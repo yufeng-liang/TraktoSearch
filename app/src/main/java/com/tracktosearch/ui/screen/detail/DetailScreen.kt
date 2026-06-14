@@ -674,7 +674,7 @@ private fun CrewSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
-            if (totalCount > 10) {
+            if (totalCount > 0) {
                 Text(
                     text = stringResource(R.string.detail_cast_all, totalCount),
                     style = MaterialTheme.typography.labelSmall,
@@ -999,6 +999,12 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
                 } else if (!expanded) {
                     isOverflowing = false
                 }
+            },
+            modifier = Modifier.clickable(
+                interactionSource = MutableInteractionSource(),
+                indication = null
+            ) {
+                if (isOverflowing || expanded) expanded = !expanded
             }
         )
 

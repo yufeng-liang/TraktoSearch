@@ -62,12 +62,8 @@ fun SearchScreen(
     }
     val viewedUrls by viewedItemStorage.viewedUrls.collectAsState(initial = emptySet())
 
-    // 防止搜索历史异步加载时闪过默认空页面
-    var showDefaultPage by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(150)
-        showDefaultPage = true
-    }
+    // 搜索历史是否已加载完成（避免异步加载时闪过默认空页面）
+    val searchHistoryLoaded by remember { derivedStateOf { uiState.searchHistoryLoaded } }
 
     // 搜索框清空时同步清除结果
     LaunchedEffect(searchQuery) {
@@ -209,8 +205,8 @@ fun SearchScreen(
                             onHistoryDelete = { viewModel.removeHistory(it) },
                             onClearAll = { viewModel.clearHistory() }
                         )
-                    } else if (showDefaultPage) {
-                        // 默认空白页（延迟显示，避免历史加载时闪过）
+                    } else if (searchHistoryLoaded) {
+                        // 默认空白页（搜索历史加载完成后显示）
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             horizontalAlignment = Alignment.CenterHorizontally,

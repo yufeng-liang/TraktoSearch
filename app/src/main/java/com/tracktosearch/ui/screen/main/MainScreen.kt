@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -141,7 +142,12 @@ fun MainScreen(
                     .offset(y = with(density) { fabOffset.dp })
                     .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp))
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
                         shape = RoundedCornerShape(28.dp)
                     )
                     .width(navBarWidth)

@@ -18,7 +18,8 @@ data class SearchUiState(
     val keyword: String = "",
     val resources: List<ResourceItem> = emptyList(),
     val error: String? = null,
-    val searchHistory: List<String> = emptyList()
+    val searchHistory: List<String> = emptyList(),
+    val searchHistoryLoaded: Boolean = false
 )
 
 @HiltViewModel
@@ -34,7 +35,10 @@ class SearchViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             searchHistoryStorage.history.collect { history ->
-                _uiState.value = _uiState.value.copy(searchHistory = history)
+                _uiState.value = _uiState.value.copy(
+                    searchHistory = history,
+                    searchHistoryLoaded = true
+                )
             }
         }
     }
