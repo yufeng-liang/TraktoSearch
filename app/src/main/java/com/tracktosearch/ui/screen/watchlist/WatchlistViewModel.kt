@@ -208,6 +208,16 @@ class WatchlistViewModel @Inject constructor(
         loadShows(forceReload = true)
     }
 
+    /** 页面恢复可见时调用：如果之前已加载过，则静默刷新（重置状态重新拉取） */
+    fun refreshIfLoaded() {
+        val state = _uiState.value
+        if (state.moviesLoaded || state.showsLoaded) {
+            _uiState.value = WatchlistUiState()
+            loadMovies(forceReload = true)
+            loadShows(forceReload = true)
+        }
+    }
+
     fun loadMoreMovies() {
         if (_uiState.value.isLoadingMovies || !_uiState.value.hasMoreMovies) return
         viewModelScope.launch {

@@ -69,6 +69,11 @@ class LoginViewModel @Inject constructor(
         _loginState.value = LoginState.IDLE
         _errorMessage.value = null
     }
+
+    fun onAuthDenied() {
+        _loginState.value = LoginState.ERROR
+        _errorMessage.value = null  // 使用默认的拒绝授权提示
+    }
 }
 
 @Composable
@@ -93,13 +98,17 @@ fun LoginScreen(
         }
     }
 
-    // 监听 OAuth 回调 code
+    // 监听 OAuth 回调 code 或拒绝授权
     LaunchedEffect(Unit) {
         while (true) {
             val code = OAuthCallback.pendingCode
             if (code != null) {
                 OAuthCallback.pendingCode = null
                 viewModel.exchangeCodeForToken(code)
+            }
+            if (OAuthCallback.authDenied) {
+                OAuthCallback.authDenied = false
+                viewModel.onAuthDenied()
             }
             kotlinx.coroutines.delay(300)
         }
@@ -201,7 +210,7 @@ fun LoginScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = errorMessage ?: stringResource(R.string.login_failed),
+                            text = errorMessage ?: stringResource(R.string.login_denied),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.error
                         )

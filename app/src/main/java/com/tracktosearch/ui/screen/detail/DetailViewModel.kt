@@ -61,7 +61,9 @@ data class DetailUiState(
     val expandedSeasons: Set<Int> = emptySet(),
     // 演职员
     val cast: List<TmdbCast> = emptyList(),
-    val crew: List<TmdbCrew> = emptyList()
+    val crew: List<TmdbCrew> = emptyList(),
+    // 列表是否变更（标记已看后变为 true，上级页面用于决定是否刷新）
+    val watchlistChanged: Boolean = false
 )
 
 @HiltViewModel
@@ -293,17 +295,17 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun toggleSeason(seasonTraktId: Int) {
+    fun toggleSeason(seasonNumber: Int) {
         val current = _uiState.value.expandedSeasons
-        val newExpanded = if (seasonTraktId in current) current - seasonTraktId else current + seasonTraktId
+        val newExpanded = if (seasonNumber in current) current - seasonNumber else current + seasonNumber
 
         // 如果展开且还没有加载该季的集信息，则加载
-        if (seasonTraktId !in current && seasonTraktId !in _uiState.value.episodes) {
+        if (seasonNumber !in current && seasonNumber !in _uiState.value.episodes) {
             viewModelScope.launch {
-                val result = traktRepository.getSeasonEpisodes(seasonTraktId)
+                val result = traktRepository.getSeasonEpisodes(currentTraktId, seasonNumber)
                 result.onSuccess { episodeList ->
                     val newEpisodes = _uiState.value.episodes.toMutableMap()
-                    newEpisodes[seasonTraktId] = episodeList
+                    newEpisodes[seasonNumber] = episodeList
                     _uiState.value = _uiState.value.copy(
                         expandedSeasons = newExpanded,
                         episodes = newEpisodes
@@ -441,7 +443,9 @@ class DetailViewModel @Inject constructor(
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = true,
-                            isMarkingWatched = false
+                            isMarkingWatched = false,
+                            // 通知上级页面：从列表中移除该 item
+                            watchlistChanged = true
                         )
                     }
                     .onFailure {

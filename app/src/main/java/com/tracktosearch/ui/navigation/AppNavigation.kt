@@ -9,18 +9,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -109,6 +113,19 @@ fun AppNavigation(
                 composable(Routes.MAIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val isLoggedIn by authStateHolder.isLoggedIn.collectAsState(initial = false)
+
+                        // 从详情页返回时，若标记已看则触发列表刷新（仅在 watchlist 标签页且 watchlistViewModel 已存在时有效）
+                        val savedState = navController.currentBackStackEntry?.savedStateHandle
+                        val watchlistChanged by (savedState?.getStateFlow("watchlist_changed", false)
+                            ?: MutableStateFlow(false)).collectAsState()
+                        val watchlistViewModel: WatchlistViewModel = hiltViewModel()
+                        LaunchedEffect(watchlistChanged) {
+                            if (watchlistChanged) {
+                                watchlistViewModel.refreshIfLoaded()
+                                savedState?.set("watchlist_changed", false)
+                            }
+                        }
+
                         MainScreen(
                             initialTab = initialTab,
                             isLoggedIn = isLoggedIn,
@@ -156,6 +173,13 @@ fun AppNavigation(
                         val imdbId = backStackEntry.arguments?.getString("imdbId") ?: ""
                         val traktRating = backStackEntry.arguments?.getFloat("traktRating")?.toDouble() ?: 0.0
 
+                        // 用于在标记已看后通知上级列表页刷新
+                        val previousEntry = navController.previousBackStackEntry
+                        fun goBack(changed: Boolean) {
+                            previousEntry?.savedStateHandle?.set("watchlist_changed", changed)
+                            navController.popBackStack()
+                        }
+
                         DetailScreen(
                             traktId = traktId,
                             tmdbId = tmdbId,
@@ -163,7 +187,7 @@ fun AppNavigation(
                             mediaType = if (type == "show") MediaType.SHOW else MediaType.MOVIE,
                             imdbId = imdbId,
                             traktRating = traktRating,
-                            onBack = { navController.popBackStack() },
+                            onBack = { goBack(false) },
                             onPersonClick = { personId, personName ->
                                 navController.navigate(Routes.webViewRoute(
                                     "https://www.themoviedb.org/person/$personId",

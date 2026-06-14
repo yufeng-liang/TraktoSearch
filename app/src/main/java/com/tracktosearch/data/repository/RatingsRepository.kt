@@ -58,7 +58,13 @@ class RatingsRepository @Inject constructor(
             traktRating = traktRating,
             imdbRating = omdbRatings?.imdbRating?.takeIf { it != "N/A" && it.isNotEmpty() } ?: "",
             rottenTomatoes = omdbRatings?.Ratings?.find { it.Source == "Rotten Tomatoes" }?.Value?.takeIf { it.isNotEmpty() } ?: "",
-            metacritic = omdbRatings?.Ratings?.find { it.Source == "Metacritic" }?.Value?.takeIf { it.isNotEmpty() } ?: "",
+            // OMDB Metacritic 格式为 "77/100"，统一转为 "77%" 以缩短显示宽度
+            metacritic = run {
+                val mtcRaw = omdbRatings?.Ratings?.find { it.Source == "Metacritic" }?.Value?.takeIf { it.isNotEmpty() } ?: ""
+                if (mtcRaw.matches(Regex("""\d+/100"""))) {
+                    mtcRaw.replace(Regex("""(\d+)/100"""), "$1%")
+                } else mtcRaw
+            },
             director = omdbRatings?.Director?.takeIf { it != "N/A" && it.isNotEmpty() } ?: "",
             actors = omdbRatings?.Actors?.takeIf { it != "N/A" && it.isNotEmpty() } ?: ""
         )

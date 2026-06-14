@@ -37,10 +37,8 @@ class CommentTranslator @Inject constructor() {
             try {
                 withTimeoutOrNull(10000) {
                     var result = translateWithBaiduAI(comment.comment, targetLang)
-                    // 超过6000字符时跳过通用翻译（有字符限制），直接用 MyMemory
                     val isLongText = comment.comment.length > 6000
                     if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
-                    if (result.isNullOrEmpty()) result = translateWithMyMemory(comment.comment, targetLang)
 
                     if (!result.isNullOrEmpty() && result != comment.comment) {
                         Log.d("CommentTranslator", "Single translated OK")
@@ -59,7 +57,7 @@ class CommentTranslator @Inject constructor() {
 
     /**
      * 翻译评论列表为目标语言（设备语言）
-     * 优先使用百度大模型翻译 API，降级到通用文本翻译和 MyMemory 免费接口
+     * 优先使用百度大模型翻译 API，降级到通用文本翻译
      */
     suspend fun translateComments(comments: List<TraktComment>): List<TraktComment> {
         if (comments.isEmpty()) return emptyList()
@@ -71,13 +69,9 @@ class CommentTranslator @Inject constructor() {
             comments.map { comment ->
                 try {
                     withTimeoutOrNull(10000) {
-                        // 优先：百度大模型文本翻译
                         var result = translateWithBaiduAI(comment.comment, targetLang)
-                        // 降级1：百度通用文本翻译（有6000字符限制）
                         val isLongText = comment.comment.length > 6000
                         if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
-                        // 降级2：MyMemory 免费（无字符限制）
-                        if (result.isNullOrEmpty()) result = translateWithMyMemory(comment.comment, targetLang)
 
                         if (!result.isNullOrEmpty() && result != comment.comment) {
                             Log.d("CommentTranslator", "Translated OK")
@@ -178,26 +172,6 @@ class CommentTranslator @Inject constructor() {
         }
     }
 
-    /** MyMemory 免费翻译 API（降级方案） */
-    private fun translateWithMyMemory(text: String, targetLang: String): String? {
-        val encodedText = URLEncoder.encode(text, "UTF-8")
-        val url = "https://api.mymemory.translated.net/get?q=$encodedText&langpair=en|$targetLang"
-
-        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-        connection.connectTimeout = 5000
-        connection.readTimeout = 8000
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
-
-        return try {
-            val json = connection.inputStream.bufferedReader().readText()
-            val response = jsonDecoder.decodeFromString<MyMemoryResponse>(json)
-            response.responseData?.translatedText
-        } finally {
-            connection.disconnect()
-        }
-    }
-
     private fun md5(str: String): String {
         val md = MessageDigest.getInstance("MD5")
         val digest = md.digest(str.toByteArray())
@@ -249,16 +223,5 @@ class CommentTranslator @Inject constructor() {
     private data class BaiduTransItem(
         val src: String? = null,
         val dst: String? = null
-    )
-
-    @Serializable
-    private data class MyMemoryResponse(
-        val responseData: ResponseData? = null,
-        val responseStatus: Int = 0
-    )
-
-    @Serializable
-    private data class ResponseData(
-        val translatedText: String? = null
     )
 }

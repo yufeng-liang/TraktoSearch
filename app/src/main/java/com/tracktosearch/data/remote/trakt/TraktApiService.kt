@@ -53,9 +53,10 @@ interface TraktApiService {
         @Query("extended") extended: String = "full"
     ): Response<List<TraktSeason>>
 
-    @GET("seasons/{id}/episodes")
+    @GET("shows/{id}/seasons/{season}/episodes")
     suspend fun getSeasonEpisodes(
-        @Path("id") seasonTraktId: Int,
+        @Path("id") showTraktId: Int,
+        @Path("season") seasonNumber: Int,
         @Query("extended") extended: String = "full"
     ): Response<List<TraktEpisode>>
 }

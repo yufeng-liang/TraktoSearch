@@ -91,6 +91,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -138,7 +140,7 @@ fun DetailScreen(
     year: Int? = null,
     imdbId: String = "",
     traktRating: Double = 0.0,
-    onBack: () -> Unit = {},
+    onBack: (changed: Boolean) -> Unit = {},
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
     viewModel: DetailViewModel = hiltViewModel()
 ) {
@@ -149,81 +151,278 @@ fun DetailScreen(
         viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating)
     }
 
-    val resourceListState = rememberLazyListState()
-    val commentListState = rememberLazyListState()
+    val listState = rememberLazyListState()
     var selectedTab by remember { mutableStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
 
-    // 评论Tab滚动到底部自动加载更多
-    val shouldLoadMoreComments by remember {
-        derivedStateOf {
-            val lastVisibleItem = commentListState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= commentListState.layoutInfo.totalItemsCount - 2
+    // 评论翻译映射
+    val translatedMap = remember(uiState.translatedComments) {
+        uiState.translatedComments.associateBy { it.id }
+    }
+
+    // 资源分页加载
+    val initialCount = 30
+    var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(uiState.resources.size)) }
+    LaunchedEffect(uiState.resources.size) {
+        if (uiState.resources.isNotEmpty() && displayedCount == 0) {
+            displayedCount = initialCount.coerceAtMost(uiState.resources.size)
         }
     }
-    LaunchedEffect(shouldLoadMoreComments, selectedTab) {
-        if (selectedTab == 1 && shouldLoadMoreComments && uiState.hasMoreComments && !uiState.isLoadingMoreComments) {
-            viewModel.loadMoreComments()
+
+    // 滚动到底部自动加载更多（资源/评论共用）
+    val shouldLoadMore by remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 2
+        }
+    }
+    LaunchedEffect(shouldLoadMore, selectedTab) {
+        if (shouldLoadMore) {
+            if (selectedTab == 0 && displayedCount < uiState.resources.size) {
+                displayedCount = (displayedCount + 30).coerceAtMost(uiState.resources.size)
+            } else if (selectedTab == 1 && uiState.hasMoreComments && !uiState.isLoadingMoreComments) {
+                viewModel.loadMoreComments()
+            }
         }
     }
 
     Scaffold { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Tab 内容（各自独立滚动，头部随内容滚动消失，TabRow吸顶）
-            when (selectedTab) {
-                0 -> ResourcesLazyContent(
-                    uiState = uiState,
-                    tmdbId = tmdbId,
-                    listState = resourceListState,
-                    selectedTab = selectedTab,
-                    onTabChange = { selectedTab = it },
-                    isMarkedWatched = uiState.isMarkedWatched,
-                    isMarkingWatched = uiState.isMarkingWatched,
-                    onToggleWatched = { viewModel.toggleWatched() },
-                    onPosterClick = { showPosterFullscreen = true },
-                    onPersonClick = onPersonClick,
-                    onToggleSource = { viewModel.toggleSource(it) },
-                    onToggleDiskType = { viewModel.toggleDiskType(it) },
-                    onResourceClick = { item ->
-                        viewModel.markResourceViewed(item.url)
-                        openResourceLink(context, item)
-                    },
-                    onRetry = { viewModel.searchResources() },
-                    onToggleSeason = { viewModel.toggleSeason(it) }
-                )
-                1 -> CommentsLazyContent(
-                    uiState = uiState,
-                    tmdbId = tmdbId,
-                    listState = commentListState,
-                    selectedTab = selectedTab,
-                    onTabChange = { selectedTab = it },
-                    isMarkedWatched = uiState.isMarkedWatched,
-                    isMarkingWatched = uiState.isMarkingWatched,
-                    onToggleWatched = { viewModel.toggleWatched() },
-                    onPosterClick = { showPosterFullscreen = true },
-                    onPersonClick = onPersonClick,
-                    onTranslateComments = { commentId ->
-                        if (commentId == -1) {
-                            viewModel.translateComments()
-                        } else {
-                            viewModel.translateSingleComment(commentId)
+            // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                // 头部信息（随内容滚动）
+                item(key = "detail_header") {
+                    DetailHeaderContent(
+                        uiState = uiState,
+                        tmdbId = tmdbId,
+                        isMarkedWatched = uiState.isMarkedWatched,
+                        isMarkingWatched = uiState.isMarkingWatched,
+                        onToggleWatched = { viewModel.toggleWatched() },
+                        onPosterClick = { showPosterFullscreen = true },
+                        onPersonClick = onPersonClick
+                    )
+                }
+
+                // Tab 行（吸顶，共用同一个）
+                stickyHeader(key = "tab_row") {
+                    TabRow(selectedTabIndex = selectedTab) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = { selectedTab = 0 },
+                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = { selectedTab = 1 },
+                            text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
+                        )
+                    }
+                }
+
+                // ===== 资源 Tab 内容 =====
+                if (selectedTab == 0) {
+                    // 筛选器
+                    item(key = "filter_section") {
+                        FilterSection(
+                            enabledSources = uiState.enabledSources,
+                            enabledDiskTypes = uiState.enabledDiskTypes,
+                            onToggleSource = { viewModel.toggleSource(it) },
+                            onToggleDiskType = { viewModel.toggleDiskType(it) }
+                        )
+                    }
+
+                    // 季/集信息（仅电视剧）
+                    if (uiState.seasons.isNotEmpty()) {
+                        item(key = "seasons_section") {
+                            SeasonsSection(
+                                seasons = uiState.seasons,
+                                episodes = uiState.episodes,
+                                expandedSeasons = uiState.expandedSeasons,
+                                onToggleSeason = { viewModel.toggleSeason(it) },
+                                onEpisodeClick = { _, _ -> }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                         }
-                    },
-                    onLoadMoreComments = { viewModel.loadMoreComments() }
-                )
+                    }
+
+                    // 资源列表
+                    val items = uiState.resources
+                    when {
+                        uiState.isSearching -> {
+                            item(key = "searching") {
+                                SearchingState(
+                                    sourceCount = uiState.enabledSources.size,
+                                    diskTypeCount = uiState.enabledDiskTypes.size
+                                )
+                            }
+                        }
+                        items.isEmpty() && uiState.searchAttempted -> {
+                            item(key = "empty") { EmptyState(onRetry = { viewModel.searchResources() }) }
+                        }
+                        else -> {
+                            item(key = "resource_count") {
+                                Text(
+                                    text = stringResource(R.string.detail_found_resources, items.size),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                                )
+                            }
+                            itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }) { index, item ->
+                                ResourceItemCard(
+                                    item = item,
+                                    isViewed = item.url in uiState.viewedUrls,
+                                    onClick = {
+                                        viewModel.markResourceViewed(item.url)
+                                        openResourceLink(context, item)
+                                    },
+                                    index = index
+                                )
+                            }
+                            if (displayedCount < items.size) {
+                                item(key = "load_more") {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.detail_load_more_text, displayedCount, items.size),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else if (items.size > initialCount) {
+                                item(key = "all_loaded") {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.detail_all_loaded, items.size),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ===== 评论 Tab 内容 =====
+                if (selectedTab == 1) {
+                    val commentsToShow = uiState.comments
+                    item(key = "comments_header") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_comments),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (commentsToShow.isNotEmpty() && uiState.translatedComments.size < commentsToShow.size) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                                    modifier = Modifier
+                                        .clickable(enabled = !uiState.isTranslating) { viewModel.translateComments() }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        if (uiState.isTranslating) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(13.dp),
+                                                strokeWidth = 1.5.dp
+                                            )
+                                        }
+                                        Text(
+                                            text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
+                                            else stringResource(R.string.detail_translate_all),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    items(
+                        items = commentsToShow,
+                        key = { it.id }
+                    ) { comment ->
+                        CommentItem(
+                            comment = comment,
+                            translatedText = translatedMap[comment.id]?.comment,
+                            onTranslate = { commentId ->
+                                if (commentId == -1) viewModel.translateComments()
+                                else viewModel.translateSingleComment(commentId)
+                            },
+                            isTranslating = uiState.isTranslating,
+                            isThisTranslating = (uiState.translatingCommentId == comment.id)
+                        )
+                    }
+
+                    if (uiState.hasMoreComments || uiState.isLoadingMoreComments) {
+                        item(key = "load_more_comments") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (uiState.isLoadingMoreComments) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 3.dp)
+                                } else {
+                                    Text(
+                                        text = stringResource(R.string.detail_load_more_comments),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    } else if (commentsToShow.size > 5) {
+                        item(key = "all_comments_loaded") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.detail_all_comments_loaded, commentsToShow.size),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
-            // 返回按钮（箭头 + 半透明边框）
+            // 返回按钮（与资源/评论 Tab 文字中轴线对齐）
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = Color.Transparent,
                 modifier = Modifier
-                    .padding(start = 12.dp, top = 48.dp)
+                    .padding(start = 12.dp, top = 4.dp)
                     .align(Alignment.TopStart)
                     .clickable(
                         interactionSource = MutableInteractionSource(),
                         indication = null,
-                        onClick = onBack
+                        onClick = { onBack(uiState.watchlistChanged) }
                     )
             ) {
                 Box(
@@ -249,7 +448,7 @@ fun DetailScreen(
             }
 
             LazyColumnScrollbar(
-                state = if (selectedTab == 0) resourceListState else commentListState,
+                state = listState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 2.dp)
@@ -512,6 +711,12 @@ private fun DetailHeaderContent(
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                                 modifier = Modifier.width(56.dp).height(10.dp)
                             ) {}
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.width(40.dp).height(8.dp)
+                            ) {}
                         }
                     }
                 }
@@ -640,7 +845,9 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
             text = value,
             style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -982,47 +1189,28 @@ private fun FullCastItem(name: String, originalName: String, role: String, profi
 @Composable
 private fun ExpandableText(text: String, maxLines: Int = 3) {
     var expanded by remember { mutableStateOf(false) }
-    var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var isOverflowing by remember { mutableStateOf(false) }
 
-    Column {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = if (expanded) Int.MAX_VALUE else maxLines,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { result ->
-                layoutResult = result
-                if (!expanded && result.lineCount > maxLines - 1) {
-                    isOverflowing = result.isLineEllipsized(maxLines - 1)
-                } else if (!expanded) {
-                    isOverflowing = false
-                }
-            },
-            modifier = Modifier.clickable(
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = if (expanded) Int.MAX_VALUE else maxLines,
+        overflow = TextOverflow.Ellipsis,
+        onTextLayout = { result ->
+            if (!expanded) {
+                isOverflowing = result.hasVisualOverflow || result.lineCount > maxLines
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
                 interactionSource = MutableInteractionSource(),
                 indication = null
             ) {
                 if (isOverflowing || expanded) expanded = !expanded
             }
-        )
-
-        // 展开/收起按钮（独立行，不遮挡文字）
-        if (isOverflowing || expanded) {
-            Text(
-                text = if (expanded) stringResource(R.string.detail_collapse) else stringResource(R.string.detail_expand),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .clickable(
-                        interactionSource = MutableInteractionSource(),
-                        indication = null
-                    ) { expanded = !expanded }
-                    .padding(top = 2.dp)
-            )
-        }
-    }
+    )
 }
 
 // ==================== 筛选器 ====================
@@ -1114,8 +1302,13 @@ private fun SeasonsSection(
     seasons: List<TraktSeason>,
     episodes: Map<Int, List<TraktEpisode>>,
     expandedSeasons: Set<Int>,
-    onToggleSeason: (Int) -> Unit
+    onToggleSeason: (Int) -> Unit,
+    onEpisodeClick: (seasonNumber: Int, episodeNumber: Int) -> Unit = { _, _ -> }
 ) {
+    // 过滤掉第0季（特别篇），单独展示为"特别篇"
+    val regularSeasons = seasons.filter { it.number > 0 }
+    val specialSeasons = seasons.filter { it.number == 0 }
+
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         Text(
             text = stringResource(R.string.detail_seasons),
@@ -1123,46 +1316,58 @@ private fun SeasonsSection(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        seasons.forEach { season ->
-            val isExpanded = season.ids.trakt in expandedSeasons
-            Column {
+
+        // 正常季（第1季、第2季...）
+        regularSeasons.forEach { season ->
+            SeasonRow(
+                season = season,
+                episodes = episodes,
+                expandedSeasons = expandedSeasons,
+                onToggleSeason = onToggleSeason,
+                onEpisodeClick = onEpisodeClick
+            )
+        }
+
+        // 特别篇（第0季）— 合并为一个条目展示
+        specialSeasons.forEach { season ->
+            val totalEpisodes = season.episode_count
+            if (totalEpisodes > 0) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onToggleSeason(season.ids.trakt) }
+                        .clickable { onToggleSeason(season.number) }
                         .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.detail_season, season.number),
+                        text = stringResource(R.string.detail_specials),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        text = stringResource(R.string.detail_episode_count, season.episode_count),
+                        text = stringResource(R.string.detail_episode_count, totalEpisodes),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Icon(
-                        imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (season.number in expandedSeasons) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
                 AnimatedVisibility(
-                    visible = isExpanded,
+                    visible = season.number in expandedSeasons,
                     enter = expandVertically() + fadeIn(),
                     exit = shrinkVertically() + fadeOut()
                 ) {
-                    val episodeList = episodes[season.ids.trakt] ?: emptyList()
+                    val episodeList = episodes[season.number] ?: emptyList()
                     Column(modifier = Modifier.padding(start = 16.dp)) {
                         if (episodeList.isEmpty()) {
                             CircularProgressIndicator(
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .padding(2.dp),
+                                modifier = Modifier.size(20.dp).padding(2.dp),
                                 strokeWidth = 2.dp
                             )
                         } else {
@@ -1170,10 +1375,81 @@ private fun SeasonsSection(
                                 Text(
                                     text = stringResource(R.string.detail_episode, ep.number, ep.title),
                                     style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(vertical = 2.dp)
+                                    modifier = Modifier
+                                        .padding(vertical = 2.dp)
+                                        .clickable(
+                                            interactionSource = MutableInteractionSource(),
+                                            indication = null
+                                        ) { onEpisodeClick(0, ep.number) }
                                 )
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SeasonRow(
+    season: TraktSeason,
+    episodes: Map<Int, List<TraktEpisode>>,
+    expandedSeasons: Set<Int>,
+    onToggleSeason: (Int) -> Unit,
+    onEpisodeClick: (seasonNumber: Int, episodeNumber: Int) -> Unit
+) {
+    val isExpanded = season.number in expandedSeasons
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleSeason(season.number) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.detail_season, season.number),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = stringResource(R.string.detail_episode_count, season.episode_count),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Icon(
+                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            val episodeList = episodes[season.number] ?: emptyList()
+            Column(modifier = Modifier.padding(start = 16.dp)) {
+                if (episodeList.isEmpty()) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp).padding(2.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    episodeList.forEach { ep ->
+                        Text(
+                            text = stringResource(R.string.detail_episode, ep.number, ep.title),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier
+                                .padding(vertical = 2.dp)
+                                .clickable(
+                                    interactionSource = MutableInteractionSource(),
+                                    indication = null
+                                ) { onEpisodeClick(season.number, ep.number) }
+                        )
                     }
                 }
             }
@@ -1264,6 +1540,13 @@ private fun ResourcesLazyContent(
     val initialCount = 30
     var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(items.size)) }
 
+    // 数据到达时更新 displayedCount（解决初始化时 items 为空导致 displayedCount=0 的竞态）
+    LaunchedEffect(items.size) {
+        if (items.isNotEmpty() && displayedCount == 0) {
+            displayedCount = initialCount.coerceAtMost(items.size)
+        }
+    }
+
     // 滚动到底部自动加载更多资源
     val shouldLoadMoreResources by remember {
         derivedStateOf {
@@ -1327,7 +1610,8 @@ private fun ResourcesLazyContent(
                     seasons = uiState.seasons,
                     episodes = uiState.episodes,
                     expandedSeasons = uiState.expandedSeasons,
-                    onToggleSeason = onToggleSeason
+                    onToggleSeason = onToggleSeason,
+                    onEpisodeClick = { _, _ -> }
                 )
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
             }
@@ -1595,7 +1879,8 @@ private fun LazyListScope.resourcesTabItems(
                 seasons = uiState.seasons,
                 episodes = uiState.episodes,
                 expandedSeasons = uiState.expandedSeasons,
-                onToggleSeason = onToggleSeason
+                onToggleSeason = onToggleSeason,
+                onEpisodeClick = { _, _ -> }
             )
             HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
         }

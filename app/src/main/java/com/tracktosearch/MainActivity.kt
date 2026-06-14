@@ -26,10 +26,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 全局共享的 OAuth code，供 MainActivity 传递给 LoginViewModel
+// 全局共享的 OAuth 结果，供 MainActivity 传递给 LoginViewModel
 object OAuthCallback {
     @Volatile
     var pendingCode: String? = null
+    @Volatile
+    var authDenied: Boolean = false
 }
 
 @AndroidEntryPoint
@@ -106,11 +108,16 @@ class MainActivity : ComponentActivity() {
     private fun handleIntent(intent: Intent?) {
         intent?.data?.let { uri ->
             if (uri.scheme == "tracktosearch" && uri.host == "oauth") {
-                val code = uri.getQueryParameter("code")
-                if (!code.isNullOrEmpty()) {
-                    Log.d("MainActivity", "Received OAuth callback with code")
-                    // 通过全局对象传递给 LoginViewModel
-                    OAuthCallback.pendingCode = code
+                val error = uri.getQueryParameter("error")
+                if (!error.isNullOrEmpty()) {
+                    Log.d("MainActivity", "OAuth denied: $error")
+                    OAuthCallback.authDenied = true
+                } else {
+                    val code = uri.getQueryParameter("code")
+                    if (!code.isNullOrEmpty()) {
+                        Log.d("MainActivity", "Received OAuth callback with code")
+                        OAuthCallback.pendingCode = code
+                    }
                 }
             }
         }

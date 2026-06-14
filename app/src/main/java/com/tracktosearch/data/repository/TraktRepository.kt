@@ -78,9 +78,9 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun getSeasonEpisodes(seasonTraktId: Int): Result<List<TraktEpisode>> {
+    suspend fun getSeasonEpisodes(showTraktId: Int, seasonNumber: Int): Result<List<TraktEpisode>> {
         return try {
-            val response = traktApiService.getSeasonEpisodes(seasonTraktId)
+            val response = traktApiService.getSeasonEpisodes(showTraktId, seasonNumber)
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else {

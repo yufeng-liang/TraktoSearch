@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.watchlist
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -7,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -21,8 +23,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
@@ -50,17 +56,22 @@ fun WatchlistScreen(
     }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
-    var isSearchExpanded by remember { mutableStateOf(false) }
-    var lastExpandTime by remember { mutableLongStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
-    LaunchedEffect(isSearchExpanded) {
-        if (isSearchExpanded) {
-            lastExpandTime = System.currentTimeMillis()
-            focusRequester.requestFocus()
-        } else {
-            focusManager.clearFocus()
+    // 根据搜索关键词过滤当前 Tab 的列表
+    val filteredMovies = remember(uiState.movies, searchQuery) {
+        if (searchQuery.isBlank()) uiState.movies
+        else uiState.movies.filter {
+            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
+            it.title.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    val filteredShows = remember(uiState.shows, searchQuery) {
+        if (searchQuery.isBlank()) uiState.shows
+        else uiState.shows.filter {
+            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
+            it.title.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -68,63 +79,50 @@ fun WatchlistScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    if (isSearchExpanded) {
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester)
-                                .onFocusChanged { focusState ->
-                                    // 展开后 800ms 内不因失焦收起（防止 requestFocus 异步导致立刻收起）
-                                    if (!focusState.isFocused && searchQuery.isEmpty()
-                                        && System.currentTimeMillis() - lastExpandTime > 800
-                                    ) {
-                                        isSearchExpanded = false
-                                    }
-                                },
-                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(24.dp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = {
-                                    if (searchQuery.isNotBlank()) {
-                                        onSearchClick(searchQuery)
-                                        searchQuery = ""
-                                        isSearchExpanded = false
-                                    }
-                                }
-                            ),
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    TextButton(onClick = {
-                                        onSearchClick(searchQuery)
-                                        searchQuery = ""
-                                        isSearchExpanded = false
-                                    }) {
-                                        Text(stringResource(R.string.search_button))
-                                    }
-                                }
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        placeholder = {
+                            Text(
+                                if (searchQuery.isBlank()) stringResource(R.string.watchlist_title)
+                                else stringResource(R.string.search_placeholder)
+                            )
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                focusManager.clearFocus()
                             }
-                        )
-                    } else {
-                        Text(stringResource(R.string.watchlist_title))
-                    }
+                        ),
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                IconButton(onClick = {
+                                    searchQuery = ""
+                                }) {
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "清除",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                            }
+                        }
+                    )
                 },
                 actions = {
-                    if (!isSearchExpanded) {
-                        IconButton(onClick = { isSearchExpanded = true }) {
-                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
-                        }
-                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
                     }
                     IconButton(onClick = onLogout) {
                         Icon(Icons.Default.Logout, contentDescription = stringResource(R.string.logout))
                     }
-
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -171,12 +169,12 @@ fun WatchlistScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("${stringResource(R.string.watchlist_tab_movies)}(${uiState.movies.size})") }
+                    text = { Text("${stringResource(R.string.watchlist_tab_movies)}(${filteredMovies.size})") }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("${stringResource(R.string.watchlist_tab_shows)}(${uiState.shows.size})") }
+                    text = { Text("${stringResource(R.string.watchlist_tab_shows)}(${filteredShows.size})") }
                 )
             }
 
@@ -185,18 +183,24 @@ fun WatchlistScreen(
                 0 -> MovieTabContent(
                     isLoading = uiState.isLoadingMovies,
                     isLoaded = uiState.moviesLoaded,
-                    items = uiState.movies,
+                    items = filteredMovies,
+                    totalItems = uiState.movies.size,
+                    searchQuery = searchQuery,
                     error = uiState.moviesError,
                     onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                    onRetry = { viewModel.loadMovies(forceReload = true) }
+                    onRetry = { viewModel.loadMovies(forceReload = true) },
+                    onOpenTrakt = { onSearchClick("https://trakt.tv/watchlist") }
                 )
                 1 -> ShowTabContent(
                     isLoading = uiState.isLoadingShows,
                     isLoaded = uiState.showsLoaded,
-                    items = uiState.shows,
+                    items = filteredShows,
+                    totalItems = uiState.shows.size,
+                    searchQuery = searchQuery,
                     error = uiState.showsError,
                     onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                    onRetry = { viewModel.loadShows(forceReload = true) }
+                    onRetry = { viewModel.loadShows(forceReload = true) },
+                    onOpenTrakt = { onSearchClick("https://trakt.tv/watchlist") }
                 )
             }
         }
@@ -208,11 +212,13 @@ private fun MovieTabContent(
     isLoading: Boolean,
     isLoaded: Boolean,
     items: List<MovieUiItem>,
+    totalItems: Int,
+    searchQuery: String,
     error: String?,
     onItemClick: (MovieUiItem) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onOpenTrakt: () -> Unit
 ) {
-    // 状态优先级：错误 > 首次加载中 > 空 > 数据
     when {
         error != null && items.isEmpty() -> {
             Column(
@@ -233,25 +239,22 @@ private fun MovieTabContent(
             LoadingView(message = stringResource(R.string.watchlist_loading))
         }
         items.isEmpty() && isLoaded -> {
-            EmptyView(message = stringResource(R.string.watchlist_empty_movies))
+            WatchlistEmptyState(
+                isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
+                emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
+                    stringResource(R.string.watchlist_search_no_movies)
+                else stringResource(R.string.watchlist_empty_movies),
+                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
+            )
         }
         else -> {
-            MovieGrid(
-                items = items,
-                onItemClick = onItemClick
-            )
-            // 如果还在加载更多，底部显示小 loading
+            MovieGrid(items = items, onItemClick = onItemClick)
             if (isLoading) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
             }
         }
@@ -263,9 +266,12 @@ private fun ShowTabContent(
     isLoading: Boolean,
     isLoaded: Boolean,
     items: List<ShowUiItem>,
+    totalItems: Int,
+    searchQuery: String,
     error: String?,
     onItemClick: (ShowUiItem) -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    onOpenTrakt: () -> Unit
 ) {
     when {
         error != null && items.isEmpty() -> {
@@ -287,24 +293,22 @@ private fun ShowTabContent(
             LoadingView(message = stringResource(R.string.watchlist_loading))
         }
         items.isEmpty() && isLoaded -> {
-            EmptyView(message = stringResource(R.string.watchlist_empty_shows))
+            WatchlistEmptyState(
+                isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
+                emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
+                    stringResource(R.string.watchlist_search_no_shows)
+                else stringResource(R.string.watchlist_empty_shows),
+                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
+            )
         }
         else -> {
-            ShowGrid(
-                items = items,
-                onItemClick = onItemClick
-            )
+            ShowGrid(items = items, onItemClick = onItemClick)
             if (isLoading) {
                 Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 2.dp
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
             }
         }
@@ -376,5 +380,51 @@ private fun ShowGrid(
                 .align(Alignment.CenterEnd)
                 .padding(end = 2.dp)
         )
+    }
+}
+
+/** 想看列表空状态（区分搜索无结果 vs 列表为空，Trakt 超链接） */
+@Composable
+private fun WatchlistEmptyState(
+    isSearchResult: Boolean,
+    emptyText: String,
+    onOpenTrakt: (() -> Unit)?
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = emptyText,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        if (!isSearchResult && onOpenTrakt != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            val annotatedString = buildAnnotatedString {
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                    append("去 ")
+                }
+                withStyle(style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )) {
+                    append("Trakt")
+                }
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
+                    append(" 添加一些想看的")
+                }
+            }
+            Text(
+                text = annotatedString,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.clickable { onOpenTrakt() }
+            )
+        }
     }
 }
