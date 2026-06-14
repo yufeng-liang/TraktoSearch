@@ -1,0 +1,39 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Kotlin
+*.class
+.kotlin/
+
+# Android Studio
+.navigation/
+captures/
+
+# Build
+/app/build
+/build
+
+# Trae IDE
+.trae/
+
+# Keystore
+*.jks
+*.keystore
+
+# Google Services
+google-services.json
+
+# Secrets
+local.properties

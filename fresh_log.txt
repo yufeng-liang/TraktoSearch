@@ -1,0 +1,727 @@
+﻿--------- beginning of system
+06-12 13:57:43.236   735   837 I ActivityManager: Force stopping com.tracktosearch appid=10217 user=0: from pid 5271
+06-12 13:57:43.238   735   837 I ActivityManager: Killing 5056:com.tracktosearch/u0a217 (adj 0): stop com.tracktosearch due to from pid 5271
+--------- beginning of main
+06-12 13:57:43.244   735   922 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-12 13:57:43.245   735   837 D CompatChangeReporter: Compat change id reported: 151861875; UID 10217; state: ENABLED
+06-12 13:57:43.247   735   837 W ActivityTaskManager: Force removing ActivityRecord{264946970 u0 com.tracktosearch/.MainActivity t29 f}}: app died, no saved state
+06-12 13:57:43.253   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.256   735   922 D InetDiagMessage: Destroyed 2 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-12 13:57:43.256   735   922 D InetDiagMessage: Destroyed live tcp sockets for uids={10217} in 16ms
+06-12 13:57:43.259   735   922 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-12 13:57:43.259  1016  1092 V WindowManagerShell: Transition requested (#18): android.os.BinderProxy@903ba76 TransitionRequestInfo { type = CLOSE, triggerTask = TaskInfo{userId=0 taskId=29 effectiveUid=10217 displayId=0 isRunning=false baseIntent=Intent { flg=0x10000000 cmp=com.tracktosearch/.MainActivity } baseActivity=null topActivity=null origActivity=null realActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} numActivities=0 lastActiveTime=642871 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@6aa8877} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=null launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=true lastNonFullscreenBounds=Rect(337, 831 - 1008, 2175) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 0, 0) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=undefined}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 18 }
+06-12 13:57:43.260   735   837 D ActivityManager: quick sync unfreeze 3348 for 1
+06-12 13:57:43.265   735   922 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-12 13:57:43.265   735   922 D InetDiagMessage: Destroyed live tcp sockets for uids={20217} in 9ms
+06-12 13:57:43.274  3348  3348 I cr_OfflineIndicator: Reported by system: [ Transports: CELLULAR Capabilities: MMS&SUPL&DUN&FOTA&IMS&CBS&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&FOREGROUND&NOT_CONGESTED&NOT_SUSPENDED&PARTIAL_CONNECTIVITY&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED LinkUpBandwidth>=60000Kbps LinkDnBandwidth>=145000Kbps Specifier: <TelephonyNetworkSpecifier [mSubId = 1]> SubscriptionIds: {1} UnderlyingNetworks: Null]
+06-12 13:57:43.274  3348  3348 I cr_OfflineIndicator: setConnectionState connectionState=2
+06-12 13:57:43.274  3348  3348 I cr_OfflineIndicator: processConnectivityCheckResult mConnectionState=2 mConnectivityCheckingStage=1
+06-12 13:57:43.274  3348  3348 I cr_OfflineIndicator: scheduleNextConnectivityCheck
+06-12 13:57:43.274  3348  3348 I cr_OfflineIndicator: Retry after 5000ms
+06-12 13:57:43.288   735   872 W InputDispatcher: channel '8cbfbd com.tracktosearch/com.tracktosearch.MainActivity' ~ Consumer closed input channel or an error occurred.  events=0x9
+06-12 13:57:43.288   735   872 E InputDispatcher: channel '8cbfbd com.tracktosearch/com.tracktosearch.MainActivity' ~ Channel is unrecoverably broken and will be disposed!
+06-12 13:57:43.288  3348  4142 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.288  3348  4142 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.288  3348  4142 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.289   735   872 I WindowManager: WINDOW DIED Window{8cbfbd u0 com.tracktosearch/com.tracktosearch.MainActivity}
+06-12 13:57:43.295   564   564 I adbd    : Remote process closed the socket (on MSG_PEEK)
+06-12 13:57:43.303   556   556 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+06-12 13:57:43.305   735  2074 I WindowManager: WIN DEATH: Window{8cbfbd u0 com.tracktosearch/com.tracktosearch.MainActivity EXITING}
+06-12 13:57:43.307   735   837 D ActivityManager: sync unfroze 3348 com.android.chrome for 12
+06-12 13:57:43.307  3348  3348 D ViewRootImpl: Skipping stats log for color mode
+06-12 13:57:43.310   482   482 I Zygote  : Process 5056 exited due to signal 9 (Killed)
+06-12 13:57:43.314   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.315   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.325   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.333   735  1818 I ImeTracker: com.tracktosearch:581fc508: onRequestHide at ORIGIN_SERVER reason HIDE_REMOVE_CLIENT fromUser false
+06-12 13:57:43.336   735  1818 I ImeTracker: com.tracktosearch:581fc508: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-12 13:57:43.337   735   782 I libprocessgroup: Removed cgroup /sys/fs/cgroup/apps/uid_10217/pid_5056
+06-12 13:57:43.350   735   837 D ActivityManager: sync unfroze 4903 com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:19 for 12
+06-12 13:57:43.351  3348  4181 I cr_media: Destroying MediaDrmBridge for origin 952ED67DD08B2F4D2F484E6DA573E2DF
+06-12 13:57:43.351  3348  4181 I cr_media: Create MediaDrmBridge with level L1 and origin 952ED67DD08B2F4D2F484E6DA573E2DF for L1 provisioning
+06-12 13:57:43.354   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.357  3348  4181 I DrmHalHidl: No hidl drm factories found
+06-12 13:57:43.357   646  5276 W s       : AIBinder_linkToDeath is being called with a non-null cookie and no onUnlink callback set. This might not be intended. AIBinder_DeathRecipient_setOnUnlinked should be called first.
+06-12 13:57:43.359   239   239 I hwservicemanager: getTransport: Cannot find entry android.hardware.drm@1.0::IDrmFactory/default in either framework or device VINTF manifest.
+06-12 13:57:43.360  3348  4181 W DrmHalHidl: Failed to find passthrough drm factories
+06-12 13:57:43.365   735   837 D ActivityManager: sync unfroze 4380 com.android.chrome:sandboxed_process0:org.chromium.content.app.SandboxedProcessService0:3 for 12
+06-12 13:57:43.365  3348  4181 I DrmUtils: found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/clearkey]
+06-12 13:57:43.365  3348  4181 I DrmUtils: found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/widevine]
+06-12 13:57:43.374   551   551 I WVCdm   : [(0):] L3 Terminate.
+06-12 13:57:43.375   551   551 I WVCdm   : [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.376   551   551 I WVCdm   : [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.376   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.376   551   551 I WVCdm   : "soc_vendor": "Widevine",
+06-12 13:57:43.376   551   551 I WVCdm   : "soc_model": "Software",
+06-12 13:57:43.376   551   551 I WVCdm   : "ta_ver": "N/A",
+06-12 13:57:43.376   551   551 I WVCdm   : "uses_opk": false,
+06-12 13:57:43.376   551   551 I WVCdm   : "tee_os": "N/A",
+06-12 13:57:43.376   551   551 I WVCdm   : "tee_os_ver": "N/A",
+06-12 13:57:43.376   551   551 I WVCdm   : "is_debug": false,
+06-12 13:57:43.376   551   551 I WVCdm   : "git_commit": "",
+06-12 13:57:43.376   551   551 I WVCdm   : "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.376   551   551 I WVCdm   : "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.376   551   551 I WVCdm   : "rikers": {},
+06-12 13:57:43.376   551   551 I WVCdm   : "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.376   551   551 I WVCdm   : }
+06-12 13:57:43.377   551  5280 I WVCdm   : [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.380  2195  2689 E PlayCommon: [65] axan.j(1628): Failed to connect to server for server timestamp: java.net.ConnectException: Failed to connect to play.googleapis.com/[2001:4860:4802:32::223]:443
+06-12 13:57:43.381  2195  2689 W PlayCommon: [65] axan.l(11): No account for auth token provided
+06-12 13:57:43.383  2195  2689 I PlayCommon: [65] axan.j(1854): Connecting to server: https://play.googleapis.com/play/log?format=raw&proto_v2=true
+06-12 13:57:43.387   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.388   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.388   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.388   551   551 E WVCdm   : [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.388   551   551 I WVCdm   : [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.388   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.388   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.388   551   551 D WVCdm   : [crypto_session.cpp(434):CacheVersion] OEMCrypto version (default security level): 18.3
+06-12 13:57:43.388   551   551 D WVCdm   : [crypto_session.cpp(443):CacheVersion] OEMCrypto version (L3 security level): 18.3
+06-12 13:57:43.391   735   837 D ActivityManager: sync unfroze 2195 com.android.vending for 12
+06-12 13:57:43.391  3348  4181 I DrmHalHidl: No hidl drm factories found
+06-12 13:57:43.392   239   239 I hwservicemanager: getTransport: Cannot find entry android.hardware.drm@1.0::IDrmFactory/default in either framework or device VINTF manifest.
+06-12 13:57:43.392   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.393  3348  4181 W DrmHalHidl: Failed to find passthrough drm factories
+06-12 13:57:43.395  3348  4181 I DrmUtils: found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/clearkey]
+06-12 13:57:43.396   735   837 D ActivityManager: sync unfroze 4187 com.android.chrome:privileged_process0 for 12
+06-12 13:57:43.396  3348  4181 I DrmUtils: found IDrmFactory. Instance name:[android.hardware.drm.IDrmFactory/widevine]
+06-12 13:57:43.396   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   551   551 I WVCdm   : [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.397   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.398   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.398   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   551   551 I WVCdm-DrmFactory: [app][com.android.chrome] calling virtual ::ndk::ScopedAStatus wvdrm::hardware::drm::widevine::WVDrmFactory::createDrmPlugin(const Uuid &, const string &, std::shared_ptr< ::aidl::android::hardware::drm::IDrmPlugin> *)
+06-12 13:57:43.399   551   551 D WVCdm   : Instantiating CDM.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   837 W IPCThreadState: Sending oneway calls to frozen process.
+06-12 13:57:43.399   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.400   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.400   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.401   735   837 W ProcessStats: Tracking association SourceState{146cf6a com.android.chrome/10150 BTop #2262} whose proc state 2 is better than process ProcessState{1f9f1ec com.google.android.gms.persistent/10148 pkg=com.google.android.gms} proc state 4 (141 skipped)
+06-12 13:57:43.401   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.403   735   837 I AppsFilter: interaction: PackageSetting{6fbfd80 com.android.microdroid.empty_payload/10209} -> PackageSetting{454cc5b com.tracktosearch/10217} BLOCKED
+06-12 13:57:43.404   551   551 D WVCdm   : [cdm_engine.cpp(583):QueryStatus] security_level = Default, query_token = WidevineCdmVersion
+06-12 13:57:43.409   735  1818 D CompatChangeReporter: Compat change id reported: 161145287; UID 10150; state: ENABLED
+06-12 13:57:43.409   735  2076 V ActivityManager: Got obituary of 5056:com.tracktosearch
+06-12 13:57:43.412   735   774 W ActivityManager: setHasOverlayUi called on unknown pid: 5056
+06-12 13:57:43.412   551   551 D WVCdm   : [cdm_engine.cpp(583):QueryStatus] security_level = Default, query_token = SecurityLevel
+06-12 13:57:43.413   735   774 V WindowManager: Unknown focus tokens, dropping reportFocusChanged
+06-12 13:57:43.421   551   551 I WVCdm   : [(0):] L3 Terminate.
+06-12 13:57:43.423   551   551 D WVCdm   : [cdm_engine.cpp(583):QueryStatus] security_level = Default, query_token = SecurityLevel
+06-12 13:57:43.423   551   551 I WVCdm   : [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.423   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.423   551   551 I WVCdm   : "soc_vendor": "Widevine",
+06-12 13:57:43.423   551   551 I WVCdm   : "soc_model": "Software",
+06-12 13:57:43.423   551   551 I WVCdm   : "ta_ver": "N/A",
+06-12 13:57:43.423   551   551 I WVCdm   : "uses_opk": false,
+06-12 13:57:43.423   551   551 I WVCdm   : "tee_os": "N/A",
+06-12 13:57:43.423   551   551 I WVCdm   : "tee_os_ver": "N/A",
+06-12 13:57:43.423   551   551 I WVCdm   : "is_debug": false,
+06-12 13:57:43.423   551   551 I WVCdm   : "git_commit": "",
+06-12 13:57:43.423   551   551 I WVCdm   : "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.423   551   551 I WVCdm   : "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.423   551   551 I WVCdm   : "rikers": {},
+06-12 13:57:43.423   551   551 I WVCdm   : "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.423   551   551 I WVCdm   : }
+06-12 13:57:43.423   551  5286 I WVCdm   : [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.425   735  1818 D ConnectivityService: requestNetwork for uid/pid:10150/3348 activeRequest: null callbackRequest: 169 [NetworkRequest [ REQUEST id=170, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10150 RequestorUid: 10150 RequestorPkg: com.android.chrome UnderlyingNetworks: Null] ]] callback flags: 0 order: 2147483647 isUidTracked: false declaredMethods: AVAIL|LOST|NC|LP
+06-12 13:57:43.425  1172  1172 D CarrierSvcBindHelper: onHandleForceStop: [com.tracktosearch]
+06-12 13:57:43.427   735   883 I system_server: AssetManager2(0x70d1fc863678) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:43.427  1172  1172 D CarrierSvcBindHelper: No carrier app for: 0
+06-12 13:57:43.432   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.432   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.432   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.432   551   551 E WVCdm   : [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.432   551   551 I WVCdm   : [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.432   551   551 W WVCdm   : [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.432   551   551 I WVCdm   : [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.432   551   551 D WVCdm   : [crypto_session.cpp(434):CacheVersion] OEMCrypto version (default security level): 18.3
+06-12 13:57:43.432   551   551 D WVCdm   : [crypto_session.cpp(443):CacheVersion] OEMCrypto version (L3 security level): 18.3
+06-12 13:57:43.432   551   551 E WVCdm   : App requested L1 security on a non-L1 device.
+06-12 13:57:43.437   735   883 I system_server: AssetManager2(0x70d1fc8720d8) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:43.439  3348  4181 D DrmHalAidl: framework logs size 8; plugin logs size 63
+06-12 13:57:43.440  3348  4181 E cr_media: Failed to set security level L1
+06-12 13:57:43.440  3348  4181 E cr_media: java.lang.IllegalArgumentException: {}: BAD_VALUE
+06-12 13:57:43.440  3348  4181 E cr_media: cdm err: 0, oem err: 0, ctx: 0
+06-12 13:57:43.440  3348  4181 E cr_media: ============================== Beginning of DRM Plugin Log ==============================
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.759 I No hidl drm factories found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.760 W Failed to find passthrough drm factories
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.838 I [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.844 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.845 I [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_vendor": "Widevine",
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_model": "Software",
+06-12 13:57:43.440  3348  4181 E cr_media: "ta_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "uses_opk": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "is_debug": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "git_commit": "",
+06-12 13:57:43.440  3348  4181 E cr_media: "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.440  3348  4181 E cr_media: "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.440  3348  4181 E cr_media: "rikers": {},
+06-12 13:57:43.440  3348  4181 E cr_media: "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.440  3348  4181 E cr_media: }
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.845 I [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.867 I [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 W [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 W [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 E [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 W [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.870 I [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.880 I [(0):] L3 Terminate.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.881 I No hidl drm factories found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.883 W Failed to find passthrough drm factories
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.886 I [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.886 I [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_vendor": "Widevine",
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_model": "Software",
+06-12 13:57:43.440  3348  4181 E cr_media: "ta_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "uses_opk": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "is_debug": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "git_commit": "",
+06-12 13:57:43.440  3348  4181 E cr_media: "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.440  3348  4181 E cr_media: "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.440  3348  4181 E cr_media: "rikers": {},
+06-12 13:57:43.440  3348  4181 E cr_media: "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.440  3348  4181 E cr_media: }
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.886 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.887 I [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 I [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 I [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 W [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 W [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 E [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.889 W [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.896 I [(0):] L3 Terminate.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.902 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.903 I [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.903 I [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_vendor": "Widevine",
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_model": "Software",
+06-12 13:57:43.440  3348  4181 E cr_media: "ta_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "uses_opk": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "is_debug": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "git_commit": "",
+06-12 13:57:43.440  3348  4181 E cr_media: "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.440  3348  4181 E cr_media: "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.440  3348  4181 E cr_media: "rikers": {},
+06-12 13:57:43.440  3348  4181 E cr_media: "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.440  3348  4181 E cr_media: }
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 I [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 W [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 E [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 W [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 I [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.907 W [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.928 I [cdm_usage_table.cpp(203):RestoreTable] Found usage table to restore: entry_count = 0
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.935 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.936 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.936 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:53:09.941 I [cdm_engine.cpp(1158):GetProvisioningRequest] cert_type = Widevine
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.357 I No hidl drm factories found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.360 W Failed to find passthrough drm factories
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.374 I [(0):] L3 Terminate.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.376 I [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.376 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.376 I [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_vendor": "Widevine",
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_model": "Software",
+06-12 13:57:43.440  3348  4181 E cr_media: "ta_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "uses_opk": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "is_debug": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "git_commit": "",
+06-12 13:57:43.440  3348  4181 E cr_media: "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.440  3348  4181 E cr_media: "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.440  3348  4181 E cr_media: "rikers": {},
+06-12 13:57:43.440  3348  4181 E cr_media: "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.440  3348  4181 E cr_media: }
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.377 I [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 I [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 I [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 W [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 W [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 E [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.388 W [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.391 I No hidl drm factories found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.393 W Failed to find passthrough drm factories
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.397 I [cdm_engine.cpp(1132):IsSecurityLevelSupported] level = L1
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.421 I [(0):] L3 Terminate.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.423 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.423 I [oemcrypto_adapter_dynamic.cpp(836):Initialize] Level 3 Build Info (v18): {
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_vendor": "Widevine",
+06-12 13:57:43.440  3348  4181 E cr_media: "soc_model": "Software",
+06-12 13:57:43.440  3348  4181 E cr_media: "ta_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "uses_opk": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "tee_os_ver": "N/A",
+06-12 13:57:43.440  3348  4181 E cr_media: "is_debug": false,
+06-12 13:57:43.440  3348  4181 E cr_media: "git_commit": "",
+06-12 13:57:43.440  3348  4181 E cr_media: "build_timestamp": "Feb 25 2025 00:18:07",
+06-12 13:57:43.440  3348  4181 E cr_media: "mode": "HAYSTACK_ONLY",
+06-12 13:57:43.440  3348  4181 E cr_media: "rikers": {},
+06-12 13:57:43.440  3348  4181 E cr_media: "haystack": {"soc_vendor":"L3_33100","soc_model":"X86 64 bit","ta_ver":"18.1.0+May 14 2024_19:04:42_","uses_opk":false,"tee_os":"none","tee_os_ver":"0.0.0","form_factor":"L3","implementer":"Widevine","fused":false}
+06-12 13:57:43.440  3348  4181 E cr_media: }
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.423 I [(0):] Level3 Library 33100 May 14 2024 19:04:42
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 I [oemcrypto_adapter_dynamic.cpp(851):Initialize] L3 Initialized. Trying L1.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 W [oemcrypto_adapter_dynamic.cpp(864):Initialize] Could not load oemcrypto from path liboemcrypto.so.  dlopen failed: library "liboemcrypto.so" not found
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 W [oemcrypto_adapter_dynamic.cpp(868):Initialize] Could not load oemcrypto. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 E [oemcrypto_adapter_dynamic.cpp(1352):ValidateOrInstallL1KeyboxOrCert] L1 not initialized. Falling back to L3
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 I [file_utils.cpp(38):Exists] stat failed: ENOENT
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 W [oemcrypto_adapter_dynamic.cpp(1557):OEMCrypto_InitializeAndCheckKeybox] Keybox error: 25. Falling back to L3.
+06-12 13:57:43.440  3348  4181 E cr_media:   06-12 13:57:43.432 I [oemcrypto_adapter_dynamic.cpp(901):Level1Terminate] L1 Terminate not needed
+06-12 13:57:43.440  3348  4181 E cr_media: ============================== End of DRM Plugin Log ==============================
+06-12 13:57:43.440  3348  4181 E cr_media: 	at android.media.MediaDrm.setPropertyString(Native Method)
+06-12 13:57:43.440  3348  4181 E cr_media: 	at org.chromium.media.MediaDrmBridge.create(chromium-TrichromeChromeGoogle6432.aab-stable-694313738:118)
+06-12 13:57:43.440  3348  4181 E cr_media: Security level L1 not supported!
+06-12 13:57:43.442   735   908 D WifiNetworkFactory: got request NetworkRequest [ REQUEST id=170, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10150 RequestorUid: 10150 RequestorPkg: com.android.chrome UnderlyingNetworks: Null] ]
+06-12 13:57:43.446   735   908 D UntrustedWifiNetworkFactory: got request NetworkRequest [ REQUEST id=170, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10150 RequestorUid: 10150 RequestorPkg: com.android.chrome UnderlyingNetworks: Null] ]
+06-12 13:57:43.447   735   922 D ConnectivityService: NetReassign [170 : null 鈫?100] [c 1] [a 6] [i 13]
+06-12 13:57:43.448   735   908 D OemPaidWifiNetworkFactory: got request NetworkRequest [ REQUEST id=170, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10150 RequestorUid: 10150 RequestorPkg: com.android.chrome UnderlyingNetworks: Null] ]
+06-12 13:57:43.448   735   908 D MultiInternetWifiNetworkFactory: got request NetworkRequest [ REQUEST id=170, [ Capabilities: INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED Uid: 10150 RequestorUid: 10150 RequestorPkg: com.android.chrome UnderlyingNetworks: Null] ]
+06-12 13:57:43.449   735   922 D ConnectivityService: NetReassign [no changes] [c 0] [a 1] [i 0]
+06-12 13:57:43.450   646   646 D statsd_drm: statsd_mediadrm skipping empty entry
+06-12 13:57:43.451  3348  4181 W chromium: [WARNING:media_drm_origin_id_manager.cc(338)] Failed to provision origin ID
+06-12 13:57:43.455  3348  3348 I cr_OfflineDetector: Running updateState mConnectivityDetectorInitialized: true, mTimeWhenLastForegrounded: 736262, getElapsedTime: 736262, mTimeWhenLastOfflineNotificationReceived: 403063, mTimeWhenLastOnline: 0, mTimeWhenAirplaneModeToggledOff: 0 mApplicationState: 1, mIsOfflineLastReportedByConnectivityDetector: true, mInAirplaneMode: false mIsEffectivelyOffline: true
+06-12 13:57:43.456  3348  3348 I cr_OfflineDetector: updateState(): timeSinceLastForeground: 0, timeSinceOfflineNotificationReceived: 333199, timeSinceLastOnline: 736262, timeNeededForForeground: 2000, timeNeededForOffline: -331199 timeSinceAirplaneModeToggledOff: 736262 timeNeededAfterConnectionChangeFromOnlineToOffline: 0 timeNeededAfterConnectionChangeFromAirplaneToOffline: 0
+06-12 13:57:43.460   551   551 I WVCdm   : [(0):] L3 Terminate.
+06-12 13:57:43.486  3348  3348 W cr_ActivityDispatcher: CustomTabsIntent#shouldAlwaysUseBrowserUI() = false
+06-12 13:57:43.499   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.501   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:43.501  3348  4175 W cr_PartnerCustomize: Partner homepage must be HTTP(S) or NewTabPage. Got invalid URL ""
+06-12 13:57:43.503   735  2075 D CoreBackPreview: Window{f86be89 u0 com.android.chrome/com.google.android.apps.chrome.Main}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@18ef62a, mPriority=0, mIsAnimationCallback=true, mOverrideBehavior=0}
+06-12 13:57:43.505  1982  1982 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.chromesync.service.firstparty.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.GmsApiService }
+06-12 13:57:43.505  1982  1982 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.chromesync.service.firstparty.START dat=chimera-action:/... xflg=0x4 cmp=com.google.android.gms/.chimera.GmsApiService }
+06-12 13:57:43.518  3348  3348 I cr_A11yState: Enabled accessibility services list updated. []
+06-12 13:57:43.520  3348  3348 I cr_A11yState: Informing listeners of changes.
+06-12 13:57:43.521  3348  3348 I cr_A11yState: New AccessibilityState: State{isScreenReaderEnabled=false, isTouchExplorationEnabled=false, isPerformGesturesEnabled=false, isAnyAccessibilityServiceEnabled=false, isAccessibilityToolPresent=false, isSpokenFeedbackServicePresent=false, isTextShowPasswordEnabled=true, isOnlyPasswordManagersEnabled=false}
+06-12 13:57:43.555  3348  3348 I cr_InactivityTracker: Last background time read from the SharedPreference is:1781272568656.
+06-12 13:57:43.562  3348  3348 I cr_ChromeActivity: onResumeWithNative: exiting picture in picture if needed
+06-12 13:57:43.562  3348  3348 I cr_VideoPersist: Dismiss activity with reason 0
+06-12 13:57:43.570  3348  3348 I cr_InactivityTracker: Last visible time read from the SharedPreference is:1781272566396.
+06-12 13:57:43.595  3348  4141 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+06-12 13:57:43.597  3348  4141 I EGL_emulation: Opening libGLESv2_emulation.so
+06-12 13:57:43.640  3348  3348 I cr_CompositorSurfaceMgr: surfaceCreated format: 0
+06-12 13:57:43.654  3348  4141 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-12 13:57:43.654  3348  4141 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-12 13:57:43.777   735   762 I system_server: Background concurrent mark compact GC freed 25MB AllocSpace bytes, 12(240KB) LOS objects, 45% free, 29MB/53MB, paused 2.144ms,3.191ms total 543.075ms
+06-12 13:57:43.849   735  1818 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:43.849   735  1818 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:43.852   735  1818 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:43.932  1633  1633 W AiAiVC  : Unexpected capture event type: 11
+06-12 13:57:43.943  3348  4176 W chromium: [WARNING:ev_root_ca_metadata.cc(119)] Not implemented
+06-12 13:57:43.947  3348  4175 W chromium: [WARNING:ev_root_ca_metadata.cc(119)] Not implemented
+06-12 13:57:44.080  1016  1316 V WindowManagerShell: onTransitionReady(transaction=3156800963347)
+06-12 13:57:44.083  1016  1092 V WindowManagerShell: onTransitionReady (#18) android.os.BinderProxy@903ba76: {id=18 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-12 13:57:44.083  1016  1092 V WindowManagerShell:         {m=TO_FRONT f=MOVE_TO_TOP leash=Surface(name=Task=27)/@0xf33a54d sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},
+06-12 13:57:44.083  1016  1092 V WindowManagerShell:         {m=CLOSE f=NONE leash=Surface(name=Task=29)/@0xbe90802 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}
+06-12 13:57:44.083  1016  1092 V WindowManagerShell:     ]}
+06-12 13:57:44.083  1016  1092 V WindowManagerShell: Playing animation for (#18) android.os.BinderProxy@903ba76@0
+06-12 13:57:44.084  1016  1092 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+06-12 13:57:44.084  1016  1092 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=18 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=TO_FRONT f=MOVE_TO_TOP leash=Surface(name=Task=27)/@0xf33a54d sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},{m=CLOSE f=NONE leash=Surface(name=Task=29)/@0xbe90802 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}]}
+06-12 13:57:44.084  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null taskFragmentToken=android.os.BinderProxy@5f4ca58 windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@6f127b1, appThread = android.app.IApplicationThread$Stub$Proxy@2ac0496, debugName = overlayBackTransition }}
+06-12 13:57:44.084  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@ea7d817, appThread = android.app.IApplicationThread$Stub$Proxy@a183404, debugName = LauncherToDream }}
+06-12 13:57:44.084  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null windowingMode=undefined},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{NOT atype=undefined independent=true modes=[] flags=NONE mustBeTask=true order=ANY topActivity=null launchCookie=null customAnim=true windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@b3f8ded, appThread = android.app.IApplicationThread$Stub$Proxy@99bd422, debugName = QuickstepLaunchHome }}
+06-12 13:57:44.084  1016  1092 V WindowManagerShell:  Delegate animation for (#18) to null
+06-12 13:57:44.084  1016  1092 V WindowManagerShell: start default transition animation, info = {id=18 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=TO_FRONT f=MOVE_TO_TOP leash=Surface(name=Task=27)/@0xf33a54d sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},{m=CLOSE f=NONE leash=Surface(name=Task=29)/@0xbe90802 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}]}
+06-12 13:57:44.084  1016  1092 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@7e3a24e animAttr=0xb type=CLOSE isEntrance=false
+06-12 13:57:44.085  1016  1092 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@138947c animAttr=0xa type=CLOSE isEntrance=true
+06-12 13:57:44.092  1016  1092 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@ffe5041
+06-12 13:57:44.100   504   604 I RanchuHwc: logCompositionFallbackIfChanged: layer 48 CompositionType fallback from 3 to 1
+06-12 13:57:44.195   735   771 V WindowManager: Sent Transition (#18) createdAt=06-12 13:57:43.248 via request=TransitionRequestInfo { type = CLOSE, triggerTask = TaskInfo{userId=0 taskId=29 effectiveUid=10217 displayId=0 isRunning=false baseIntent=Intent { flg=0x10000000 cmp=com.tracktosearch/.MainActivity } baseActivity=null topActivity=null origActivity=null realActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} numActivities=0 lastActiveTime=642871 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{ec1aae9 Task{d80084b #29 type=standard A=10217:com.tracktosearch}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 0 - 0, 0) topActivityInfo=null launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=true isVisible=true isVisibleRequested=true isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=true lastNonFullscreenBounds=Rect(337, 831 - 1008, 2175) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= false isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 0, 0) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=undefined}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 18 }
+06-12 13:57:44.195   735   771 V WindowManager:     startWCT=WindowContainerTransaction { changes= {} hops= [] errorCallbackToken=null taskFragmentOrganizer=null }
+06-12 13:57:44.196   735   771 V WindowManager:     info={id=18 t=CLOSE f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-12 13:57:44.196   735   771 V WindowManager:         {WCT{RemoteToken{cd44e39 Task{5ea0c9 #27 type=standard A=10150:com.android.chrome}}} m=TO_FRONT f=MOVE_TO_TOP leash=Surface(name=Task=27)/@0x9bb1483 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},
+06-12 13:57:44.196   735   771 V WindowManager:         {WCT{RemoteToken{ec1aae9 Task{d80084b #29 type=standard A=10217:com.tracktosearch}}} m=CLOSE f=NONE leash=Surface(name=Task=29)/@0xd8b9f17 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}
+06-12 13:57:44.196   735   771 V WindowManager:     ]}
+06-12 13:57:44.212  1475  1475 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():2043 
+06-12 13:57:44.216   735  2075 I ImeTracker: system_server:b7641673: onRequestHide at ORIGIN_SERVER reason IME_REQUESTED_CHANGED_LISTENER fromUser false
+06-12 13:57:44.216  1475  1475 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 0, locked = false
+06-12 13:57:44.223   735   774 I ImeTracker: system_server:b7641673: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-12 13:57:44.229  1475  1475 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1293 onStartInput(EditorInfo{EditorInfo{packageName=com.android.chrome, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=12000000, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+06-12 13:57:44.233  1475  1475 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 1, locked = false
+06-12 13:57:44.236   735  1818 W PackageConfigPersister: App-specific configuration not found for packageName: com.android.chrome and userId: 0
+06-12 13:57:44.407  1016  1028 W System  : A resource failed to call release. 
+06-12 13:57:44.407  1016  1028 W System  : A resource failed to call release. 
+06-12 13:57:44.407  1016  1028 W System  : A resource failed to call release. 
+06-12 13:57:44.409  1016  1028 W System  : A resource failed to call release. 
+06-12 13:57:44.409  1016  1028 W System  : A resource failed to call release. 
+06-12 13:57:44.599  1016  1092 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#18) android.os.BinderProxy@903ba76@0
+06-12 13:57:44.601   735   771 V WindowManager: Finish Transition (#18): created at 06-12 13:57:43.248 collect-started=0.049ms request-sent=0.137ms started=38.137ms ready=38.123ms sent=832.096ms commit=20.625ms finished=1352.135ms
+06-12 13:57:44.609   735  2075 E IPCThreadState: Binder transaction failure. id: 223195, BR_*: 29189, error: -22 (Invalid argument)
+06-12 13:57:44.609   735  2075 W ActivityManager: pid 735 system sent binder code 7 with flags 1 to frozen apps and got error -32
+06-12 13:57:44.609   735  2075 W WindowManager: Exception thrown during dispatchAppVisibility Window{8cbfbd u0 com.tracktosearch/com.tracktosearch.MainActivity EXITING}
+06-12 13:57:44.609   735  2075 W WindowManager: android.os.DeadObjectException
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.os.BinderProxy.transactNative(Native Method)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.os.BinderProxy.transact(BinderProxy.java:592)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.view.IWindow$Stub$Proxy.dispatchAppVisibility(IWindow.java:557)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.WindowState.sendAppVisibilityToClients(WindowState.java:3151)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.WindowContainer.sendAppVisibilityToClients(WindowContainer.java:1311)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.WindowToken.setClientVisible(WindowToken.java:389)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.ActivityRecord.setClientVisible(ActivityRecord.java:6650)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.ActivityRecord.commitVisibility(ActivityRecord.java:5561)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.Transition.finishTransition(Transition.java:1391)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.TransitionController.finishTransition(TransitionController.java:1029)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.finishTransition(WindowOrganizerController.java:496)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.window.IWindowOrganizerController$Stub.onTransact(IWindowOrganizerController.java:261)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at com.android.server.wm.WindowOrganizerController.onTransact(WindowOrganizerController.java:223)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.os.Binder.execTransactInternal(Binder.java:1421)
+06-12 13:57:44.609   735  2075 W WindowManager: 	at android.os.Binder.execTransact(Binder.java:1365)
+06-12 13:57:44.609   735  2075 W Process : Unable to open /proc/5056/status
+06-12 13:57:44.626  1184  1184 D RecentsView: onTaskRemoved: 29, not handling task stack changes
+06-12 13:57:44.629  1184  1184 D RecentsView: onTaskRemoved: 29, not handling task stack changes
+06-12 13:57:44.635  1016  1092 V WindowManagerShell: Track 0 became idle
+06-12 13:57:44.636  1016  1092 V WindowManagerShell: All active transition animations finished
+06-12 13:57:44.679   556   556 E BpTransactionCompletedListener: Failed to transact (-32)
+06-12 13:57:44.729   735   837 W ActivityTaskManager: callingPackage for (uid=2000, pid=5290) has no WPC
+06-12 13:57:44.733   735   837 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@8fc261c9 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-12 13:57:44.734   735   837 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_OVERRIDE
+06-12 13:57:44.735   735   837 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_USER_ASPECT_RATIO_FULLSCREEN_OVERRIDE
+06-12 13:57:44.735   735   837 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_RESIZEABLE_ACTIVITY_OVERRIDES
+06-12 13:57:44.737   735   837 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_MIN_ASPECT_RATIO_OVERRIDE
+06-12 13:57:44.742   735   837 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE
+06-12 13:57:44.747   735   837 I ActivityTaskManager: START u0 {flg=0x10000000 xflg=0x5 cmp=com.tracktosearch/.MainActivity} with LAUNCH_SINGLE_TOP from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+06-12 13:57:44.748  1016  1130 I ndroid.systemui: AssetManager2(0x70d1fc820378) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:44.751  3348  3348 I cr_VideoPersist: Attempted picture-in-picture with result: 8
+06-12 13:57:44.751  1016  1092 V WindowManagerShell: Transition requested (#19): android.os.BinderProxy@c0814ac TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=30 effectiveUid=10217 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.tracktosearch/.MainActivity } baseActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} topActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} origActivity=null realActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} numActivities=1 lastActiveTime=737553 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{android.window.IWindowContainerToken$Stub$Proxy@ec56575} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 159 - 0, 0) topActivityInfo=ActivityInfo{c74090a com.tracktosearch.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=false lastNonFullscreenBounds=Rect(337, 831 - 1008, 2175) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1344, 2992) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=inactive}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 19 }
+06-12 13:57:44.759  1016  1092 D ShellSplitScreen: logExit: no-op, mLoggerSessionId is null
+06-12 13:57:44.759   735   774 V GrammaticalInflectionUtils: AttributionSource: android.content.AttributionSource@8fc261c9 does not have READ_SYSTEM_GRAMMATICAL_GENDER permission.
+06-12 13:57:44.764   735  2076 D CompatChangeReporter: Compat change id reported: 309578419; UID 10217; state: ENABLED
+06-12 13:57:44.767   556   556 I BpBinder: onLastStrongRef automatically unlinking death recipients: 
+06-12 13:57:44.783  1016  1131 W HWUI    : Image decoding logging dropped!
+06-12 13:57:44.785   735  2076 I AppsFilter: interaction: PackageSetting{6fbfd80 com.android.microdroid.empty_payload/10209} -> PackageSetting{3c6773 com.tracktosearch/10217} BLOCKED
+06-12 13:57:44.788   482   482 D Zygote  : Forked child process 5293
+06-12 13:57:44.792   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:44.795   735   883 I system_server: AssetManager2(0x70d1fc86eed8) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:44.800   735   781 I ActivityManager: Start proc 5293:com.tracktosearch/u0a217 for next-top-activity {com.tracktosearch/com.tracktosearch.MainActivity}
+06-12 13:57:44.800   735   781 I ActivityManager: ProcessObserver broadcast disabled
+06-12 13:57:44.800   735  1818 D CoreBackPreview: Window{97a955c u0 Splash Screen com.tracktosearch}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@9bbdcea, mPriority=0, mIsAnimationCallback=false, mOverrideBehavior=0}
+06-12 13:57:44.804   735   883 I system_server: AssetManager2(0x70d1fc8720d8) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:44.807  5293  5293 I m.tracktosearch: Late-enabling -Xcheck:jni
+06-12 13:57:44.834  5293  5293 I m.tracktosearch: Using CollectorTypeCMC GC.
+06-12 13:57:44.836  5293  5293 W m.tracktosearch: Unexpected CPU variant for x86: x86_64.
+06-12 13:57:44.836  5293  5293 W m.tracktosearch: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, goldmont-without-sha-xsaves, tremont, kabylake, alderlake, default
+06-12 13:57:44.845   564   578 I adbd    : jdwp connection from 5293
+06-12 13:57:44.877  5293  5293 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+06-12 13:57:44.881   735  2076 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:44.882   735  2076 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:44.886   735  2076 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:44.915   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:44.916  1172  1172 D TelephonyManager: requestModemActivityInfo: Sending result to app: ModemActivityInfo{ mTimestamp=737717 mSleepTimeMs=336 mIdleTimeMs=112 mActivityStatsTechSpecificInfo=[{mRat=UNKNOWN,mFrequencyRange=UNKNOWN,mTxTimeMs[]=[8, 24, 48, 64, 72],mRxTimeMs=72}]}
+06-12 13:57:45.003  1016  1030 V WindowManagerShell: onTransitionReady(transaction=3156800963366)
+06-12 13:57:45.005  1016  1092 V WindowManagerShell: onTransitionReady (#19) android.os.BinderProxy@c0814ac: {id=19 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-12 13:57:45.005  1016  1092 V WindowManagerShell:         {m=OPEN f=NONE leash=Surface(name=Task=30)/@0x68ab686 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},
+06-12 13:57:45.005  1016  1092 V WindowManagerShell:         {m=TO_BACK f=NONE leash=Surface(name=Task=27)/@0xe50bb47 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}
+06-12 13:57:45.005  1016  1092 V WindowManagerShell:     ]}
+06-12 13:57:45.006  1016  1092 V WindowManagerShell: Playing animation for (#19) android.os.BinderProxy@c0814ac@0
+06-12 13:57:45.006  1016  1092 V ShellRecents: RecentsTransitionHandler.startAnimation: no controller found
+06-12 13:57:45.007  1016  1092 V WindowManagerShell: Transition doesn't have explicit remote, search filters for match for {id=19 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=OPEN f=NONE leash=Surface(name=Task=30)/@0x68ab686 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},{m=TO_BACK f=NONE leash=Surface(name=Task=27)/@0xe50bb47 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}]}
+06-12 13:57:45.007  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=undefined independent=true modes=[CLOSE,TO_BACK] flags=IN_TASK_WITH_EMBEDDED_ACTIVITY mustBeTask=false order=ANY topActivity=null launchCookie=null taskFragmentToken=android.os.BinderProxy@5f4ca58 windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@6f127b1, appThread = android.app.IApplicationThread$Stub$Proxy@2ac0496, debugName = overlayBackTransition }}
+06-12 13:57:45.007  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x0 checks=[{atype=dream independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{atype=home independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@ea7d817, appThread = android.app.IApplicationThread$Stub$Proxy@a183404, debugName = LauncherToDream }}
+06-12 13:57:45.007  1016  1092 V WindowManagerShell:  Checking filter Pair{{types=[] flags=0x0] notFlags=0x100 checks=[{atype=home independent=true modes=[OPEN,TO_FRONT] flags=NONE mustBeTask=false order=TOP topActivity=ComponentInfo{com.google.android.apps.nexuslauncher/com.google.android.apps.nexuslauncher.NexusLauncherActivity} launchCookie=null windowingMode=undefined},{atype=standard independent=true modes=[CLOSE,TO_BACK] flags=NONE mustBeTask=false order=ANY topActivity=null launchCookie=null windowingMode=undefined},{NOT atype=undefined independent=true modes=[] flags=NONE mustBeTask=true order=ANY topActivity=null launchCookie=null customAnim=true windowingMode=undefined}]} RemoteTransition { remoteTransition = android.window.IRemoteTransition$Stub$Proxy@b3f8ded, appThread = android.app.IApplicationThread$Stub$Proxy@99bd422, debugName = QuickstepLaunchHome }}
+06-12 13:57:45.007  1016  1092 V WindowManagerShell:  Delegate animation for (#19) to null
+06-12 13:57:45.007  1016  1092 V WindowManagerShell: start default transition animation, info = {id=19 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[{m=OPEN f=NONE leash=Surface(name=Task=30)/@0x68ab686 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},{m=TO_BACK f=NONE leash=Surface(name=Task=27)/@0xe50bb47 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}]}
+06-12 13:57:45.008  1016  1092 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@14bb512 animAttr=0x9 type=OPEN isEntrance=false
+06-12 13:57:45.015  1016  1092 I ndroid.systemui: AssetManager2(0x70d1fc820ff8) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:45.164   735   771 V WindowManager: Sent Transition (#19) createdAt=06-12 13:57:44.738 via request=TransitionRequestInfo { type = OPEN, triggerTask = TaskInfo{userId=0 taskId=30 effectiveUid=10217 displayId=0 isRunning=true baseIntent=Intent { flg=0x10000000 cmp=com.tracktosearch/.MainActivity } baseActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} topActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} origActivity=null realActivity=ComponentInfo{com.tracktosearch/com.tracktosearch.MainActivity} numActivities=1 lastActiveTime=737553 supportsMultiWindow=true resizeMode=1 isResizeable=true minWidth=-1 minHeight=-1 defaultMinSize=220 token=WCT{RemoteToken{2abed8e Task{7a154d7 #30 type=standard A=10217:com.tracktosearch}}} topActivityType=1 pictureInPictureParams=null shouldDockBigOverlays=false launchIntoPipHostTaskId=-1 lastParentTaskIdBeforePip=-1 displayCutoutSafeInsets=Rect(0, 159 - 0, 0) topActivityInfo=ActivityInfo{f6999af com.tracktosearch.MainActivity} launchCookies=[] positionInParent=Point(0, 0) parentTaskId=-1 isFocused=false isVisible=false isVisibleRequested=false isTopActivityNoDisplay=false isSleeping=false locusId=null displayAreaFeatureId=1 isTopActivityTransparent=false isActivityStackTransparent=false lastNonFullscreenBounds=Rect(337, 831 - 1008, 2175) capturedLink=null capturedLinkTimestamp=0 requestedVisibleTypes=-9 topActivityRequestOpenInBrowserEducationTimestamp=0 appCompatTaskInfo=AppCompatTaskInfo { topActivityInSizeCompat=false eligibleForLetterboxEducation= false isLetterboxEducationEnabled= true isLetterboxDoubleTapEnabled= false eligibleForUserAspectRatioButton= false topActivityBoundsLetterboxed= false isFromLetterboxDoubleTap= false topActivityLetterboxVerticalPosition= -1 topActivityLetterboxHorizontalPosition= -1 topActivityLetterboxWidth=-1 topActivityLetterboxHeight=-1 topActivityAppBounds=Rect(0, 0 - 1344, 2992) isUserFullscreenOverrideEnabled=false isSystemFullscreenOverrideEnabled=false hasMinAspectRatioOverride=false topActivityLetterboxBounds=null cameraCompatTaskInfo=CameraCompatTaskInfo { freeformCameraCompatMode=inactive}} topActivityMainWindowFrame=null}, pipChange = null, remoteTransition = null, displayChange = null, flags = 0, debugId = 19 }
+06-12 13:57:45.164   735   771 V WindowManager:     startWCT=WindowContainerTransaction { changes= {} hops= [] errorCallbackToken=null taskFragmentOrganizer=null }
+06-12 13:57:45.164   735   771 V WindowManager:     info={id=19 t=OPEN f=0x0 trk=0 r=[0@Point(0, 0)] c=[
+06-12 13:57:45.164   735   771 V WindowManager:         {WCT{RemoteToken{2abed8e Task{7a154d7 #30 type=standard A=10217:com.tracktosearch}}} m=OPEN f=NONE leash=Surface(name=Task=30)/@0x25a9b53 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1},
+06-12 13:57:45.164   735   771 V WindowManager:         {WCT{RemoteToken{cd44e39 Task{5ea0c9 #27 type=standard A=10150:com.android.chrome}}} m=TO_BACK f=NONE leash=Surface(name=Task=27)/@0x9bb1483 sb=Rect(0, 0 - 1344, 2992) eb=Rect(0, 0 - 1344, 2992) epz=Point(1344, 2992) d=0 taskParent=-1}
+06-12 13:57:45.164   735   771 V WindowManager:     ]}
+06-12 13:57:45.178  1016  1092 I ndroid.systemui: AssetManager2(0x70d1fc818678) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:45.180  1016  1092 V WindowManagerShell: loadAnimation: anim=android.view.animation.AnimationSet@1ce2ed1 animAttr=0x8 type=OPEN isEntrance=true
+06-12 13:57:45.183  1016  1092 V WindowManagerShell:  animated by com.android.wm.shell.transition.DefaultTransitionHandler@ffe5041
+06-12 13:57:45.216   504   604 I RanchuHwc: logCompositionFallbackIfChanged: layer 51 CompositionType fallback from 3 to 1
+06-12 13:57:45.700  1016  1092 V WindowManagerShell: Transition animation finished (aborted=false), notifying core (#19) android.os.BinderProxy@c0814ac@0
+06-12 13:57:45.703   735   771 V WindowManager: Finish Transition (#19): created at 06-12 13:57:44.738 collect-started=0.032ms request-sent=9.291ms started=21.734ms ready=262.29ms sent=264.027ms commit=214.051ms finished=965.072ms
+06-12 13:57:45.708  1016  1092 V WindowManagerShell: Track 0 became idle
+06-12 13:57:45.709  3348  3348 D VRI[Main]: visibilityChanged oldVisibility=true newVisibility=false
+06-12 13:57:45.711  1016  1092 V WindowManagerShell: All active transition animations finished
+06-12 13:57:45.717  3348  3348 E cr_CompositorSurfaceMgr: surfaceDestroyed format : -3
+06-12 13:57:45.764  1633  1633 W AiAiVC  : Unexpected capture event type: 11
+06-12 13:57:45.890   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:45.890   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:45.892   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:45.901  5293  5293 D nativeloader: Configuring clns-9 for other apk /data/app/~~zx1pMmcHGCpfao_YK27ySA==/com.tracktosearch-Dxh-r96QRhIggCyp_aHgEQ==/base.apk. target_sdk_version=35, uses_libraries=, library_path=/data/app/~~zx1pMmcHGCpfao_YK27ySA==/com.tracktosearch-Dxh-r96QRhIggCyp_aHgEQ==/lib/x86_64:/data/app/~~zx1pMmcHGCpfao_YK27ySA==/com.tracktosearch-Dxh-r96QRhIggCyp_aHgEQ==/base.apk!/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.tracktosearch
+06-12 13:57:45.908  5293  5293 D CompatChangeReporter: Compat change id reported: 202956589; UID 10217; state: ENABLED
+06-12 13:57:45.919  5293  5293 I m.tracktosearch: AssetManager2(0x70d1fc7d6c78) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:45.931  5293  5293 V GraphicsEnvironment: Currently set values for:
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment: com.tracktosearch is not listed in per-application setting
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment: ANGLE allowlist from config: com.dreamgames.royalmatch com.dts.freefiremax com.dxx.firenow com.gramgames.mergedragons com.ludo.king com.mojang.minecraftpe com.my.defense com.nintendo.zaka com.os.airforce com.playrix.fishdomdd.gplay io.teslatech.callbreak jp.konami.prospia net.peakgames.toonblast
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment: com.tracktosearch is not listed in ANGLE allowlist or settings, returning default
+06-12 13:57:45.932  5293  5293 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-12 13:57:45.960  5293  5293 D CompatChangeReporter: Compat change id reported: 279646685; UID 10217; state: ENABLED
+06-12 13:57:45.978   735  1818 W OptProp : Cannot read opt property android.window.PROPERTY_COMPAT_ENABLE_FAKE_FOCUS
+06-12 13:57:45.978   735  1818 D CompatChangeReporter: Compat change id reported: 324203798; UID 10217; state: ENABLED
+06-12 13:57:45.983   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:45.983   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:45.989  5293  5308 I DisplayManager: Choreographer implicitly registered for the refresh rate.
+06-12 13:57:46.000  5293  5293 I m.tracktosearch: AssetManager2(0x70d1fc7cfbf8) locale list changing from [] to [zh-Hans-CN]
+06-12 13:57:46.024  5293  5293 E ashmem  : Pinning is deprecated since Android Q. Please use trim or other methods.
+06-12 13:57:46.043  5293  5293 D CompatChangeReporter: Compat change id reported: 309578419; UID 10217; state: ENABLED
+06-12 13:57:46.046  5293  5293 D DesktopModeFlags: Toggle override initialized to: OVERRIDE_UNSET
+06-12 13:57:46.077  5293  5308 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+06-12 13:57:46.081  5293  5308 I EGL_emulation: Opening libGLESv2_emulation.so
+06-12 13:57:46.094  5293  5308 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-12 13:57:46.095  5293  5308 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-12 13:57:46.211  5293  5293 D CompatChangeReporter: Compat change id reported: 352594277; UID 10217; state: ENABLED
+06-12 13:57:46.217  5293  5293 D CompatChangeReporter: Compat change id reported: 349153669; UID 10217; state: ENABLED
+06-12 13:57:46.225  5293  5293 W HWUI    : Unknown dataspace 0
+06-12 13:57:46.475  5293  5293 W m.tracktosearch: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+06-12 13:57:46.475  5293  5293 W m.tracktosearch: Common causes for lock verification issues are non-optimized dex code
+06-12 13:57:46.475  5293  5293 W m.tracktosearch: and incorrect proguard optimizations.
+06-12 13:57:46.475  5293  5293 W m.tracktosearch: Method boolean androidx.compose.runtime.snapshots.SnapshotStateList.conditionalUpdate$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+06-12 13:57:46.476  5293  5293 W m.tracktosearch: Method java.lang.Object androidx.compose.runtime.snapshots.SnapshotStateList.mutate(kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+06-12 13:57:46.476  5293  5293 W m.tracktosearch: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update(boolean, kotlin.jvm.functions.Function1) failed lock verification and will run slower.
+06-12 13:57:46.476  5293  5293 W m.tracktosearch: Method void androidx.compose.runtime.snapshots.SnapshotStateList.update$default(androidx.compose.runtime.snapshots.SnapshotStateList, boolean, kotlin.jvm.functions.Function1, int, java.lang.Object) failed lock verification and will run slower.
+06-12 13:57:46.586   735  2076 D CoreBackPreview: Window{ad59b8f u0 com.tracktosearch/com.tracktosearch.MainActivity}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@3fe008, mPriority=0, mIsAnimationCallback=false, mOverrideBehavior=0}
+06-12 13:57:46.803   735   771 I ActivityTaskManager: Displayed com.tracktosearch/.MainActivity for user 0: +2s73ms
+06-12 13:57:46.818  1172  1368 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled
+06-12 13:57:46.830  3348  3348 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=dM2@aded7f7
+06-12 13:57:46.831   735  2076 D CoreBackPreview: Window{f86be89 u0 com.android.chrome/com.google.android.apps.chrome.Main}: Setting back callback OnBackInvokedCallbackInfo{mCallback=android.window.IOnBackInvokedCallback$Stub$Proxy@2c4b9e, mPriority=-1, mIsAnimationCallback=false, mOverrideBehavior=0}
+06-12 13:57:46.868  1376  2927 I FontLog : (REDACTED) Received query %s, URI %s
+06-12 13:57:46.869  1376  2927 I FontLog : (REDACTED) Query [%s] resolved to %s
+06-12 13:57:46.870  1376  2927 I FontLog : (REDACTED) Fetch %s end status %s
+06-12 13:57:46.889  1376  2927 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-12 13:57:46.894   735   837 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:46.894   735   837 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:46.895   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:46.922  1376  2927 I FontLog : (REDACTED) Pulling font file for id = %d, cache size = %d
+06-12 13:57:46.935  3348  4142 I cr_BindingManager: onTrimMemory: level=20, size=1
+06-12 13:57:46.941   735   975 D BackgroundInstallControlService: Package event received: 0
+06-12 13:57:47.145  5293  5297 I m.tracktosearch: Compiler allocated 5042KB to compile void android.view.ViewRootImpl.performTraversals()
+06-12 13:57:47.190  1016  1130 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ViewRootImpl$$ExternalSyntheticLambda13@80df14f
+06-12 13:57:47.190   735  2071 D CoreBackPreview: Window{97a955c u0 Splash Screen com.tracktosearch EXITING}: Setting back callback null
+06-12 13:57:47.290   735  1705 E TaskPersister: File error accessing recents directory (directory doesn't exist?).
+06-12 13:57:47.482  5293  5325 I okhttp.OkHttpClient: --> GET https://api.trakt.tv/sync/watchlist?type=movies&extended=full&page=1&limit=50
+06-12 13:57:47.482  5293  5325 I okhttp.OkHttpClient: Content-Type: application/json
+06-12 13:57:47.482  5293  5325 I okhttp.OkHttpClient: trakt-api-key: 7329d593070bea6afa419f08eb5706deba915c23fc661c0b2d9bc2f489220249
+06-12 13:57:47.484  5293  5325 I okhttp.OkHttpClient: trakt-api-version: 2
+06-12 13:57:47.484  5293  5325 I okhttp.OkHttpClient: Authorization: Bearer 6bb35f3d2146dd62e79aa659a015bd52e439dc41b43443c01f6377ff410ff1cb
+06-12 13:57:47.485  5293  5325 I okhttp.OkHttpClient: --> END GET
+06-12 13:57:47.491  5293  5326 I okhttp.OkHttpClient: --> GET https://api.trakt.tv/sync/watchlist?type=shows&extended=full&page=1&limit=50
+06-12 13:57:47.491  5293  5326 I okhttp.OkHttpClient: Content-Type: application/json
+06-12 13:57:47.491  5293  5326 I okhttp.OkHttpClient: trakt-api-key: 7329d593070bea6afa419f08eb5706deba915c23fc661c0b2d9bc2f489220249
+06-12 13:57:47.491  5293  5326 I okhttp.OkHttpClient: trakt-api-version: 2
+06-12 13:57:47.492  5293  5326 I okhttp.OkHttpClient: Authorization: Bearer 6bb35f3d2146dd62e79aa659a015bd52e439dc41b43443c01f6377ff410ff1cb
+06-12 13:57:47.492  5293  5326 I okhttp.OkHttpClient: --> END GET
+06-12 13:57:47.504  5293  5293 I Choreographer: Skipped 39 frames!  The application may be doing too much work on its main thread.
+06-12 13:57:47.559   735   882 I ImeTracker: com.tracktosearch:d1f31d3e: onRequestHide at ORIGIN_SERVER reason HIDE_UNSPECIFIED_WINDOW fromUser false
+06-12 13:57:47.562  3348  3348 I ImeTracker: com.android.chrome:6deb16d: onRequestHide at ORIGIN_CLIENT reason HIDE_WINDOW_LOST_FOCUS fromUser false
+06-12 13:57:47.562  3348  3348 D InsetsController: hide(ime(), fromIme=false)
+06-12 13:57:47.563  3348  3348 I ImeTracker: com.android.chrome:6deb16d: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-12 13:57:47.572  1475  1475 I GoogleInputMethodService: GoogleInputMethodService.onFinishInput():2043 
+06-12 13:57:47.575  1475  1475 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 0, locked = false
+06-12 13:57:47.575   735  2075 I ImeTracker: system_server:41987d23: onRequestHide at ORIGIN_SERVER reason IME_REQUESTED_CHANGED_LISTENER fromUser false
+06-12 13:57:47.576  1475  1475 I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1293 onStartInput(EditorInfo{EditorInfo{packageName=com.tracktosearch, inputType=0, inputTypeString=NULL, enableLearning=false, autoCorrection=false, autoComplete=false, imeOptions=0, privateImeOptions=null, actionName=UNSPECIFIED, actionLabel=null, initialSelStart=-1, initialSelEnd=-1, initialCapsMode=0, label=null, fieldId=0, fieldName=null, extras=null, hintText=null, hintLocales=[]}}, false)
+06-12 13:57:47.576   735   774 I ImeTracker: system_server:41987d23: onCancelled at PHASE_SERVER_SHOULD_HIDE
+06-12 13:57:47.578  1475  1475 I Module  : DeviceLockedStatusModuleProvider$Module.updateDeviceLockedStatus():100 repeatCheckTimes = 1, locked = false
+06-12 13:57:47.579   735  2075 W PackageConfigPersister: App-specific configuration not found for packageName: com.tracktosearch and userId: 0
+06-12 13:57:47.635  5293  5293 D InsetsController: hide(ime(), fromIme=false)
+06-12 13:57:47.636  5293  5293 I ImeTracker: com.tracktosearch:d1f31d3e: onCancelled at PHASE_CLIENT_ALREADY_HIDDEN
+06-12 13:57:47.688  5293  5304 I HWUI    : Davey! duration=786ms; Flags=0, FrameTimelineVsyncId=95479, IntendedVsync=739653804961, Vsync=740303804935, InputEventId=0, HandleInputStart=740311150694, AnimationStart=740311152279, PerformTraversalsStart=740347364526, DrawStart=740356654675, FrameDeadline=740303804935, FrameStartTime=740310370439, FrameInterval=16666666, WorkloadTarget=16666666, SyncQueued=740360800324, SyncStart=740361396807, IssueDrawCommandsStart=740361552300, SwapBuffers=740436865030, FrameCompleted=740440814706, DequeueBufferDuration=4108, QueueBufferDuration=633006, GpuCompleted=740440814706, SwapBuffersCompleted=740438108937, DisplayPresentTime=0, CommandSubmissionCompleted=740436865030, 
+06-12 13:57:47.765  4514  4514 I AidlLazyServiceRegistrar: Process has 0 (of 1 available) client(s) in use after notification android.hardware.drm.IDrmFactory/clearkey has clients: 0
+06-12 13:57:47.765  4514  4514 I AidlLazyServiceRegistrar: Trying to shut down the service. No clients in use for any service in process.
+06-12 13:57:47.772  4514  4514 I AidlLazyServiceRegistrar: Unregistered all clients and exiting
+06-12 13:57:47.898   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:47.898   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:47.899   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:48.276  3348  3348 I cr_OfflineIndicator: Reported by system: [ Transports: CELLULAR Capabilities: MMS&SUPL&DUN&FOTA&IMS&CBS&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&FOREGROUND&NOT_CONGESTED&NOT_SUSPENDED&PARTIAL_CONNECTIVITY&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED LinkUpBandwidth>=60000Kbps LinkDnBandwidth>=145000Kbps Specifier: <TelephonyNetworkSpecifier [mSubId = 1]> SubscriptionIds: {1} UnderlyingNetworks: Null]
+06-12 13:57:48.276  3348  3348 I cr_OfflineIndicator: setConnectionState connectionState=2
+06-12 13:57:48.276  3348  3348 I cr_OfflineIndicator: processConnectivityCheckResult mConnectionState=2 mConnectivityCheckingStage=1
+06-12 13:57:48.276  3348  3348 I cr_OfflineIndicator: scheduleNextConnectivityCheck
+06-12 13:57:48.276  3348  3348 I cr_OfflineIndicator: Retry after 5000ms
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: <-- 200 https://api.trakt.tv/sync/watchlist?type=movies&extended=full&page=1&limit=50 (1193ms)
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: date: Fri, 12 Jun 2026 13:57:49 GMT
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: content-type: application/json; charset=utf-8
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: cf-ray: a0a95de69fc6c982-LAX
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: cf-cache-status: DYNAMIC
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: access-control-allow-origin: *
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: cache-control: max-age=0, private, must-revalidate
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: etag: W/"d25cc6692105f92d732bd089927c5b74"
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: last-modified: Fri, 12 Jun 2026 05:18:56 GMT
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: server: cloudflare
+06-12 13:57:48.679  5293  5325 I okhttp.OkHttpClient: vary: Accept-Encoding, Origin
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: cf-placement: remote-ORD
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: access-control-expose-headers: X-Pagination-Page,X-Pagination-Page-Count,X-Pagination-Limit,X-Pagination-Item-Count,X-Trending-User-Count,X-Start-Date,X-End-Date,X-Sort-By,X-Sort-How,X-Private-User,X-Ratelimit,Retry-After,X-Upgrade-URL,X-Applied-Sort-By,X-Applied-Sort-How,Cache-Control,Pragma,Expires
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: referrer-policy: strict-origin-when-cross-origin
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-applied-sort-by: rank
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-applied-sort-how: asc
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-content-type-options: nosniff
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-download-options: noopen
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-frame-options: SAMEORIGIN
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-list-id: 35104242
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-pagination-item-count: 1
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-pagination-limit: 50
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-pagination-page: 1
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-pagination-page-count: 1
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-permitted-cross-domain-policies: none
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-request-id: adf5dbd9-8cbe-41a9-8220-db25366f52d5
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-runtime: 0.023003
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-sort-by: rank
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-sort-how: asc
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: x-xss-protection: 0
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: speculation-rules: "/cdn-cgi/speculation"
+06-12 13:57:48.680  5293  5325 I okhttp.OkHttpClient: <-- END HTTP
+06-12 13:57:48.738  5293  5340 I okhttp.OkHttpClient: --> GET https://api.tmdb.org/3/movie/857?language=zh-CN
+06-12 13:57:48.739  5293  5340 I okhttp.OkHttpClient: Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI2MmIzYWUzYmNiYjQ3NzBkMzM1ZGMwNGFjNjViNjk3ZiIsIm5iZiI6MTc4MTI1MjE1OC45MTgwMDAyLCJzdWIiOiI2YTJiYzAzZTRmZWU3NGE5NDJlY2Y4ZDEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.EXvR2zfGbMuV2HHIP8sQaAI5INBPf4XM20N8eDGkyVc
+06-12 13:57:48.739  5293  5340 I okhttp.OkHttpClient: --> END GET
+06-12 13:57:48.900   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:48.902   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:48.906   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:49.045  5344  5344 W dumpsys : Thread Pool max thread count is 0. Cannot cache binder as linkToDeath cannot be implemented. serviceName: package
+06-12 13:57:49.152  2025  2025 I artd    : GetBestInfo: odex next to the dex file (/product/priv-app/PrebuiltGmsCore/oat/x86_64/PrebuiltGmsCore.odex) is kOatUpToDate with filter 'verify' executable 'false'
+06-12 13:57:49.157  2025  2025 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000004/DynamiteModulesC.apk has no usable artifacts
+06-12 13:57:49.159  2025  2025 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000001/CronetDynamite.apk has no usable artifacts
+06-12 13:57:49.161  2025  2025 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000002/DynamiteLoader.apk has no usable artifacts
+06-12 13:57:49.163  2025  2025 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000005/GoogleCertificates.apk has no usable artifacts
+06-12 13:57:49.164  2025  2025 I artd    : GetBestInfo: /data/user_de/0/com.google.android.gms/app_chimera/m/00000007/MeasurementDynamite.apk has no usable artifacts
+06-12 13:57:49.232  5293  5326 I okhttp.OkHttpClient: <-- 200 https://api.trakt.tv/sync/watchlist?type=shows&extended=full&page=1&limit=50 (1740ms)
+06-12 13:57:49.233  5293  5326 I okhttp.OkHttpClient: date: Fri, 12 Jun 2026 13:57:50 GMT
+06-12 13:57:49.233  5293  5326 I okhttp.OkHttpClient: content-type: application/json; charset=utf-8
+06-12 13:57:49.233  5293  5326 I okhttp.OkHttpClient: cf-ray: a0a95deb884ac982-LAX
+06-12 13:57:49.233  5293  5326 I okhttp.OkHttpClient: cf-cache-status: DYNAMIC
+06-12 13:57:49.234  5293  5326 I okhttp.OkHttpClient: access-control-allow-origin: *
+06-12 13:57:49.234  5293  5326 I okhttp.OkHttpClient: cache-control: max-age=0, private, must-revalidate
+06-12 13:57:49.235  5293  5326 I okhttp.OkHttpClient: etag: W/"d25cc6692105f92d732bd089927c5b74"
+06-12 13:57:49.235  5293  5326 I okhttp.OkHttpClient: last-modified: Fri, 12 Jun 2026 05:18:56 GMT
+06-12 13:57:49.235  5293  5326 I okhttp.OkHttpClient: server: cloudflare
+06-12 13:57:49.236  5293  5326 I okhttp.OkHttpClient: vary: Accept-Encoding, Origin
+06-12 13:57:49.236  5293  5326 I okhttp.OkHttpClient: cf-placement: remote-ORD
+06-12 13:57:49.236  5293  5326 I okhttp.OkHttpClient: access-control-expose-headers: X-Pagination-Page,X-Pagination-Page-Count,X-Pagination-Limit,X-Pagination-Item-Count,X-Trending-User-Count,X-Start-Date,X-End-Date,X-Sort-By,X-Sort-How,X-Private-User,X-Ratelimit,Retry-After,X-Upgrade-URL,X-Applied-Sort-By,X-Applied-Sort-How,Cache-Control,Pragma,Expires
+06-12 13:57:49.236  5293  5326 I okhttp.OkHttpClient: referrer-policy: strict-origin-when-cross-origin
+06-12 13:57:49.237  5293  5326 I okhttp.OkHttpClient: x-applied-sort-by: rank
+06-12 13:57:49.237  5293  5326 I okhttp.OkHttpClient: x-applied-sort-how: asc
+06-12 13:57:49.237  5293  5326 I okhttp.OkHttpClient: x-content-type-options: nosniff
+06-12 13:57:49.237  5293  5326 I okhttp.OkHttpClient: x-download-options: noopen
+06-12 13:57:49.238  5293  5326 I okhttp.OkHttpClient: x-frame-options: SAMEORIGIN
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-list-id: 35104242
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-pagination-item-count: 0
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-pagination-limit: 50
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-pagination-page: 1
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-pagination-page-count: 0
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-permitted-cross-domain-policies: none
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-request-id: 1fecf565-74f9-4386-bc2f-4012ebb20eed
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-runtime: 0.023906
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-sort-by: rank
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-sort-how: asc
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: x-xss-protection: 0
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: speculation-rules: "/cdn-cgi/speculation"
+06-12 13:57:49.239  5293  5326 I okhttp.OkHttpClient: <-- END HTTP
+06-12 13:57:49.908   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:49.908   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:49.911   735  2071 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: <-- 200 https://api.tmdb.org/3/movie/857?language=zh-CN (1434ms)
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: content-type: application/json;charset=utf-8
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: date: Fri, 12 Jun 2026 12:30:50 GMT
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: server: openresty
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: x-gateway-cache-status: MISS
+06-12 13:57:50.174  5293  5340 I okhttp.OkHttpClient: cache-control: public, max-age=5463
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-memc: HIT
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-memc-key: 290383fc43a3b043eef1827c079cea5f
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-memc-age: 17270
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-memc-expires: 5463
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-az: us-east-1b
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-task-id: 42854bb5d94d4a04a0958f838902b2a0
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: etag: W/"8947dc10d7f0f2f44f3233e36587fd1a"
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: vary: accept-encoding
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-cache: Hit from cloudfront
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: via: 1.1 20b3731a0ef4aba3db1fcd63c3ef2b2a.cloudfront.net (CloudFront)
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-amz-cf-pop: SEA900-P1
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: alt-svc: h3=":443"; ma=86400
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: x-amz-cf-id: 9kElQzaX6NFfXEoQIu2pVoNLrEr7KX1wbkW828xxoYJxRoCQqdTayg==
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: age: 5220
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: vary: Origin
+06-12 13:57:50.175  5293  5340 I okhttp.OkHttpClient: <-- END HTTP
+06-12 13:57:50.299   735   985 D androidtc: Initializing SystemTextClassifier, type = System
+06-12 13:57:50.300   735   985 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+06-12 13:57:50.302  1633  1633 I AiAiTextClassifier: onCreateTextClassificationSession = TextClassificationSessionId {188949b5-cfe1-40f0-864c-757e07e44d42}
+06-12 13:57:50.313  1016  1016 I ClipboardListener: Clipboard overlay suppressed.
+06-12 13:57:50.314  1633  2073 I AiAiTextClassifier: GenerateLinks did not find valid links, returning empty result
+06-12 13:57:50.315  1633  2027 I AiAiTranslate: C2T - not in a conversation
+06-12 13:57:50.315   735   986 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+06-12 13:57:50.324  1016  1016 I ClipboardListener: Clipboard overlay suppressed.
+06-12 13:57:50.915   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:50.915   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:50.917   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:51.721  5293  5352 D ProfileInstaller: Installing profile for com.tracktosearch
+06-12 13:57:51.870   735   922 D InetDiagMessage: Destroyed 3 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-12 13:57:51.871   735   922 D InetDiagMessage: Destroyed 1 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-12 13:57:51.872   735   922 D InetDiagMessage: Destroyed live tcp sockets for uids={10150} in 3ms
+06-12 13:57:51.873   735   922 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET, states=14
+06-12 13:57:51.873   735   922 D InetDiagMessage: Destroyed 0 sockets, proto=IPPROTO_TCP, family=AF_INET6, states=14
+06-12 13:57:51.873   735   922 D InetDiagMessage: Destroyed live tcp sockets for uids={20150} in 2ms
+06-12 13:57:51.920   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:51.920   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:51.920   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:52.923   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:52.923   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:52.923   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:53.279  3348  3348 I cr_OfflineIndicator: Reported by system: [ Transports: CELLULAR Capabilities: MMS&SUPL&DUN&FOTA&IMS&CBS&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&NOT_ROAMING&FOREGROUND&NOT_CONGESTED&NOT_SUSPENDED&PARTIAL_CONNECTIVITY&NOT_VCN_MANAGED&NOT_BANDWIDTH_CONSTRAINED LinkUpBandwidth>=60000Kbps LinkDnBandwidth>=145000Kbps Specifier: <TelephonyNetworkSpecifier [mSubId = 1]> SubscriptionIds: {1} UnderlyingNetworks: Null]
+06-12 13:57:53.279  3348  3348 I cr_OfflineIndicator: setConnectionState connectionState=2
+06-12 13:57:53.279  3348  3348 I cr_OfflineIndicator: processConnectivityCheckResult mConnectionState=2 mConnectivityCheckingStage=1
+06-12 13:57:53.279  3348  3348 I cr_OfflineIndicator: scheduleNextConnectivityCheck
+06-12 13:57:53.279  3348  3348 I cr_OfflineIndicator: Retry after 5000ms
+06-12 13:57:53.926   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:53.926   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:53.926   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:54.928   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:54.928   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:54.928   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:55.932   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:55.932   735  1340 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:55.932   735  2075 W BestClock: java.time.DateTimeException: No network time available
+06-12 13:57:56.816  1172  1368 D SatelliteController: iisInCarrierRoamingNbIotNtn: satellite is disabled

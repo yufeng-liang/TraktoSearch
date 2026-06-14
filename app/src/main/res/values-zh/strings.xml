@@ -1,0 +1,134 @@
+<resources>
+    <string name="app_name">TraktToSearch</string>
+
+    <!-- Main Screen -->
+    <string name="tab_search">搜索</string>
+    <string name="tab_me">我的</string>
+
+    <!-- Search Screen -->
+    <string name="search_title">搜索资源</string>
+    <string name="search_back">返回</string>
+    <string name="search_placeholder">输入片名搜索网盘资源</string>
+    <string name="search_button">搜索</string>
+    <string name="search_loading">搜索中…</string>
+    <string name="search_failed">搜索失败: %1$s</string>
+    <string name="search_no_results">未找到相关资源</string>
+    <string name="search_empty_hint">输入关键词开始搜索</string>
+    <string name="search_results">搜索结果 (%1$d)</string>
+    <string name="search_clear_input">清空</string>
+    <string name="search_history_title">搜索历史</string>
+    <string name="search_history_clear_all">清空全部</string>
+    <string name="search_history_delete">删除</string>
+
+    <!-- Watchlist Screen -->
+    <string name="watchlist_title">我的想看</string>
+    <string name="watchlist_search">搜索</string>
+    <string name="watchlist_refresh">刷新</string>
+    <string name="watchlist_poster_error">海报和中文名加载失败，请开启网络代理后刷新</string>
+    <string name="watchlist_tab_movies">电影</string>
+    <string name="watchlist_tab_shows">电视剧</string>
+    <string name="watchlist_load_failed">加载失败: %1$s</string>
+    <string name="watchlist_retry">重试</string>
+    <string name="watchlist_loading">正在加载想看列表…</string>
+    <string name="watchlist_empty_movies">想看列表为空\n去 Trakt 添加一些想看的影视吧</string>
+    <string name="watchlist_empty_shows">想看列表为空\n去 Trakt 添加一些想看的电视剧吧</string>
+    <string name="watchlist_logout">退出登录</string>
+
+    <!-- Detail Screen -->
+    <string name="detail_back">返回</string>
+    <string name="detail_mark_watched">标记已看</string>
+    <string name="detail_marked_watched">已看</string>
+    <string name="detail_mark_processing">处理中</string>
+    <string name="detail_no_overview">暂无简介</string>
+    <string name="detail_overview_label">简介</string>
+    <string name="detail_filter_sources">搜索源</string>
+    <string name="detail_filter_disk_types">网盘类型</string>
+    <string name="detail_searching">正在搜索网盘资源…</string>
+    <string name="detail_searching_info">来源: %1$d 个 · 网盘: %2$d 种</string>
+    <string name="detail_no_resources">未找到网盘资源</string>
+    <string name="detail_retry">重试</string>
+    <string name="detail_found_resources">找到 %1$d 个资源</string>
+    <string name="detail_load_more">继续滑动加载更多 (%1$d/%2$d)</string>
+    <string name="detail_all_loaded">已显示全部 %1$d 个</string>
+    <string name="detail_disk_type_quark">夸克</string>
+    <string name="detail_disk_type_baidu">百度</string>
+    <string name="detail_disk_type_ali">阿里</string>
+    <string name="detail_disk_type_xunlei">迅雷</string>
+    <string name="detail_disk_type_uc">UC</string>
+    <string name="detail_disk_type_115">115</string>
+    <string name="detail_disk_type_other">其他</string>
+
+    <!-- Resource Item Card -->
+    <string name="resource_viewed">已查看</string>
+    <string name="resource_scan">扫码</string>
+    <string name="resource_invalid">失效</string>
+
+    <!-- Disk Type Labels -->
+    <string name="disk_quark">夸克</string>
+    <string name="disk_baidu">百度</string>
+    <string name="disk_ali">阿里</string>
+    <string name="disk_xunlei">迅雷</string>
+    <string name="disk_uc">UC</string>
+    <string name="disk_115">115</string>
+    <string name="disk_other">其他</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">TraktToSearch</string>
+    <string name="login_subtitle">从想看到资源，一步到位</string>
+    <string name="login_button">使用 Trakt 登录</string>
+    <string name="login_connecting">正在连接 Trakt…</string>
+    <string name="login_connecting_hint">请稍候，正在获取你的账号信息</string>
+    <string name="login_failed">登录失败</string>
+    <string name="login_retry">重试</string>
+    <string name="login_success">登录成功，正在加载…</string>
+    <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
+    <string name="login_guest">以访客身份进入</string>
+
+    <!-- Login Prompt Screen -->
+    <string name="login_prompt_title">登录 Trakt</string>
+    <string name="login_prompt_desc">登录后可同步你的想看列表\n快速找到想看的影视资源</string>
+    <string name="login_prompt_button">使用 Trakt 登录</string>
+    <string name="login_prompt_guest">继续以访客身份浏览</string>
+
+    <!-- Loading / Empty / Error Views -->
+    <string name="loading_default">加载中…</string>
+    <string name="empty_default">暂无数据</string>
+    <string name="error_retry">重试</string>
+
+    <!-- Ratings -->
+    <string name="rating_trakt">Trakt</string>
+
+    <!-- Detail Info -->
+    <string name="detail_director">导演</string>
+    <string name="detail_actors">演员</string>
+    <string name="detail_comments">评论</string>
+    <string name="detail_no_comments">暂无评论</string>
+    <string name="detail_seasons">季信息</string>
+    <string name="detail_season">第 %1$d 季</string>
+    <string name="detail_episode_count">%1$d 集</string>
+    <string name="detail_episode">第%1$d集 %2$s</string>
+    <string name="detail_original_title">原名: %1$s</string>
+    <string name="detail_year">%1$d年</string>
+    <string name="detail_collapse">收起 ▲</string>
+    <string name="detail_expand">展开 ▼</string>
+    <string name="detail_load_more_text">继续滑动加载更多 (%1$d/%2$d)</string>
+    <string name="detail_spoiler">剧透</string>
+    <string name="detail_tab_resources">资源</string>
+    <string name="detail_tab_comments">评论</string>
+    <string name="detail_translating">正在翻译…</string>
+    <string name="detail_translate_failed">翻译失败</string>
+    <string name="detail_translate">翻译</string>
+    <string name="detail_translated">已翻译</string>
+    <string name="detail_original">原文</string>
+    <string name="detail_load_more_comments">下滑加载更多</string>
+    <string name="detail_all_comments_loaded">已加载全部 %1$d 条评论</string>
+    <string name="detail_cast_crew">演职员</string>
+    <string name="detail_cast_all">全部 %1$d ></string>
+    <string name="detail_director_tag">导演</string>
+    <string name="detail_cast_as">饰 %1$s</string>
+    <string name="detail_writer_tag">编剧</string>
+    <string name="detail_producer_tag">制片人</string>
+    <string name="detail_cast_all_title">全部演职员</string>
+    <string name="detail_cast_close">关闭</string>
+    <string name="detail_actor">演员</string>
+</resources>

@@ -1,0 +1,134 @@
+<resources>
+    <string name="app_name">TraktToSearch</string>
+
+    <!-- Main Screen -->
+    <string name="tab_search">Search</string>
+    <string name="tab_me">Me</string>
+
+    <!-- Search Screen -->
+    <string name="search_title">Search Resources</string>
+    <string name="search_back">Back</string>
+    <string name="search_placeholder">Enter movie title to search cloud resources</string>
+    <string name="search_button">Search</string>
+    <string name="search_loading">Searching…</string>
+    <string name="search_failed">Search failed: %1$s</string>
+    <string name="search_no_results">No resources found</string>
+    <string name="search_empty_hint">Enter a keyword to start searching</string>
+    <string name="search_results">Search results (%1$d)</string>
+    <string name="search_clear_input">Clear</string>
+    <string name="search_history_title">Search History</string>
+    <string name="search_history_clear_all">Clear All</string>
+    <string name="search_history_delete">Delete</string>
+
+    <!-- Watchlist Screen -->
+    <string name="watchlist_title">My Watchlist</string>
+    <string name="watchlist_search">Search</string>
+    <string name="watchlist_refresh">Refresh</string>
+    <string name="watchlist_poster_error">Failed to load posters and Chinese titles. Please enable network proxy and refresh.</string>
+    <string name="watchlist_tab_movies">Movies</string>
+    <string name="watchlist_tab_shows">TV Shows</string>
+    <string name="watchlist_load_failed">Load failed: %1$s</string>
+    <string name="watchlist_retry">Retry</string>
+    <string name="watchlist_loading">Loading watchlist…</string>
+    <string name="watchlist_empty_movies">Your watchlist is empty.\nAdd some movies on Trakt!</string>
+    <string name="watchlist_empty_shows">Your watchlist is empty.\nAdd some TV shows on Trakt!</string>
+    <string name="watchlist_logout">Logout</string>
+
+    <!-- Detail Screen -->
+    <string name="detail_back">Back</string>
+    <string name="detail_mark_watched">Mark as Watched</string>
+    <string name="detail_marked_watched">Watched</string>
+    <string name="detail_mark_processing">Processing</string>
+    <string name="detail_no_overview">No overview available</string>
+    <string name="detail_overview_label">Overview</string>
+    <string name="detail_filter_sources">Sources</string>
+    <string name="detail_filter_disk_types">Disk Types</string>
+    <string name="detail_searching">Searching cloud resources…</string>
+    <string name="detail_searching_info">Sources: %1$d · Disk types: %2$d</string>
+    <string name="detail_no_resources">No cloud resources found</string>
+    <string name="detail_retry">Retry</string>
+    <string name="detail_found_resources">Found %1$d resources</string>
+    <string name="detail_load_more">Load more (%1$d/%2$d)</string>
+    <string name="detail_all_loaded">All %1$d shown</string>
+    <string name="detail_disk_type_quark">Quark</string>
+    <string name="detail_disk_type_baidu">Baidu</string>
+    <string name="detail_disk_type_ali">Ali</string>
+    <string name="detail_disk_type_xunlei">Xunlei</string>
+    <string name="detail_disk_type_uc">UC</string>
+    <string name="detail_disk_type_115">115</string>
+    <string name="detail_disk_type_other">Other</string>
+
+    <!-- Resource Item Card -->
+    <string name="resource_viewed">Viewed</string>
+    <string name="resource_scan">Scan</string>
+    <string name="resource_invalid">Invalid</string>
+
+    <!-- Disk Type Labels -->
+    <string name="disk_quark">Quark</string>
+    <string name="disk_baidu">Baidu</string>
+    <string name="disk_ali">Ali</string>
+    <string name="disk_xunlei">Xunlei</string>
+    <string name="disk_uc">UC</string>
+    <string name="disk_115">115</string>
+    <string name="disk_other">Other</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">TraktToSearch</string>
+    <string name="login_subtitle">From watchlist to resources, one step away</string>
+    <string name="login_button">Sign in with Trakt</string>
+    <string name="login_connecting">Connecting to Trakt…</string>
+    <string name="login_connecting_hint">Please wait, fetching your account info</string>
+    <string name="login_failed">Login failed</string>
+    <string name="login_retry">Retry</string>
+    <string name="login_success">Login successful, loading…</string>
+    <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
+    <string name="login_guest">Continue as guest</string>
+
+    <!-- Login Prompt Screen -->
+    <string name="login_prompt_title">Sign in to Trakt</string>
+    <string name="login_prompt_desc">Sync your watchlist after login\nQuickly find resources for what you want to watch</string>
+    <string name="login_prompt_button">Sign in with Trakt</string>
+    <string name="login_prompt_guest">Continue as guest</string>
+
+    <!-- Loading / Empty / Error Views -->
+    <string name="loading_default">Loading…</string>
+    <string name="empty_default">No data</string>
+    <string name="error_retry">Retry</string>
+
+    <!-- Ratings -->
+    <string name="rating_trakt">Trakt</string>
+
+    <!-- Detail Info -->
+    <string name="detail_director">Director</string>
+    <string name="detail_actors">Cast</string>
+    <string name="detail_comments">Comments</string>
+    <string name="detail_no_comments">No comments yet</string>
+    <string name="detail_seasons">Seasons</string>
+    <string name="detail_season">Season %1$d</string>
+    <string name="detail_episode_count">%1$d episodes</string>
+    <string name="detail_episode">E%1$d %2$s</string>
+    <string name="detail_original_title">Original: %1$s</string>
+    <string name="detail_year">%1$d</string>
+    <string name="detail_collapse">Collapse ▲</string>
+    <string name="detail_expand">Expand ▼</string>
+    <string name="detail_load_more_text">Scroll to load more (%1$d/%2$d)</string>
+    <string name="detail_spoiler">Spoiler</string>
+    <string name="detail_tab_resources">Resources</string>
+    <string name="detail_tab_comments">Comments</string>
+    <string name="detail_translating">Translating…</string>
+    <string name="detail_translate_failed">Translation failed</string>
+    <string name="detail_translate">Translate</string>
+    <string name="detail_translated">Translated</string>
+    <string name="detail_original">Original</string>
+    <string name="detail_load_more_comments">Scroll down to load more</string>
+    <string name="detail_all_comments_loaded">All %1$d comments loaded</string>
+    <string name="detail_cast_crew">Cast &amp; Crew</string>
+    <string name="detail_cast_all">All %1$d ></string>
+    <string name="detail_director_tag">Director</string>
+    <string name="detail_cast_as">as %1$s</string>
+    <string name="detail_writer_tag">Writer</string>
+    <string name="detail_producer_tag">Producer</string>
+    <string name="detail_cast_all_title">All Cast &amp; Crew</string>
+    <string name="detail_cast_close">Close</string>
+    <string name="detail_actor">Actor</string>
+</resources>
