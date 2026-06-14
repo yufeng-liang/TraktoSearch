@@ -13,12 +13,15 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -45,14 +48,19 @@ fun WatchlistScreen(
         viewModel.loadMovies()
         viewModel.loadShows()
     }
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchExpanded by remember { mutableStateOf(false) }
+    var lastExpandTime by remember { mutableLongStateOf(0L) }
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
 
     LaunchedEffect(isSearchExpanded) {
         if (isSearchExpanded) {
+            lastExpandTime = System.currentTimeMillis()
             focusRequester.requestFocus()
+        } else {
+            focusManager.clearFocus()
         }
     }
 
@@ -66,7 +74,15 @@ fun WatchlistScreen(
                             onValueChange = { searchQuery = it },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .focusRequester(focusRequester),
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    // 展开后 800ms 内不因失焦收起（防止 requestFocus 异步导致立刻收起）
+                                    if (!focusState.isFocused && searchQuery.isEmpty()
+                                        && System.currentTimeMillis() - lastExpandTime > 800
+                                    ) {
+                                        isSearchExpanded = false
+                                    }
+                                },
                             placeholder = { Text(stringResource(R.string.search_placeholder)) },
                             singleLine = true,
                             shape = RoundedCornerShape(24.dp),
@@ -104,6 +120,9 @@ fun WatchlistScreen(
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.Logout, contentDescription = stringResource(R.string.logout))
                     }
 
                 },
@@ -152,12 +171,12 @@ fun WatchlistScreen(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text(stringResource(R.string.watchlist_tab_movies)) }
+                    text = { Text("${stringResource(R.string.watchlist_tab_movies)}(${uiState.movies.size})") }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text(stringResource(R.string.watchlist_tab_shows)) }
+                    text = { Text("${stringResource(R.string.watchlist_tab_shows)}(${uiState.shows.size})") }
                 )
             }
 
@@ -301,10 +320,10 @@ private fun MovieGrid(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items, key = { it.traktId }) { item ->
                 MovieCard(
@@ -312,6 +331,7 @@ private fun MovieGrid(
                     year = item.year,
                     genres = item.genres,
                     posterUrl = item.posterUrl,
+                    tmdbId = item.tmdbId,
                     onClick = { onItemClick(item) }
                 )
             }
@@ -334,10 +354,10 @@ private fun ShowGrid(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyVerticalGrid(
             state = gridState,
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            columns = GridCells.Fixed(3),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(items, key = { it.traktId }) { item ->
                 MovieCard(
@@ -345,6 +365,7 @@ private fun ShowGrid(
                     year = item.year,
                     genres = item.genres,
                     posterUrl = item.posterUrl,
+                    tmdbId = item.tmdbId,
                     onClick = { onItemClick(item) }
                 )
             }

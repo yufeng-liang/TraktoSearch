@@ -13,6 +13,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.R
@@ -51,6 +52,7 @@ fun ResourceItemCard(
     item: ResourceItem,
     isViewed: Boolean = false,
     onClick: () -> Unit,
+    index: Int = 0,
     modifier: Modifier = Modifier
 ) {
     val style = diskStyleOf(item.diskType)
@@ -59,46 +61,56 @@ fun ResourceItemCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)
                 .alpha(contentAlpha)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 序号ID
+                Text(
+                    text = "#${index + 1}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier.width(28.dp)
+                )
+
                 // 网盘类型标签（品牌色背景 + 白色文字，居中）
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = style.backgroundColor,
-                    modifier = Modifier.height(28.dp)
+                    modifier = Modifier.height(26.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .padding(horizontal = 10.dp)
+                            .padding(horizontal = 8.dp)
                             .fillMaxHeight(),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = stringResource(style.shortNameResId),
                             style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp
                             ),
                             color = Color.White
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // 来源标签
                 Surface(
@@ -117,7 +129,7 @@ fun ResourceItemCard(
                         } else {
                             MaterialTheme.colorScheme.onSecondaryContainer
                         },
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
 
@@ -132,65 +144,56 @@ fun ResourceItemCard(
                             text = stringResource(R.string.resource_viewed),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // 日期 + 文件数（右对齐）
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (item.fileDate.isNotEmpty()) {
-                        Text(
-                            text = formatFileDate(item.fileDate),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (item.fileCount > 1) {
-                        if (item.fileDate.isNotEmpty()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Text(
-                                text = "${item.fileCount}文件",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
-                    // 失效标记
-                    if (item.isInvalid) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.errorContainer
-                        ) {
-                            Text(
-                                text = stringResource(R.string.resource_invalid),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
-                            )
-                        }
-                    }
+                // 日期（右对齐）
+                if (item.fileDate.isNotEmpty()) {
+                    Text(
+                        text = formatFileDate(item.fileDate),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            // 第二行：文件数 + 资源名称
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 文件数
+                if (item.fileCount > 1) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Text(
+                            text = "${item.fileCount}文件",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+            }
 
             // 资源名称
             Text(
                 text = item.name,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(top = 2.dp)
             )
         }
     }

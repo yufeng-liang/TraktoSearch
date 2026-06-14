@@ -2,13 +2,19 @@ package com.tracktosearch.ui.screen.detail
 
 import android.content.Intent
 import android.net.Uri
+import android.graphics.Bitmap
+import android.os.Environment
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,6 +25,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,11 +34,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.TextLayoutResult
@@ -47,6 +57,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -72,6 +83,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -92,10 +104,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
+import coil.request.SuccessResult
+import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
@@ -107,7 +128,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.LazyColumnScrollbar
 import com.tracktosearch.ui.component.ResourceItemCard
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DetailScreen(
     traktId: Int,
@@ -118,6 +139,7 @@ fun DetailScreen(
     imdbId: String = "",
     traktRating: Double = 0.0,
     onBack: () -> Unit = {},
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -127,74 +149,68 @@ fun DetailScreen(
         viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating)
     }
 
-    val listState = rememberLazyListState()
+    val resourceListState = rememberLazyListState()
+    val commentListState = rememberLazyListState()
     var selectedTab by remember { mutableStateOf(0) }
+    var showPosterFullscreen by remember { mutableStateOf(false) }
+
+    // 评论Tab滚动到底部自动加载更多
+    val shouldLoadMoreComments by remember {
+        derivedStateOf {
+            val lastVisibleItem = commentListState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem != null && lastVisibleItem.index >= commentListState.layoutInfo.totalItemsCount - 2
+        }
+    }
+    LaunchedEffect(shouldLoadMoreComments, selectedTab) {
+        if (selectedTab == 1 && shouldLoadMoreComments && uiState.hasMoreComments && !uiState.isLoadingMoreComments) {
+            viewModel.loadMoreComments()
+        }
+    }
 
     Scaffold { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                // 头部信息：海报 + 标题 + 演职员 + 简介
-                item(key = "header") {
-                    DetailHeaderContent(
-                        uiState = uiState,
-                        isMarkedWatched = uiState.isMarkedWatched,
-                        isMarkingWatched = uiState.isMarkingWatched,
-                        onToggleWatched = { viewModel.toggleWatched() }
-                    )
-                }
-
-                // Tab 行（吸顶）
-                stickyHeader(key = "tabs") {
-                    Surface(
-                        color = MaterialTheme.colorScheme.background,
-                        shadowElevation = if (listState.firstVisibleItemIndex > 0) 4.dp else 0.dp
-                    ) {
-                        TabRow(selectedTabIndex = selectedTab) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = { selectedTab = 0 },
-                                text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = { selectedTab = 1 },
-                                text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
-                            )
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Tab 内容（各自独立滚动，头部随内容滚动消失，TabRow吸顶）
+            when (selectedTab) {
+                0 -> ResourcesLazyContent(
+                    uiState = uiState,
+                    tmdbId = tmdbId,
+                    listState = resourceListState,
+                    selectedTab = selectedTab,
+                    onTabChange = { selectedTab = it },
+                    isMarkedWatched = uiState.isMarkedWatched,
+                    isMarkingWatched = uiState.isMarkingWatched,
+                    onToggleWatched = { viewModel.toggleWatched() },
+                    onPosterClick = { showPosterFullscreen = true },
+                    onPersonClick = onPersonClick,
+                    onToggleSource = { viewModel.toggleSource(it) },
+                    onToggleDiskType = { viewModel.toggleDiskType(it) },
+                    onResourceClick = { item ->
+                        viewModel.markResourceViewed(item.url)
+                        openResourceLink(context, item)
+                    },
+                    onRetry = { viewModel.searchResources() },
+                    onToggleSeason = { viewModel.toggleSeason(it) }
+                )
+                1 -> CommentsLazyContent(
+                    uiState = uiState,
+                    tmdbId = tmdbId,
+                    listState = commentListState,
+                    selectedTab = selectedTab,
+                    onTabChange = { selectedTab = it },
+                    isMarkedWatched = uiState.isMarkedWatched,
+                    isMarkingWatched = uiState.isMarkingWatched,
+                    onToggleWatched = { viewModel.toggleWatched() },
+                    onPosterClick = { showPosterFullscreen = true },
+                    onPersonClick = onPersonClick,
+                    onTranslateComments = { commentId ->
+                        if (commentId == -1) {
+                            viewModel.translateComments()
+                        } else {
+                            viewModel.translateSingleComment(commentId)
                         }
-                    }
-                }
-
-                // Tab 内容
-                when (selectedTab) {
-                    0 -> resourcesTabItems(
-                        uiState = uiState,
-                        onToggleSource = { viewModel.toggleSource(it) },
-                        onToggleDiskType = { viewModel.toggleDiskType(it) },
-                        onResourceClick = { item ->
-                            viewModel.markResourceViewed(item.url)
-                            openResourceLink(context, item)
-                        },
-                        onRetry = { viewModel.searchResources() },
-                        onToggleSeason = { viewModel.toggleSeason(it) }
-                    )
-                    1 -> commentsTabItems(
-                        uiState = uiState,
-                        onTranslateComments = { commentId ->
-                            if (commentId == -1) {
-                                viewModel.translateComments()
-                            } else {
-                                viewModel.translateSingleComment(commentId)
-                            }
-                        },
-                        onLoadMoreComments = { viewModel.loadMoreComments() }
-                    )
-                }
+                    },
+                    onLoadMoreComments = { viewModel.loadMoreComments() }
+                )
             }
 
             // 返回按钮（箭头 + 半透明边框）
@@ -233,23 +249,37 @@ fun DetailScreen(
             }
 
             LazyColumnScrollbar(
-                state = listState,
+                state = if (selectedTab == 0) resourceListState else commentListState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 2.dp)
             )
+
+            // 海报大图查看
+            val posterUrl = uiState.posterUrl
+            if (showPosterFullscreen && posterUrl != null) {
+                PosterFullscreenOverlay(
+                    posterUrl = posterUrl,
+                    title = uiState.displayTitle,
+                    onDismiss = { showPosterFullscreen = false }
+                )
+            }
         }
     }
 }
 
 // ==================== 头部内容 ====================
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DetailHeaderContent(
     uiState: DetailUiState,
+    tmdbId: Int,
     isMarkedWatched: Boolean,
     isMarkingWatched: Boolean,
-    onToggleWatched: () -> Unit
+    onToggleWatched: () -> Unit,
+    onPosterClick: () -> Unit = {},
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         // 第一行：海报 + 标题信息
@@ -264,18 +294,33 @@ private fun DetailHeaderContent(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
-                    .width(110.dp)
-                    .height(165.dp)
+                    .width(132.dp)
+                    .height(198.dp)
+                    .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
             ) {
                 if (uiState.posterUrl != null) {
+                    val sharedTransitionScope = LocalSharedTransitionScope.current
+                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier
+                                .sharedElement(
+                                    rememberSharedContentState(key = "poster-$tmdbId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                                .fillMaxSize()
+                        }
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(uiState.posterUrl)
-                            .size(220)
+                            .size(264)
                             .build(),
                         contentDescription = uiState.displayTitle,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = posterModifier
                     )
                 } else {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -290,29 +335,16 @@ private fun DetailHeaderContent(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 标题/年份/类型/评分/标记已看
+            // 标题/类型/日期/评分/标记已看
             Column(modifier = Modifier.weight(1f)) {
-                // 标题行：标题(左) + 年份(右，与标题中轴对齐)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = uiState.displayTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (uiState.year != null) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "${uiState.year}年",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                // 标题
+                Text(
+                    text = uiState.displayTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
                 if (uiState.title != uiState.displayTitle) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
@@ -326,6 +358,43 @@ private fun DetailHeaderContent(
                     Text(
                         text = uiState.genres,
                         style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                // 上映日期（详细日期，放在标题下方）
+                if (!uiState.releaseDate.isEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val dateText = if (uiState.releaseDate.length >= 10) {
+                        "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
+                    } else {
+                        uiState.releaseDate
+                    }
+                    Text(
+                        text = dateText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else if (uiState.year != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "${uiState.year}年",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // 时长
+                if (uiState.runtime != null && uiState.runtime!! > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val hours = uiState.runtime!! / 60
+                    val minutes = uiState.runtime!! % 60
+                    val runtimeText = if (hours > 0) {
+                        stringResource(R.string.detail_runtime_hours, hours, minutes)
+                    } else {
+                        stringResource(R.string.detail_runtime_minutes, minutes)
+                    }
+                    Text(
+                        text = runtimeText,
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -334,41 +403,43 @@ private fun DetailHeaderContent(
                     Spacer(modifier = Modifier.height(6.dp))
                     RatingsRow(uiState.ratings)
                 }
-                // 标记已看按钮（评分下方右对齐）
+                // 标记已看按钮（起点对齐评分行右列MTC位置）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
                 ) {
+                    Spacer(modifier = Modifier.weight(1f))
                     Surface(
                         onClick = if (isMarkingWatched) ({}) else onToggleWatched,
                         enabled = !isMarkingWatched,
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = if (!isMarkedWatched && !isMarkingWatched) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
                         color = when {
                             isMarkingWatched -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                            isMarkedWatched -> MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
-                            else -> MaterialTheme.colorScheme.surfaceVariant
+                            isMarkedWatched -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
                         },
                         tonalElevation = 0.dp,
                         shadowElevation = 0.dp,
-                        modifier = Modifier.height(30.dp)
+                        modifier = Modifier.height(32.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp),
+                            modifier = Modifier.padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(5.dp)
                         ) {
                             if (isMarkingWatched) {
                                 CircularProgressIndicator(
-                                    modifier = Modifier.size(13.dp),
-                                    strokeWidth = 1.8.dp,
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                 )
                             } else {
                                 Icon(
                                     imageVector = if (isMarkedWatched) Icons.Filled.Check else Icons.Filled.Visibility,
                                     contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = if (isMarkedWatched) MaterialTheme.colorScheme.onPrimary
+                                    modifier = Modifier.size(15.dp),
+                                    tint = if (isMarkedWatched) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -378,11 +449,11 @@ private fun DetailHeaderContent(
                                     isMarkedWatched -> stringResource(R.string.detail_marked_watched)
                                     else -> stringResource(R.string.detail_mark_watched)
                                 },
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
                                 color = when {
                                     isMarkingWatched -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    isMarkedWatched -> MaterialTheme.colorScheme.onPrimary
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    isMarkedWatched -> MaterialTheme.colorScheme.primary
+                                    else -> MaterialTheme.colorScheme.onSurface
                                 }
                             )
                         }
@@ -401,7 +472,8 @@ private fun DetailHeaderContent(
                 CrewSection(
                     cast = uiState.cast.take(10),
                     crew = uiState.crew,
-                    onShowAll = { showFullCast = true }
+                    onShowAll = { showFullCast = true },
+                    onPersonClick = onPersonClick
                 )
             } else {
                 // 加载中占位：固定高度骨架屏
@@ -427,18 +499,18 @@ private fun DetailHeaderContent(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    repeat(4) {
+                    repeat(5) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.size(width = 90.dp, height = 126.dp)
+                                modifier = Modifier.size(width = 68.dp, height = 95.dp)
                             ) {}
                             Spacer(modifier = Modifier.height(5.dp))
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier.width(60.dp).height(12.dp)
+                                modifier = Modifier.width(56.dp).height(10.dp)
                             ) {}
                         }
                     }
@@ -448,7 +520,8 @@ private fun DetailHeaderContent(
                 FullCastCrewSheet(
                     cast = uiState.cast,
                     crew = uiState.crew,
-                    onDismiss = { showFullCast = false }
+                    onDismiss = { showFullCast = false },
+                    onPersonClick = onPersonClick
                 )
             }
         }
@@ -472,54 +545,100 @@ private fun DetailHeaderContent(
 
 @Composable
 private fun RatingsRow(ratings: MultiRatings) {
-    Column {
-        // IMDb
-        if (ratings.imdbRating.isNotEmpty()) {
-            RatingItem(label = "IMDb", value = ratings.imdbRating)
+    // 第一行：IMDb, MTC
+    val row1 = mutableListOf<Triple<String, Color, String>>()
+    if (ratings.imdbRating.isNotEmpty()) {
+        row1.add(Triple("IMDb", Color(0xFFF5C518), ratings.imdbRating))
+    }
+    if (ratings.metacritic.isNotEmpty()) {
+        row1.add(Triple("MTC", Color(0xFFFF9500), ratings.metacritic))
+    }
+
+    // 第二行：TMDB, RT
+    val row2 = mutableListOf<Triple<String, Color, String>>()
+    if (ratings.tmdbRating > 0) {
+        row2.add(Triple("TMDB", Color(0xFFF5C518), String.format("%.1f", ratings.tmdbRating)))
+    }
+    if (ratings.rottenTomatoes.isNotEmpty()) {
+        row2.add(Triple("RT", Color(0xFFFF4444), ratings.rottenTomatoes))
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (row1.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for ((label, color, value) in row1) {
+                    RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
+                }
+                if (row1.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
-        // TMDB
-        if (ratings.tmdbRating > 0) {
-            RatingItem(label = "TMDB", value = String.format("%.1f", ratings.tmdbRating))
-        }
-        // Trakt
-        if (ratings.traktRating > 0) {
-            RatingItem(label = "Trakt", value = String.format("%.1f", ratings.traktRating))
-        }
-        // Metacritic (MTC)
-        if (ratings.metacritic.isNotEmpty()) {
-            RatingItem(label = "MTC", value = ratings.metacritic)
-        }
-        // Rotten Tomatoes
-        if (ratings.rottenTomatoes.isNotEmpty()) {
-            RatingItem(label = "RT", value = ratings.rottenTomatoes)
+        if (row2.isNotEmpty()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                for ((label, color, value) in row2) {
+                    RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
+                }
+                if (row2.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
         }
     }
 }
 
+/** 单个评分项：无背景填充，各平台专属图标 */
 @Composable
-private fun RatingItem(label: String, value: String) {
+private fun RatingBadge(label: String, color: Color, value: String, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(42.dp)
-        )
-        Icon(
-            imageVector = Icons.Filled.Star,
-            contentDescription = null,
-            modifier = Modifier.size(12.dp),
-            tint = Color(0xFFFFC107)
-        )
-        Spacer(modifier = Modifier.width(4.dp))
+        when (label) {
+            "TMDB" -> Icon(
+                Icons.Filled.Star, contentDescription = null,
+                modifier = Modifier.size(18.dp), tint = color
+            )
+            "IMDb" -> Surface(
+                shape = RoundedCornerShape(2.dp),
+                color = color
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontSize = 15.sp, fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.Black,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                )
+            }
+            "RT" -> Text(
+                text = "🍅",
+                fontSize = 18.sp
+            )
+            "MTC" -> Text(
+                text = "🎯",
+                fontSize = 18.sp
+            )
+        }
+
+        if (label != "IMDb") {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+
         Text(
             text = value,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -532,12 +651,13 @@ private fun RatingItem(label: String, value: String) {
 private fun CrewSection(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
-    onShowAll: () -> Unit = {}
+    onShowAll: () -> Unit = {},
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
-    val totalCount = cast.size + crew.size
+    val totalCount = cast.size + crew.distinctBy { it.id }.size
 
     Column {
         // 标题行
@@ -566,14 +686,16 @@ private fun CrewSection(
 
         // 横向滚动：导演→演员→编剧→制片人
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(end = 16.dp)
         ) {
             // 导演
             items(directors) { person ->
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_director_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                    onClick = { onPersonClick(person.id, person.name) }
                 )
             }
             // 演员
@@ -581,7 +703,8 @@ private fun CrewSection(
                 CastCard(
                     name = person.name,
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                    onClick = { onPersonClick(person.id, person.name) }
                 )
             }
             // 编剧
@@ -589,7 +712,8 @@ private fun CrewSection(
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_writer_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                    onClick = { onPersonClick(person.id, person.name) }
                 )
             }
             // 制片人
@@ -597,7 +721,8 @@ private fun CrewSection(
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_producer_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                    onClick = { onPersonClick(person.id, person.name) }
                 )
             }
         }
@@ -605,30 +730,32 @@ private fun CrewSection(
 }
 
 @Composable
-private fun CastCard(name: String, role: String, profileUrl: String?) {
+private fun CastCard(name: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
     Column(
-        modifier = Modifier.width(90.dp),
+        modifier = Modifier
+            .width(68.dp)
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier
-                .width(90.dp)
-                .height(126.dp)
+                .width(68.dp)
+                .height(95.dp)
         ) {
             if (profileUrl != null) {
                 SubcomposeAsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(profileUrl)
-                        .size(180)
+                        .size(136)
                         .build(),
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
                     loading = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp
                             )
                         }
@@ -639,7 +766,7 @@ private fun CastCard(name: String, role: String, profileUrl: String?) {
                                 Icons.Filled.Person,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(28.dp)
+                                modifier = Modifier.size(22.dp)
                             )
                         }
                     }
@@ -650,15 +777,15 @@ private fun CastCard(name: String, role: String, profileUrl: String?) {
                         Icons.Filled.Person,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(28.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
         }
-        Spacer(modifier = Modifier.height(5.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = name,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.Center,
@@ -666,7 +793,7 @@ private fun CastCard(name: String, role: String, profileUrl: String?) {
         )
         Text(
             text = role,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -683,7 +810,8 @@ private fun CastCard(name: String, role: String, profileUrl: String?) {
 private fun FullCastCrewSheet(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
@@ -714,54 +842,59 @@ private fun FullCastCrewSheet(
 
             // 分组列表
             LazyColumn(
+                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 // 导演
                 if (directors.isNotEmpty()) {
-                    item { SectionHeader(stringResource(R.string.detail_director_tag)) }
+                    item { SectionHeader("${stringResource(R.string.detail_director_tag)} (${directors.size})") }
                     items(directors) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                            onClick = { onPersonClick(person.id, person.name) }
                         )
                     }
                 }
                 // 演员
                 if (cast.isNotEmpty()) {
-                    item { SectionHeader(stringResource(R.string.detail_actor)) }
+                    item { SectionHeader("${stringResource(R.string.detail_actor)} (${cast.size})") }
                     items(cast) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                            onClick = { onPersonClick(person.id, person.name) }
                         )
                     }
                 }
                 // 编剧
                 if (writers.isNotEmpty()) {
-                    item { SectionHeader(stringResource(R.string.detail_writer_tag)) }
+                    item { SectionHeader("${stringResource(R.string.detail_writer_tag)} (${writers.size})") }
                     items(writers) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                            onClick = { onPersonClick(person.id, person.name) }
                         )
                     }
                 }
                 // 制片人
                 if (producers.isNotEmpty()) {
-                    item { SectionHeader(stringResource(R.string.detail_producer_tag)) }
+                    item { SectionHeader("${stringResource(R.string.detail_producer_tag)} (${producers.size})") }
                     items(producers) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" }
+                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
+                            onClick = { onPersonClick(person.id, person.name) }
                         )
                     }
                 }
@@ -782,9 +915,11 @@ private fun SectionHeader(title: String) {
 }
 
 @Composable
-private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?) {
+private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Surface(
@@ -850,7 +985,7 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
     var layoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     var isOverflowing by remember { mutableStateOf(false) }
 
-    Box {
+    Column {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
@@ -859,29 +994,26 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { result ->
                 layoutResult = result
-                if (!expanded) {
+                if (!expanded && result.lineCount > maxLines - 1) {
                     isOverflowing = result.isLineEllipsized(maxLines - 1)
+                } else if (!expanded) {
+                    isOverflowing = false
                 }
             }
         )
 
-        // 内嵌展开/收起按钮（右下角）
+        // 展开/收起按钮（独立行，不遮挡文字）
         if (isOverflowing || expanded) {
             Text(
                 text = if (expanded) stringResource(R.string.detail_collapse) else stringResource(R.string.detail_expand),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
                     .clickable(
                         interactionSource = MutableInteractionSource(),
                         indication = null
                     ) { expanded = !expanded }
-                    .background(
-                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.9f),
-                        shape = RoundedCornerShape(4.dp)
-                    )
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                    .padding(top = 2.dp)
             )
         }
     }
@@ -896,6 +1028,9 @@ private fun FilterSection(
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit
 ) {
+    // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
+    val labelWidth = 64.dp
+
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         // 搜索源
         Row(
@@ -903,13 +1038,13 @@ private fun FilterSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.detail_filter_sources) + "：",
+                text = stringResource(R.string.detail_filter_sources),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(IntrinsicSize.Min)
+                modifier = Modifier.width(labelWidth)
             )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 for (source in ResourceRepository.ALL_SOURCES) {
                     val label = if (source == "pansou") "PanSou" else "Zreso"
@@ -923,23 +1058,26 @@ private fun FilterSection(
             }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
-        // 网盘类型
+        // 网盘类型（横向滚动）
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.detail_filter_disk_types) + "：",
+                text = stringResource(R.string.detail_filter_disk_types),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.width(IntrinsicSize.Min)
+                modifier = Modifier.width(labelWidth)
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (type in ResourceRepository.ALL_DISK_TYPES) {
+                items(
+                    items = ResourceRepository.ALL_DISK_TYPES.toList(),
+                    key = { it.name }
+                ) { type ->
                     val label = when (type) {
                         DiskType.QUARK -> stringResource(R.string.detail_disk_type_quark)
                         DiskType.BAIDU -> stringResource(R.string.detail_disk_type_baidu)
@@ -953,7 +1091,9 @@ private fun FilterSection(
                         selected = type in enabledDiskTypes,
                         onClick = { onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier
+                            .height(28.dp)
+                            .widthIn(min = 48.dp)
                     )
                 }
             }
@@ -1087,7 +1227,331 @@ private fun EmptyState(onRetry: () -> Unit) {
     }
 }
 
-// ==================== 资源 Tab ====================
+// ==================== 资源 Tab（独立滚动，含头部） ====================
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun ResourcesLazyContent(
+    uiState: DetailUiState,
+    tmdbId: Int,
+    listState: LazyListState,
+    selectedTab: Int,
+    onTabChange: (Int) -> Unit,
+    isMarkedWatched: Boolean,
+    isMarkingWatched: Boolean,
+    onToggleWatched: () -> Unit,
+    onPosterClick: () -> Unit,
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
+    onToggleSource: (String) -> Unit,
+    onToggleDiskType: (DiskType) -> Unit,
+    onResourceClick: (ResourceItem) -> Unit,
+    onRetry: () -> Unit,
+    onToggleSeason: (Int) -> Unit
+) {
+    val items = uiState.resources
+    val enabledSources = uiState.enabledSources
+    val enabledDiskTypes = uiState.enabledDiskTypes
+    val viewedUrls = uiState.viewedUrls
+    val isSearching = uiState.isSearching
+    val searchAttempted = uiState.searchAttempted
+
+    val initialCount = 30
+    var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(items.size)) }
+
+    // 滚动到底部自动加载更多资源
+    val shouldLoadMoreResources by remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 2
+        }
+    }
+    LaunchedEffect(shouldLoadMoreResources) {
+        if (shouldLoadMoreResources && displayedCount < items.size) {
+            displayedCount = (displayedCount + 30).coerceAtMost(items.size)
+        }
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        // 头部信息（随内容滚动）
+        item {
+            DetailHeaderContent(
+                uiState = uiState,
+                tmdbId = tmdbId,
+                isMarkedWatched = isMarkedWatched,
+                isMarkingWatched = isMarkingWatched,
+                onToggleWatched = onToggleWatched,
+                onPosterClick = onPosterClick,
+                onPersonClick = onPersonClick
+            )
+        }
+
+        // Tab 行（吸顶）
+        stickyHeader {
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { onTabChange(0) },
+                    text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { onTabChange(1) },
+                    text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
+                )
+            }
+        }
+        // 筛选器
+        item {
+            FilterSection(
+                enabledSources = enabledSources,
+                enabledDiskTypes = enabledDiskTypes,
+                onToggleSource = onToggleSource,
+                onToggleDiskType = onToggleDiskType
+            )
+        }
+
+        // 季/集信息（仅电视剧）
+        if (uiState.seasons.isNotEmpty()) {
+            item {
+                SeasonsSection(
+                    seasons = uiState.seasons,
+                    episodes = uiState.episodes,
+                    expandedSeasons = uiState.expandedSeasons,
+                    onToggleSeason = onToggleSeason
+                )
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+
+        // 资源列表
+        when {
+            isSearching -> {
+                item {
+                    SearchingState(
+                        sourceCount = enabledSources.size,
+                        diskTypeCount = enabledDiskTypes.size
+                    )
+                }
+            }
+            items.isEmpty() && searchAttempted -> {
+                item { EmptyState(onRetry = onRetry) }
+            }
+            else -> {
+                item {
+                    Text(
+                        text = stringResource(R.string.detail_found_resources, items.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
+                    )
+                }
+                itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }) { index, item ->
+                    ResourceItemCard(
+                        item = item,
+                        isViewed = item.url in viewedUrls,
+                        onClick = { onResourceClick(item) },
+                        index = index
+                    )
+                }
+                if (displayedCount < items.size) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_load_more_text, displayedCount, items.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else if (items.size > initialCount) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.detail_all_loaded, items.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ==================== 评论 Tab（独立滚动，含头部） ====================
+
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+private fun CommentsLazyContent(
+    uiState: DetailUiState,
+    tmdbId: Int,
+    listState: LazyListState,
+    selectedTab: Int,
+    onTabChange: (Int) -> Unit,
+    isMarkedWatched: Boolean,
+    isMarkingWatched: Boolean,
+    onToggleWatched: () -> Unit,
+    onPosterClick: () -> Unit,
+    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
+    onTranslateComments: (Int) -> Unit,
+    onLoadMoreComments: () -> Unit
+) {
+    val commentsToShow = uiState.comments
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        // 头部信息（随内容滚动）
+        item {
+            DetailHeaderContent(
+                uiState = uiState,
+                tmdbId = tmdbId,
+                isMarkedWatched = isMarkedWatched,
+                isMarkingWatched = isMarkingWatched,
+                onToggleWatched = onToggleWatched,
+                onPosterClick = onPosterClick,
+                onPersonClick = onPersonClick
+            )
+        }
+
+        // Tab 行（吸顶）
+        stickyHeader {
+            TabRow(selectedTabIndex = selectedTab) {
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { onTabChange(0) },
+                    text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { onTabChange(1) },
+                    text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
+                )
+            }
+        }
+        item(key = "comments_header") {
+            val translatedMap = remember(uiState.translatedComments) {
+                uiState.translatedComments.associateBy { it.id }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_comments),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f)
+                )
+                if (commentsToShow.isNotEmpty() && uiState.translatedComments.size < commentsToShow.size) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        modifier = Modifier
+                            .clickable(enabled = !uiState.isTranslating) { onTranslateComments(-1) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            if (uiState.isTranslating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(13.dp),
+                                    strokeWidth = 1.5.dp
+                                )
+                            }
+                            Text(
+                                text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
+                                else stringResource(R.string.detail_translate_all),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        items(
+            items = commentsToShow,
+            key = { it.id }
+        ) { comment ->
+            val translatedMap = remember(uiState.translatedComments) {
+                uiState.translatedComments.associateBy { it.id }
+            }
+            CommentItem(
+                comment = comment,
+                translatedText = translatedMap[comment.id]?.comment,
+                onTranslate = onTranslateComments,
+                isTranslating = uiState.isTranslating,
+                isThisTranslating = (uiState.translatingCommentId == comment.id)
+            )
+        }
+
+        if (uiState.hasMoreComments || uiState.isLoadingMoreComments) {
+            item(key = "load_more_comments") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (uiState.isLoadingMoreComments) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 3.dp
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.detail_load_more_comments),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        } else if (commentsToShow.size > 5) {
+            item(key = "all_comments_loaded") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.detail_all_comments_loaded, commentsToShow.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ==================== 资源 Tab（旧版，保留兼容） ====================
 
 private fun LazyListScope.resourcesTabItems(
     uiState: DetailUiState,
@@ -1155,11 +1619,12 @@ private fun LazyListScope.resourcesTabItems(
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
                 )
             }
-            items(items.take(displayedCount), key = { it.url }) { item ->
+            itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }) { index, item ->
                 ResourceItemCard(
                     item = item,
                     isViewed = item.url in viewedUrls,
-                    onClick = { onResourceClick(item) }
+                    onClick = { onResourceClick(item) },
+                    index = index
                 )
             }
             if (displayedCount < items.size) {
@@ -1244,7 +1709,7 @@ private fun LazyListScope.commentsTabItems(
                         }
                         Text(
                             text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
-                            else stringResource(R.string.detail_translate),
+                            else stringResource(R.string.detail_translate_all),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -1320,10 +1785,10 @@ private fun CommentItem(
     isTranslating: Boolean,
     isThisTranslating: Boolean
 ) {
-    var showOriginal by remember(comment.id) { mutableStateOf(true) }
+    var showOriginal by remember(comment.id) { mutableStateOf(false) }
     var spoilerRevealed by remember { mutableStateOf(false) }
 
-    val displayText = if (showOriginal) comment.comment else translatedText ?: comment.comment
+    val displayText = if (showOriginal) comment.comment else (translatedText ?: comment.comment)
 
     Card(
         modifier = Modifier
@@ -1346,6 +1811,12 @@ private fun CommentItem(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "(来源:Trakt)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 if (comment.user_rating != null) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
@@ -1361,29 +1832,31 @@ private fun CommentItem(
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                // 单条翻译按钮
-                if (translatedText == null && !isThisTranslating) {
-                    Text(
-                        text = stringResource(R.string.detail_translate),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable(
-                            interactionSource = MutableInteractionSource(),
-                            indication = null
-                        ) { onTranslate(comment.id) }
-                    )
-                } else if (isThisTranslating) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(12.dp),
-                            strokeWidth = 1.5.dp
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                // 单条翻译按钮（剧透未揭示时不显示）
+                if (!comment.spoiler || spoilerRevealed) {
+                    if (translatedText == null && !isThisTranslating) {
                         Text(
-                            text = stringResource(R.string.detail_translating),
+                            text = stringResource(R.string.detail_translate),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.clickable(
+                                interactionSource = MutableInteractionSource(),
+                                indication = null
+                            ) { onTranslate(comment.id) }
                         )
+                    } else if (isThisTranslating) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(12.dp),
+                                strokeWidth = 1.5.dp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.detail_translating),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -1437,7 +1910,6 @@ private fun CommentItem(
 // ==================== 工具函数 ====================
 
 private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
-    val url = item.url
     val appScheme = when (item.diskType) {
         DiskType.QUARK -> "quark://"
         DiskType.BAIDU -> "baidunetdisk://"
@@ -1445,16 +1917,196 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
         DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.OTHER -> null
     }
 
+    // 优先尝试打开网盘 App
     if (appScheme != null) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            context.startActivity(intent)
-        } catch (_: Exception) {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            context.startActivity(browserIntent)
-        }
-    } else {
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        context.startActivity(browserIntent)
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(appScheme))
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (appIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(appIntent)
+                return
+            }
+        } catch (_: Exception) {}
     }
+    // Fallback: 浏览器打开
+    try {
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
+        context.startActivity(browserIntent)
+    } catch (_: Exception) {}
+}
+
+// ==================== 海报大图查看 ====================
+
+@Composable
+private fun PosterFullscreenOverlay(
+    posterUrl: String,
+    title: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        // 海报图片（放大显示，拦截点击事件不触发外层dismiss）
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(posterUrl)
+                .crossfade(true)
+                .size(1080) // 加载高清大图
+                .build(),
+            contentDescription = title,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .aspectRatio(2f / 3f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {} // 拦截点击，不触发外层 dismiss
+                )
+        )
+
+        // 顶部操作栏（在图片之上，也需要拦截点击）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 16.dp, vertical = 48.dp)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                ),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 关闭按钮
+            IconButton(onClick = onDismiss) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(20.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.detail_back),
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            // 保存按钮
+            IconButton(onClick = {
+                savePosterToGallery(context, posterUrl, title)
+            }) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = Color.White.copy(alpha = 0.2f),
+                            shape = RoundedCornerShape(20.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Download,
+                        contentDescription = "保存",
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun savePosterToGallery(context: android.content.Context, posterUrl: String, title: String) {
+    val imageLoader = context.imageLoader
+    GlobalScope.launch(Dispatchers.IO) {
+        try {
+            val result = imageLoader.execute(
+                ImageRequest.Builder(context)
+                    .data(posterUrl)
+                    .allowHardware(false)
+                    .build()
+            )
+            val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
+            if (bitmap != null) {
+                saveBitmapToGallery(context, bitmap, title)
+            }
+        } catch (_: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "保存失败", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
+private fun saveBitmapToGallery(context: android.content.Context, bitmap: Bitmap, title: String) {
+    val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
+    val filename = "TrackToSearch_${safeName}.jpg"
+    val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
+
+    // 检查是否已存在同名文件（防重复保存）
+    val existingUri = queryExistingFile(context, filename, relativePath)
+    if (existingUri != null) {
+        GlobalScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, "已存在: $filename", Toast.LENGTH_SHORT).show()
+        }
+        return
+    }
+
+    val contentValues = android.content.ContentValues().apply {
+        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, filename)
+        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, relativePath)
+    }
+    val uri = context.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+    if (uri != null) {
+        context.contentResolver.openOutputStream(uri)?.use { stream ->
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
+        }
+        GlobalScope.launch(Dispatchers.Main) {
+            Toast.makeText(context, "已保存: $relativePath/$filename", Toast.LENGTH_SHORT).show()
+        }
+    }
+}
+
+/** 查询 MediaStore 中是否已存在同名文件 */
+private fun queryExistingFile(context: android.content.Context, filename: String, relativePath: String): android.net.Uri? {
+    val selection = "${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Images.Media.RELATIVE_PATH} = ?"
+    val selectionArgs = arrayOf(filename, relativePath)
+    val cursor = context.contentResolver.query(
+        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+        arrayOf(android.provider.MediaStore.Images.Media._ID),
+        selection,
+        selectionArgs,
+        null
+    )
+    cursor?.use {
+        if (it.moveToFirst()) {
+            val id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
+            return android.net.Uri.withAppendedPath(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                id.toString()
+            )
+        }
+    }
+    return null
 }

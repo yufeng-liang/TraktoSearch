@@ -15,6 +15,11 @@ import java.util.concurrent.TimeUnit
 @HiltAndroidApp
 class TraktSearchApp : Application(), ImageLoaderFactory {
 
+    override fun onCreate() {
+        super.onCreate()
+        CrashHandler.init(this)
+    }
+
     override fun newImageLoader(): ImageLoader {
         // 复用 NetworkModule 里 TMDB client 相同的强制 IPv4 DNS 策略，
         // 避免 image.tmdb.org 在某些网络环境下因 IPv6 解析失败导致图片加载失败

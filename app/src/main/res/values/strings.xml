@@ -4,6 +4,7 @@
     <!-- Main Screen -->
     <string name="tab_search">Search</string>
     <string name="tab_me">Me</string>
+    <string name="press_back_again">Press back again to exit</string>
 
     <!-- Search Screen -->
     <string name="search_title">Search Resources</string>
@@ -12,8 +13,9 @@
     <string name="search_button">Search</string>
     <string name="search_loading">Searching…</string>
     <string name="search_failed">Search failed: %1$s</string>
-    <string name="search_no_results">No resources found</string>
+    <string name="search_no_results">No resources found, try another keyword</string>
     <string name="search_empty_hint">Enter a keyword to start searching</string>
+    <string name="search_default_hint">Search for movies and TV shows</string>
     <string name="search_results">Search results (%1$d)</string>
     <string name="search_clear_input">Clear</string>
     <string name="search_history_title">Search History</string>
@@ -24,6 +26,7 @@
     <string name="watchlist_title">My Watchlist</string>
     <string name="watchlist_search">Search</string>
     <string name="watchlist_refresh">Refresh</string>
+    <string name="logout">Logout</string>
     <string name="watchlist_poster_error">Failed to load posters and Chinese titles. Please enable network proxy and refresh.</string>
     <string name="watchlist_tab_movies">Movies</string>
     <string name="watchlist_tab_shows">TV Shows</string>
@@ -108,6 +111,8 @@
     <string name="detail_episode_count">%1$d episodes</string>
     <string name="detail_episode">E%1$d %2$s</string>
     <string name="detail_original_title">Original: %1$s</string>
+    <string name="detail_runtime_hours">%1$dh %2$dm</string>
+    <string name="detail_runtime_minutes">%1$dm</string>
     <string name="detail_year">%1$d</string>
     <string name="detail_collapse">Collapse ▲</string>
     <string name="detail_expand">Expand ▼</string>
@@ -118,6 +123,7 @@
     <string name="detail_translating">Translating…</string>
     <string name="detail_translate_failed">Translation failed</string>
     <string name="detail_translate">Translate</string>
+    <string name="detail_translate_all">Translate All</string>
     <string name="detail_translated">Translated</string>
     <string name="detail_original">Original</string>
     <string name="detail_load_more_comments">Scroll down to load more</string>

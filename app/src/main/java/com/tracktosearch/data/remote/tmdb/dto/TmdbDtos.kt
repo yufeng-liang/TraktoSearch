@@ -11,7 +11,8 @@ data class TmdbMovieDetail(
     val overview: String = "",
     val genres: List<TmdbGenre> = emptyList(),
     val release_date: String = "",
-    val vote_average: Double = 0.0
+    val vote_average: Double = 0.0,
+    val runtime: Int? = null
 )
 
 @Serializable
@@ -23,7 +24,8 @@ data class TmdbTvDetail(
     val overview: String = "",
     val genres: List<TmdbGenre> = emptyList(),
     val first_air_date: String = "",
-    val vote_average: Double = 0.0
+    val vote_average: Double = 0.0,
+    val episode_run_time: List<Int>? = null
 )
 
 @Serializable

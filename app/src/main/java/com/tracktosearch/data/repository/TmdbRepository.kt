@@ -25,7 +25,9 @@ class TmdbRepository @Inject constructor(
         val overview: String,
         val genres: String,
         val year: Int?,
-        val rating: Double
+        val rating: Double,
+        val runtime: Int? = null,
+        val releaseDate: String = ""
     )
 
     data class TvEnrichment(
@@ -34,7 +36,9 @@ class TmdbRepository @Inject constructor(
         val overview: String,
         val genres: String,
         val year: Int?,
-        val rating: Double
+        val rating: Double,
+        val episodeRunTime: Int? = null,
+        val releaseDate: String = ""
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -49,7 +53,9 @@ class TmdbRepository @Inject constructor(
                 overview = cached.overview ?: "",
                 genres = cached.genres?.joinToString(" · ") { it.name } ?: "",
                 year = cached.release_date?.take(4)?.toIntOrNull() ?: year,
-                rating = cached.vote_average
+                rating = cached.vote_average,
+                runtime = cached.runtime,
+                releaseDate = cached.release_date ?: ""
             )
         }
 
@@ -66,7 +72,9 @@ class TmdbRepository @Inject constructor(
                     overview = detail.overview ?: "",
                     genres = detail.genres?.joinToString(" · ") { it.name } ?: "",
                     year = detail.release_date?.take(4)?.toIntOrNull() ?: year,
-                    rating = detail.vote_average
+                    rating = detail.vote_average,
+                    runtime = detail.runtime,
+                    releaseDate = detail.release_date ?: ""
                 )
             } else {
                 fallbackMovie(originalTitle, year)
@@ -88,7 +96,9 @@ class TmdbRepository @Inject constructor(
                 overview = cached.overview ?: "",
                 genres = cached.genres?.joinToString(" · ") { it.name } ?: "",
                 year = cached.first_air_date?.take(4)?.toIntOrNull() ?: year,
-                rating = cached.vote_average
+                rating = cached.vote_average,
+                episodeRunTime = cached.episode_run_time?.firstOrNull(),
+                releaseDate = cached.first_air_date ?: ""
             )
         }
 
@@ -105,7 +115,9 @@ class TmdbRepository @Inject constructor(
                     overview = detail.overview ?: "",
                     genres = detail.genres?.joinToString(" · ") { it.name } ?: "",
                     year = detail.first_air_date?.take(4)?.toIntOrNull() ?: year,
-                    rating = detail.vote_average
+                    rating = detail.vote_average,
+                    episodeRunTime = detail.episode_run_time?.firstOrNull(),
+                    releaseDate = detail.first_air_date ?: ""
                 )
             } else {
                 fallbackTv(originalName, year)

@@ -82,6 +82,7 @@ class ResourceRepository @Inject constructor(
         enabledDiskTypes: Set<DiskType>
     ): List<ResourceItem> {
         return items
+            .filter { !it.isInvalid }
             .filter { it.source in enabledSources }
             .filter { it.diskType in enabledDiskTypes }
     }

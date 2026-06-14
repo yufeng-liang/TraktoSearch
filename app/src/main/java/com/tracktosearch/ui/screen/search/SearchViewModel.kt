@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.local.SearchHistoryStorage
+import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.ResourceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,7 +24,8 @@ data class SearchUiState(
 @HiltViewModel
 class SearchViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
-    private val searchHistoryStorage: SearchHistoryStorage
+    private val searchHistoryStorage: SearchHistoryStorage,
+    private val viewedItemStorage: ViewedItemStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -69,6 +71,21 @@ class SearchViewModel @Inject constructor(
     fun clearHistory() {
         viewModelScope.launch {
             searchHistoryStorage.clear()
+        }
+    }
+
+    fun clearResults() {
+        _uiState.value = _uiState.value.copy(
+            resources = emptyList(),
+            error = null,
+            isLoading = false,
+            keyword = ""
+        )
+    }
+
+    fun markViewed(url: String) {
+        viewModelScope.launch {
+            viewedItemStorage.markViewed(url)
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -28,10 +29,21 @@ import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LazyColumnScrollbar
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ViewedStorageProvider {
+    fun viewedItemStorage(): ViewedItemStorage
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +57,24 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
+    val viewedItemStorage = remember {
+        EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
+    }
+    val viewedUrls by viewedItemStorage.viewedUrls.collectAsState(initial = emptySet())
+
+    // 防止搜索历史异步加载时闪过默认空页面
+    var showDefaultPage by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(150)
+        showDefaultPage = true
+    }
+
+    // 搜索框清空时同步清除结果
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isEmpty()) {
+            viewModel.clearResults()
+        }
+    }
 
     LaunchedEffect(initialKeyword) {
         if (initialKeyword.isNotEmpty()) {
@@ -146,10 +176,16 @@ fun SearchScreen(
                                     modifier = Modifier.padding(bottom = 8.dp)
                                 )
                             }
-                            items(uiState.resources, key = { it.url }) { item ->
+                            itemsIndexed(uiState.resources, key = { _, it -> it.url }) { index, item ->
+                                val isViewed = item.url in viewedUrls
                                 ResourceItemCard(
                                     item = item,
-                                    onClick = { openResourceLink(context, item) }
+                                    isViewed = isViewed,
+                                    index = index,
+                                    onClick = {
+                                        openResourceLink(context, item)
+                                        viewModel.markViewed(item.url)
+                                    }
                                 )
                             }
                         }
@@ -173,8 +209,26 @@ fun SearchScreen(
                             onHistoryDelete = { viewModel.removeHistory(it) },
                             onClearAll = { viewModel.clearHistory() }
                         )
-                    } else {
-                        EmptyView(message = stringResource(R.string.search_empty_hint))
+                    } else if (showDefaultPage) {
+                        // 默认空白页（延迟显示，避免历史加载时闪过）
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = stringResource(R.string.search_default_hint),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -252,7 +306,6 @@ private fun SearchHistoryList(
 }
 
 private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
-    val url = item.url
     val appScheme = when (item.diskType) {
         DiskType.QUARK -> "quark://"
         DiskType.BAIDU -> "baidunetdisk://"
@@ -260,16 +313,20 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
         DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.OTHER -> null
     }
 
+    // 优先尝试打开网盘 App
     if (appScheme != null) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            context.startActivity(intent)
-        } catch (_: Exception) {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            context.startActivity(browserIntent)
-        }
-    } else {
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        context.startActivity(browserIntent)
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(appScheme))
+            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (appIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(appIntent)
+                return
+            }
+        } catch (_: Exception) {}
     }
+    // Fallback: 浏览器打开
+    try {
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
+        context.startActivity(browserIntent)
+    } catch (_: Exception) {}
 }

@@ -14,8 +14,9 @@ data class ResourceItem(
     val url: String,
     val source: String
 ) {
-    /** 资源可能失效（基于 status 字段判断） */
+    /** 资源可能失效（基于 status 字段或 fileCount 判断） */
     val isInvalid: Boolean get() = status.equals("fail", ignoreCase = true)
             || status.equals("expired", ignoreCase = true)
             || status.equals("invalid", ignoreCase = true)
+            || fileCount == 0
 }

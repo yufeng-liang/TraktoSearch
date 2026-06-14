@@ -4,6 +4,7 @@
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
     <string name="tab_me">我的</string>
+    <string name="press_back_again">再按一次返回桌面</string>
 
     <!-- Search Screen -->
     <string name="search_title">搜索资源</string>
@@ -12,8 +13,9 @@
     <string name="search_button">搜索</string>
     <string name="search_loading">搜索中…</string>
     <string name="search_failed">搜索失败: %1$s</string>
-    <string name="search_no_results">未找到相关资源</string>
+    <string name="search_no_results">未找到相关资源，换个关键词试试</string>
     <string name="search_empty_hint">输入关键词开始搜索</string>
+    <string name="search_default_hint">搜索你感兴趣的影视资源</string>
     <string name="search_results">搜索结果 (%1$d)</string>
     <string name="search_clear_input">清空</string>
     <string name="search_history_title">搜索历史</string>
@@ -24,6 +26,7 @@
     <string name="watchlist_title">我的想看</string>
     <string name="watchlist_search">搜索</string>
     <string name="watchlist_refresh">刷新</string>
+    <string name="logout">登出</string>
     <string name="watchlist_poster_error">海报和中文名加载失败，请开启网络代理后刷新</string>
     <string name="watchlist_tab_movies">电影</string>
     <string name="watchlist_tab_shows">电视剧</string>
@@ -108,6 +111,8 @@
     <string name="detail_episode_count">%1$d 集</string>
     <string name="detail_episode">第%1$d集 %2$s</string>
     <string name="detail_original_title">原名: %1$s</string>
+    <string name="detail_runtime_hours">%1$d小时%2$d分</string>
+    <string name="detail_runtime_minutes">%1$d分钟</string>
     <string name="detail_year">%1$d年</string>
     <string name="detail_collapse">收起 ▲</string>
     <string name="detail_expand">展开 ▼</string>
@@ -118,6 +123,7 @@
     <string name="detail_translating">正在翻译…</string>
     <string name="detail_translate_failed">翻译失败</string>
     <string name="detail_translate">翻译</string>
+    <string name="detail_translate_all">全部翻译</string>
     <string name="detail_translated">已翻译</string>
     <string name="detail_original">原文</string>
     <string name="detail_load_more_comments">下滑加载更多</string>

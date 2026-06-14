@@ -1,13 +1,12 @@
 package com.tracktosearch.ui.component
 
-import androidx.compose.foundation.background
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,15 +17,20 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun MovieCard(
     title: String,
     year: Int?,
     genres: String,
     posterUrl: String?,
+    tmdbId: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -38,16 +42,31 @@ fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
+            val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .sharedElement(
+                            rememberSharedContentState(key = "poster-$tmdbId"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+                }
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
+            }
+
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(posterUrl)
-                    .size(300)  // 限制解码宽度为 300px，减少内存占用
+                    .size(200)
                     .build(),
                 contentDescription = title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                modifier = imageModifier,
                 contentScale = ContentScale.Crop,
                 placeholder = null,
                 error = null,
@@ -55,7 +74,7 @@ fun MovieCard(
             )
 
             Column(
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier.padding(6.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -63,7 +82,7 @@ fun MovieCard(
                 ) {
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -72,13 +91,13 @@ fun MovieCard(
                     if (year != null) {
                         Text(
                             text = "$year",
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
                 if (genres.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = genres,
                         style = MaterialTheme.typography.labelSmall,

@@ -4,6 +4,9 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
+import android.app.AlertDialog
+import android.content.DialogInterface
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -64,6 +67,9 @@ class MainActivity : ComponentActivity() {
         // 处理 OAuth 回调
         handleIntent(intent)
 
+        // 检测崩溃次数，>=2 次时提醒用户分享日志
+        checkCrashAndPrompt()
+
         setContent {
             TraktToSearchTheme {
                 if (isReady) {
@@ -107,6 +113,52 @@ class MainActivity : ComponentActivity() {
                     OAuthCallback.pendingCode = code
                 }
             }
+        }
+    }
+
+    private fun checkCrashAndPrompt() {
+        val crashCount = CrashHandler.getAndResetCrashCount(this)
+        if (crashCount >= 2) {
+            val logs = CrashHandler.getCrashLogs(this)
+            AlertDialog.Builder(this)
+                .setTitle("应用异常提醒")
+                .setMessage("检测到应用近期发生了 $crashCount 次异常退出，是否将错误日志发送给开发者以帮助修复问题？")
+                .setPositiveButton("发送日志") { _: DialogInterface, _: Int ->
+                    sendCrashEmail(logs)
+                    CrashHandler.clearCrashLogs(this)
+                }
+                .setNegativeButton("暂不发送") { dialog: DialogInterface, _: Int ->
+                    dialog.dismiss()
+                    CrashHandler.clearCrashLogs(this)
+                }
+                .setCancelable(false)
+                .show()
+        }
+    }
+
+    private fun sendCrashEmail(logs: String) {
+        val subject = "TrackToSearch 错误日志"
+        val body = if (logs.isNotEmpty()) {
+            "以下是应用崩溃的错误日志：\n\n$logs"
+        } else {
+            "应用发生了异常退出，但未找到详细的错误日志。"
+        }
+
+        val intent = Intent(Intent.ACTION_SENDTO).apply {
+            data = Uri.parse("mailto:1577865546@qq.com")
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+
+        try {
+            startActivity(intent)
+        } catch (e: Exception) {
+            // 没有邮件客户端，复制到剪贴板
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(
+                android.content.ClipData.newPlainText("Crash Log", body)
+            )
+            Toast.makeText(this, "日志已复制到剪贴板，请手动发送至 1577865546@qq.com", Toast.LENGTH_LONG).show()
         }
     }
 }

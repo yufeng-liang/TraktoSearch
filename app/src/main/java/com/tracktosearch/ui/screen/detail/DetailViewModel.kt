@@ -35,9 +35,11 @@ data class DetailUiState(
     val title: String = "",
     val displayTitle: String = "",
     val year: Int? = null,
+    val releaseDate: String = "",
     val overview: String = "",
     val genres: String = "",
     val posterUrl: String? = null,
+    val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
     val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
@@ -104,15 +106,15 @@ class DetailViewModel @Inject constructor(
         _uiState.value = DetailUiState(
             isLoading = true,
             isSearching = true,
-            title = title,
-            displayTitle = title,
+            title = title.replace("+", " "),
+            displayTitle = title.replace("+", " "),
             year = year
         )
 
         viewModelScope.launch {
             var tmdbRating = 0.0
             if (tmdbId <= 0) {
-                _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title)
+                _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title.replace("+", " "))
                 detailLoaded = true
                 startSearch()
             } else {
@@ -121,12 +123,12 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> {
                             val e = tmdbRepository.enrichMovie(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating)
+                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate)
                         }
                         MediaType.SHOW -> {
                             val e = tmdbRepository.enrichTv(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating)
+                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate)
                         }
                     }
                 }.getOrNull()
@@ -135,11 +137,13 @@ class DetailViewModel @Inject constructor(
                 currentKeyword = chineseTitle
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    displayTitle = chineseTitle,
+                    displayTitle = chineseTitle.replace("+", " "),
                     overview = enrichment?.overview ?: "",
                     genres = enrichment?.genres ?: "",
                     posterUrl = enrichment?.posterUrl,
-                    year = enrichment?.year ?: year
+                    year = enrichment?.year ?: year,
+                    releaseDate = enrichment?.releaseDate ?: "",
+                    runtime = enrichment?.runtime
                 )
                 detailLoaded = true
                 startSearch()
@@ -469,6 +473,8 @@ class DetailViewModel @Inject constructor(
         val genres: String,
         val posterUrl: String?,
         val year: Int?,
-        val rating: Double
+        val rating: Double,
+        val runtime: Int? = null,
+        val releaseDate: String = ""
     )
 }

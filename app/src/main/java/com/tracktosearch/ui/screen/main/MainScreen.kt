@@ -1,15 +1,20 @@
 package com.tracktosearch.ui.screen.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -18,10 +23,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Divider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -31,6 +38,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.ui.screen.search.SearchScreen
@@ -49,6 +58,23 @@ fun MainScreen(
     onLogout: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+
+    // 获取屏幕宽度用于导航栏宽度计算
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp
+
+    // 双击返回退出
+    var lastBackTime by remember { mutableLongStateOf(0L) }
+    val context = LocalContext.current
+    BackHandler(enabled = true) {
+        val now = System.currentTimeMillis()
+        if (now - lastBackTime < 2000) {
+            (context as? android.app.Activity)?.finish()
+        } else {
+            lastBackTime = now
+            android.widget.Toast.makeText(context, context.getString(R.string.press_back_again), android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
 
     // 悬浮导航显隐状态
     var isFabVisible by remember { mutableFloatStateOf(1f) }
@@ -105,8 +131,9 @@ fun MainScreen(
                 }
             }
 
-            // 悬浮底部导航（半透明毛玻璃效果）
+            // 悬浮底部导航（半透明毛玻璃效果，宽度拉伸20%，左右半边点击）
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val navBarWidth = (screenWidthDp * 0.48).dp // 原宽度约40%屏幕宽，拉伸20%后约48%
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -117,14 +144,20 @@ fun MainScreen(
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
                         shape = RoundedCornerShape(28.dp)
                     )
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .width(navBarWidth)
+                    .height(52.dp)
             ) {
                 androidx.compose.foundation.layout.Row(
+                    modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(
-                        onClick = { selectedTab = 0 },
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                    // 左半边：搜索页
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .clickable { selectedTab = 0 },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Search,
@@ -133,9 +166,21 @@ fun MainScreen(
                                    else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    IconButton(
-                        onClick = { selectedTab = 1 },
-                        modifier = Modifier.padding(horizontal = 12.dp)
+                    // 分隔线
+                    Divider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .padding(vertical = 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    // 右半边：我的页
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .clickable { selectedTab = 1 },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
