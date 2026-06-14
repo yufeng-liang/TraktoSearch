@@ -37,3 +37,10 @@ google-services.json
 
 # Secrets
 local.properties
+
+# Debug / temp files
+log.txt
+build_log.txt
+fresh_log.txt
+icon.png
+backup.kt
