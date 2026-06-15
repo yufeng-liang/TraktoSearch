@@ -147,10 +147,7 @@ fun AppNavigation(
                         updateInfo?.let { info ->
                             UpdateDialog(
                                 updateInfo = info,
-                                onDismiss = { updateInfo = null },
-                                onOpenInBrowser = { url ->
-                                    navController.navigate(Routes.webViewRoute(url, "下载更新"))
-                                }
+                                onDismiss = { updateInfo = null }
                             )
                         }
 

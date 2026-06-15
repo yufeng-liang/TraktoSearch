@@ -79,6 +79,19 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingMovies = true, moviesError = null)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
             result.onSuccess { (items, totalPages) ->
+                // 如果 forceReload 且数据与现有列表相同，跳过 TMDB 富化和 UI 更新
+                if (forceReload) {
+                    val newIds = items.map { it.movie.ids.trakt }
+                    val oldIds = _uiState.value.movies.take(items.size).map { it.traktId }
+                    if (newIds == oldIds) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingMovies = false,
+                            hasMoreMovies = _uiState.value.moviePage < totalPages,
+                            moviePage = _uiState.value.moviePage + 1
+                        )
+                        return@launch
+                    }
+                }
                 // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
@@ -126,6 +139,19 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingShows = true, showsError = null)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage) }
             result.onSuccess { (items, totalPages) ->
+                // 如果 forceReload 且数据与现有列表相同，跳过 TMDB 富化和 UI 更新
+                if (forceReload) {
+                    val newIds = items.map { it.show.ids.trakt }
+                    val oldIds = _uiState.value.shows.take(items.size).map { it.traktId }
+                    if (newIds == oldIds) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoadingShows = false,
+                            hasMoreShows = _uiState.value.showPage < totalPages,
+                            showPage = _uiState.value.showPage + 1
+                        )
+                        return@launch
+                    }
+                }
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
                         val uiItem = enrichShowItem(item.show, item.listed_at)
@@ -256,11 +282,17 @@ class WatchlistViewModel @Inject constructor(
         loadShows(forceReload = true)
     }
 
-    /** 页面恢复可见时调用：如果之前已加载过，则静默刷新（重置状态重新拉取） */
+    /** 页面恢复可见时调用：如果之前已加载过，则后台静默刷新，不重置已有数据避免重复拉取 */
     fun refreshIfLoaded() {
         val state = _uiState.value
         if (state.moviesLoaded || state.showsLoaded) {
-            _uiState.value = WatchlistUiState()
+            // 只重置分页，保留已有数据避免 UI 闪烁和重复拉取
+            _uiState.value = state.copy(
+                moviePage = 1,
+                showPage = 1,
+                hasMoreMovies = true,
+                hasMoreShows = true
+            )
             loadMovies(forceReload = true)
             loadShows(forceReload = true)
         }

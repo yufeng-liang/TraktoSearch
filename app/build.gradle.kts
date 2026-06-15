@@ -17,8 +17,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.2.0"
+        versionCode = 9
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -36,7 +36,7 @@ android {
         buildConfigField("String", "OMDB_API_KEY", "\"${properties.getProperty("omdb.api.key", "")}\"")
         buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
-        buildConfigField("String", "LANZOU_DOWNLOAD_URL", "\"${properties.getProperty("lanzou.download.url", "")}\"")
+        buildConfigField("String", "GITEE_RELEASE_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
     }
 
     signingConfigs {

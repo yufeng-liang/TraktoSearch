@@ -343,12 +343,13 @@ class DetailViewModel @Inject constructor(
             var englishItems = emptyList<ResourceItem>()
 
             // 同时收集两个 Flow，任一发射就更新 UI
+            // 注意：只有非空结果才关闭搜索状态，避免空结果先到导致"无结果"闪烁
             if (englishFlow != null) {
                 coroutineScope {
                     val chineseJob = launch {
                         chineseFlow.collect { items ->
                             chineseItems = items
-                            if (!firstResultShown) {
+                            if (!firstResultShown && items.isNotEmpty()) {
                                 firstResultShown = true
                                 Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                                 _uiState.value = _uiState.value.copy(isSearching = false)
@@ -359,7 +360,7 @@ class DetailViewModel @Inject constructor(
                     val englishJob = launch {
                         englishFlow.collect { items ->
                             englishItems = items
-                            if (!firstResultShown) {
+                            if (!firstResultShown && items.isNotEmpty()) {
                                 firstResultShown = true
                                 Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                                 _uiState.value = _uiState.value.copy(isSearching = false)
@@ -369,16 +370,24 @@ class DetailViewModel @Inject constructor(
                     }
                     chineseJob.join()
                     englishJob.join()
+                    // 所有源都完成后若仍无结果，关闭搜索状态
+                    if (_uiState.value.isSearching) {
+                        _uiState.value = _uiState.value.copy(isSearching = false)
+                    }
                 }
             } else {
                 chineseFlow.collect { items ->
                     chineseItems = items
-                    if (!firstResultShown) {
+                    if (!firstResultShown && items.isNotEmpty()) {
                         firstResultShown = true
                         Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                         _uiState.value = _uiState.value.copy(isSearching = false)
                     }
                     updateSearchResults(chineseItems, englishItems, isShow)
+                }
+                // 单个 Flow 收集完成后若仍无结果，关闭搜索状态
+                if (_uiState.value.isSearching) {
+                    _uiState.value = _uiState.value.copy(isSearching = false)
                 }
             }
         }
@@ -523,7 +532,12 @@ class DetailViewModel @Inject constructor(
         if (current.isMarkingWatched) return
 
         val targetState = !current.isMarkedWatched
-        _uiState.value = current.copy(isMarkingWatched = true)
+        // 标记已看 → 立即通知刷新（不等 API 完成，确保返回时列表更新）
+        // 取消标记 → 设为 false，避免无变更时重复拉取
+        _uiState.value = current.copy(
+            isMarkingWatched = true,
+            watchlistChanged = targetState // 标记时 true，取消时 false
+        )
 
         viewModelScope.launch {
             if (targetState) {
@@ -532,14 +546,15 @@ class DetailViewModel @Inject constructor(
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = true,
-                            isMarkingWatched = false,
-                            // 通知上级页面：从列表中移除该 item
-                            watchlistChanged = true
+                            isMarkingWatched = false
                         )
                     }
                     .onFailure {
-                        // 失败则回滚状态
-                        _uiState.value = _uiState.value.copy(isMarkingWatched = false)
+                        // 失败则回滚状态，同时撤销刷新标记
+                        _uiState.value = _uiState.value.copy(
+                            isMarkingWatched = false,
+                            watchlistChanged = false
+                        )
                     }
             } else {
                 // 取消标记：移除已看记录并重新加回想看
@@ -547,8 +562,7 @@ class DetailViewModel @Inject constructor(
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = false,
-                            isMarkingWatched = false,
-                            watchlistChanged = true
+                            isMarkingWatched = false
                         )
                     }
                     .onFailure {
