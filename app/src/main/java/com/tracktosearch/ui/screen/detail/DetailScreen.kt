@@ -127,8 +127,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.ResourceRepository
-import com.tracktosearch.ui.component.LazyColumnScrollbar
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ScrollToTopButton
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -447,11 +447,11 @@ fun DetailScreen(
                 }
             }
 
-            LazyColumnScrollbar(
-                state = listState,
+            ScrollToTopButton(
+                listState = listState,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 2.dp)
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 16.dp, end = 16.dp)
             )
 
             // 海报大图查看
@@ -1276,6 +1276,7 @@ private fun FilterSection(
                         DiskType.XUNLEI -> stringResource(R.string.detail_disk_type_xunlei)
                         DiskType.UC -> stringResource(R.string.detail_disk_type_uc)
                         DiskType.ONEONEFIVE -> stringResource(R.string.detail_disk_type_115)
+                        DiskType.MAGNET -> stringResource(R.string.detail_disk_type_magnet)
                         DiskType.OTHER -> stringResource(R.string.detail_disk_type_other)
                     }
                     FilterChip(
@@ -2202,7 +2203,7 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
         DiskType.QUARK -> "quark://"
         DiskType.BAIDU -> "baidunetdisk://"
         DiskType.ALI -> "aliyundrive://"
-        DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.OTHER -> null
+        DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET, DiskType.OTHER -> null
     }
 
     // 优先尝试打开网盘 App
@@ -2216,11 +2217,32 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
             }
         } catch (_: Exception) {}
     }
+
+    // 磁力链接：尝试用系统默认 App 打开
+    if (item.diskType == DiskType.MAGNET || item.url.startsWith("magnet:", ignoreCase = true)) {
+        try {
+            val magnetIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
+            magnetIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (magnetIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(magnetIntent)
+                return
+            }
+        } catch (_: Exception) {}
+        // 无 App 处理磁力链接：复制到剪贴板
+        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        val clip = android.content.ClipData.newPlainText("magnet", item.url)
+        clipboard.setPrimaryClip(clip)
+        android.widget.Toast.makeText(context, "磁力链接已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+
     // Fallback: 浏览器打开
     try {
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
         context.startActivity(browserIntent)
-    } catch (_: Exception) {}
+    } catch (_: Exception) {
+        android.widget.Toast.makeText(context, "无法打开此链接", android.widget.Toast.LENGTH_SHORT).show()
+    }
 }
 
 // ==================== 海报大图查看 ====================

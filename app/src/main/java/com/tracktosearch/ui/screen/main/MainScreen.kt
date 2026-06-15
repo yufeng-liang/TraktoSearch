@@ -152,8 +152,8 @@ fun MainScreen(
             }
 
             // 悬浮底部导航（半透明毛玻璃效果，宽度拉伸20%，左右半边点击）
-            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarWidth = (screenWidthDp * 0.48).dp // 原宽度约40%屏幕宽，拉伸20%后约48%
+            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

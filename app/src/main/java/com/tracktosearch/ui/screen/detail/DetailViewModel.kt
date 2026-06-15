@@ -21,11 +21,13 @@ import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -83,6 +85,7 @@ class DetailViewModel @Inject constructor(
     private var currentMediaType: MediaType = MediaType.MOVIE
     private var currentTitle: String = ""
     private var currentKeyword: String = ""
+    private var currentOriginalTitle: String = ""
     private var currentImdbId: String = ""
     private var currentTraktRating: Double = 0.0
     private var currentTmdbId: Int = 0
@@ -125,18 +128,19 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> {
                             val e = tmdbRepository.enrichMovie(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate)
                         }
                         MediaType.SHOW -> {
                             val e = tmdbRepository.enrichTv(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate)
                         }
                     }
                 }.getOrNull()
 
                 val chineseTitle = enrichment?.chineseTitle?.takeIf { it.isNotEmpty() } ?: title
                 currentKeyword = chineseTitle
+                currentOriginalTitle = enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle } ?: ""
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     displayTitle = chineseTitle.replace("+", " "),
@@ -318,48 +322,99 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 启动搜索：取消之前的任务，优先用"影视名 年份"搜索
-     * 如果带年份搜索无结果，回退用影视名搜索
+     * 启动搜索：中英文并行搜索，源级别先到先显示，全部完成后合并去重
      */
     private fun startSearch() {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            val state = _uiState.value
-            _uiState.value = state.copy(isSearching = true, error = null)
+            _uiState.value = _uiState.value.copy(isSearching = true, error = null)
+            val startTime = System.currentTimeMillis()
 
-            // 优先用"影视名 年份"搜索，确保找到同年份的同名影视
-            val keywordWithYear = if (state.year != null) "$currentKeyword ${state.year}" else currentKeyword
             val isShow = currentMediaType == MediaType.SHOW
-            var result = resourceRepository.searchResources(keyword = keywordWithYear, isShow = isShow)
+            val hasEnglish = currentOriginalTitle.isNotEmpty()
 
-            // 带年份搜索无结果，回退用影视名搜索
-            if (result.isSuccess && result.getOrDefault(emptyList()).isEmpty() && state.year != null) {
-                result = resourceRepository.searchResources(keyword = currentKeyword, isShow = isShow)
-            }
+            val chineseFlow = resourceRepository.searchResourcesFlow(currentKeyword, isShow = isShow)
+            val englishFlow = if (hasEnglish) {
+                resourceRepository.searchResourcesFlow(currentOriginalTitle, isShow = isShow)
+            } else null
 
-            result.onSuccess { _ ->
-                // repository 已缓存全量，这里读取全量以便 filter 切换
-                allResources = resourceRepository.getCachedAllResources(currentKeyword)
-                val state = _uiState.value
-                val filtered = resourceRepository.filterItems(
-                    allResources, state.enabledSources, state.enabledDiskTypes
-                )
-                // 加载已查看 URL 集合
-                val viewedUrls = viewedItemStorage.getviewedUrls()
-                _uiState.value = _uiState.value.copy(
-                    isSearching = false,
-                    searchAttempted = true,
-                    resources = filtered,
-                    viewedUrls = viewedUrls
-                )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isSearching = false,
-                    searchAttempted = true,
-                    error = e.message
-                )
+            var firstResultShown = false
+            var chineseItems = emptyList<ResourceItem>()
+            var englishItems = emptyList<ResourceItem>()
+
+            // 同时收集两个 Flow，任一发射就更新 UI
+            if (englishFlow != null) {
+                coroutineScope {
+                    val chineseJob = launch {
+                        chineseFlow.collect { items ->
+                            chineseItems = items
+                            if (!firstResultShown) {
+                                firstResultShown = true
+                                Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
+                                _uiState.value = _uiState.value.copy(isSearching = false)
+                            }
+                            updateSearchResults(chineseItems, englishItems, isShow)
+                        }
+                    }
+                    val englishJob = launch {
+                        englishFlow.collect { items ->
+                            englishItems = items
+                            if (!firstResultShown) {
+                                firstResultShown = true
+                                Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
+                                _uiState.value = _uiState.value.copy(isSearching = false)
+                            }
+                            updateSearchResults(chineseItems, englishItems, isShow)
+                        }
+                    }
+                    chineseJob.join()
+                    englishJob.join()
+                }
+            } else {
+                chineseFlow.collect { items ->
+                    chineseItems = items
+                    if (!firstResultShown) {
+                        firstResultShown = true
+                        Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
+                        _uiState.value = _uiState.value.copy(isSearching = false)
+                    }
+                    updateSearchResults(chineseItems, englishItems, isShow)
+                }
             }
         }
+    }
+
+    /**
+     * 合并中英文搜索结果并更新 UI
+     */
+    private suspend fun updateSearchResults(
+        chineseItems: List<ResourceItem>,
+        englishItems: List<ResourceItem>,
+        isShow: Boolean
+    ) {
+        val existingUrls = chineseItems.map { it.url }.toSet()
+        val mergedItems = chineseItems + englishItems.filter { it.url !in existingUrls }
+
+        if (mergedItems.isNotEmpty()) {
+            allResources = resourceRepository.mergeAndCacheResources(
+                keyword = currentKeyword,
+                items = mergedItems,
+                isShow = isShow
+            )
+        } else {
+            allResources = resourceRepository.getCachedAllResources(currentKeyword)
+        }
+
+        val state = _uiState.value
+        val filtered = resourceRepository.filterItems(
+            allResources, state.enabledSources, state.enabledDiskTypes
+        )
+        val viewedUrls = viewedItemStorage.getviewedUrls()
+        _uiState.value = _uiState.value.copy(
+            searchAttempted = true,
+            resources = filtered,
+            viewedUrls = viewedUrls
+        )
     }
 
     /**
@@ -371,7 +426,7 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 重新搜索：清除缓存，强制重新请求 API
+     * 重新搜索：清除缓存，强制重新请求 API（中英文名并行搜索）
      */
     fun searchResources() {
         if (!detailLoaded) return
@@ -379,28 +434,50 @@ class DetailViewModel @Inject constructor(
         searchJob = viewModelScope.launch {
             val state = _uiState.value
             _uiState.value = state.copy(isSearching = true, error = null)
-            // 强制刷新（清除缓存后重拉）
             val isShow = currentMediaType == MediaType.SHOW
-            val result = resourceRepository.refreshResources(
+
+            // 强制刷新中文名搜索
+            val chineseResult = resourceRepository.refreshResources(
                 keyword = currentKeyword,
                 enabledSources = state.enabledSources,
                 enabledDiskTypes = state.enabledDiskTypes,
                 isShow = isShow
             )
-            result.onSuccess { items ->
-                allResources = resourceRepository.getCachedAllResources(currentKeyword)
-                _uiState.value = _uiState.value.copy(
-                    isSearching = false,
-                    searchAttempted = true,
-                    resources = items
+            // 如果有英文名，也刷新英文名搜索
+            val englishResult = if (currentOriginalTitle.isNotEmpty()) {
+                resourceRepository.refreshResources(
+                    keyword = currentOriginalTitle,
+                    enabledSources = state.enabledSources,
+                    enabledDiskTypes = state.enabledDiskTypes,
+                    isShow = isShow
                 )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isSearching = false,
-                    searchAttempted = true,
-                    error = e.message
-                )
+            } else {
+                Result.success(emptyList())
             }
+
+            val chineseItems = chineseResult.getOrDefault(emptyList())
+            val englishItems = englishResult.getOrDefault(emptyList())
+            val existingUrls = chineseItems.map { it.url }.toSet()
+            val mergedItems = chineseItems + englishItems.filter { it.url !in existingUrls }
+
+            if (mergedItems.isNotEmpty()) {
+                allResources = resourceRepository.mergeAndCacheResources(
+                    keyword = currentKeyword,
+                    items = mergedItems,
+                    isShow = isShow
+                )
+            } else {
+                allResources = resourceRepository.getCachedAllResources(currentKeyword)
+            }
+
+            val filtered = resourceRepository.filterItems(
+                allResources, state.enabledSources, state.enabledDiskTypes
+            )
+            _uiState.value = _uiState.value.copy(
+                isSearching = false,
+                searchAttempted = true,
+                resources = filtered
+            )
         }
     }
 
@@ -465,11 +542,18 @@ class DetailViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(isMarkingWatched = false)
                     }
             } else {
-                // 取消标记（本地切换，无对应 API 时乐观更新）
-                _uiState.value = _uiState.value.copy(
-                    isMarkedWatched = false,
-                    isMarkingWatched = false
-                )
+                // 取消标记：移除已看记录并重新加回想看
+                traktRepository.removeWatched(currentTraktId, currentMediaType)
+                    .onSuccess {
+                        _uiState.value = _uiState.value.copy(
+                            isMarkedWatched = false,
+                            isMarkingWatched = false,
+                            watchlistChanged = true
+                        )
+                    }
+                    .onFailure {
+                        _uiState.value = _uiState.value.copy(isMarkingWatched = false)
+                    }
             }
         }
     }
@@ -485,6 +569,7 @@ class DetailViewModel @Inject constructor(
 
     private data class EnrichmentData(
         val chineseTitle: String,
+        val originalTitle: String = "",
         val overview: String,
         val genres: String,
         val posterUrl: String?,

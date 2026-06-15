@@ -149,9 +149,9 @@ object NetworkModule {
                 chain.proceed(request)
             })
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(8, TimeUnit.SECONDS)
-            .readTimeout(8, TimeUnit.SECONDS)
-            .callTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
     }
@@ -228,7 +228,18 @@ object NetworkModule {
     fun provideGitHubUpdateApiService(
         loggingInterceptor: HttpLoggingInterceptor
     ): GitHubUpdateApiService {
+        val token = BuildConfig.GITHUB_UPDATE_TOKEN
         val client = OkHttpClient.Builder()
+            .apply {
+                if (token.isNotEmpty()) {
+                    addInterceptor(Interceptor { chain ->
+                        val request = chain.request().newBuilder()
+                            .addHeader("Authorization", "Bearer $token")
+                            .build()
+                        chain.proceed(request)
+                    })
+                }
+            }
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
@@ -246,7 +257,22 @@ object NetworkModule {
     fun provideGiteeUpdateApiService(
         loggingInterceptor: HttpLoggingInterceptor
     ): GiteeUpdateApiService {
+        val token = BuildConfig.GITEE_ACCESS_TOKEN
         val client = OkHttpClient.Builder()
+            .apply {
+                if (token.isNotEmpty()) {
+                    addInterceptor(Interceptor { chain ->
+                        val originalUrl = chain.request().url
+                        val newUrl = originalUrl.newBuilder()
+                            .addQueryParameter("access_token", token)
+                            .build()
+                        val request = chain.request().newBuilder()
+                            .url(newUrl)
+                            .build()
+                        chain.proceed(request)
+                    })
+                }
+            }
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)

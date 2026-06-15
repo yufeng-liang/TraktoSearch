@@ -33,6 +33,7 @@ fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
     DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue)
     DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange)
     DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115)
+    DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000))
     DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93))
 }
 

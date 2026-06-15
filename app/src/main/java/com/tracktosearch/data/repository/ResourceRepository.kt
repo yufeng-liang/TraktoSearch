@@ -4,8 +4,16 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,7 +30,7 @@ class ResourceRepository @Inject constructor(
         val ALL_SOURCES = setOf(SOURCE_PANSOU, SOURCE_ZRESO)
         val ALL_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
-            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE
+            DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
     }
@@ -52,9 +60,12 @@ class ResourceRepository @Inject constructor(
         val allItems = if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
             cached.items
         } else {
-            // 调两个 API 拉全量
-            val fetched = fetchAllSources(keyword, isShow)
-            cache[keyword] = KeywordCache(fetched, now)
+            // 只查询用户选中的源，避免无效请求
+            val fetched = fetchEnabledSources(keyword, enabledSources, enabledDiskTypes, isShow)
+            // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
+            if (fetched.isNotEmpty()) {
+                cache[keyword] = KeywordCache(fetched, now)
+            }
             fetched
         }
 
@@ -76,6 +87,68 @@ class ResourceRepository @Inject constructor(
     }
 
     /**
+     * 增量搜索接口：先到的源先发射，等所有源完成后发射合并结果。
+     * 发射 1~2 次：
+     *   - 第 1 次：最快的源返回时立即发射（先到先显示）
+     *   - 第 2 次：所有源完成后发射合并去重结果（数据完整性）
+     * 如果有缓存则只发射 1 次。
+     */
+    fun searchResourcesFlow(
+        keyword: String,
+        enabledSources: Set<String> = ALL_SOURCES,
+        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
+        isShow: Boolean = false
+    ): Flow<List<ResourceItem>> = channelFlow {
+        if (keyword.isBlank()) { send(emptyList()); return@channelFlow }
+
+        val now = System.currentTimeMillis()
+        val cached = cache[keyword]
+        if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
+            send(filterItems(cached.items, enabledSources, enabledDiskTypes))
+            return@channelFlow
+        }
+
+        val deferreds = mutableListOf<Deferred<List<ResourceItem>>>()
+        if (SOURCE_PANSOU in enabledSources) {
+            deferreds.add(async {
+                runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
+        if (SOURCE_ZRESO in enabledSources) {
+            deferreds.add(async {
+                runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
+
+        if (deferreds.isEmpty()) { send(emptyList()); return@channelFlow }
+        if (deferreds.size == 1) {
+            val items = deferreds.first().await()
+            if (items.isNotEmpty()) cache[keyword] = KeywordCache(items, now)
+            send(items)
+            return@channelFlow
+        }
+
+        // 多源：select 先拿到最快的源，立即发射
+        val firstCompleted = select<Deferred<List<ResourceItem>>> {
+            for (d in deferreds) d.onAwait { d }
+        }
+        val firstItems = firstCompleted.await()
+        send(firstItems)
+
+        // 等剩余源完成，合并去重后再次发射
+        val restItems = deferreds
+            .filter { it !== firstCompleted }
+            .flatMap { runCatching { it.await() }.getOrDefault(emptyList()) }
+        val allItems = (firstItems + restItems)
+            .distinctBy { it.url }
+            .sortedWith(resourceComparator(isShow))
+        if (allItems.isNotEmpty()) {
+            cache[keyword] = KeywordCache(allItems, System.currentTimeMillis())
+        }
+        send(allItems)
+    }.flowOn(Dispatchers.IO)
+
+    /**
      * 本地过滤（不调 API）
      */
     fun filterItems(
@@ -89,36 +162,68 @@ class ResourceRepository @Inject constructor(
             .filter { it.diskType in enabledDiskTypes }
     }
 
-    private suspend fun fetchAllSources(keyword: String, isShow: Boolean = false): List<ResourceItem> {
-        val (panSouItems, zresoItems) = coroutineScope {
-            val panSouDeferred = async {
-                runCatching { searchPanSou(keyword, ALL_DISK_TYPES) }.getOrDefault(emptyList())
+    /**
+     * 只查询用户选中的源，并行请求所有选中源，等全部返回后合并
+     */
+    private suspend fun fetchEnabledSources(
+        keyword: String,
+        enabledSources: Set<String>,
+        enabledDiskTypes: Set<DiskType>,
+        isShow: Boolean
+    ): List<ResourceItem> {
+        return coroutineScope {
+            val deferreds = mutableListOf<Deferred<List<ResourceItem>>>()
+
+            if (SOURCE_PANSOU in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
             }
-            val zresoDeferred = async {
-                runCatching { searchZreso(keyword, ALL_DISK_TYPES) }.getOrDefault(emptyList())
+            if (SOURCE_ZRESO in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
             }
-            panSouDeferred.await() to zresoDeferred.await()
+
+            if (deferreds.isEmpty()) return@coroutineScope emptyList()
+
+            // 等待所有选中源都返回，合并结果
+            val allResults = deferreds.awaitAll()
+            allResults.flatten().sortedWith(resourceComparator(isShow))
         }
-        return (panSouItems + zresoItems)
+    }
+
+    /**
+     * 资源排序规则：
+     * 1. 夸克网盘 > 其它
+     * 2. 日期新的在前
+     * 3. 电视剧多季结果优先
+     */
+    private fun resourceComparator(isShow: Boolean) = compareByDescending<ResourceItem> {
+        if (isShow) multiSeasonScore(it.name) else 0
+    }.thenByDescending { it.diskType == DiskType.QUARK } // 夸克优先
+        .thenByDescending { it.fileDate } // 日期新
+        .thenByDescending { it.fileCount }
+        .thenByDescending { it.source == SOURCE_PANSOU }
+
+    /**
+     * 合并外部传入的资源列表并写入缓存（用于中英文搜索结果合并）
+     */
+    fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
+        val merged = items
             .distinctBy { it.url }
-            .sortedWith(
-                compareByDescending<ResourceItem> {
-                    // 电视剧优先展示含多季的结果（名称含"全"或"第"或"1-N季"等）
-                    if (isShow) multiSeasonScore(it.name) else 0
-                }.thenByDescending { it.fileDate }
-                    .thenByDescending { it.fileCount }
-                    .thenByDescending { it.diskType == DiskType.QUARK }
-                    .thenByDescending { it.source == SOURCE_PANSOU }
-            )
+            .sortedWith(resourceComparator(isShow))
+        if (merged.isNotEmpty()) {
+            cache[keyword] = KeywordCache(merged, System.currentTimeMillis())
+        }
+        return merged
     }
 
     /** 判断资源名是否包含多季信息，返回优先级分数 */
     private fun multiSeasonScore(name: String): Int {
         val n = name.lowercase()
         return when {
-            // "全季"、"1-8季"、"第1-8季" 等多季合集
             Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""").containsMatchIn(n) -> 2
-            // "第1季"、"第2季" 等明确标季的
             Regex("""第\s*\d+\s*季""").containsMatchIn(n) -> 1
             else -> 0
         }
@@ -154,7 +259,7 @@ class ResourceRepository @Inject constructor(
 
     private fun cloudTypesForPanSou(types: Set<DiskType>): String {
         if (types == ALL_DISK_TYPES) {
-            return "quark,baidu,aliyun,xunlei,uc,115"
+            return "quark,baidu,aliyun,xunlei,uc,115,magnet"
         }
         return types.joinToString(",") { diskTypeToPanSou(it) }
     }
@@ -166,6 +271,7 @@ class ResourceRepository @Inject constructor(
         DiskType.XUNLEI -> "xunlei"
         DiskType.UC -> "uc"
         DiskType.ONEONEFIVE -> "115"
+        DiskType.MAGNET -> "magnet"
         DiskType.OTHER -> "others"
     }
 
@@ -176,28 +282,34 @@ class ResourceRepository @Inject constructor(
         DiskType.XUNLEI -> "xunlei"
         DiskType.UC -> "uc"
         DiskType.ONEONEFIVE -> "115"
+        DiskType.MAGNET -> "magnet"
         DiskType.OTHER -> ""
     }
 
     private suspend fun searchPanSou(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
-        val cloudTypes = cloudTypesForPanSou(enabledDiskTypes)
-        val response = panSouApiService.search(keyword = keyword, cloudTypes = cloudTypes)
-        if (response.code != 0) return emptyList()
-        val data = response.data ?: return emptyList()
-        val allLinks = data.merged_by_type.flatMap { (type, links) ->
-            links.map { link -> type to link }
-        }
-        return allLinks.mapNotNull { (type, link) ->
-            val diskType = mapPanSouType(type) ?: return@mapNotNull null
-            ResourceItem(
-                name = link.note.ifBlank { keyword },
-                diskType = diskType,
-                fileSize = "",
-                fileDate = link.datetime,
-                fileCount = 1,
-                url = link.url,
-                source = SOURCE_PANSOU
-            )
+        return try {
+            val response = withTimeoutOrNull(8_000) {
+                panSouApiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
+            } ?: return emptyList()
+            if (response.code != 0) return emptyList()
+            val data = response.data ?: return emptyList()
+            val allLinks = data.merged_by_type.flatMap { (type, links) ->
+                links.map { link -> type to link }
+            }
+            allLinks.mapNotNull { (type, link) ->
+                val diskType = mapPanSouType(type) ?: return@mapNotNull null
+                ResourceItem(
+                    name = link.note.ifBlank { keyword },
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = link.datetime,
+                    fileCount = 1,
+                    url = link.url,
+                    source = SOURCE_PANSOU
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
@@ -208,37 +320,44 @@ class ResourceRepository @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "magnet" -> DiskType.MAGNET
         else -> null
     }
 
     private suspend fun searchZreso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
-        val cloud = if (enabledDiskTypes == ALL_DISK_TYPES || enabledDiskTypes.size > 1) {
-            enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
-        } else {
-            enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
-        }
-        val response = zresoApiService.search(keyword = keyword, cloud = cloud)
-        return response.data.results.mapNotNull { result ->
-            val link = result.links.firstOrNull() ?: return@mapNotNull null
-            val fullUrl = if (link.url.startsWith("http")) {
-                link.url
+        return try {
+            val cloud = if (enabledDiskTypes == ALL_DISK_TYPES || enabledDiskTypes.size > 1) {
+                enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
             } else {
-                "https://zreso.cn${link.url}"
+                enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
             }
-            val diskType = mapZresoType(link.type)
-            if (cloud.isNotEmpty() && diskType != mapZresoTypeFirst(cloud)) {
-                return@mapNotNull null
+            val response = withTimeoutOrNull(8_000) {
+                zresoApiService.search(keyword = keyword, cloud = cloud)
+            } ?: return emptyList()
+            response.data.results.mapNotNull { result ->
+                val link = result.links.firstOrNull() ?: return@mapNotNull null
+                val fullUrl = if (link.url.startsWith("http")) {
+                    link.url
+                } else {
+                    "https://zreso.cn${link.url}"
+                }
+                val diskType = mapZresoType(link.type)
+                if (cloud.isNotEmpty() && diskType != mapZresoTypeFirst(cloud)) {
+                    return@mapNotNull null
+                }
+                ResourceItem(
+                    name = result.title,
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = result.datetime.ifBlank { result.date },
+                    fileCount = result.links.size,
+                    status = result.status,
+                    url = fullUrl,
+                    source = SOURCE_ZRESO
+                )
             }
-            ResourceItem(
-                name = result.title,
-                diskType = diskType,
-                fileSize = "",
-                fileDate = result.datetime.ifBlank { result.date },
-                fileCount = result.links.size,
-                status = result.status,
-                url = fullUrl,
-                source = SOURCE_ZRESO
-            )
+        } catch (e: Exception) {
+            emptyList()
         }
     }
 
@@ -249,6 +368,7 @@ class ResourceRepository @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "magnet" -> DiskType.MAGNET
         else -> null
     }
 
@@ -259,6 +379,7 @@ class ResourceRepository @Inject constructor(
         "xunlei" -> DiskType.XUNLEI
         "uc" -> DiskType.UC
         "115" -> DiskType.ONEONEFIVE
+        "magnet" -> DiskType.MAGNET
         else -> DiskType.OTHER
     }
 }

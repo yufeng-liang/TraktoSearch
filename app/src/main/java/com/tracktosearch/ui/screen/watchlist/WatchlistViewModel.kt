@@ -2,6 +2,8 @@ package com.tracktosearch.ui.screen.watchlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -24,7 +26,8 @@ data class MovieUiItem(
     val genres: String,
     val posterUrl: String?,
     val imdbId: String = "",
-    val traktRating: Double = 0.0
+    val traktRating: Double = 0.0,
+    val listedAt: String = ""
 )
 
 data class ShowUiItem(
@@ -36,7 +39,8 @@ data class ShowUiItem(
     val genres: String,
     val posterUrl: String?,
     val imdbId: String = "",
-    val traktRating: Double = 0.0
+    val traktRating: Double = 0.0,
+    val listedAt: String = ""
 )
 
 data class WatchlistUiState(
@@ -74,22 +78,28 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingMovies = true, moviesError = null)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
             result.onSuccess { (items, totalPages) ->
-                val batchSize = 5
-                val uiItems = mutableListOf<MovieUiItem>()
-                for (i in items.indices step batchSize) {
-                    val batch = items.subList(i, minOf(i + batchSize, items.size))
-                    val batchResults = batch.map { item -> async { enrichMovieItem(item.movie) } }.awaitAll()
-                    uiItems.addAll(batchResults)
-                    if (i + batchSize < items.size) {
-                        _uiState.value = _uiState.value.copy(
-                            movies = (_uiState.value.movies + uiItems.toList()).distinctBy { it.traktId },
-                            isLoadingMovies = true
-                        )
+                // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
+                val deferredItems = items.mapIndexed { index, item ->
+                    async {
+                        val uiItem = enrichMovieItem(item.movie, item.listed_at)
+                        // 每完成一个就更新 UI
+                        val currentMovies = _uiState.value.movies.toMutableList()
+                        // 按原始顺序插入到对应位置
+                        if (index < currentMovies.size) {
+                            currentMovies[index] = uiItem
+                        } else {
+                            // 补齐中间空位
+                            while (currentMovies.size < index) currentMovies.add(createPlaceholderMovie(items[currentMovies.size]))
+                            currentMovies.add(uiItem)
+                        }
+                        _uiState.value = _uiState.value.copy(movies = currentMovies.toList())
+                        uiItem
                     }
                 }
+                val uiItems = deferredItems.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
-                    movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
+                    movies = uiItems,
                     isLoadingMovies = false,
                     moviesLoaded = true,
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
@@ -114,22 +124,24 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingShows = true, showsError = null)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage) }
             result.onSuccess { (items, totalPages) ->
-                val batchSize = 5
-                val uiItems = mutableListOf<ShowUiItem>()
-                for (i in items.indices step batchSize) {
-                    val batch = items.subList(i, minOf(i + batchSize, items.size))
-                    val batchResults = batch.map { item -> async { enrichShowItem(item.show) } }.awaitAll()
-                    uiItems.addAll(batchResults)
-                    if (i + batchSize < items.size) {
-                        _uiState.value = _uiState.value.copy(
-                            shows = (_uiState.value.shows + uiItems.toList()).distinctBy { it.traktId },
-                            isLoadingShows = true
-                        )
+                val deferredItems = items.mapIndexed { index, item ->
+                    async {
+                        val uiItem = enrichShowItem(item.show, item.listed_at)
+                        val currentShows = _uiState.value.shows.toMutableList()
+                        if (index < currentShows.size) {
+                            currentShows[index] = uiItem
+                        } else {
+                            while (currentShows.size < index) currentShows.add(createPlaceholderShow(items[currentShows.size]))
+                            currentShows.add(uiItem)
+                        }
+                        _uiState.value = _uiState.value.copy(shows = currentShows.toList())
+                        uiItem
                     }
                 }
+                val uiItems = deferredItems.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
-                    shows = (_uiState.value.shows + uiItems).distinctBy { it.traktId },
+                    shows = uiItems,
                     isLoadingShows = false,
                     showsLoaded = true,
                     hasMoreShows = _uiState.value.showPage < totalPages,
@@ -146,7 +158,7 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    private suspend fun enrichMovieItem(movie: com.tracktosearch.data.remote.trakt.dto.TraktMovie): MovieUiItem {
+    private suspend fun enrichMovieItem(movie: com.tracktosearch.data.remote.trakt.dto.TraktMovie, listedAt: String = ""): MovieUiItem {
         if (movie.ids.tmdb <= 0) {
             return MovieUiItem(
                 traktId = movie.ids.trakt,
@@ -157,7 +169,8 @@ class WatchlistViewModel @Inject constructor(
                 genres = "",
                 posterUrl = null,
                 imdbId = movie.ids.imdb,
-                traktRating = movie.rating
+                traktRating = movie.rating,
+                listedAt = listedAt
             )
         }
         val enrichment = tmdbRepository.enrichMovie(movie.ids.tmdb, movie.title, movie.year)
@@ -170,11 +183,12 @@ class WatchlistViewModel @Inject constructor(
             genres = enrichment.genres,
             posterUrl = enrichment.posterUrl,
             imdbId = movie.ids.imdb,
-            traktRating = movie.rating
+            traktRating = movie.rating,
+            listedAt = listedAt
         )
     }
 
-    private suspend fun enrichShowItem(show: com.tracktosearch.data.remote.trakt.dto.TraktShow): ShowUiItem {
+    private suspend fun enrichShowItem(show: com.tracktosearch.data.remote.trakt.dto.TraktShow, listedAt: String = ""): ShowUiItem {
         if (show.ids.tmdb <= 0) {
             return ShowUiItem(
                 traktId = show.ids.trakt,
@@ -185,7 +199,8 @@ class WatchlistViewModel @Inject constructor(
                 genres = "",
                 posterUrl = null,
                 imdbId = show.ids.imdb,
-                traktRating = show.rating
+                traktRating = show.rating,
+                listedAt = listedAt
             )
         }
         val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, show.year)
@@ -198,7 +213,38 @@ class WatchlistViewModel @Inject constructor(
             genres = enrichment.genres,
             posterUrl = enrichment.posterUrl,
             imdbId = show.ids.imdb,
-            traktRating = show.rating
+            traktRating = show.rating,
+            listedAt = listedAt
+        )
+    }
+
+    private fun createPlaceholderMovie(item: TraktWatchlistMovieItem): MovieUiItem {
+        return MovieUiItem(
+            traktId = item.movie.ids.trakt,
+            tmdbId = item.movie.ids.tmdb,
+            title = item.movie.title,
+            displayTitle = item.movie.title,
+            year = item.movie.year,
+            genres = "",
+            posterUrl = null,
+            imdbId = item.movie.ids.imdb,
+            traktRating = item.movie.rating,
+            listedAt = item.listed_at
+        )
+    }
+
+    private fun createPlaceholderShow(item: TraktWatchlistShowItem): ShowUiItem {
+        return ShowUiItem(
+            traktId = item.show.ids.trakt,
+            tmdbId = item.show.ids.tmdb,
+            title = item.show.title,
+            displayTitle = item.show.title,
+            year = item.show.year,
+            genres = "",
+            posterUrl = null,
+            imdbId = item.show.ids.imdb,
+            traktRating = item.show.rating,
+            listedAt = item.listed_at
         )
     }
 

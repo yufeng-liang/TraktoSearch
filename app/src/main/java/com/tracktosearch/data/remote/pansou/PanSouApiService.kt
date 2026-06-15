@@ -10,7 +10,7 @@ interface PanSouApiService {
     suspend fun search(
         @Query("kw") keyword: String,
         @Query("res") res: String = "merge",
-        @Query("cloud_types") cloudTypes: String = "quark,baidu,aliyun,quark,xunlei,uc,115",
+        @Query("cloud_types") cloudTypes: String = "quark,baidu,aliyun,xunlei,uc,115",
         @Query("src") src: String = "all"
     ): PanSouResponse
 }

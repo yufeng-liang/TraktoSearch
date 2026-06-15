@@ -24,6 +24,12 @@ interface TraktApiService {
     @POST("sync/history")
     suspend fun addToHistory(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
 
+    @POST("sync/history/remove")
+    suspend fun removeFromHistory(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
+
+    @POST("sync/watchlist")
+    suspend fun addToWatchlist(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
+
     @POST("sync/watchlist/remove")
     suspend fun removeFromWatchlist(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
 

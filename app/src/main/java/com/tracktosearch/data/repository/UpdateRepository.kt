@@ -32,18 +32,18 @@ class UpdateRepository @Inject constructor(
     suspend fun checkForUpdate(): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
 
-        // 先尝试 GitHub
-        val gitHubResult = tryFetchFromGitHub()
-        if (gitHubResult != null && isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
-            // 同时尝试获取 Gitee 下载链接作为备用
-            val giteeUrl = tryFetchGiteeDownloadUrl()
-            return gitHubResult.copy(giteeDownloadUrl = giteeUrl)
-        }
-
-        // GitHub 失败或无更新，尝试 Gitee
+        // 优先尝试 Gitee（国内更稳定）
         val giteeResult = tryFetchFromGitee()
         if (giteeResult != null && isNewerVersion(giteeResult.latestVersion, currentVersion)) {
-            return giteeResult
+            // 同时尝试获取 GitHub 下载链接作为备用
+            val githubUrl = tryFetchGitHubDownloadUrl()
+            return giteeResult.copy(downloadUrl = githubUrl.ifEmpty { giteeResult.downloadUrl })
+        }
+
+        // Gitee 失败或无更新，尝试 GitHub
+        val gitHubResult = tryFetchFromGitHub()
+        if (gitHubResult != null && isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
+            return gitHubResult
         }
 
         return null
@@ -94,10 +94,9 @@ class UpdateRepository @Inject constructor(
         }
     }
 
-    private suspend fun tryFetchGiteeDownloadUrl(): String {
+    private suspend fun tryFetchGitHubDownloadUrl(): String {
         return try {
-            val releases = giteeApi.getLatestRelease(GITEE_OWNER, GITEE_REPO)
-            val release = releases.firstOrNull() ?: return ""
+            val release = gitHubApi.getLatestRelease(GITHUB_OWNER, GITHUB_REPO)
             val apkAsset = release.assets.find {
                 it.name.endsWith(".apk", ignoreCase = true)
             }

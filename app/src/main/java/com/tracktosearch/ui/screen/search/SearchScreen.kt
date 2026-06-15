@@ -31,7 +31,6 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.ui.component.EmptyView
-import com.tracktosearch.ui.component.LazyColumnScrollbar
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import dagger.hilt.EntryPoint
@@ -185,12 +184,6 @@ fun SearchScreen(
                                 )
                             }
                         }
-                        LazyColumnScrollbar(
-                            state = listState,
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .padding(end = 2.dp)
-                        )
                     }
                 }
                 else -> {
@@ -306,7 +299,7 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
         DiskType.QUARK -> "quark://"
         DiskType.BAIDU -> "baidunetdisk://"
         DiskType.ALI -> "aliyundrive://"
-        DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.OTHER -> null
+        DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET, DiskType.OTHER -> null
     }
 
     // 优先尝试打开网盘 App

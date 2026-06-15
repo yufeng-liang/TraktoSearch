@@ -1,7 +1,7 @@
 package com.tracktosearch.data.remote.dto
 
 enum class DiskType {
-    QUARK, BAIDU, ALI, XUNLEI, UC, ONEONEFIVE, OTHER
+    QUARK, BAIDU, ALI, XUNLEI, UC, ONEONEFIVE, MAGNET, OTHER
 }
 
 data class ResourceItem(

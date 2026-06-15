@@ -36,9 +36,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.EmptyView
-import com.tracktosearch.ui.component.LazyGridScrollbar
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.ScrollToTopButton
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -359,11 +359,11 @@ private fun MovieGrid(
                 )
             }
         }
-        LazyGridScrollbar(
-            state = gridState,
+        ScrollToTopButton(
+            gridState = gridState,
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 2.dp)
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
         )
     }
 }
@@ -395,11 +395,11 @@ private fun ShowGrid(
                 )
             }
         }
-        LazyGridScrollbar(
-            state = gridState,
+        ScrollToTopButton(
+            gridState = gridState,
             modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 2.dp)
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
         )
     }
 }

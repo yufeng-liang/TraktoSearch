@@ -110,6 +110,26 @@ class TraktRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    suspend fun removeWatched(traktId: Int, type: MediaType): Result<TraktSyncResponse> {
+        return try {
+            val ids = TraktIds(trakt = traktId)
+            val request = when (type) {
+                MediaType.MOVIE -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids)))
+                MediaType.SHOW -> TraktSyncRequest(shows = listOf(TraktSyncItem(ids)))
+            }
+            val response = traktApiService.removeFromHistory(request)
+            if (response.isSuccessful) {
+                // 取消已看后重新加入想看列表
+                traktApiService.addToWatchlist(request)
+                Result.success(response.body()!!)
+            } else {
+                Result.failure(Exception("Failed to remove watched: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 
 enum class MediaType {

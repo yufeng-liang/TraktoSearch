@@ -61,6 +61,7 @@
     <string name="detail_disk_type_xunlei">Xunlei</string>
     <string name="detail_disk_type_uc">UC</string>
     <string name="detail_disk_type_115">115</string>
+    <string name="detail_disk_type_magnet">Magnet</string>
     <string name="detail_disk_type_other">Other</string>
 
     <!-- Resource Item Card -->
@@ -75,6 +76,7 @@
     <string name="disk_xunlei">Xunlei</string>
     <string name="disk_uc">UC</string>
     <string name="disk_115">115</string>
+    <string name="disk_magnet">Magnet</string>
     <string name="disk_other">Other</string>
 
     <!-- Login Screen -->

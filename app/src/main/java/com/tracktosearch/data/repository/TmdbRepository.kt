@@ -22,6 +22,7 @@ class TmdbRepository @Inject constructor(
     data class MovieEnrichment(
         val posterUrl: String?,
         val chineseTitle: String,
+        val originalTitle: String = "",
         val overview: String,
         val genres: String,
         val year: Int?,
@@ -33,6 +34,7 @@ class TmdbRepository @Inject constructor(
     data class TvEnrichment(
         val posterUrl: String?,
         val chineseTitle: String,
+        val originalTitle: String = "",
         val overview: String,
         val genres: String,
         val year: Int?,
@@ -50,6 +52,7 @@ class TmdbRepository @Inject constructor(
             return MovieEnrichment(
                 posterUrl = cached.poster_path?.let { "$IMAGE_BASE_URL$it" },
                 chineseTitle = chineseTitle,
+                originalTitle = cached.original_title,
                 overview = cached.overview ?: "",
                 genres = cached.genres?.joinToString(" · ") { it.name } ?: "",
                 year = cached.release_date?.take(4)?.toIntOrNull() ?: year,
@@ -69,6 +72,7 @@ class TmdbRepository @Inject constructor(
                 MovieEnrichment(
                     posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
                     chineseTitle = chineseTitle,
+                    originalTitle = detail.original_title,
                     overview = detail.overview ?: "",
                     genres = detail.genres?.joinToString(" · ") { it.name } ?: "",
                     year = detail.release_date?.take(4)?.toIntOrNull() ?: year,
@@ -93,6 +97,7 @@ class TmdbRepository @Inject constructor(
             return TvEnrichment(
                 posterUrl = cached.poster_path?.let { "$IMAGE_BASE_URL$it" },
                 chineseTitle = chineseTitle,
+                originalTitle = cached.original_name,
                 overview = cached.overview ?: "",
                 genres = cached.genres?.joinToString(" · ") { it.name } ?: "",
                 year = cached.first_air_date?.take(4)?.toIntOrNull() ?: year,
@@ -112,6 +117,7 @@ class TmdbRepository @Inject constructor(
                 TvEnrichment(
                     posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
                     chineseTitle = chineseTitle,
+                    originalTitle = detail.original_name,
                     overview = detail.overview ?: "",
                     genres = detail.genres?.joinToString(" · ") { it.name } ?: "",
                     year = detail.first_air_date?.take(4)?.toIntOrNull() ?: year,
