@@ -180,14 +180,14 @@ class DetailViewModel @Inject constructor(
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             Log.d("DetailVM", "Fetching comments for traktId=$currentTraktId, type=$currentMediaType")
-            val result = traktRepository.getComments(currentTraktId, currentMediaType, limit = 5, page = 1)
+            val result = traktRepository.getComments(currentTraktId, currentMediaType, limit = 15, page = 1)
             result.onSuccess { comments ->
                 Log.d("DetailVM", "Got ${comments.size} comments")
                 _uiState.value = _uiState.value.copy(
                     comments = comments,
                     translatedComments = emptyList(),
                     commentPage = 1,
-                    hasMoreComments = comments.isNotEmpty()  // 有评论就尝试加载更多
+                    hasMoreComments = comments.size >= 15  // 满页说明可能还有更多
                 )
             }.onFailure { e ->
                 Log.e("DetailVM", "Failed to fetch comments", e)
@@ -318,15 +318,25 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 启动搜索：取消之前的任务，使用当前 filter 状态
-     * 总是拉全量（两个源 + 所有网盘），缓存后本地过滤
+     * 启动搜索：取消之前的任务，优先用"影视名 年份"搜索
+     * 如果带年份搜索无结果，回退用影视名搜索
      */
     private fun startSearch() {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             val state = _uiState.value
             _uiState.value = state.copy(isSearching = true, error = null)
-            val result = resourceRepository.searchResources(keyword = currentKeyword)
+
+            // 优先用"影视名 年份"搜索，确保找到同年份的同名影视
+            val keywordWithYear = if (state.year != null) "$currentKeyword ${state.year}" else currentKeyword
+            val isShow = currentMediaType == MediaType.SHOW
+            var result = resourceRepository.searchResources(keyword = keywordWithYear, isShow = isShow)
+
+            // 带年份搜索无结果，回退用影视名搜索
+            if (result.isSuccess && result.getOrDefault(emptyList()).isEmpty() && state.year != null) {
+                result = resourceRepository.searchResources(keyword = currentKeyword, isShow = isShow)
+            }
+
             result.onSuccess { _ ->
                 // repository 已缓存全量，这里读取全量以便 filter 切换
                 allResources = resourceRepository.getCachedAllResources(currentKeyword)
@@ -370,10 +380,12 @@ class DetailViewModel @Inject constructor(
             val state = _uiState.value
             _uiState.value = state.copy(isSearching = true, error = null)
             // 强制刷新（清除缓存后重拉）
+            val isShow = currentMediaType == MediaType.SHOW
             val result = resourceRepository.refreshResources(
                 keyword = currentKeyword,
                 enabledSources = state.enabledSources,
-                enabledDiskTypes = state.enabledDiskTypes
+                enabledDiskTypes = state.enabledDiskTypes,
+                isShow = isShow
             )
             result.onSuccess { items ->
                 allResources = resourceRepository.getCachedAllResources(currentKeyword)

@@ -33,8 +33,8 @@
     <string name="watchlist_load_failed">Load failed: %1$s</string>
     <string name="watchlist_retry">Retry</string>
     <string name="watchlist_loading">Loading watchlist…</string>
-    <string name="watchlist_empty_movies">Your watchlist is empty.\nGo to Trakt to add some movies!</string>
-    <string name="watchlist_empty_shows">Your watchlist is empty.\nGo to Trakt to add some TV shows!</string>
+    <string name="watchlist_empty_movies">Watchlist is empty</string>
+    <string name="watchlist_empty_shows">Watchlist is empty</string>
     <string name="watchlist_search_no_movies">No movies match your search</string>
     <string name="watchlist_search_no_shows">No TV shows match your search</string>
     <string name="watchlist_logout">Logout</string>
@@ -132,7 +132,7 @@
     <string name="detail_load_more_comments">Scroll down to load more</string>
     <string name="detail_all_comments_loaded">All %1$d comments loaded</string>
     <string name="detail_cast_crew">Cast &amp; Crew</string>
-    <string name="detail_cast_all">All %1$d ></string>
+    <string name="detail_cast_all">All ></string>
     <string name="detail_director_tag">Director</string>
     <string name="detail_cast_as">as %1$s</string>
     <string name="detail_writer_tag">Writer</string>
@@ -141,4 +141,13 @@
     <string name="detail_cast_close">Close</string>
     <string name="detail_specials">Specials</string>
     <string name="detail_actor">Actor</string>
+
+    <!-- Update -->
+    <string name="update_title">New version available</string>
+    <string name="update_download">Update now</string>
+    <string name="update_later">Remind me later</string>
+    <string name="update_browser_download">Download in browser</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="update_download_failed">Download failed, try browser download</string>
+    <string name="update_install">Installing…</string>
 </resources>

@@ -864,7 +864,6 @@ private fun CrewSection(
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
-    val totalCount = cast.size + crew.distinctBy { it.id }.size
 
     Column {
         // 标题行
@@ -881,14 +880,12 @@ private fun CrewSection(
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
-            if (totalCount > 0) {
-                Text(
-                    text = stringResource(R.string.detail_cast_all, totalCount),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable(onClick = onShowAll)
-                )
-            }
+            Text(
+                text = stringResource(R.string.detail_cast_all),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(onClick = onShowAll)
+            )
         }
 
         // 横向滚动：导演→演员→编剧→制片人

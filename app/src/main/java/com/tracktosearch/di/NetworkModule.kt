@@ -6,6 +6,8 @@ import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
+import com.tracktosearch.data.remote.update.GitHubUpdateApiService
+import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import dagger.Module
 import dagger.Provides
@@ -219,5 +221,41 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(OmdbApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGitHubUpdateApiService(
+        loggingInterceptor: HttpLoggingInterceptor
+    ): GitHubUpdateApiService {
+        val client = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl("https://api.github.com/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(GitHubUpdateApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGiteeUpdateApiService(
+        loggingInterceptor: HttpLoggingInterceptor
+    ): GiteeUpdateApiService {
+        val client = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl("https://gitee.com/api/v5/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(GiteeUpdateApiService::class.java)
     }
 }

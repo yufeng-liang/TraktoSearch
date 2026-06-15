@@ -82,14 +82,14 @@ class WatchlistViewModel @Inject constructor(
                     uiItems.addAll(batchResults)
                     if (i + batchSize < items.size) {
                         _uiState.value = _uiState.value.copy(
-                            movies = _uiState.value.movies + uiItems.toList(),
+                            movies = (_uiState.value.movies + uiItems.toList()).distinctBy { it.traktId },
                             isLoadingMovies = true
                         )
                     }
                 }
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
-                    movies = _uiState.value.movies + uiItems,
+                    movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
                     isLoadingMovies = false,
                     moviesLoaded = true,
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
@@ -122,14 +122,14 @@ class WatchlistViewModel @Inject constructor(
                     uiItems.addAll(batchResults)
                     if (i + batchSize < items.size) {
                         _uiState.value = _uiState.value.copy(
-                            shows = _uiState.value.shows + uiItems.toList(),
+                            shows = (_uiState.value.shows + uiItems.toList()).distinctBy { it.traktId },
                             isLoadingShows = true
                         )
                     }
                 }
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
-                    shows = _uiState.value.shows + uiItems,
+                    shows = (_uiState.value.shows + uiItems).distinctBy { it.traktId },
                     isLoadingShows = false,
                     showsLoaded = true,
                     hasMoreShows = _uiState.value.showPage < totalPages,
@@ -227,7 +227,7 @@ class WatchlistViewModel @Inject constructor(
                 val uiItems = items.map { item -> async { enrichMovieItem(item.movie) } }.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
-                    movies = _uiState.value.movies + uiItems,
+                    movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
                     isLoadingMovies = false,
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
                     moviePage = _uiState.value.moviePage + 1,

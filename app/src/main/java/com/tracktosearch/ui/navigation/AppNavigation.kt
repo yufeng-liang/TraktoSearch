@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -22,6 +23,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
@@ -126,6 +129,31 @@ fun AppNavigation(
                             }
                         }
 
+                        // 版本更新检查：首页加载完成后检查，仅一次
+                        val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
+                        var updateInfo by rememberSaveable { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
+                        var updateChecked by rememberSaveable { mutableStateOf(false) }
+                        val uiState by watchlistViewModel.uiState.collectAsState()
+                        LaunchedEffect(uiState.moviesLoaded, uiState.showsLoaded) {
+                            if (!updateChecked && uiState.moviesLoaded && uiState.showsLoaded) {
+                                updateChecked = true
+                                try {
+                                    updateInfo = updateRepository.checkForUpdate()
+                                } catch (_: Exception) {}
+                            }
+                        }
+
+                        // 更新弹窗
+                        updateInfo?.let { info ->
+                            UpdateDialog(
+                                updateInfo = info,
+                                onDismiss = { updateInfo = null },
+                                onOpenInBrowser = { url ->
+                                    navController.navigate(Routes.webViewRoute(url, "下载更新"))
+                                }
+                            )
+                        }
+
                         MainScreen(
                             initialTab = initialTab,
                             isLoggedIn = isLoggedIn,
@@ -137,6 +165,9 @@ fun AppNavigation(
                             },
                             onSearchClick = { keyword ->
                                 navController.navigate(Routes.searchRoute(keyword))
+                            },
+                            onOpenWebView = { url ->
+                                navController.navigate(Routes.webViewRoute(url, "Trakt"))
                             },
                             onNavigateToLogin = {
                                 navController.navigate(Routes.LOGIN) {
@@ -187,7 +218,7 @@ fun AppNavigation(
                             mediaType = if (type == "show") MediaType.SHOW else MediaType.MOVIE,
                             imdbId = imdbId,
                             traktRating = traktRating,
-                            onBack = { goBack(false) },
+                            onBack = { changed -> goBack(changed) },
                             onPersonClick = { personId, personName ->
                                 navController.navigate(Routes.webViewRoute(
                                     "https://www.themoviedb.org/person/$personId",
@@ -229,10 +260,15 @@ fun AppNavigation(
                     val title = java.net.URLDecoder.decode(
                         backStackEntry.arguments?.getString("title") ?: "", "UTF-8"
                     )
+                    // 从 WebView 返回时触发想看列表刷新（用户可能在 Trakt 网站上添加了新内容）
+                    val previousEntry = navController.previousBackStackEntry
                     WebViewScreen(
                         url = url,
                         title = title,
-                        onBack = { navController.popBackStack() }
+                        onBack = {
+                            previousEntry?.savedStateHandle?.set("watchlist_changed", true)
+                            navController.popBackStack()
+                        }
                     )
                 }
             }

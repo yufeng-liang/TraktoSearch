@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
@@ -14,10 +15,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 
 /**
@@ -51,12 +55,17 @@ fun LazyColumnScrollbar(
         }
     }
 
+    val density = LocalDensity.current
+    var containerHeightPxState = remember { mutableFloatStateOf(0f) }
+    val containerHeightPx = containerHeightPxState.floatValue
+
     Box(
         modifier = modifier
             .fillMaxHeight()
             .width(4.dp)
-            .padding(vertical = 4.dp),
-        contentAlignment = Alignment.TopCenter
+            .padding(vertical = 4.dp)
+            .onSizeChanged { containerHeightPxState.floatValue = it.height.toFloat() },
+        contentAlignment = Alignment.TopStart
     ) {
         // Track
         Box(
@@ -71,20 +80,18 @@ fun LazyColumnScrollbar(
 
         // Thumb
         layoutInfo?.let { (progress, thumbHeight) ->
+            val thumbHeightPx = containerHeightPx * thumbHeight
+            val offsetY = progress * (containerHeightPx - thumbHeightPx)
             Box(
                 modifier = Modifier
-                    .fillMaxHeight(thumbHeight)
+                    .height(with(density) { thumbHeightPx.toDp() })
                     .width(3.dp)
                     .alpha(scrollbarAlpha)
                     .background(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                         shape = RoundedCornerShape(1.5.dp)
                     )
-                    .align(Alignment.TopCenter)
-                    .padding(top = androidx.compose.ui.unit.max(
-                        0.dp,
-                        (progress * 100).dp
-                    ))
+                    .padding(top = with(density) { offsetY.toDp() })
             )
         }
     }
@@ -121,13 +128,19 @@ fun LazyGridScrollbar(
         }
     }
 
+    val density = LocalDensity.current
+    var containerHeightPxState = remember { mutableFloatStateOf(0f) }
+    val containerHeightPx = containerHeightPxState.floatValue
+
     Box(
         modifier = modifier
             .fillMaxHeight()
             .width(4.dp)
-            .padding(vertical = 4.dp),
-        contentAlignment = Alignment.TopCenter
+            .padding(vertical = 4.dp)
+            .onSizeChanged { containerHeightPxState.floatValue = it.height.toFloat() },
+        contentAlignment = Alignment.TopStart
     ) {
+        // Track
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -138,17 +151,20 @@ fun LazyGridScrollbar(
                 )
         )
 
+        // Thumb
         layoutInfo?.let { (progress, thumbHeight) ->
+            val thumbHeightPx = containerHeightPx * thumbHeight
+            val offsetY = progress * (containerHeightPx - thumbHeightPx)
             Box(
                 modifier = Modifier
-                    .fillMaxHeight(thumbHeight)
+                    .height(with(density) { thumbHeightPx.toDp() })
                     .width(3.dp)
                     .alpha(scrollbarAlpha)
                     .background(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
                         shape = RoundedCornerShape(1.5.dp)
                     )
-                    .align(Alignment.TopCenter)
+                    .padding(top = with(density) { offsetY.toDp() })
             )
         }
     }

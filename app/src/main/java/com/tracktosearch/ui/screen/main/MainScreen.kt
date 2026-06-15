@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -24,13 +26,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -47,6 +51,7 @@ import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
+import kotlinx.coroutines.launch
 
 @Composable
 fun MainScreen(
@@ -55,10 +60,18 @@ fun MainScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
+    onOpenWebView: (url: String) -> Unit,
     onNavigateToLogin: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    val pagerState = rememberPagerState(initialPage = initialTab) { 2 }
+    val scope = rememberCoroutineScope()
+
+    // Pager 滑动 → 同步 selectedTab
+    LaunchedEffect(pagerState.currentPage) {
+        selectedTab = pagerState.currentPage
+    }
 
     // 获取屏幕宽度用于导航栏宽度计算
     val configuration = LocalConfiguration.current
@@ -107,27 +120,33 @@ fun MainScreen(
                 .fillMaxSize()
                 .nestedScroll(nestedScrollConnection)
         ) {
-            when (selectedTab) {
-                0 -> SearchScreen(
-                    initialKeyword = "",
-                    onSearchClick = onSearchClick,
-                    modifier = Modifier.fillMaxSize()
-                )
-                1 -> {
-                    if (isLoggedIn) {
-                        WatchlistScreen(
-                            onMovieClick = onMovieClick,
-                            onShowClick = onShowClick,
-                            onSearchClick = onSearchClick,
-                            onLogout = onLogout,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        LoginPromptScreen(
-                            onNavigateToLogin = onNavigateToLogin,
-                            onContinueAsGuest = { selectedTab = 0 },
-                            modifier = Modifier.fillMaxSize()
-                        )
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                when (page) {
+                    0 -> SearchScreen(
+                        initialKeyword = "",
+                        onSearchClick = onSearchClick,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    1 -> {
+                        if (isLoggedIn) {
+                            WatchlistScreen(
+                                onMovieClick = onMovieClick,
+                                onShowClick = onShowClick,
+                                onSearchClick = onSearchClick,
+                                onOpenWebView = onOpenWebView,
+                                onLogout = onLogout,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            LoginPromptScreen(
+                                onNavigateToLogin = onNavigateToLogin,
+                                onContinueAsGuest = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }
@@ -162,7 +181,7 @@ fun MainScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxSize()
-                            .clickable { selectedTab = 0 },
+                            .clickable { scope.launch { pagerState.animateScrollToPage(0) } },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -173,7 +192,7 @@ fun MainScreen(
                         )
                     }
                     // 分隔线
-                    Divider(
+                    HorizontalDivider(
                         modifier = Modifier
                             .fillMaxHeight()
                             .width(1.dp)
@@ -185,7 +204,7 @@ fun MainScreen(
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxSize()
-                            .clickable { selectedTab = 1 },
+                            .clickable { scope.launch { pagerState.animateScrollToPage(1) } },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

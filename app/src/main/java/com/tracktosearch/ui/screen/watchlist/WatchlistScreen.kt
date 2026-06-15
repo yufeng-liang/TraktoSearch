@@ -6,6 +6,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -37,6 +39,7 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LazyGridScrollbar
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.MovieCard
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +47,7 @@ fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
+    onOpenWebView: (url: String) -> Unit,
     onLogout: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
@@ -55,6 +59,14 @@ fun WatchlistScreen(
         viewModel.loadShows()
     }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val tabPagerState = rememberPagerState(initialPage = 0) { 2 }
+    val tabScope = rememberCoroutineScope()
+
+    // Pager 滑动 → 同步 selectedTab
+    LaunchedEffect(tabPagerState.currentPage) {
+        selectedTab = tabPagerState.currentPage
+    }
+
     var searchQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -168,40 +180,45 @@ fun WatchlistScreen(
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = { tabScope.launch { tabPagerState.animateScrollToPage(0) } },
                     text = { Text("${stringResource(R.string.watchlist_tab_movies)}(${filteredMovies.size})") }
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
+                    onClick = { tabScope.launch { tabPagerState.animateScrollToPage(1) } },
                     text = { Text("${stringResource(R.string.watchlist_tab_shows)}(${filteredShows.size})") }
                 )
             }
 
-            // 内容区域 - 区分加载中/错误/空/有数据 四种状态
-            when (selectedTab) {
-                0 -> MovieTabContent(
-                    isLoading = uiState.isLoadingMovies,
-                    isLoaded = uiState.moviesLoaded,
-                    items = filteredMovies,
-                    totalItems = uiState.movies.size,
-                    searchQuery = searchQuery,
-                    error = uiState.moviesError,
-                    onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                    onRetry = { viewModel.loadMovies(forceReload = true) },
-                    onOpenTrakt = { onSearchClick("https://trakt.tv/watchlist") }
-                )
-                1 -> ShowTabContent(
-                    isLoading = uiState.isLoadingShows,
-                    isLoaded = uiState.showsLoaded,
-                    items = filteredShows,
-                    totalItems = uiState.shows.size,
-                    searchQuery = searchQuery,
-                    error = uiState.showsError,
-                    onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                    onRetry = { viewModel.loadShows(forceReload = true) },
-                    onOpenTrakt = { onSearchClick("https://trakt.tv/watchlist") }
-                )
+            // 内容区域 - HorizontalPager 支持左右滑动
+            HorizontalPager(
+                state = tabPagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                when (page) {
+                    0 -> MovieTabContent(
+                        isLoading = uiState.isLoadingMovies,
+                        isLoaded = uiState.moviesLoaded,
+                        items = filteredMovies,
+                        totalItems = uiState.movies.size,
+                        searchQuery = searchQuery,
+                        error = uiState.moviesError,
+                        onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                        onRetry = { viewModel.loadMovies(forceReload = true) },
+                        onOpenTrakt = { onOpenWebView("https://trakt.tv/watchlist") }
+                    )
+                    1 -> ShowTabContent(
+                        isLoading = uiState.isLoadingShows,
+                        isLoaded = uiState.showsLoaded,
+                        items = filteredShows,
+                        totalItems = uiState.shows.size,
+                        searchQuery = searchQuery,
+                        error = uiState.showsError,
+                        onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                        onRetry = { viewModel.loadShows(forceReload = true) },
+                        onOpenTrakt = { onOpenWebView("https://trakt.tv/watchlist") }
+                    )
+                }
             }
         }
     }
@@ -321,15 +338,17 @@ private fun MovieGrid(
     onItemClick: (MovieUiItem) -> Unit
 ) {
     val gridState = rememberLazyGridState()
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
-            items(items, key = { it.traktId }) { item ->
+            items(items.size, key = { "movie_${items[it].traktId}_$it" }) { index ->
+                val item = items[index]
                 MovieCard(
                     title = item.displayTitle,
                     year = item.year,
@@ -355,15 +374,17 @@ private fun ShowGrid(
     onItemClick: (ShowUiItem) -> Unit
 ) {
     val gridState = rememberLazyGridState()
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
             contentPadding = PaddingValues(8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
-            items(items, key = { it.traktId }) { item ->
+            items(items.size, key = { "show_${items[it].traktId}_$it" }) { index ->
+                val item = items[index]
                 MovieCard(
                     title = item.displayTitle,
                     year = item.year,
@@ -413,10 +434,10 @@ private fun WatchlistEmptyState(
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Medium
                 )) {
-                    append("Trakt")
+                    append("Trakt 添加")
                 }
                 withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                    append(" 添加一些想看的")
+                    append(" 一些想看的影视吧")
                 }
             }
             Text(

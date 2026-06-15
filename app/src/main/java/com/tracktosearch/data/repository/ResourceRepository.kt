@@ -42,7 +42,8 @@ class ResourceRepository @Inject constructor(
     suspend fun searchResources(
         keyword: String,
         enabledSources: Set<String> = ALL_SOURCES,
-        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES
+        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
+        isShow: Boolean = false
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
 
@@ -52,7 +53,7 @@ class ResourceRepository @Inject constructor(
             cached.items
         } else {
             // 调两个 API 拉全量
-            val fetched = fetchAllSources(keyword)
+            val fetched = fetchAllSources(keyword, isShow)
             cache[keyword] = KeywordCache(fetched, now)
             fetched
         }
@@ -66,11 +67,12 @@ class ResourceRepository @Inject constructor(
     suspend fun refreshResources(
         keyword: String,
         enabledSources: Set<String> = ALL_SOURCES,
-        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES
+        enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
+        isShow: Boolean = false
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
         cache.remove(keyword)
-        return searchResources(keyword, enabledSources, enabledDiskTypes)
+        return searchResources(keyword, enabledSources, enabledDiskTypes, isShow)
     }
 
     /**
@@ -87,7 +89,7 @@ class ResourceRepository @Inject constructor(
             .filter { it.diskType in enabledDiskTypes }
     }
 
-    private suspend fun fetchAllSources(keyword: String): List<ResourceItem> {
+    private suspend fun fetchAllSources(keyword: String, isShow: Boolean = false): List<ResourceItem> {
         val (panSouItems, zresoItems) = coroutineScope {
             val panSouDeferred = async {
                 runCatching { searchPanSou(keyword, ALL_DISK_TYPES) }.getOrDefault(emptyList())
@@ -100,11 +102,26 @@ class ResourceRepository @Inject constructor(
         return (panSouItems + zresoItems)
             .distinctBy { it.url }
             .sortedWith(
-                compareByDescending<ResourceItem> { it.fileDate }
+                compareByDescending<ResourceItem> {
+                    // 电视剧优先展示含多季的结果（名称含"全"或"第"或"1-N季"等）
+                    if (isShow) multiSeasonScore(it.name) else 0
+                }.thenByDescending { it.fileDate }
                     .thenByDescending { it.fileCount }
                     .thenByDescending { it.diskType == DiskType.QUARK }
                     .thenByDescending { it.source == SOURCE_PANSOU }
             )
+    }
+
+    /** 判断资源名是否包含多季信息，返回优先级分数 */
+    private fun multiSeasonScore(name: String): Int {
+        val n = name.lowercase()
+        return when {
+            // "全季"、"1-8季"、"第1-8季" 等多季合集
+            Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""").containsMatchIn(n) -> 2
+            // "第1季"、"第2季" 等明确标季的
+            Regex("""第\s*\d+\s*季""").containsMatchIn(n) -> 1
+            else -> 0
+        }
     }
 
     fun clearCache() {
