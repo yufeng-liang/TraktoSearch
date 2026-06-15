@@ -9,8 +9,7 @@ import javax.inject.Singleton
 
 data class UpdateInfo(
     val latestVersion: String,
-    val downloadUrl: String,
-    val giteeDownloadUrl: String,
+    val downloadUrl: String,       // 蓝奏云链接（优先）
     val changelog: String,
     val fileSize: Long,
     val hasUpdate: Boolean
@@ -31,19 +30,22 @@ class UpdateRepository @Inject constructor(
 
     suspend fun checkForUpdate(): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
+        val lanzouUrl = BuildConfig.LANZOU_DOWNLOAD_URL
 
-        // 优先尝试 Gitee（国内更稳定）
-        val giteeResult = tryFetchFromGitee()
-        if (giteeResult != null && isNewerVersion(giteeResult.latestVersion, currentVersion)) {
-            // 同时尝试获取 GitHub 下载链接作为备用
-            val githubUrl = tryFetchGitHubDownloadUrl()
-            return giteeResult.copy(downloadUrl = githubUrl.ifEmpty { giteeResult.downloadUrl })
+        // 优先尝试 GitHub（版本检测）
+        val gitHubResult = tryFetchFromGitHub()
+        if (gitHubResult != null) {
+            if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
+                // 使用蓝奏云链接作为下载地址
+                return gitHubResult.copy(downloadUrl = lanzouUrl.ifEmpty { gitHubResult.downloadUrl })
+            }
+            return null
         }
 
-        // Gitee 失败或无更新，尝试 GitHub
-        val gitHubResult = tryFetchFromGitHub()
-        if (gitHubResult != null && isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
-            return gitHubResult
+        // GitHub 请求失败，降级到 Gitee
+        val giteeResult = tryFetchFromGitee()
+        if (giteeResult != null && isNewerVersion(giteeResult.latestVersion, currentVersion)) {
+            return giteeResult.copy(downloadUrl = lanzouUrl.ifEmpty { giteeResult.downloadUrl })
         }
 
         return null
@@ -59,10 +61,9 @@ class UpdateRepository @Inject constructor(
                 UpdateInfo(
                     latestVersion = release.tag_name.removePrefix("v"),
                     downloadUrl = apkAsset.browser_download_url,
-                    giteeDownloadUrl = "",
-                    changelog = release.body,
+                    changelog = sanitizeChangelog(release.body),
                     fileSize = apkAsset.size,
-                    hasUpdate = false  // 由调用方比较
+                    hasUpdate = false
                 )
             } else null
         } catch (e: Exception) {
@@ -75,41 +76,32 @@ class UpdateRepository @Inject constructor(
         return try {
             val releases = giteeApi.getLatestRelease(GITEE_OWNER, GITEE_REPO)
             val release = releases.firstOrNull() ?: return null
-            val apkAsset = release.assets.find {
-                it.name.endsWith(".apk", ignoreCase = true)
-            }
-            if (apkAsset != null) {
-                UpdateInfo(
-                    latestVersion = release.tag_name.removePrefix("v"),
-                    downloadUrl = apkAsset.browser_download_url,
-                    giteeDownloadUrl = apkAsset.browser_download_url,
-                    changelog = release.body,
-                    fileSize = apkAsset.size,
-                    hasUpdate = false
-                )
-            } else null
+            UpdateInfo(
+                latestVersion = release.tag_name.removePrefix("v"),
+                downloadUrl = "",
+                changelog = sanitizeChangelog(release.body),
+                fileSize = 0,
+                hasUpdate = false
+            )
         } catch (e: Exception) {
             Log.w(TAG, "Gitee update check failed", e)
             null
         }
     }
 
-    private suspend fun tryFetchGitHubDownloadUrl(): String {
-        return try {
-            val release = gitHubApi.getLatestRelease(GITHUB_OWNER, GITHUB_REPO)
-            val apkAsset = release.assets.find {
-                it.name.endsWith(".apk", ignoreCase = true)
-            }
-            apkAsset?.browser_download_url ?: ""
-        } catch (e: Exception) {
-            ""
+    /**
+     * 清理 changelog：检测乱码（大量问号等）并返回友好文本
+     */
+    private fun sanitizeChangelog(raw: String): String {
+        if (raw.isBlank()) return ""
+        val questionMarkCount = raw.count { it == '?' }
+        val totalLength = raw.length
+        if (totalLength > 0 && questionMarkCount.toFloat() / totalLength > 0.3f) {
+            return ""
         }
+        return raw
     }
 
-    /**
-     * 比较版本号，判断 latest 是否比 current 新
-     * 格式: "1.9.0" vs "1.8.0"
-     */
     private fun isNewerVersion(latest: String, current: String): Boolean {
         val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
         val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }

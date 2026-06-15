@@ -74,6 +74,7 @@ class WatchlistViewModel @Inject constructor(
         if (!forceReload && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
             return
         }
+        if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingMovies = true, moviesError = null)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
@@ -120,6 +121,7 @@ class WatchlistViewModel @Inject constructor(
         if (!forceReload && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
             return
         }
+        if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingShows = true, showsError = null)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage) }
