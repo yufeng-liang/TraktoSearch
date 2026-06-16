@@ -58,5 +58,13 @@
                     android:pathPrefix="/callback" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".data.util.InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.tracktosearch.INSTALL_RESULT" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -71,3 +71,28 @@ data class TmdbCrew(
     val job: String = "",
     val department: String = ""
 )
+
+@Serializable
+data class TmdbReviewsResponse(
+    val results: List<TmdbReview> = emptyList(),
+    val total_pages: Int = 1,
+    val total_results: Int = 0
+)
+
+@Serializable
+data class TmdbReview(
+    val id: String = "",
+    val author: String = "",
+    val author_details: TmdbReviewAuthor = TmdbReviewAuthor(),
+    val content: String = "",
+    val created_at: String = "",
+    val url: String = ""
+)
+
+@Serializable
+data class TmdbReviewAuthor(
+    val name: String = "",
+    val username: String = "",
+    val avatar_path: String? = null,
+    val rating: Double? = null
+)

@@ -110,7 +110,8 @@ data class TraktComment(
     val replies: Int = 0,
     val likes: Int = 0,
     val user_rating: Double? = null,
-    val user: TraktCommentUser = TraktCommentUser()
+    val user: TraktCommentUser = TraktCommentUser(),
+    val source: String = "Trakt"  // "Trakt" 或 "TMDB"
 )
 
 @Serializable

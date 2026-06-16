@@ -56,12 +56,26 @@ class UpdateRepository @Inject constructor(
         return null
     }
 
-    /** 从公开仓库获取 APK 下载链接 */
+    /**
+     * 从公开仓库获取 APK 下载链接
+     * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktToSearch-*.apk），
+     * 若有多个匹配则在匹配集中取最小体积的，避免选到因 UTF-8 重新编码而膨胀的损坏文件
+     */
     private suspend fun fetchDownloadUrl(version: String): String {
         return try {
             val releases = giteeApi.getLatestRelease(RELEASE_REPO_OWNER, RELEASE_REPO)
             val release = releases.firstOrNull() ?: return ""
-            val apkAsset = release.assets.find { it.name.endsWith(".apk", ignoreCase = true) }
+
+            val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+            if (apkAssets.isEmpty()) return ""
+
+            // 优先 TraktToSearch-*.apk 命名的附件；候选中取最小体积（修复损坏文件膨胀问题）
+            val namedCandidates = apkAssets.filter {
+                it.name.startsWith("TraktToSearch-", ignoreCase = true)
+            }
+            val apkAsset = (namedCandidates.ifEmpty { apkAssets })
+                .minByOrNull { it.size }
+
             apkAsset?.browser_download_url ?: ""
         } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch download URL from release repo", e)

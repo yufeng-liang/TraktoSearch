@@ -231,4 +231,16 @@ class TmdbRepository @Inject constructor(
     fun buildProfileUrl(profilePath: String?): String? {
         return profilePath?.let { "$IMAGE_BASE_URL$it" }
     }
+
+    suspend fun getReviews(tmdbId: Int, mediaType: MediaType, page: Int = 1): TmdbReviewsResponse? {
+        return try {
+            val response = when (mediaType) {
+                MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
+                MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
+            }
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

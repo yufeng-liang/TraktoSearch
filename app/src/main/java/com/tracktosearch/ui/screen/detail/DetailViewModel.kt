@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
+import com.tracktosearch.data.remote.trakt.dto.TraktCommentUser
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
@@ -16,6 +17,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCreditsResponse
+import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
@@ -184,18 +186,30 @@ class DetailViewModel @Inject constructor(
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             Log.d("DetailVM", "Fetching comments for traktId=$currentTraktId, type=$currentMediaType")
-            val result = traktRepository.getComments(currentTraktId, currentMediaType, limit = 15, page = 1)
-            result.onSuccess { comments ->
-                Log.d("DetailVM", "Got ${comments.size} comments")
-                _uiState.value = _uiState.value.copy(
-                    comments = comments,
-                    translatedComments = emptyList(),
-                    commentPage = 1,
-                    hasMoreComments = comments.size >= 15  // 满页说明可能还有更多
-                )
-            }.onFailure { e ->
-                Log.e("DetailVM", "Failed to fetch comments", e)
+
+            // 并行加载 Trakt 和 TMDB 评论
+            val traktDeferred = async {
+                traktRepository.getComments(currentTraktId, currentMediaType, limit = 15, page = 1)
+                    .getOrDefault(emptyList())
             }
+            val tmdbDeferred = async {
+                if (currentTmdbId > 0) {
+                    tmdbRepository.getReviews(currentTmdbId, currentMediaType)
+                        ?.results?.map { it.toTraktComment() } ?: emptyList()
+                } else emptyList()
+            }
+
+            val traktComments = traktDeferred.await()
+            val tmdbComments = tmdbDeferred.await()
+            val allComments = traktComments + tmdbComments
+
+            Log.d("DetailVM", "Got ${traktComments.size} Trakt + ${tmdbComments.size} TMDB comments")
+            _uiState.value = _uiState.value.copy(
+                comments = allComments,
+                translatedComments = emptyList(),
+                commentPage = 1,
+                hasMoreComments = traktComments.size >= 15
+            )
         }
     }
 
@@ -211,8 +225,11 @@ class DetailViewModel @Inject constructor(
             val result = traktRepository.getComments(currentTraktId, currentMediaType, limit = 5, page = nextPage)
             result.onSuccess { newComments ->
                 Log.d("DetailVM", "Loaded ${newComments.size} more comments (page $nextPage)")
+                // 去重：过滤掉与已有评论 ID 重复的项（API 分页边界可能重叠）
+                val existingIds = _uiState.value.comments.map { it.id }.toSet()
+                val uniqueNew = newComments.filter { it.id !in existingIds }
                 _uiState.value = _uiState.value.copy(
-                    comments = _uiState.value.comments + newComments,
+                    comments = _uiState.value.comments + uniqueNew,
                     commentPage = nextPage,
                     hasMoreComments = newComments.size >= 5,  // 满页说明可能还有更多
                     isLoadingMoreComments = false
@@ -591,5 +608,24 @@ class DetailViewModel @Inject constructor(
         val rating: Double,
         val runtime: Int? = null,
         val releaseDate: String = ""
+    )
+}
+
+/** 将 TMDB Review 转换为统一的 TraktComment 格式 */
+private fun TmdbReview.toTraktComment(): TraktComment {
+    // TMDB 的 id 是字符串，用 hashCode 转为 Int，加偏移避免与 Trakt ID 冲突
+    val tmdbId = Math.abs(id.hashCode()) + 1_000_000
+    return TraktComment(
+        id = tmdbId,
+        comment = content,
+        spoiler = false,
+        review = true,
+        created_at = created_at,
+        user_rating = author_details.rating,
+        user = TraktCommentUser(
+            username = author_details.username.ifEmpty { author },
+            name = author_details.name.ifEmpty { author }
+        ),
+        source = "TMDB"
     )
 }

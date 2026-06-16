@@ -42,4 +42,16 @@ interface TmdbApiService {
         @Path("tv_id") id: Int,
         @Query("language") language: String = "zh-CN"
     ): Response<TmdbCreditsResponse>
+
+    @GET("movie/{movie_id}/reviews")
+    suspend fun getMovieReviews(
+        @Path("movie_id") id: Int,
+        @Query("page") page: Int = 1
+    ): Response<TmdbReviewsResponse>
+
+    @GET("tv/{tv_id}/reviews")
+    suspend fun getTvReviews(
+        @Path("tv_id") id: Int,
+        @Query("page") page: Int = 1
+    ): Response<TmdbReviewsResponse>
 }
