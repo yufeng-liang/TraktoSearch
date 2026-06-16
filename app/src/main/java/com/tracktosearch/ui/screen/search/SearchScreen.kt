@@ -368,22 +368,22 @@ private fun SearchHistoryList(
 private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
     val url = item.url
 
-    // 网盘类型对应的 App 包名
-    val appPackage = when (item.diskType) {
-        DiskType.QUARK -> "com.quark.pan"
-        DiskType.BAIDU -> "com.baidu.netdisk"
-        DiskType.ALI -> "com.alicloud.databox"
-        DiskType.XUNLEI -> "com.xunlei.downloadprovider"
-        DiskType.UC -> "com.UCMobile"
-        DiskType.ONEONEFIVE -> "com.crland.app"
-        DiskType.MAGNET, DiskType.OTHER -> null
+    // 网盘类型对应的 App 包名（优先网盘独立App，其次浏览器）
+    val appPackages = when (item.diskType) {
+        DiskType.QUARK -> listOf("com.quark.clouddrive", "com.quark.browser")
+        DiskType.BAIDU -> listOf("com.baidu.netdisk")
+        DiskType.ALI -> listOf("com.alicloud.databox")
+        DiskType.XUNLEI -> listOf("com.xunlei.downloadprovider", "com.xunlei.browser")
+        DiskType.UC -> listOf("com.UCMobile")
+        DiskType.ONEONEFIVE -> listOf("com.crland.app")
+        DiskType.MAGNET, DiskType.OTHER -> emptyList()
     }
 
     // 优先尝试用对应网盘 App 打开实际 URL
-    if (appPackage != null) {
+    for (pkg in appPackages) {
         try {
             val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                setPackage(appPackage)
+                setPackage(pkg)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             if (appIntent.resolveActivity(context.packageManager) != null) {
