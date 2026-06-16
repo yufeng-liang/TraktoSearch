@@ -91,7 +91,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -129,8 +129,13 @@ import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun DetailScreen(
     traktId: Int,
@@ -187,8 +192,15 @@ fun DetailScreen(
         }
     }
 
+    // Haze 毛玻璃状态
+    val detailHazeState = remember { HazeState() }
+
     Scaffold { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .hazeSource(state = detailHazeState)
+        ) {
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             LazyColumn(
                 state = listState,
@@ -413,39 +425,37 @@ fun DetailScreen(
                 }
             }
 
-            // 返回按钮（与资源/评论 Tab 文字中轴线对齐）
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color.Transparent,
+            // 返回按钮（毛玻璃效果）
+            Box(
                 modifier = Modifier
                     .padding(start = 12.dp, top = 4.dp)
                     .align(Alignment.TopStart)
+                    .size(40.dp)
+                    .hazeEffect(
+                        state = detailHazeState,
+                        style = HazeMaterials.thin()
+                    ) {
+                        blurRadius = 18.dp
+                        noiseFactor = 0f
+                    }
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(20.dp)
+                    )
                     .clickable(
-                        interactionSource = MutableInteractionSource(),
+                        interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = { onBack(uiState.watchlistChanged) }
-                    )
+                    ),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(20.dp)
-                        )
-                        .border(
-                            BorderStroke(1.5.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)),
-                            shape = RoundedCornerShape(20.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.detail_back),
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.detail_back),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
             }
 
             ScrollToTopButton(
@@ -2267,10 +2277,14 @@ private fun PosterFullscreenOverlay(
 
     BackHandler(onBack = onDismiss)
 
+    // 海报大图 overlay 的 Haze 状态
+    val posterHazeState = remember { HazeState() }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.92f))
+            .hazeSource(state = posterHazeState)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -2311,13 +2325,21 @@ private fun PosterFullscreenOverlay(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 关闭按钮
+            // 关闭按钮（毛玻璃效果）
             IconButton(onClick = onDismiss) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .background(
-                            color = Color.White.copy(alpha = 0.2f),
+                        .hazeEffect(
+                            state = posterHazeState,
+                            style = HazeMaterials.thin()
+                        ) {
+                            blurRadius = 18.dp
+                            noiseFactor = 0f
+                        }
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.35f),
                             shape = RoundedCornerShape(20.dp)
                         ),
                     contentAlignment = Alignment.Center
@@ -2344,8 +2366,16 @@ private fun PosterFullscreenOverlay(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .background(
-                            color = Color.White.copy(alpha = 0.2f),
+                        .hazeEffect(
+                            state = posterHazeState,
+                            style = HazeMaterials.thin()
+                        ) {
+                            blurRadius = 18.dp
+                            noiseFactor = 0f
+                        }
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.35f),
                             shape = RoundedCornerShape(20.dp)
                         ),
                     contentAlignment = Alignment.Center

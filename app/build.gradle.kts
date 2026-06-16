@@ -11,14 +11,14 @@ plugins {
 
 android {
     namespace = "com.tracktosearch"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tracktosearch"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 12
-        versionName = "2.3.3"
+        targetSdk = 36
+        versionCode = 13
+    versionName = "2.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -130,4 +130,8 @@ dependencies {
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)
+
+    // Haze (frosted glass blur)
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 }

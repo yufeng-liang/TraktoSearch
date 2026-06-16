@@ -3,7 +3,6 @@ package com.tracktosearch.ui.screen.main
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -51,8 +50,14 @@ import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
@@ -114,6 +119,9 @@ fun MainScreen(
         }
     }
 
+    // Haze 毛玻璃状态
+    val hazeState = remember { HazeState() }
+
     Scaffold { _ ->
         Box(
             modifier = Modifier
@@ -122,7 +130,9 @@ fun MainScreen(
         ) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
             ) { page ->
                 when (page) {
                     0 -> SearchScreen(
@@ -151,26 +161,27 @@ fun MainScreen(
                 }
             }
 
-            // 悬浮底部导航（半透明毛玻璃效果，宽度拉伸20%，左右半边点击）
-            val navBarWidth = (screenWidthDp * 0.48).dp // 原宽度约40%屏幕宽，拉伸20%后约48%
+            // 悬浮底部导航（真正毛玻璃模糊效果）
+            val navBarWidth = (screenWidthDp * 0.48).dp
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val navBarShape = RoundedCornerShape(28.dp)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBarHeight + 8.dp)
                     .offset(y = with(density) { fabOffset.dp })
-                    .shadow(elevation = 12.dp, shape = RoundedCornerShape(28.dp))
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                        shape = RoundedCornerShape(28.dp)
+                    .width(navBarWidth)
+                    .height(52.dp)
+                    .shadow(elevation = 16.dp, shape = navBarShape)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin()
                     )
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(28.dp)
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        shape = navBarShape
                     )
-                    .width(navBarWidth)
-                    .height(52.dp)
             ) {
                 androidx.compose.foundation.layout.Row(
                     modifier = Modifier.fillMaxSize(),

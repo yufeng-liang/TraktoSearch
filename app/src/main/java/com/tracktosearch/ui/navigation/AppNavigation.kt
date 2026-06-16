@@ -26,7 +26,6 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -113,19 +112,20 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.MAIN) {
+                composable(Routes.MAIN) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val isLoggedIn by authStateHolder.isLoggedIn.collectAsState(initial = false)
 
-                        // 从详情页返回时，若标记已看则触发列表刷新（仅在 watchlist 标签页且 watchlistViewModel 已存在时有效）
-                        val savedState = navController.currentBackStackEntry?.savedStateHandle
-                        val watchlistChanged by (savedState?.getStateFlow("watchlist_changed", false)
-                            ?: MutableStateFlow(false)).collectAsState()
+                        // 从详情页返回时，若标记已看则触发列表刷新
+                        // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry
+                        // 后者在导航过渡期间可能为 null 或指向错误的 entry
+                        val savedState = backStackEntry.savedStateHandle
+                        val watchlistChanged by savedState.getStateFlow("watchlist_changed", false).collectAsState()
                         val watchlistViewModel: WatchlistViewModel = hiltViewModel()
                         LaunchedEffect(watchlistChanged) {
                             if (watchlistChanged) {
                                 watchlistViewModel.refreshIfLoaded()
-                                savedState?.set("watchlist_changed", false)
+                                savedState.set("watchlist_changed", false)
                             }
                         }
 

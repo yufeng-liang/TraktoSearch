@@ -79,6 +79,13 @@ fun SearchScreen(
         hadQuery = searchQuery.isNotEmpty()
     }
 
+    // 从其他 Tab 返回时，rememberSaveable 可能丢失搜索框内容，需从 ViewModel 同步关键词
+    LaunchedEffect(Unit) {
+        if (searchQuery.isEmpty() && uiState.keyword.isNotEmpty()) {
+            searchQuery = uiState.keyword
+        }
+    }
+
     LaunchedEffect(initialKeyword) {
         if (initialKeyword.isNotEmpty()) {
             searchQuery = initialKeyword

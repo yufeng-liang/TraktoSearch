@@ -56,7 +56,8 @@ data class DetailUiState(
     val translatedComments: List<TraktComment> = emptyList(),
     val isTranslating: Boolean = false,
     val translatingCommentId: Int? = null,  // 正在翻译的单条评论ID
-    val commentPage: Int = 1,              // 当前评论页码
+    val commentPage: Int = 1,              // 当前 Trakt 评论页码
+    val tmdbCommentPage: Int = 1,          // 当前 TMDB 评论页码
     val hasMoreComments: Boolean = false,   // 是否还有更多评论
     val isLoadingMoreComments: Boolean = false,  // 是否正在加载更多评论
     val isMarkingWatched: Boolean = false,       // 是否正在处理标记/取消标记
@@ -187,57 +188,81 @@ class DetailViewModel @Inject constructor(
         commentsJob = viewModelScope.launch {
             Log.d("DetailVM", "Fetching comments for traktId=$currentTraktId, type=$currentMediaType")
 
-            // 并行加载 Trakt 和 TMDB 评论
+            // 并行加载 Trakt 和 TMDB 评论（首页各取少量）
             val traktDeferred = async {
-                traktRepository.getComments(currentTraktId, currentMediaType, limit = 15, page = 1)
+                traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = 1)
                     .getOrDefault(emptyList())
             }
             val tmdbDeferred = async {
                 if (currentTmdbId > 0) {
-                    tmdbRepository.getReviews(currentTmdbId, currentMediaType)
-                        ?.results?.map { it.toTraktComment() } ?: emptyList()
-                } else emptyList()
+                    tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = 1)
+                } else null
             }
 
             val traktComments = traktDeferred.await()
-            val tmdbComments = tmdbDeferred.await()
+            val tmdbResponse = tmdbDeferred.await()
+            val tmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
             val allComments = traktComments + tmdbComments
+
+            val hasMoreTrakt = traktComments.size >= 10
+            val hasMoreTmdb = tmdbResponse != null && tmdbResponse.total_pages > 1
 
             Log.d("DetailVM", "Got ${traktComments.size} Trakt + ${tmdbComments.size} TMDB comments")
             _uiState.value = _uiState.value.copy(
                 comments = allComments,
                 translatedComments = emptyList(),
                 commentPage = 1,
-                hasMoreComments = traktComments.size >= 15
+                tmdbCommentPage = 1,
+                hasMoreComments = hasMoreTrakt || hasMoreTmdb
             )
         }
     }
 
-    /** 加载更多评论（下一页） */
+    /** 加载更多评论（下一页，Trakt 和 TMDB 并行） */
     fun loadMoreComments() {
         val current = _uiState.value
         if (!current.hasMoreComments || current.isLoadingMoreComments) return
 
-        val nextPage = current.commentPage + 1
+        val nextTraktPage = current.commentPage + 1
+        val nextTmdbPage = current.tmdbCommentPage + 1
         _uiState.value = current.copy(isLoadingMoreComments = true)
 
         viewModelScope.launch {
-            val result = traktRepository.getComments(currentTraktId, currentMediaType, limit = 5, page = nextPage)
-            result.onSuccess { newComments ->
-                Log.d("DetailVM", "Loaded ${newComments.size} more comments (page $nextPage)")
-                // 去重：过滤掉与已有评论 ID 重复的项（API 分页边界可能重叠）
-                val existingIds = _uiState.value.comments.map { it.id }.toSet()
-                val uniqueNew = newComments.filter { it.id !in existingIds }
-                _uiState.value = _uiState.value.copy(
-                    comments = _uiState.value.comments + uniqueNew,
-                    commentPage = nextPage,
-                    hasMoreComments = newComments.size >= 5,  // 满页说明可能还有更多
-                    isLoadingMoreComments = false
-                )
-            }.onFailure { e ->
-                Log.e("DetailVM", "Failed to load more comments", e)
-                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
+            // 判断是否还有更多 Trakt/TMDB 评论
+            val hasMoreTrakt = current.commentPage > 0 // 首页满 10 条时 commentPage=1，可以继续
+            val hasMoreTmdb = current.tmdbCommentPage > 0
+
+            val traktDeferred = async {
+                if (hasMoreTrakt) {
+                    traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = nextTraktPage)
+                        .getOrDefault(emptyList())
+                } else emptyList()
             }
+            val tmdbDeferred = async {
+                if (hasMoreTmdb && currentTmdbId > 0) {
+                    tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = nextTmdbPage)
+                } else null
+            }
+
+            val newTraktComments = traktDeferred.await()
+            val tmdbResponse = tmdbDeferred.await()
+            val newTmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
+
+            // 去重
+            val existingIds = _uiState.value.comments.map { it.id }.toSet()
+            val uniqueNew = (newTraktComments + newTmdbComments).filter { it.id !in existingIds }
+
+            val newHasMoreTrakt = newTraktComments.size >= 10
+            val newHasMoreTmdb = tmdbResponse != null && nextTmdbPage < tmdbResponse.total_pages
+
+            Log.d("DetailVM", "Loaded ${newTraktComments.size} Trakt + ${newTmdbComments.size} TMDB more comments")
+            _uiState.value = _uiState.value.copy(
+                comments = _uiState.value.comments + uniqueNew,
+                commentPage = if (newTraktComments.isNotEmpty()) nextTraktPage else current.commentPage,
+                tmdbCommentPage = if (newTmdbComments.isNotEmpty()) nextTmdbPage else current.tmdbCommentPage,
+                hasMoreComments = newHasMoreTrakt || newHasMoreTmdb,
+                isLoadingMoreComments = false
+            )
         }
     }
 
