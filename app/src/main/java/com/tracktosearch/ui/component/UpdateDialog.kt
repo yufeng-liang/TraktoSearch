@@ -17,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,11 +52,19 @@ fun UpdateDialog(
     var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
 
+    // 组件销毁时取消下载
     DisposableEffect(Unit) {
         onDispose { downloadJob?.cancel() }
     }
 
     val canDismiss = downloadState !is DownloadState.Downloading
+
+    // 下载完成自动唤起安装
+    LaunchedEffect(downloadState) {
+        if (downloadState is DownloadState.Completed) {
+            ApkInstaller.installApk(context, (downloadState as DownloadState.Completed).file)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
@@ -109,11 +118,7 @@ fun UpdateDialog(
         confirmButton = {
             when (val state = downloadState) {
                 is DownloadState.Idle -> {
-                    Row {
-                        OutlinedButton(onClick = onDismiss) {
-                            Text("稍后提醒")
-                        }
-                        Spacer(Modifier.width(8.dp))
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Button(onClick = {
                             downloadState = DownloadState.Downloading(0f)
                             downloadJob = scope.launch {
@@ -131,16 +136,20 @@ fun UpdateDialog(
                                     downloadState = DownloadState.Error(e.message ?: "下载失败")
                                 }
                             }
-                        }) {
+                        }, modifier = Modifier.fillMaxWidth()) {
                             Text("内置下载")
                         }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
                             context.startActivity(intent)
                             onDismiss()
-                        }) {
+                        }, modifier = Modifier.fillMaxWidth()) {
                             Text("浏览器下载")
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                            Text("稍后提醒")
                         }
                     }
                 }
@@ -148,42 +157,42 @@ fun UpdateDialog(
                     OutlinedButton(onClick = {
                         downloadJob?.cancel()
                         downloadState = DownloadState.Idle
-                    }) {
-                        Text("取消")
+                    }, modifier = Modifier.fillMaxWidth()) {
+                        Text("取消下载")
                     }
                 }
                 is DownloadState.Completed -> {
-                    Row {
-                        OutlinedButton(onClick = onDismiss) {
-                            Text("稍后安装")
-                        }
-                        Spacer(Modifier.width(8.dp))
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Button(onClick = {
                             ApkInstaller.installApk(context, state.file)
                             onDismiss()
-                        }) {
-                            Text("安装")
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("安装更新")
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                            Text("稍后安装")
                         }
                     }
                 }
                 is DownloadState.Error -> {
-                    Row {
-                        OutlinedButton(onClick = onDismiss) {
-                            Text("关闭")
-                        }
-                        Spacer(Modifier.width(8.dp))
+                    Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Button(onClick = {
                             downloadState = DownloadState.Idle
-                        }) {
-                            Text("重试")
+                        }, modifier = Modifier.fillMaxWidth()) {
+                            Text("重试下载")
                         }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = {
                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
                             context.startActivity(intent)
                             onDismiss()
-                        }) {
+                        }, modifier = Modifier.fillMaxWidth()) {
                             Text("浏览器下载")
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                            Text("关闭")
                         }
                     }
                 }

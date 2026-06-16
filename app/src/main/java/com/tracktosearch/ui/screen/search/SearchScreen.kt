@@ -24,6 +24,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -58,6 +60,8 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
     }
@@ -120,6 +124,8 @@ fun SearchScreen(
                     onSearch = {
                         if (searchQuery.isNotBlank()) {
                             viewModel.search(searchQuery)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
                         }
                     }
                 ),
@@ -140,6 +146,8 @@ fun SearchScreen(
                             // 搜索按钮
                             TextButton(onClick = {
                                 viewModel.search(searchQuery)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
                             }) {
                                 Text(stringResource(R.string.search_button))
                             }
@@ -265,6 +273,8 @@ fun SearchScreen(
                             onHistoryClick = { keyword ->
                                 searchQuery = keyword
                                 viewModel.search(keyword)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
                             },
                             onHistoryDelete = { viewModel.removeHistory(it) },
                             onClearAll = { viewModel.clearHistory() }

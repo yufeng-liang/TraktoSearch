@@ -164,8 +164,9 @@ fun DetailScreen(
     val initialCount = 30
     var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(uiState.resources.size)) }
     LaunchedEffect(uiState.resources.size) {
-        if (uiState.resources.isNotEmpty() && displayedCount == 0) {
-            displayedCount = initialCount.coerceAtMost(uiState.resources.size)
+        if (uiState.resources.isNotEmpty() && displayedCount < uiState.resources.size) {
+            // 数据增长时，至少显示 initialCount 条（避免先到源只有少量结果导致卡住）
+            displayedCount = maxOf(displayedCount, initialCount).coerceAtMost(uiState.resources.size)
         }
     }
 
@@ -2102,7 +2103,7 @@ private fun CommentItem(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "(来源:Trakt)",
+                    text = "(来源:${comment.source})",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -2254,6 +2255,15 @@ private fun PosterFullscreenOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
+
+    // 进入时检查是否已保存
+    LaunchedEffect(posterUrl, title) {
+        val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
+        val filename = "TrackToSearch_${safeName}.jpg"
+        val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
+        isSaved = queryExistingFile(context, filename, relativePath) != null
+    }
 
     BackHandler(onBack = onDismiss)
 
@@ -2321,9 +2331,15 @@ private fun PosterFullscreenOverlay(
                 }
             }
 
-            // 保存按钮
+            // 保存按钮（已保存时显示勾选图标）
             IconButton(onClick = {
-                savePosterToGallery(context, posterUrl, title)
+                if (isSaved == true) {
+                    Toast.makeText(context, "已保存到相册", Toast.LENGTH_SHORT).show()
+                } else {
+                    savePosterToGallery(context, posterUrl, title) {
+                        isSaved = true
+                    }
+                }
             }) {
                 Box(
                     modifier = Modifier
@@ -2334,19 +2350,28 @@ private fun PosterFullscreenOverlay(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Download,
-                        contentDescription = "保存",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    if (isSaved == true) {
+                        Icon(
+                            Icons.Filled.Check,
+                            contentDescription = "已保存",
+                            tint = Color(0xFF4CAF50), // 绿色
+                            modifier = Modifier.size(22.dp)
+                        )
+                    } else {
+                        Icon(
+                            Icons.Default.Download,
+                            contentDescription = "保存",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-private fun savePosterToGallery(context: android.content.Context, posterUrl: String, title: String) {
+private fun savePosterToGallery(context: android.content.Context, posterUrl: String, title: String, onSaved: () -> Unit = {}) {
     val imageLoader = context.imageLoader
     GlobalScope.launch(Dispatchers.IO) {
         try {
@@ -2359,6 +2384,7 @@ private fun savePosterToGallery(context: android.content.Context, posterUrl: Str
             val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
             if (bitmap != null) {
                 saveBitmapToGallery(context, bitmap, title)
+                onSaved()
             }
         } catch (_: Exception) {
             withContext(Dispatchers.Main) {
