@@ -79,11 +79,11 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingMovies = true, moviesError = null)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
             result.onSuccess { (items, totalPages) ->
-                // 如果 forceReload 且数据与现有列表相同，跳过 TMDB 富化和 UI 更新
+                // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
-                    val newIds = items.map { it.movie.ids.trakt }
-                    val oldIds = _uiState.value.movies.take(items.size).map { it.traktId }
-                    if (newIds == oldIds) {
+                    val newIds = items.map { it.movie.ids.trakt }.toSet()
+                    val oldIds = _uiState.value.movies.map { it.traktId }.toSet()
+                    if (newIds == oldIds && items.size == _uiState.value.movies.size) {
                         _uiState.value = _uiState.value.copy(
                             isLoadingMovies = false,
                             hasMoreMovies = _uiState.value.moviePage < totalPages,
@@ -91,6 +91,8 @@ class WatchlistViewModel @Inject constructor(
                         )
                         return@launch
                     }
+                    // 数据有变化，先清空旧列表避免新旧数据混合
+                    _uiState.value = _uiState.value.copy(movies = emptyList())
                 }
                 // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
                 val deferredItems = items.mapIndexed { index, item ->
@@ -139,11 +141,11 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingShows = true, showsError = null)
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage) }
             result.onSuccess { (items, totalPages) ->
-                // 如果 forceReload 且数据与现有列表相同，跳过 TMDB 富化和 UI 更新
+                // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
-                    val newIds = items.map { it.show.ids.trakt }
-                    val oldIds = _uiState.value.shows.take(items.size).map { it.traktId }
-                    if (newIds == oldIds) {
+                    val newIds = items.map { it.show.ids.trakt }.toSet()
+                    val oldIds = _uiState.value.shows.map { it.traktId }.toSet()
+                    if (newIds == oldIds && items.size == _uiState.value.shows.size) {
                         _uiState.value = _uiState.value.copy(
                             isLoadingShows = false,
                             hasMoreShows = _uiState.value.showPage < totalPages,
@@ -151,6 +153,8 @@ class WatchlistViewModel @Inject constructor(
                         )
                         return@launch
                     }
+                    // 数据有变化，先清空旧列表避免新旧数据混合
+                    _uiState.value = _uiState.value.copy(shows = emptyList())
                 }
                 val deferredItems = items.mapIndexed { index, item ->
                     async {

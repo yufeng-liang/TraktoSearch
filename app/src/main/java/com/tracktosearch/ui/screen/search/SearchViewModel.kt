@@ -7,6 +7,7 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.ResourceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,8 @@ class SearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+    private var searchJob: Job? = null
+
     init {
         viewModelScope.launch {
             searchHistoryStorage.history.collect { history ->
@@ -46,22 +49,29 @@ class SearchViewModel @Inject constructor(
     fun search(keyword: String) {
         if (keyword.isBlank()) return
 
-        viewModelScope.launch {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             searchHistoryStorage.add(keyword)
-            _uiState.value = SearchUiState(isLoading = true, keyword = keyword, searchHistory = _uiState.value.searchHistory)
-            val result = resourceRepository.searchResources(keyword = keyword)
-            result.onSuccess { items ->
-                val quarkOnly = items.filter { it.diskType == com.tracktosearch.data.remote.dto.DiskType.QUARK }
-                val finalItems = if (quarkOnly.isNotEmpty()) quarkOnly else items
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    resources = finalItems
-                )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message
-                )
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                keyword = keyword,
+                resources = emptyList(),
+                error = null
+            )
+            // 使用 Flow 接口：先到的源先显示，所有源完成后合并去重
+            resourceRepository.searchResourcesFlow(keyword = keyword)
+                .collect { items ->
+                    if (items.isNotEmpty()) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            resources = items
+                        )
+                    }
+                    // 空结果不关闭加载状态，避免短暂显示"没有结果"
+                }
+            // Flow 结束后，如果仍然没有结果，关闭加载状态
+            if (_uiState.value.resources.isEmpty()) {
+                _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
     }
@@ -79,6 +89,7 @@ class SearchViewModel @Inject constructor(
     }
 
     fun clearResults() {
+        searchJob?.cancel()
         _uiState.value = _uiState.value.copy(
             resources = emptyList(),
             error = null,

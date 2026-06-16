@@ -13,12 +13,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -54,7 +56,7 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var searchQuery by remember { mutableStateOf(initialKeyword) }
+    var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
@@ -64,11 +66,13 @@ fun SearchScreen(
     // 搜索历史是否已加载完成（避免异步加载时闪过默认空页面）
     val searchHistoryLoaded by remember { derivedStateOf { uiState.searchHistoryLoaded } }
 
-    // 搜索框清空时同步清除结果
+    // 搜索框清空时同步清除结果（仅当之前有内容时才清除，避免切换Tab回来时误清）
+    var hadQuery by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(searchQuery) {
-        if (searchQuery.isEmpty()) {
+        if (searchQuery.isEmpty() && hadQuery) {
             viewModel.clearResults()
         }
+        hadQuery = searchQuery.isNotEmpty()
     }
 
     LaunchedEffect(initialKeyword) {
@@ -156,22 +160,89 @@ fun SearchScreen(
                     EmptyView(message = stringResource(R.string.search_no_results))
                 }
                 uiState.resources.isNotEmpty() -> {
+                    // 网盘类型筛选器
+                    var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
+                    var filterExpanded by remember { mutableStateOf(false) }
+
+                    val filteredResources = if (selectedDiskType != null) {
+                        uiState.resources.filter { it.diskType == selectedDiskType }
+                    } else {
+                        uiState.resources
+                    }
+
                     // 搜索结果列表
                     val listState = rememberLazyListState()
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
                             state = listState,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             item {
-                                Text(
-                                    text = stringResource(R.string.search_results, uiState.resources.size),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 4.dp, bottom = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.search_results, filteredResources.size),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(Modifier.weight(1f))
+                                    // 网盘类型筛选器
+                                    Box {
+                                        Row(
+                                            modifier = Modifier
+                                                .clickable { filterExpanded = true }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "网盘类型",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Spacer(Modifier.width(2.dp))
+                                            Text(
+                                                text = selectedDiskType?.let {
+                                                    diskTypeDisplayName(it)
+                                                } ?: "全部",
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Icon(
+                                                Icons.Default.ArrowDropDown,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        DropdownMenu(
+                                            expanded = filterExpanded,
+                                            onDismissRequest = { filterExpanded = false }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("全部") },
+                                                onClick = {
+                                                    selectedDiskType = null
+                                                    filterExpanded = false
+                                                }
+                                            )
+                                            DiskType.entries.forEach { type ->
+                                                DropdownMenuItem(
+                                                    text = { Text(diskTypeDisplayName(type)) },
+                                                    onClick = {
+                                                        selectedDiskType = type
+                                                        filterExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            itemsIndexed(uiState.resources, key = { _, it -> it.url }) { index, item ->
+                            itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
                                 val isViewed = item.url in viewedUrls
                                 ResourceItemCard(
                                     item = item,
@@ -295,18 +366,26 @@ private fun SearchHistoryList(
 }
 
 private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
-    val appScheme = when (item.diskType) {
-        DiskType.QUARK -> "quark://"
-        DiskType.BAIDU -> "baidunetdisk://"
-        DiskType.ALI -> "aliyundrive://"
-        DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET, DiskType.OTHER -> null
+    val url = item.url
+
+    // 网盘类型对应的 App 包名
+    val appPackage = when (item.diskType) {
+        DiskType.QUARK -> "com.quark.pan"
+        DiskType.BAIDU -> "com.baidu.netdisk"
+        DiskType.ALI -> "com.alicloud.databox"
+        DiskType.XUNLEI -> "com.xunlei.downloadprovider"
+        DiskType.UC -> "com.UCMobile"
+        DiskType.ONEONEFIVE -> "com.crland.app"
+        DiskType.MAGNET, DiskType.OTHER -> null
     }
 
-    // 优先尝试打开网盘 App
-    if (appScheme != null) {
+    // 优先尝试用对应网盘 App 打开实际 URL
+    if (appPackage != null) {
         try {
-            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(appScheme))
-            appIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                setPackage(appPackage)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
             if (appIntent.resolveActivity(context.packageManager) != null) {
                 context.startActivity(appIntent)
                 return
@@ -315,7 +394,20 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
     }
     // Fallback: 浏览器打开
     try {
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
+        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
         context.startActivity(browserIntent)
     } catch (_: Exception) {}
+}
+
+private fun diskTypeDisplayName(type: DiskType): String = when (type) {
+    DiskType.QUARK -> "夸克"
+    DiskType.BAIDU -> "百度"
+    DiskType.ALI -> "阿里"
+    DiskType.XUNLEI -> "迅雷"
+    DiskType.UC -> "UC"
+    DiskType.ONEONEFIVE -> "115"
+    DiskType.MAGNET -> "磁力"
+    DiskType.OTHER -> "其他"
 }
