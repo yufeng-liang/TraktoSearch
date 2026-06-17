@@ -179,10 +179,12 @@ fun SearchScreen(
                     var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
                     var filterExpanded by remember { mutableStateOf(false) }
 
-                    val filteredResources = if (selectedDiskType != null) {
-                        uiState.resources.filter { it.diskType == selectedDiskType }
-                    } else {
-                        uiState.resources
+                    val filteredResources = remember(uiState.resources, selectedDiskType) {
+                        if (selectedDiskType != null) {
+                            uiState.resources.filter { it.diskType == selectedDiskType }
+                        } else {
+                            uiState.resources
+                        }
                     }
 
                     // 搜索结果列表

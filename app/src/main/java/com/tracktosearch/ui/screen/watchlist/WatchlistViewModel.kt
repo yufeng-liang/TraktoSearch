@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.watchlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.Immutable
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.MediaType
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Immutable
 data class MovieUiItem(
     val traktId: Int,
     val tmdbId: Int,
@@ -30,6 +32,7 @@ data class MovieUiItem(
     val listedAt: String = ""
 )
 
+@Immutable
 data class ShowUiItem(
     val traktId: Int,
     val tmdbId: Int,

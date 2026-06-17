@@ -1,9 +1,12 @@
 package com.tracktosearch.data.remote.dto
 
+import androidx.compose.runtime.Immutable
+
 enum class DiskType {
     QUARK, BAIDU, ALI, XUNLEI, UC, ONEONEFIVE, MAGNET, OTHER
 }
 
+@Immutable
 data class ResourceItem(
     val name: String,
     val diskType: DiskType,

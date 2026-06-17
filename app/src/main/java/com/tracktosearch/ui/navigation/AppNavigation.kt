@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -82,6 +83,8 @@ fun AppNavigation(
 ) {
     val navController = rememberNavController()
     var currentStartDest by remember { mutableStateOf(startDestination) }
+    // 登录成功后默认进入"我的"页
+    var mainInitialTab by remember { mutableIntStateOf(initialTab) }
 
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
@@ -97,6 +100,7 @@ fun AppNavigation(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
                                 onLoginSuccess()
+                                mainInitialTab = 1  // 登录成功后默认进入"我的"页
                                 currentStartDest = Routes.MAIN
                                 navController.navigate(Routes.MAIN) {
                                     popUpTo(0) { inclusive = true }
@@ -130,16 +134,24 @@ fun AppNavigation(
                         }
 
                         // 版本更新检查：首页加载完成后检查，仅一次
+                        // 已登录：等想看列表加载完成；未登录：立即检查
                         val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
                         var updateInfo by rememberSaveable { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
                         var updateChecked by rememberSaveable { mutableStateOf(false) }
                         val uiState by watchlistViewModel.uiState.collectAsState()
-                        LaunchedEffect(uiState.moviesLoaded, uiState.showsLoaded) {
-                            if (!updateChecked && uiState.moviesLoaded && uiState.showsLoaded) {
-                                updateChecked = true
-                                try {
-                                    updateInfo = updateRepository.checkForUpdate()
-                                } catch (_: Exception) {}
+                        LaunchedEffect(isLoggedIn, uiState.moviesLoaded, uiState.showsLoaded) {
+                            if (!updateChecked) {
+                                val ready = if (isLoggedIn) {
+                                    uiState.moviesLoaded && uiState.showsLoaded
+                                } else {
+                                    true // 未登录直接检查
+                                }
+                                if (ready) {
+                                    updateChecked = true
+                                    try {
+                                        updateInfo = updateRepository.checkForUpdate()
+                                    } catch (_: Exception) {}
+                                }
                             }
                         }
 
@@ -152,7 +164,7 @@ fun AppNavigation(
                         }
 
                         MainScreen(
-                            initialTab = initialTab,
+                            initialTab = mainInitialTab,
                             isLoggedIn = isLoggedIn,
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))

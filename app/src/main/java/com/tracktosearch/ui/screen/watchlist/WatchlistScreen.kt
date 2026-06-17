@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.watchlist
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -24,6 +26,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.buildAnnotatedString
@@ -34,6 +38,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
@@ -53,11 +59,32 @@ fun WatchlistScreen(
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
+    val openTraktExternal: () -> Unit = {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadMovies()
         viewModel.loadShows()
     }
+    // 从外置浏览器（如"去 Trakt 添加想看的"）返回时，自动刷新列表
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var hasResumedOnce by remember { mutableStateOf(false) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && hasResumedOnce) {
+                viewModel.refresh()
+            } else if (event == Lifecycle.Event.ON_RESUME) {
+                hasResumedOnce = true
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabPagerState = rememberPagerState(initialPage = 0) { 2 }
     val tabScope = rememberCoroutineScope()
@@ -205,7 +232,7 @@ fun WatchlistScreen(
                         error = uiState.moviesError,
                         onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                         onRetry = { viewModel.loadMovies(forceReload = true) },
-                        onOpenTrakt = { onOpenWebView("https://trakt.tv/watchlist") }
+                        onOpenTrakt = openTraktExternal
                     )
                     1 -> ShowTabContent(
                         isLoading = uiState.isLoadingShows,
@@ -216,7 +243,7 @@ fun WatchlistScreen(
                         error = uiState.showsError,
                         onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                         onRetry = { viewModel.loadShows(forceReload = true) },
-                        onOpenTrakt = { onOpenWebView("https://trakt.tv/watchlist") }
+                        onOpenTrakt = openTraktExternal
                     )
                 }
             }
@@ -347,7 +374,7 @@ private fun MovieGrid(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(items.size, key = { "movie_${items[it].traktId}_$it" }) { index ->
+            items(items.size, key = { items[it].traktId }, contentType = { "movie" }) { index ->
                 val item = items[index]
                 MovieCard(
                     title = item.displayTitle,
@@ -383,7 +410,7 @@ private fun ShowGrid(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            items(items.size, key = { "show_${items[it].traktId}_$it" }) { index ->
+            items(items.size, key = { items[it].traktId }, contentType = { "show" }) { index ->
                 val item = items[index]
                 MovieCard(
                     title = item.displayTitle,

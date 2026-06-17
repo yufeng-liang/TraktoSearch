@@ -30,6 +30,13 @@ fun MovieCard(
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val context = LocalContext.current
+    val imageRequest = remember(posterUrl) {
+        ImageRequest.Builder(context)
+            .data(posterUrl)
+            .size(200)
+            .build()
+    }
 
     Card(
         modifier = modifier
@@ -61,10 +68,7 @@ fun MovieCard(
             }
 
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(posterUrl)
-                    .size(200)
-                    .build(),
+                model = imageRequest,
                 contentDescription = title,
                 modifier = imageModifier,
                 contentScale = ContentScale.Crop,

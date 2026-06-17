@@ -425,7 +425,7 @@ fun DetailScreen(
                 }
             }
 
-            // 返回按钮（毛玻璃效果）
+            // 返回按钮（半透明背景 + Haze 模糊增强）
             Box(
                 modifier = Modifier
                     .padding(start = 12.dp, top = 4.dp)
@@ -433,14 +433,19 @@ fun DetailScreen(
                     .size(40.dp)
                     .hazeEffect(
                         state = detailHazeState,
-                        style = HazeMaterials.thin()
+                        style = HazeMaterials.regular()
                     ) {
-                        blurRadius = 18.dp
+                        blurRadius = 28.dp
                         noiseFactor = 0f
                     }
+                    // 半透明背景作为主视觉效果（Haze 在部分设备上效果不明显时兜底）
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(20.dp)
+                    )
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
                         shape = RoundedCornerShape(20.dp)
                     )
                     .clickable(
@@ -491,12 +496,13 @@ private fun DetailHeaderContent(
     onPosterClick: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
+    val context = LocalContext.current
     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // 第一行：海报 + 标题信息
+        // 第一行：海报 + 标题信息（从顶部开始，让返回按钮悬浮在海报上以实现毛玻璃效果）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 40.dp, bottom = 12.dp),
+                .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
             // 海报
@@ -524,10 +530,12 @@ private fun DetailHeaderContent(
                         Modifier.fillMaxSize()
                     }
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(uiState.posterUrl)
-                            .size(264)
-                            .build(),
+                        model = remember(uiState.posterUrl) {
+                            ImageRequest.Builder(context)
+                                .data(uiState.posterUrl)
+                                .size(264)
+                                .build()
+                        },
                         contentDescription = uiState.displayTitle,
                         contentScale = ContentScale.Crop,
                         modifier = posterModifier
@@ -946,6 +954,7 @@ private fun CrewSection(
 
 @Composable
 private fun CastCard(name: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .width(68.dp)
@@ -961,10 +970,12 @@ private fun CastCard(name: String, role: String, profileUrl: String?, onClick: (
         ) {
             if (profileUrl != null) {
                 SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(profileUrl)
-                        .size(136)
-                        .build(),
+                    model = remember(profileUrl) {
+                        ImageRequest.Builder(context)
+                            .data(profileUrl)
+                            .size(136)
+                            .build()
+                    },
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
                     loading = {
@@ -1131,6 +1142,7 @@ private fun SectionHeader(title: String) {
 
 @Composable
 private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1144,10 +1156,12 @@ private fun FullCastItem(name: String, originalName: String, role: String, profi
         ) {
             if (profileUrl != null) {
                 SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(profileUrl)
-                        .size(144)
-                        .build(),
+                    model = remember(profileUrl) {
+                        ImageRequest.Builder(context)
+                            .data(profileUrl)
+                            .size(144)
+                            .build()
+                    },
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
                     loading = {
@@ -2294,11 +2308,13 @@ private fun PosterFullscreenOverlay(
     ) {
         // 海报图片（放大显示，拦截点击事件不触发外层dismiss）
         AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(posterUrl)
-                .crossfade(true)
-                .size(1080) // 加载高清大图
-                .build(),
+            model = remember(posterUrl) {
+                ImageRequest.Builder(context)
+                    .data(posterUrl)
+                    .crossfade(true)
+                    .size(1080) // 加载高清大图
+                    .build()
+            },
             contentDescription = title,
             contentScale = ContentScale.Fit,
             modifier = Modifier
