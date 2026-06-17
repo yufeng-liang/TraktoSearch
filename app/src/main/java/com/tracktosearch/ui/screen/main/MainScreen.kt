@@ -122,7 +122,7 @@ fun MainScreen(
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
 
-    Scaffold { _ ->
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()

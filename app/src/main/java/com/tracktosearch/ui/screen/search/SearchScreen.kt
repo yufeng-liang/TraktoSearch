@@ -94,6 +94,7 @@ fun SearchScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.search_title)) },
@@ -246,7 +247,7 @@ fun SearchScreen(
                                                     filterExpanded = false
                                                 }
                                             )
-                                            DiskType.entries.forEach { type ->
+                                            DiskType.entries.filter { it != DiskType.OTHER }.forEach { type ->
                                                 DropdownMenuItem(
                                                     text = { Text(diskTypeDisplayName(type)) },
                                                     onClick = {

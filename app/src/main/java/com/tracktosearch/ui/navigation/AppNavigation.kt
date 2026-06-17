@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -27,6 +28,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -139,19 +141,20 @@ fun AppNavigation(
                         var updateInfo by rememberSaveable { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
                         var updateChecked by rememberSaveable { mutableStateOf(false) }
                         val uiState by watchlistViewModel.uiState.collectAsState()
-                        LaunchedEffect(isLoggedIn, uiState.moviesLoaded, uiState.showsLoaded) {
-                            if (!updateChecked) {
-                                val ready = if (isLoggedIn) {
+                        // 用 snapshotFlow 监听条件，避免 LaunchedEffect key 变化导致协程取消
+                        LaunchedEffect(Unit) {
+                            snapshotFlow {
+                                if (isLoggedIn) {
                                     uiState.moviesLoaded && uiState.showsLoaded
                                 } else {
-                                    true // 未登录直接检查
+                                    true
                                 }
-                                if (ready) {
-                                    updateChecked = true
-                                    try {
-                                        updateInfo = updateRepository.checkForUpdate()
-                                    } catch (_: Exception) {}
-                                }
+                            }.first { it }
+                            if (!updateChecked) {
+                                updateChecked = true
+                                try {
+                                    updateInfo = updateRepository.checkForUpdate()
+                                } catch (_: Exception) {}
                             }
                         }
 

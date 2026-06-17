@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -195,7 +197,7 @@ fun DetailScreen(
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
 
-    Scaffold { padding ->
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
@@ -204,7 +206,7 @@ fun DetailScreen(
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().statusBarsPadding(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // 头部信息（随内容滚动）
@@ -428,6 +430,7 @@ fun DetailScreen(
             // 返回按钮（半透明背景 + Haze 模糊增强）
             Box(
                 modifier = Modifier
+                    .statusBarsPadding()
                     .padding(start = 12.dp, top = 4.dp)
                     .align(Alignment.TopStart)
                     .size(40.dp)
@@ -435,17 +438,17 @@ fun DetailScreen(
                         state = detailHazeState,
                         style = HazeMaterials.regular()
                     ) {
-                        blurRadius = 28.dp
+                        blurRadius = 40.dp
                         noiseFactor = 0f
                     }
                     // 半透明背景作为主视觉效果（Haze 在部分设备上效果不明显时兜底）
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                         shape = RoundedCornerShape(20.dp)
                     )
                     .border(
                         width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                         shape = RoundedCornerShape(20.dp)
                     )
                     .clickable(
@@ -497,8 +500,7 @@ private fun DetailHeaderContent(
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // 第一行：海报 + 标题信息（从顶部开始，让返回按钮悬浮在海报上以实现毛玻璃效果）
+    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1263,7 +1265,11 @@ private fun FilterSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 for (source in ResourceRepository.ALL_SOURCES) {
-                    val label = if (source == "pansou") "PanSou" else "Zreso"
+                    val label = when (source) {
+                        "pansou" -> "PanSou"
+                        "panhub" -> "PanHub"
+                        else -> "Zreso"
+                    }
                     FilterChip(
                         selected = source in enabledSources,
                         onClick = { onToggleSource(source) },

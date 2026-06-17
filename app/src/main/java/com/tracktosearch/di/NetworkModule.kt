@@ -171,6 +171,42 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    @Named("panhub")
+    fun providePanHubOkHttpClient(
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OkHttpClient {
+        return OkHttpClient.Builder()
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .addHeader("Referer", "https://panhub.shenzjd.com/")
+                    .build()
+                chain.proceed(request)
+            })
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .callTimeout(20, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    @Named("panhub")
+    fun providePanHubApiService(
+        @Named("panhub") okHttpClient: OkHttpClient
+    ): PanSouApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://panhub.shenzjd.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(PanSouApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
     @Named("zreso")
     fun provideZresoOkHttpClient(
         loggingInterceptor: HttpLoggingInterceptor

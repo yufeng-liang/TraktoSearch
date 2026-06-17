@@ -17,8 +17,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 14
-        versionName = "2.5.0"
+        versionCode = 15
+        versionName = "2.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -134,4 +134,8 @@ dependencies {
     // Haze (frosted glass blur)
     implementation(libs.haze)
     implementation(libs.haze.materials)
+
+    // Markdown
+    implementation(libs.richtext.commonmark)
+    implementation(libs.richtext.ui.material)
 }

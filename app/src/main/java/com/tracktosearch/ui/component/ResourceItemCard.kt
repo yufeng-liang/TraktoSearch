@@ -116,19 +116,23 @@ fun ResourceItemCard(
                 // 来源标签
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = if (item.source == "pansou") {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.secondaryContainer
+                    color = when (item.source) {
+                        "pansou" -> MaterialTheme.colorScheme.primaryContainer
+                        "panhub" -> MaterialTheme.colorScheme.tertiaryContainer
+                        else -> MaterialTheme.colorScheme.secondaryContainer
                     }
                 ) {
                     Text(
-                        text = if (item.source == "pansou") "PanSou" else "Zreso",
+                        text = when (item.source) {
+                            "pansou" -> "PanSou"
+                            "panhub" -> "PanHub"
+                            else -> "Zreso"
+                        },
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (item.source == "pansou") {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
+                        color = when (item.source) {
+                            "pansou" -> MaterialTheme.colorScheme.onPrimaryContainer
+                            "panhub" -> MaterialTheme.colorScheme.onTertiaryContainer
+                            else -> MaterialTheme.colorScheme.onSecondaryContainer
                         },
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )

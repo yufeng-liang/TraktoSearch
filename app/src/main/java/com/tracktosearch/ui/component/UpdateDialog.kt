@@ -17,6 +17,8 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import com.halilibo.richtext.markdown.Markdown
+import com.halilibo.richtext.ui.material.RichText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
@@ -70,15 +72,17 @@ fun UpdateDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
         title = { Text("发现新版本 v${updateInfo.latestVersion}") },
         text = {
-            Column {
-                Text(
-                    text = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .heightIn(max = 180.dp)
-                        .verticalScroll(rememberScrollState())
-                )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                RichText {
+                    Markdown(
+                        content = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
+                    )
+                }
 
                 val state = downloadState
                 if (state !is DownloadState.Idle) {

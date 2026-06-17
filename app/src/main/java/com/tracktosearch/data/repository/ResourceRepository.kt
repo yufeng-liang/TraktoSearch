@@ -4,6 +4,7 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import javax.inject.Named
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -21,13 +22,15 @@ import javax.inject.Singleton
 @Singleton
 class ResourceRepository @Inject constructor(
     private val panSouApiService: PanSouApiService,
+    @Named("panhub") private val panHubApiService: PanSouApiService,
     private val zresoApiService: ZresoApiService
 ) {
 
     companion object {
         const val SOURCE_PANSOU = "pansou"
+        const val SOURCE_PANHUB = "panhub"
         const val SOURCE_ZRESO = "zreso"
-        val ALL_SOURCES = setOf(SOURCE_PANSOU, SOURCE_ZRESO)
+        val ALL_SOURCES = setOf(SOURCE_PANSOU, SOURCE_PANHUB, SOURCE_ZRESO)
         val ALL_DISK_TYPES = setOf(
             DiskType.QUARK, DiskType.BAIDU, DiskType.ALI,
             DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
@@ -114,6 +117,11 @@ class ResourceRepository @Inject constructor(
                 runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
+        if (SOURCE_PANHUB in enabledSources) {
+            deferreds.add(async {
+                runCatching { searchPanHub(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+            })
+        }
         if (SOURCE_ZRESO in enabledSources) {
             deferreds.add(async {
                 runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
@@ -177,6 +185,11 @@ class ResourceRepository @Inject constructor(
             if (SOURCE_PANSOU in enabledSources) {
                 deferreds.add(async {
                     runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            if (SOURCE_PANHUB in enabledSources) {
+                deferreds.add(async {
+                    runCatching { searchPanHub(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
                 })
             }
             if (SOURCE_ZRESO in enabledSources) {
@@ -306,6 +319,33 @@ class ResourceRepository @Inject constructor(
                     fileCount = 1,
                     url = link.url,
                     source = SOURCE_PANSOU
+                )
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    private suspend fun searchPanHub(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+        return try {
+            val response = withTimeoutOrNull(8_000) {
+                panHubApiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
+            } ?: return emptyList()
+            if (response.code != 0) return emptyList()
+            val data = response.data ?: return emptyList()
+            val allLinks = data.merged_by_type.flatMap { (type, links) ->
+                links.map { link -> type to link }
+            }
+            allLinks.mapNotNull { (type, link) ->
+                val diskType = mapPanSouType(type) ?: return@mapNotNull null
+                ResourceItem(
+                    name = link.note.ifBlank { keyword },
+                    diskType = diskType,
+                    fileSize = "",
+                    fileDate = link.datetime,
+                    fileCount = 1,
+                    url = link.url,
+                    source = SOURCE_PANHUB
                 )
             }
         } catch (e: Exception) {

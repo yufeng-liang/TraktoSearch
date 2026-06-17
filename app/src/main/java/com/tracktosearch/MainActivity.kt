@@ -8,10 +8,10 @@ import android.util.Log
 import android.widget.Toast
 import android.app.AlertDialog
 import android.content.DialogInterface
-import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.SystemBarStyle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,25 +48,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        // 小米/ HyperOS 完全沉浸式适配（参考 dev.mi.com 全面屏手势提示线适配说明）
-        // 顺序很重要：先设置布局标志，再设置颜色，最后关闭对比度增强
-        val decorView = window.decorView
-        // 使用旧 API 确保兼容小米 HyperOS（参考小米文档方式2）
-        @Suppress("DEPRECATION")
-        decorView.systemUiVisibility = (
-            android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                or android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        // 参考 Google NowInAndroid 官方方案：enableEdgeToEdge 处理所有沉浸式逻辑
+        // 状态栏完全透明，导航栏也完全透明（我们的悬浮导航栏自行处理小白条区域）
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT,
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT,
+            ),
         )
-        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
-        // 状态栏和导航栏背景完全透明
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        // 隐藏导航栏分隔线
-        @Suppress("DEPRECATION")
-        window.navigationBarDividerColor = android.graphics.Color.TRANSPARENT
-        // 关闭系统自动加的导航栏对比度遮罩（这是小米设备上小白条不透明的主因）
+        // 关闭小米 HyperOS 导航栏对比度增强（系统自动加的半透明遮罩）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
