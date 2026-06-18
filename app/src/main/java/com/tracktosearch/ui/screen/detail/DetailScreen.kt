@@ -920,7 +920,7 @@ private fun CrewSection(
             contentPadding = PaddingValues(end = 16.dp)
         ) {
             // 导演
-            items(directors) { person ->
+            items(directors, key = { "director_${it.id}" }) { person ->
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_director_tag),
@@ -929,7 +929,7 @@ private fun CrewSection(
                 )
             }
             // 演员
-            items(cast) { person ->
+            items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
                 CastCard(
                     name = person.name,
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
@@ -938,7 +938,7 @@ private fun CrewSection(
                 )
             }
             // 编剧
-            items(writers) { person ->
+            items(writers, key = { "writer_${it.id}" }) { person ->
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_writer_tag),
@@ -947,7 +947,7 @@ private fun CrewSection(
                 )
             }
             // 制片人
-            items(producers) { person ->
+            items(producers, key = { "producer_${it.id}" }) { person ->
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_producer_tag),
@@ -1082,7 +1082,7 @@ private fun FullCastCrewSheet(
                 // 导演
                 if (directors.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_director_tag)} (${directors.size})") }
-                    items(directors) { person ->
+                    items(directors, key = { "director_${it.id}" }) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -1095,7 +1095,7 @@ private fun FullCastCrewSheet(
                 // 演员
                 if (cast.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_actor)} (${cast.size})") }
-                    items(cast) { person ->
+                    items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -1108,7 +1108,7 @@ private fun FullCastCrewSheet(
                 // 编剧
                 if (writers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_writer_tag)} (${writers.size})") }
-                    items(writers) { person ->
+                    items(writers, key = { "writer_${it.id}" }) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -1121,7 +1121,7 @@ private fun FullCastCrewSheet(
                 // 制片人
                 if (producers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_producer_tag)} (${producers.size})") }
-                    items(producers) { person ->
+                    items(producers, key = { "producer_${it.id}" }) { person ->
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -1234,7 +1234,7 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(
-                interactionSource = MutableInteractionSource(),
+                interactionSource = remember { MutableInteractionSource() },
                 indication = null
             ) {
                 if (isOverflowing || expanded) expanded = !expanded
@@ -2165,7 +2165,7 @@ private fun CommentItem(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable(
-                                interactionSource = MutableInteractionSource(),
+                                interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { onTranslate(comment.id) }
                         )
@@ -2221,7 +2221,7 @@ private fun CommentItem(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.clickable(
-                                interactionSource = MutableInteractionSource(),
+                                interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) { showOriginal = !showOriginal }
                         )

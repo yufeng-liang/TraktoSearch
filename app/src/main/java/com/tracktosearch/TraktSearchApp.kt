@@ -8,6 +8,7 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.Dns
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
@@ -30,8 +31,23 @@ class TraktSearchApp : Application(), ImageLoaderFactory {
             }
         }
 
+        // 豆瓣图片防盗链：对 doubanio.com 请求添加 Referer 和 User-Agent 头
+        val doubanRefererInterceptor = Interceptor { chain ->
+            val request = chain.request()
+            val newRequest = if (request.url.host.contains("doubanio.com")) {
+                request.newBuilder()
+                    .header("Referer", "https://movie.douban.com/")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .build()
+            } else {
+                request
+            }
+            chain.proceed(newRequest)
+        }
+
         val okHttpClient = OkHttpClient.Builder()
             .dns(ipv4OnlyDns)
+            .addInterceptor(doubanRefererInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()

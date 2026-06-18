@@ -1,5 +1,6 @@
 package com.tracktosearch.data.remote.tmdb.dto
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -52,6 +53,7 @@ data class TmdbCreditsResponse(
     val crew: List<TmdbCrew> = emptyList()
 )
 
+@Immutable
 @Serializable
 data class TmdbCast(
     val id: Int = 0,
@@ -62,6 +64,7 @@ data class TmdbCast(
     val order: Int = 0
 )
 
+@Immutable
 @Serializable
 data class TmdbCrew(
     val id: Int = 0,

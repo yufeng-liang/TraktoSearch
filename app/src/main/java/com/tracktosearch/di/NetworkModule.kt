@@ -2,6 +2,7 @@ package com.tracktosearch.di
 
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
@@ -203,6 +204,19 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(PanSouApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideDoubanHotApiService(
+        @Named("panhub") okHttpClient: OkHttpClient
+    ): DoubanHotApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://panhub.shenzjd.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(DoubanHotApiService::class.java)
     }
 
     @Provides

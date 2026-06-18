@@ -34,7 +34,8 @@ fun MovieCard(
     val imageRequest = remember(posterUrl) {
         ImageRequest.Builder(context)
             .data(posterUrl)
-            .size(200)
+            .size(300)
+            .crossfade(true)
             .build()
     }
 

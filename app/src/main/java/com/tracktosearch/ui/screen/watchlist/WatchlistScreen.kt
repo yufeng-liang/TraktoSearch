@@ -42,7 +42,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.EmptyView
-import com.tracktosearch.ui.component.LoadingView
+import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import kotlinx.coroutines.launch
@@ -281,7 +281,7 @@ private fun MovieTabContent(
             }
         }
         isLoading && !isLoaded -> {
-            LoadingView(message = stringResource(R.string.watchlist_loading))
+            SkeletonGrid()
         }
         items.isEmpty() && isLoaded -> {
             WatchlistEmptyState(
@@ -335,7 +335,7 @@ private fun ShowTabContent(
             }
         }
         isLoading && !isLoaded -> {
-            LoadingView(message = stringResource(R.string.watchlist_loading))
+            SkeletonGrid()
         }
         items.isEmpty() && isLoaded -> {
             WatchlistEmptyState(
@@ -429,6 +429,22 @@ private fun ShowGrid(
                 .align(Alignment.BottomEnd)
                 .padding(bottom = 16.dp, end = 16.dp)
         )
+    }
+}
+
+/** 骨架屏网格 - 想看列表加载态 */
+@Composable
+private fun SkeletonGrid() {
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        items(9) {
+            MovieCardSkeleton()
+        }
     }
 }
 

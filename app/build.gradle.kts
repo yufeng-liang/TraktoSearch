@@ -17,8 +17,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 16
-        versionName = "2.6.1"
+        versionCode = 17
+        versionName = "2.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

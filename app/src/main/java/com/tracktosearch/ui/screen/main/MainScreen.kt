@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -85,13 +86,14 @@ fun MainScreen(
     // 双击返回退出
     var lastBackTime by remember { mutableLongStateOf(0L) }
     val context = LocalContext.current
+    val pressBackAgainText = stringResource(R.string.press_back_again)
     BackHandler(enabled = true) {
         val now = System.currentTimeMillis()
         if (now - lastBackTime < 2000) {
             (context as? android.app.Activity)?.finish()
         } else {
             lastBackTime = now
-            android.widget.Toast.makeText(context, context.getString(R.string.press_back_again), android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(context, pressBackAgainText, android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -122,14 +124,16 @@ fun MainScreen(
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
 
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { _ ->
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .nestedScroll(nestedScrollConnection)
         ) {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = false,
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
@@ -138,6 +142,7 @@ fun MainScreen(
                     0 -> SearchScreen(
                         initialKeyword = "",
                         onSearchClick = onSearchClick,
+                        onOpenWebView = onOpenWebView,
                         modifier = Modifier.fillMaxSize()
                     )
                     1 -> {
