@@ -69,12 +69,12 @@ class UpdateRepository @Inject constructor(
             val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
             if (apkAssets.isEmpty()) return ""
 
-            // 优先 TraktToSearch-*.apk 命名的附件；候选中取最小体积（修复损坏文件膨胀问题）
+            // 优先 TraktToSearch-*.apk 命名的附件；候选中取最后一个（后上传的排在后面）
             val namedCandidates = apkAssets.filter {
                 it.name.startsWith("TraktToSearch-", ignoreCase = true)
             }
             val apkAsset = (namedCandidates.ifEmpty { apkAssets })
-                .minByOrNull { it.size }
+                .lastOrNull()
 
             apkAsset?.browser_download_url ?: ""
         } catch (e: Exception) {
