@@ -2,9 +2,7 @@ package com.tracktosearch.data.repository
 
 import android.util.Log
 import com.tracktosearch.BuildConfig
-import com.tracktosearch.data.remote.update.GitHubAsset
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
-import com.tracktosearch.data.remote.update.GiteeAsset
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -28,16 +26,21 @@ class UpdateRepository @Inject constructor(
         private const val GITHUB_REPO = "TrackToSearch"
         private const val GITEE_OWNER = "yufeng-liang"
         private const val GITEE_REPO = "TrackToSearch"
+        // 公开仓库，专门存放 release APK
+        private const val RELEASE_REPO_OWNER = "yufeng-liang"
+        private const val RELEASE_REPO = "TrackToSearch-release"
     }
 
     suspend fun checkForUpdate(): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
 
-        // 优先尝试 GitHub（版本检测 + APK 下载链接）
+        // 优先尝试 GitHub（版本检测）
         val gitHubResult = tryFetchFromGitHub()
         if (gitHubResult != null) {
             if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
-                return gitHubResult.takeIf { it.downloadUrl.isNotEmpty() }
+                val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
+                if (downloadUrl.isEmpty()) return null
+                return gitHubResult.copy(downloadUrl = downloadUrl)
             }
             return null
         }
@@ -45,45 +48,49 @@ class UpdateRepository @Inject constructor(
         // GitHub 请求失败，降级到 Gitee
         val giteeResult = tryFetchFromGitee()
         if (giteeResult != null && isNewerVersion(giteeResult.latestVersion, currentVersion)) {
-            return giteeResult.takeIf { it.downloadUrl.isNotEmpty() }
+            val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
+            if (downloadUrl.isEmpty()) return null
+            return giteeResult.copy(downloadUrl = downloadUrl)
         }
 
         return null
     }
 
     /**
-     * 从 release 的 assets 中选择 APK 下载链接：
-     * 优先匹配 TraktToSearch-*.apk，候选中取最小体积，避免选到损坏文件。
+     * 从公开仓库获取 APK 下载链接
+     * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktToSearch-*.apk），
+     * 若有多个匹配则在匹配集中取最小体积的，避免选到因 UTF-8 重新编码而膨胀的损坏文件
      */
-    private fun pickGitHubApkUrl(assets: List<GitHubAsset>): Pair<String, Long> {
-        val apkAssets = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-        if (apkAssets.isEmpty()) return "" to 0L
-        val namedCandidates = apkAssets.filter {
-            it.name.startsWith("TraktToSearch-", ignoreCase = true)
-        }
-        val asset = (namedCandidates.ifEmpty { apkAssets }).minByOrNull { it.size }
-        return (asset?.browser_download_url ?: "") to (asset?.size ?: 0L)
-    }
+    private suspend fun fetchDownloadUrl(version: String): String {
+        return try {
+            val releases = giteeApi.getLatestRelease(RELEASE_REPO_OWNER, RELEASE_REPO)
+            val release = releases.firstOrNull() ?: return ""
 
-    private fun pickGiteeApkUrl(assets: List<GiteeAsset>): Pair<String, Long> {
-        val apkAssets = assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-        if (apkAssets.isEmpty()) return "" to 0L
-        val namedCandidates = apkAssets.filter {
-            it.name.startsWith("TraktToSearch-", ignoreCase = true)
+            val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
+            if (apkAssets.isEmpty()) return ""
+
+            // 优先 TraktToSearch-*.apk 命名的附件；候选中取最小体积（修复损坏文件膨胀问题）
+            val namedCandidates = apkAssets.filter {
+                it.name.startsWith("TraktToSearch-", ignoreCase = true)
+            }
+            val apkAsset = (namedCandidates.ifEmpty { apkAssets })
+                .minByOrNull { it.size }
+
+            apkAsset?.browser_download_url ?: ""
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to fetch download URL from release repo", e)
+            ""
         }
-        val asset = (namedCandidates.ifEmpty { apkAssets }).minByOrNull { it.size }
-        return (asset?.browser_download_url ?: "") to (asset?.size ?: 0L)
     }
 
     private suspend fun tryFetchFromGitHub(): UpdateInfo? {
         return try {
             val release = gitHubApi.getLatestRelease(GITHUB_OWNER, GITHUB_REPO)
-            val (downloadUrl, fileSize) = pickGitHubApkUrl(release.assets)
             UpdateInfo(
                 latestVersion = release.tag_name.removePrefix("v"),
-                downloadUrl = downloadUrl,
+                downloadUrl = "",
                 changelog = sanitizeChangelog(release.body),
-                fileSize = fileSize,
+                fileSize = 0,
                 hasUpdate = false
             )
         } catch (e: Exception) {
@@ -96,12 +103,11 @@ class UpdateRepository @Inject constructor(
         return try {
             val releases = giteeApi.getLatestRelease(GITEE_OWNER, GITEE_REPO)
             val release = releases.firstOrNull() ?: return null
-            val (downloadUrl, fileSize) = pickGiteeApkUrl(release.assets)
             UpdateInfo(
                 latestVersion = release.tag_name.removePrefix("v"),
-                downloadUrl = downloadUrl,
+                downloadUrl = "",
                 changelog = sanitizeChangelog(release.body),
-                fileSize = fileSize,
+                fileSize = 0,
                 hasUpdate = false
             )
         } catch (e: Exception) {
@@ -111,8 +117,7 @@ class UpdateRepository @Inject constructor(
     }
 
     /**
-     * 清理 changelog：检测乱码（大量问号等）并返回友好文本。
-     * 同时将 `•` 开头的项目符号替换为 `-`，统一列表标记便于解析。
+     * 清理 changelog：检测乱码（大量问号等）并返回友好文本
      */
     private fun sanitizeChangelog(raw: String): String {
         if (raw.isBlank()) return ""
@@ -121,7 +126,7 @@ class UpdateRepository @Inject constructor(
         if (totalLength > 0 && questionMarkCount.toFloat() / totalLength > 0.3f) {
             return ""
         }
-        return raw.replace(Regex("^(\\s*)•\\s*", RegexOption.MULTILINE), "$1- ")
+        return raw
     }
 
     private fun isNewerVersion(latest: String, current: String): Boolean {
