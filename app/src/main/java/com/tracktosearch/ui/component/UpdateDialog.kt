@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,9 +18,12 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
-import com.halilibo.richtext.markdown.Markdown
-import com.halilibo.richtext.ui.material.RichText
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +46,88 @@ private sealed class DownloadState {
     data class Downloading(val progress: Float) : DownloadState()
     data class Completed(val file: File) : DownloadState()
     data class Error(val message: String) : DownloadState()
+}
+
+/**
+ * 轻量级更新日志渲染：
+ * - 标题字号缩小为 titleMedium，保持加粗
+ * - 列表符号（•）与文字垂直居中对齐
+ * - 支持简单的 **粗体** 内联标记
+ */
+@Composable
+private fun ChangelogContent(text: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        text.lineSequence()
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
+            .forEach { line ->
+                val trimmed = line.trimStart()
+                when {
+                    // Markdown 标题 # / ## / ...
+                    trimmed.startsWith("#") -> {
+                        val clean = trimmed.trimStart('#').trimStart()
+                        Text(
+                            text = parseInlineMarkdown(clean),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // 列表项
+                    trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ") -> {
+                        val itemText = trimmed.substring(2)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = parseInlineMarkdown(itemText),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    // 普通段落
+                    else -> {
+                        Text(
+                            text = parseInlineMarkdown(trimmed),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+    }
+}
+
+/** 解析 **粗体** 内联标记 */
+private fun parseInlineMarkdown(input: String): androidx.compose.ui.text.AnnotatedString {
+    return buildAnnotatedString {
+        var i = 0
+        while (i < input.length) {
+            val boldStart = input.indexOf("**", i)
+            if (boldStart == -1) {
+                append(input.substring(i))
+                break
+            }
+            append(input.substring(i, boldStart))
+            val boldEnd = input.indexOf("**", boldStart + 2)
+            if (boldEnd == -1) {
+                append(input.substring(boldStart))
+                break
+            }
+            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                append(input.substring(boldStart + 2, boldEnd))
+            }
+            i = boldEnd + 2
+        }
+    }
 }
 
 @Composable
@@ -78,11 +164,9 @@ fun UpdateDialog(
                     .heightIn(max = 320.dp)
                     .verticalScroll(rememberScrollState())
             ) {
-                RichText {
-                    Markdown(
-                        content = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
-                    )
-                }
+                ChangelogContent(
+                    text = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
+                )
 
                 val state = downloadState
                 if (state !is DownloadState.Idle) {

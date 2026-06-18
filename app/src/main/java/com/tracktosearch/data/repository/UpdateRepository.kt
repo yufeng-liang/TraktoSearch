@@ -117,7 +117,8 @@ class UpdateRepository @Inject constructor(
     }
 
     /**
-     * 清理 changelog：检测乱码（大量问号等）并返回友好文本
+     * 清理 changelog：检测乱码（大量问号等）并返回友好文本。
+     * 同时将 `•` 开头的项目符号替换为 `-`，统一列表标记便于解析。
      */
     private fun sanitizeChangelog(raw: String): String {
         if (raw.isBlank()) return ""
@@ -126,7 +127,7 @@ class UpdateRepository @Inject constructor(
         if (totalLength > 0 && questionMarkCount.toFloat() / totalLength > 0.3f) {
             return ""
         }
-        return raw
+        return raw.replace(Regex("^(\\s*)•\\s*", RegexOption.MULTILINE), "$1- ")
     }
 
     private fun isNewerVersion(latest: String, current: String): Boolean {
