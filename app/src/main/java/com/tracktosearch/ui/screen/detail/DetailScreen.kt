@@ -154,6 +154,11 @@ fun DetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // 拦截系统返回手势/返回键，统一走 onBack 回调以传递 watchlistChanged 状态
+    BackHandler(enabled = true) {
+        onBack(uiState.watchlistChanged)
+    }
+
     LaunchedEffect(traktId, tmdbId, title) {
         viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating)
     }

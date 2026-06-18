@@ -76,7 +76,7 @@ fun WatchlistScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME && hasResumedOnce) {
-                viewModel.refresh()
+                viewModel.refreshIfLoaded(silent = true)
             } else if (event == Lifecycle.Event.ON_RESUME) {
                 hasResumedOnce = true
             }
