@@ -475,7 +475,8 @@ fun DetailScreen(
                 listState = listState,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 16.dp, end = 16.dp)
+                    .padding(bottom = 16.dp, end = 16.dp),
+                hazeState = detailHazeState
             )
 
             // 海报大图查看
