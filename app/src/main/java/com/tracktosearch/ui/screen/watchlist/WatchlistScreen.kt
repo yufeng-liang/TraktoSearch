@@ -45,6 +45,8 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -97,6 +99,7 @@ fun WatchlistScreen(
     var searchQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
+    val hazeState = remember { HazeState() }
 
     // 根据搜索关键词过滤当前 Tab 的列表
     val filteredMovies = remember(uiState.movies, searchQuery) {
@@ -221,7 +224,9 @@ fun WatchlistScreen(
             // 内容区域 - HorizontalPager 支持左右滑动
             HorizontalPager(
                 state = tabPagerState,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
             ) { page ->
                 when (page) {
                     0 -> MovieTabContent(
@@ -233,7 +238,8 @@ fun WatchlistScreen(
                         error = uiState.moviesError,
                         onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                         onRetry = { viewModel.loadMovies(forceReload = true) },
-                        onOpenTrakt = openTraktExternal
+                        onOpenTrakt = openTraktExternal,
+                        hazeState = hazeState
                     )
                     1 -> ShowTabContent(
                         isLoading = uiState.isLoadingShows,
@@ -244,7 +250,8 @@ fun WatchlistScreen(
                         error = uiState.showsError,
                         onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                         onRetry = { viewModel.loadShows(forceReload = true) },
-                        onOpenTrakt = openTraktExternal
+                        onOpenTrakt = openTraktExternal,
+                        hazeState = hazeState
                     )
                 }
             }
@@ -262,7 +269,8 @@ private fun MovieTabContent(
     error: String?,
     onItemClick: (MovieUiItem) -> Unit,
     onRetry: () -> Unit,
-    onOpenTrakt: () -> Unit
+    onOpenTrakt: () -> Unit,
+    hazeState: HazeState
 ) {
     when {
         error != null && items.isEmpty() -> {
@@ -293,7 +301,7 @@ private fun MovieTabContent(
             )
         }
         else -> {
-            MovieGrid(items = items, onItemClick = onItemClick)
+            MovieGrid(items = items, onItemClick = onItemClick, hazeState = hazeState)
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -316,7 +324,8 @@ private fun ShowTabContent(
     error: String?,
     onItemClick: (ShowUiItem) -> Unit,
     onRetry: () -> Unit,
-    onOpenTrakt: () -> Unit
+    onOpenTrakt: () -> Unit,
+    hazeState: HazeState
 ) {
     when {
         error != null && items.isEmpty() -> {
@@ -347,7 +356,7 @@ private fun ShowTabContent(
             )
         }
         else -> {
-            ShowGrid(items = items, onItemClick = onItemClick)
+            ShowGrid(items = items, onItemClick = onItemClick, hazeState = hazeState)
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -363,7 +372,8 @@ private fun ShowTabContent(
 @Composable
 private fun MovieGrid(
     items: List<MovieUiItem>,
-    onItemClick: (MovieUiItem) -> Unit
+    onItemClick: (MovieUiItem) -> Unit,
+    hazeState: HazeState
 ) {
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -391,7 +401,8 @@ private fun MovieGrid(
             gridState = gridState,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp)
+                .padding(bottom = 16.dp, end = 16.dp),
+            hazeState = hazeState
         )
     }
 }
@@ -399,7 +410,8 @@ private fun MovieGrid(
 @Composable
 private fun ShowGrid(
     items: List<ShowUiItem>,
-    onItemClick: (ShowUiItem) -> Unit
+    onItemClick: (ShowUiItem) -> Unit,
+    hazeState: HazeState
 ) {
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -427,7 +439,8 @@ private fun ShowGrid(
             gridState = gridState,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp)
+                .padding(bottom = 16.dp, end = 16.dp),
+            hazeState = hazeState
         )
     }
 }

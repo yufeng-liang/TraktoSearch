@@ -29,9 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
@@ -136,13 +136,19 @@ private fun ScrollToTopButtonContent(
 ) {
     if (hazeState != null) {
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%
+        val hazeBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
         Box(
             modifier = Modifier
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
                 .hazeEffect(
                     state = hazeState,
-                    style = HazeMaterials.thin()
+                    style = HazeStyle(
+                        backgroundColor = hazeBackgroundColor,
+                        blurRadius = 20.dp,
+                        noiseFactor = 0f,
+                        tint = null
+                    )
                 )
                 .border(
                     width = 1.dp,
@@ -159,7 +165,8 @@ private fun ScrollToTopButtonContent(
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = "返回顶部",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp)
             )
         }
     } else {
@@ -170,7 +177,8 @@ private fun ScrollToTopButtonContent(
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = "返回顶部",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp)
             )
         }
     }

@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.material.icons.Icons
@@ -132,6 +133,7 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
@@ -206,12 +208,14 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .hazeSource(state = detailHazeState)
         ) {
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             LazyColumn(
                 state = listState,
-                modifier = Modifier.fillMaxSize().statusBarsPadding(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .hazeSource(state = detailHazeState),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // 头部信息（随内容滚动）
@@ -439,22 +443,25 @@ fun DetailScreen(
                     .padding(start = 12.dp, top = 4.dp)
                     .align(Alignment.TopStart)
                     .size(40.dp)
+                    .clip(CircleShape)
                     .hazeEffect(
                         state = detailHazeState,
-                        style = HazeMaterials.regular()
-                    ) {
-                        blurRadius = 40.dp
-                        noiseFactor = 0f
-                    }
+                        style = HazeStyle(
+                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            blurRadius = 20.dp,
+                            noiseFactor = 0f,
+                            tint = null
+                        )
+                    )
                     // 半透明背景作为主视觉效果（Haze 在部分设备上效果不明显时兜底）
                     .background(
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = CircleShape
                     )
                     .border(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(20.dp)
+                        shape = CircleShape
                     )
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
@@ -467,7 +474,7 @@ fun DetailScreen(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
                     tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
 

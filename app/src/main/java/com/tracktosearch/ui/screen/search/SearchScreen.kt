@@ -138,7 +138,8 @@ fun SearchScreen(
                 title = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(stringResource(R.string.search_title))
                         Spacer(Modifier.width(12.dp))
@@ -146,12 +147,20 @@ fun SearchScreen(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             modifier = Modifier
-                                .weight(1f)
+                                .widthIn(min = 0.dp)
+                                .wrapContentWidth()
+                                .padding(end = 16.dp)
                                 .focusRequester(focusRequester)
                                 .onFocusChanged { focusState ->
                                     isSearchFocused = focusState.isFocused
                                 },
-                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                            placeholder = {
+                                Text(
+                                    text = stringResource(R.string.search_placeholder),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Visible
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                             singleLine = true,
                             shape = RoundedCornerShape(24.dp),
@@ -389,7 +398,7 @@ private fun DoubanHotContent(
         contentPadding = PaddingValues(
             start = 16.dp,
             end = 16.dp,
-            top = 8.dp,
+            top = 24.dp,
             bottom = 80.dp // 底部安全区，避免被悬浮导航栏遮挡
         ),
         verticalArrangement = Arrangement.spacedBy(24.dp)
