@@ -135,7 +135,62 @@ fun SearchScreen(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.search_title)) },
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(stringResource(R.string.search_title))
+                        Spacer(Modifier.width(12.dp))
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(focusRequester)
+                                .onFocusChanged { focusState ->
+                                    isSearchFocused = focusState.isFocused
+                                },
+                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    if (searchQuery.isNotBlank()) {
+                                        viewModel.search(searchQuery)
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    }
+                                }
+                            ),
+                            trailingIcon = {
+                                if (searchQuery.isNotEmpty()) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = { searchQuery = "" },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Close,
+                                                contentDescription = stringResource(R.string.search_clear_input),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        TextButton(onClick = {
+                                            viewModel.search(searchQuery)
+                                            focusManager.clearFocus()
+                                            keyboardController?.hide()
+                                        }) {
+                                            Text(stringResource(R.string.search_button))
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    }
+                },
                 navigationIcon = {
                     if (onBack != null) {
                         IconButton(onClick = onBack) {
@@ -154,56 +209,6 @@ fun SearchScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 搜索栏
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { focusState ->
-                        isSearchFocused = focusState.isFocused
-                    },
-                placeholder = { Text(stringResource(R.string.search_placeholder)) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        if (searchQuery.isNotBlank()) {
-                            viewModel.search(searchQuery)
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        }
-                    }
-                ),
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(
-                                onClick = { searchQuery = "" },
-                                modifier = Modifier.size(36.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = stringResource(R.string.search_clear_input),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            TextButton(onClick = {
-                                viewModel.search(searchQuery)
-                                focusManager.clearFocus()
-                                keyboardController?.hide()
-                            }) {
-                                Text(stringResource(R.string.search_button))
-                            }
-                        }
-                    }
-                }
-            )
-
             // 搜索框聚焦且为空时，在搜索框下方展开搜索历史
             if (isSearchFocused && searchQuery.isEmpty() && uiState.searchHistory.isNotEmpty()) {
                 SearchHistoryInline(
