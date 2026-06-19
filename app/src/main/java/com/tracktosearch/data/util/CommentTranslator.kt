@@ -41,10 +41,8 @@ class CommentTranslator @Inject constructor() {
                     if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                     if (!result.isNullOrEmpty() && result != comment.comment) {
-                        Log.d("CommentTranslator", "Single translated OK")
                         comment.copy(comment = result)
                     } else {
-                        Log.w("CommentTranslator", "Single translation failed, keeping original")
                         comment
                     }
                 } ?: run { comment }
@@ -74,14 +72,11 @@ class CommentTranslator @Inject constructor() {
                         if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                         if (!result.isNullOrEmpty() && result != comment.comment) {
-                            Log.d("CommentTranslator", "Translated OK")
                             comment.copy(comment = result)
                         } else {
-                            Log.w("CommentTranslator", "Translation empty/null, keeping original")
                             comment
                         }
                     } ?: run {
-                        Log.w("CommentTranslator", "Timeout, keeping original")
                         comment
                     }
                 } catch (e: Exception) {
@@ -126,18 +121,15 @@ class CommentTranslator @Inject constructor() {
             val responseCode = connection.responseCode
             if (responseCode == 200) {
                 val json = connection.inputStream.bufferedReader().readText()
-                Log.d("CommentTranslator", "BaiduAI response: ${json.take(200)}")
                 val response = jsonDecoder.decodeFromString<BaiduAIResponse>(json)
                 if (response.error_code == null) {
                     // trans_result 是直接数组 [{src, dst}, ...]
                     response.trans_result?.joinToString("") { it.dst ?: "" }
                         ?.takeIf { it.isNotEmpty() }
                 } else {
-                    Log.w("CommentTranslator", "BaiduAI error: ${response.error_code} - ${response.error_msg}")
                     null
                 }
             } else {
-                Log.w("CommentTranslator", "BaiduAI HTTP $responseCode: ${connection.errorStream?.bufferedReader()?.readText()?.take(200)}")
                 null
             }
         } finally {

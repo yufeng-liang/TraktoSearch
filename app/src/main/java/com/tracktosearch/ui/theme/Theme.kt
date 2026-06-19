@@ -43,9 +43,14 @@ private val LightColorScheme = lightColorScheme(
 
 @Composable
 fun TraktToSearchTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    themeMode: String = "system",
     content: @Composable () -> Unit
 ) {
+    val darkTheme = when (themeMode) {
+        "dark" -> true
+        "light" -> false
+        else -> isSystemInDarkTheme()
+    }
     val colorScheme = when {
         Build.VERSION.SDK_INT >= 31 -> {
             val context = LocalContext.current

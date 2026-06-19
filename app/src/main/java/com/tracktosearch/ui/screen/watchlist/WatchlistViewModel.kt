@@ -3,8 +3,11 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.local.FavoriteResourceStorage
+import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -13,8 +16,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -59,17 +64,40 @@ data class WatchlistUiState(
     val hasMoreShows: Boolean = true,
     val moviePage: Int = 1,
     val showPage: Int = 1,
-    val tmdbUnavailable: Boolean = false
+    val tmdbUnavailable: Boolean = false,
+    // 已看历史
+    val historyMovies: List<MovieUiItem> = emptyList(),
+    val historyShows: List<ShowUiItem> = emptyList(),
+    val isLoadingHistoryMovies: Boolean = false,
+    val isLoadingHistoryShows: Boolean = false,
+    val historyMoviesError: String? = null,
+    val historyShowsError: String? = null,
+    val historyMoviesLoaded: Boolean = false,
+    val historyShowsLoaded: Boolean = false,
+    // 资源收藏
+    val favoriteResources: List<ResourceItem> = emptyList(),
+    val favoriteResourcesLoaded: Boolean = false
 )
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
-    private val tmdbRepository: TmdbRepository
+    private val tmdbRepository: TmdbRepository,
+    private val favoriteResourceStorage: FavoriteResourceStorage,
+    private val themeStorage: ThemeStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
+
+    val themeMode: StateFlow<String> = themeStorage.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "system")
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            themeStorage.setThemeMode(mode)
+        }
+    }
 
     private val maxRetries = 2
 
@@ -208,6 +236,81 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    fun loadHistoryMovies(forceReload: Boolean = false) {
+        if (!forceReload && _uiState.value.historyMoviesLoaded && _uiState.value.historyMovies.isNotEmpty()) {
+            return
+        }
+        if (_uiState.value.isLoadingHistoryMovies) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingHistoryMovies = true,
+                historyMoviesError = null
+            )
+            val result = retryIO(maxRetries) { traktRepository.getMovieHistory() }
+            result.onSuccess { (items, _) ->
+                if (forceReload) {
+                    _uiState.value = _uiState.value.copy(historyMovies = emptyList())
+                }
+                // 历史记录可能包含同一部电影的多次观看，按 traktId 去重
+                val dedupedItems = items.distinctBy { it.movie.ids.trakt }
+                val deferredItems = dedupedItems.map { item ->
+                    async { enrichMovieItem(item.movie, item.listed_at) }
+                }
+                val uiItems = deferredItems.awaitAll()
+                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
+                _uiState.value = _uiState.value.copy(
+                    historyMovies = uiItems,
+                    isLoadingHistoryMovies = false,
+                    historyMoviesLoaded = true,
+                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                )
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    isLoadingHistoryMovies = false,
+                    historyMoviesLoaded = true,
+                    historyMoviesError = e.message ?: "加载失败"
+                )
+            }
+        }
+    }
+
+    fun loadHistoryShows(forceReload: Boolean = false) {
+        if (!forceReload && _uiState.value.historyShowsLoaded && _uiState.value.historyShows.isNotEmpty()) {
+            return
+        }
+        if (_uiState.value.isLoadingHistoryShows) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoadingHistoryShows = true,
+                historyShowsError = null
+            )
+            val result = retryIO(maxRetries) { traktRepository.getShowHistory() }
+            result.onSuccess { (items, _) ->
+                if (forceReload) {
+                    _uiState.value = _uiState.value.copy(historyShows = emptyList())
+                }
+                val dedupedItems = items.distinctBy { it.show.ids.trakt }
+                val deferredItems = dedupedItems.map { item ->
+                    async { enrichShowItem(item.show, item.listed_at) }
+                }
+                val uiItems = deferredItems.awaitAll()
+                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
+                _uiState.value = _uiState.value.copy(
+                    historyShows = uiItems,
+                    isLoadingHistoryShows = false,
+                    historyShowsLoaded = true,
+                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                )
+            }.onFailure { e ->
+                _uiState.value = _uiState.value.copy(
+                    isLoadingHistoryShows = false,
+                    historyShowsLoaded = true,
+                    historyShowsError = e.message ?: "加载失败"
+                )
+            }
+        }
+    }
+
     private suspend fun enrichMovieItem(movie: com.tracktosearch.data.remote.trakt.dto.TraktMovie, listedAt: String = ""): MovieUiItem {
         if (movie.ids.tmdb <= 0) {
             return MovieUiItem(
@@ -268,6 +371,26 @@ class WatchlistViewModel @Inject constructor(
         )
     }
 
+    fun loadFavoriteResources(forceReload: Boolean = false) {
+        if (!forceReload && _uiState.value.favoriteResourcesLoaded) return
+        viewModelScope.launch {
+            val resources = favoriteResourceStorage.getFavoriteResources()
+            _uiState.value = _uiState.value.copy(
+                favoriteResources = resources,
+                favoriteResourcesLoaded = true
+            )
+        }
+    }
+
+    fun toggleFavorite(item: ResourceItem) {
+        viewModelScope.launch {
+            favoriteResourceStorage.toggleFavorite(item)
+            _uiState.value = _uiState.value.copy(
+                favoriteResources = _uiState.value.favoriteResources.filterNot { it.url == item.url }
+            )
+        }
+    }
+
     private fun createPlaceholderMovie(item: TraktWatchlistMovieItem): MovieUiItem {
         return MovieUiItem(
             traktId = item.movie.ids.trakt,
@@ -299,9 +422,18 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun refresh() {
+        val wasHistoryLoaded = _uiState.value.historyMoviesLoaded || _uiState.value.historyShowsLoaded
+        val wasFavoritesLoaded = _uiState.value.favoriteResourcesLoaded
         _uiState.value = WatchlistUiState()
         loadMovies(forceReload = true)
         loadShows(forceReload = true)
+        if (wasHistoryLoaded) {
+            loadHistoryMovies(forceReload = true)
+            loadHistoryShows(forceReload = true)
+        }
+        if (wasFavoritesLoaded) {
+            loadFavoriteResources(forceReload = true)
+        }
     }
 
     /** 页面恢复可见时调用：如果之前已加载过，则后台静默刷新，不重置已有数据避免重复拉取 */
@@ -317,6 +449,13 @@ class WatchlistViewModel @Inject constructor(
             )
             loadMovies(forceReload = true, silent = silent)
             loadShows(forceReload = true, silent = silent)
+        }
+        if (state.historyMoviesLoaded || state.historyShowsLoaded) {
+            loadHistoryMovies(forceReload = true)
+            loadHistoryShows(forceReload = true)
+        }
+        if (state.favoriteResourcesLoaded) {
+            loadFavoriteResources(forceReload = true)
         }
     }
 

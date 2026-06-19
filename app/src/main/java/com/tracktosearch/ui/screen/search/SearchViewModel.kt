@@ -3,12 +3,12 @@ package com.tracktosearch.ui.screen.search
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import android.util.Log
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.dto.ResourceType
 import com.tracktosearch.data.repository.ResourceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -36,8 +36,8 @@ data class SearchUiState(
     val resources: List<ResourceItem> = emptyList(),
     val error: String? = null,
     val searchHistory: List<String> = emptyList(),
-    val searchHistoryLoaded: Boolean = false,
-    val doubanHotCategories: List<DoubanHotCategory> = emptyList()
+    val doubanHotCategories: List<DoubanHotCategory> = emptyList(),
+    val typeFilter: ResourceType = ResourceType.ALL
 )
 
 @HiltViewModel
@@ -66,8 +66,7 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             searchHistoryStorage.history.collect { history ->
                 _uiState.value = _uiState.value.copy(
-                    searchHistory = history,
-                    searchHistoryLoaded = true
+                    searchHistory = history
                 )
             }
         }
@@ -81,34 +80,54 @@ class SearchViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(doubanHotCategories = categories)
 
         DOUBAN_CATEGORIES.forEachIndexed { index, (categoryId, _) ->
-            viewModelScope.launch {
-                try {
-                    val response = doubanHotApi.getDoubanHot(category = categoryId, limit = 10)
-                    Log.d("DoubanHot", "Category: $categoryId, items count: ${response.data.items.size}")
-                    response.data.items.forEach { item ->
-                        Log.d("DoubanHot", "  item: title=${item.title}, desc=${item.desc}, hot=${item.hot}, cover=${item.cover}")
-                    }
-                    val current = _uiState.value.doubanHotCategories.toMutableList()
-                    if (index < current.size) {
-                        current[index] = current[index].copy(
-                            items = response.data.items,
-                            isLoading = false,
-                            error = null,
-                            total = response.data.total
-                        )
-                        _uiState.value = _uiState.value.copy(doubanHotCategories = current)
-                    }
-                } catch (e: Exception) {
-                    Log.e("DoubanHot", "Failed to load category: $categoryId", e)
-                    val current = _uiState.value.doubanHotCategories.toMutableList()
-                    if (index < current.size) {
-                        current[index] = current[index].copy(
-                            isLoading = false,
-                            error = e.message ?: "加载失败"
-                        )
-                        _uiState.value = _uiState.value.copy(doubanHotCategories = current)
-                    }
+            loadDoubanCategory(index, categoryId)
+        }
+    }
+
+    private fun loadDoubanCategory(index: Int, categoryId: String) {
+        viewModelScope.launch {
+            val current = _uiState.value.doubanHotCategories.toMutableList()
+            if (index < current.size) {
+                current[index] = current[index].copy(isLoading = true, error = null)
+                _uiState.value = _uiState.value.copy(doubanHotCategories = current)
+            }
+            try {
+                val response = doubanHotApi.getDoubanHot(category = categoryId, limit = 10)
+                val updated = _uiState.value.doubanHotCategories.toMutableList()
+                if (index < updated.size) {
+                    updated[index] = updated[index].copy(
+                        items = response.data.items,
+                        isLoading = false,
+                        error = null,
+                        total = response.data.total
+                    )
+                    _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
+            } catch (e: Exception) {
+                val updated = _uiState.value.doubanHotCategories.toMutableList()
+                if (index < updated.size) {
+                    updated[index] = updated[index].copy(
+                        isLoading = false,
+                        error = e.message ?: "加载失败"
+                    )
+                    _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
+                }
+            }
+        }
+    }
+
+    fun retryDoubanCategory(categoryId: String) {
+        val index = DOUBAN_CATEGORIES.indexOfFirst { it.first == categoryId }
+        if (index >= 0) {
+            loadDoubanCategory(index, categoryId)
+        }
+    }
+
+    fun retryAllDoubanHot() {
+        DOUBAN_CATEGORIES.forEachIndexed { index, (categoryId, _) ->
+            val cat = _uiState.value.doubanHotCategories.getOrNull(index)
+            if (cat?.error != null || cat?.items.isNullOrEmpty()) {
+                loadDoubanCategory(index, categoryId)
             }
         }
     }
@@ -165,7 +184,8 @@ class SearchViewModel @Inject constructor(
                 isLoading = true,
                 keyword = keyword,
                 resources = emptyList(),
-                error = null
+                error = null,
+                typeFilter = ResourceType.ALL
             )
             resourceRepository.searchResourcesFlow(keyword = keyword)
                 .collect { items ->
@@ -200,8 +220,13 @@ class SearchViewModel @Inject constructor(
             resources = emptyList(),
             error = null,
             isLoading = false,
-            keyword = ""
+            keyword = "",
+            typeFilter = ResourceType.ALL
         )
+    }
+
+    fun setTypeFilter(filter: ResourceType) {
+        _uiState.value = _uiState.value.copy(typeFilter = filter)
     }
 
     fun markViewed(url: String) {

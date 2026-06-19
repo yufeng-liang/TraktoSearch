@@ -54,4 +54,22 @@ interface TmdbApiService {
         @Path("tv_id") id: Int,
         @Query("page") page: Int = 1
     ): Response<TmdbReviewsResponse>
+
+    @GET("person/{person_id}")
+    suspend fun getPersonDetail(
+        @Path("person_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbPerson>
+
+    @GET("person/{person_id}/movie_credits")
+    suspend fun getPersonMovieCredits(
+        @Path("person_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbPersonMovieCredits>
+
+    @GET("person/{person_id}/tv_credits")
+    suspend fun getPersonTvCredits(
+        @Path("person_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbPersonTvCredits>
 }

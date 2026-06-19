@@ -33,6 +33,20 @@ interface TraktApiService {
     @POST("sync/watchlist/remove")
     suspend fun removeFromWatchlist(@Body body: TraktSyncRequest): Response<TraktSyncResponse>
 
+    @GET("sync/history")
+    suspend fun getMovieHistory(
+        @Query("type") type: String = "movies",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 200
+    ): Response<List<TraktWatchlistMovieItem>>
+
+    @GET("sync/history")
+    suspend fun getShowHistory(
+        @Query("type") type: String = "shows",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 200
+    ): Response<List<TraktWatchlistShowItem>>
+
     @POST("oauth/token")
     suspend fun exchangeCodeForToken(@Body body: TraktTokenRequest): Response<TraktTokenResponse>
 
@@ -65,4 +79,36 @@ interface TraktApiService {
         @Path("season") seasonNumber: Int,
         @Query("extended") extended: String = "full"
     ): Response<List<TraktEpisode>>
+
+    @GET("shows/{id}/progress/watched")
+    suspend fun getShowWatchedProgress(@Path("id") id: Int): Response<TraktShowProgress>
+
+    @GET("movies/{id}/related")
+    suspend fun getRelatedMovies(
+        @Path("id") id: Int,
+        @Query("limit") limit: Int = 10,
+        @Query("page") page: Int = 1
+    ): Response<List<TraktMovie>>
+
+    @GET("shows/{id}/related")
+    suspend fun getRelatedShows(
+        @Path("id") id: Int,
+        @Query("limit") limit: Int = 10,
+        @Query("page") page: Int = 1
+    ): Response<List<TraktShow>>
+
+    @POST("sync/ratings")
+    suspend fun addRating(@Body body: RatingRequest): Response<Unit>
+
+    @POST("sync/ratings/remove")
+    suspend fun removeRating(@Body body: RatingRequest): Response<Unit>
+
+    @GET("sync/ratings/{type}")
+    suspend fun getRatings(@Path("type") type: String): Response<List<TraktRatingItem>>
+
+    @GET("search/tmdb/{id}")
+    suspend fun searchByTmdb(
+        @Path("id") id: Int,
+        @Query("type") type: String
+    ): Response<List<TraktSearchResult>>
 }

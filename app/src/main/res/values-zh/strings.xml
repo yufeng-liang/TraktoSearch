@@ -38,11 +38,18 @@
     <string name="watchlist_search_no_movies">没有匹配的电影</string>
     <string name="watchlist_search_no_shows">没有匹配的电视剧</string>
     <string name="watchlist_logout">退出登录</string>
+    <string name="watchlist_mode_watchlist">想看</string>
+    <string name="watchlist_tab_history">已看历史</string>
+    <string name="history_empty_movies">还没有已看的电影</string>
+    <string name="history_empty_shows">还没有已看的电视剧</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">返回</string>
+    <string name="detail_share">分享</string>
+    <string name="detail_marked_watched">已看过</string>
     <string name="detail_mark_watched">标记已看</string>
-    <string name="detail_marked_watched">已看</string>
+    <string name="detail_mark_watchlist">想看</string>
+    <string name="detail_marked_watchlist">已想看</string>
     <string name="detail_mark_processing">处理中</string>
     <string name="detail_no_overview">暂无简介</string>
     <string name="detail_overview_label">简介</string>
@@ -125,6 +132,10 @@
     <string name="detail_spoiler">剧透</string>
     <string name="detail_tab_resources">资源</string>
     <string name="detail_tab_comments">评论</string>
+    <string name="detail_tab_recommendations">推荐</string>
+    <string name="detail_no_recommendations">暂无推荐</string>
+    <string name="detail_load_error">加载失败，请重试</string>
+    <string name="detail_recommendations_title">相关推荐</string>
     <string name="detail_translating">正在翻译…</string>
     <string name="detail_translate_failed">翻译失败</string>
     <string name="detail_translate">翻译</string>
@@ -143,6 +154,18 @@
     <string name="detail_cast_close">关闭</string>
     <string name="detail_specials">特别篇</string>
     <string name="detail_actor">演员</string>
+    <string name="detail_your_rating">我的评分</string>
+
+    <!-- Person Screen -->
+    <string name="person_movie_credits">参演电影</string>
+    <string name="person_tv_credits">参演电视剧</string>
+    <string name="person_no_biography">暂无简介</string>
+
+    <!-- Theme -->
+    <string name="settings_theme">主题</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_dark">深色</string>
+    <string name="theme_light">浅色</string>
 
     <!-- Update -->
     <string name="update_title">发现新版本</string>

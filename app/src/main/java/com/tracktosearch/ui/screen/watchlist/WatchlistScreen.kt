@@ -4,16 +4,19 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
@@ -41,10 +44,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.tracktosearch.R
+import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.screen.detail.openResourceLink
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -88,8 +95,21 @@ fun WatchlistScreen(
     }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // 0=想看, 1=已看历史, 2=资源收藏
+    var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     val tabPagerState = rememberPagerState(initialPage = 0) { 2 }
     val tabScope = rememberCoroutineScope()
+
+    // 切换模式时触发加载
+    LaunchedEffect(selectedMode) {
+        when (selectedMode) {
+            1 -> {
+                viewModel.loadHistoryMovies()
+                viewModel.loadHistoryShows()
+            }
+            2 -> viewModel.loadFavoriteResources()
+        }
+    }
 
     // Pager 滑动 → 同步 selectedTab
     LaunchedEffect(tabPagerState.currentPage) {
@@ -100,6 +120,8 @@ fun WatchlistScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
+    val currentTheme by viewModel.themeMode.collectAsState()
+    var showThemeDialog by remember { mutableStateOf(false) }
 
     // 根据搜索关键词过滤当前 Tab 的列表
     val filteredMovies = remember(uiState.movies, searchQuery) {
@@ -114,6 +136,26 @@ fun WatchlistScreen(
         else uiState.shows.filter {
             it.displayTitle.contains(searchQuery, ignoreCase = true) ||
             it.title.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    val filteredHistoryMovies = remember(uiState.historyMovies, searchQuery) {
+        if (searchQuery.isBlank()) uiState.historyMovies
+        else uiState.historyMovies.filter {
+            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
+            it.title.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    val filteredHistoryShows = remember(uiState.historyShows, searchQuery) {
+        if (searchQuery.isBlank()) uiState.historyShows
+        else uiState.historyShows.filter {
+            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
+            it.title.contains(searchQuery, ignoreCase = true)
+        }
+    }
+    val filteredFavoriteResources = remember(uiState.favoriteResources, searchQuery) {
+        if (searchQuery.isBlank()) uiState.favoriteResources
+        else uiState.favoriteResources.filter {
+            it.name.contains(searchQuery, ignoreCase = true)
         }
     }
 
@@ -160,6 +202,9 @@ fun WatchlistScreen(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showThemeDialog = true }) {
+                        Icon(Icons.Default.Palette, contentDescription = stringResource(R.string.settings_theme))
+                    }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
                     }
@@ -178,6 +223,14 @@ fun WatchlistScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+
+            if (showThemeDialog) {
+                ThemeSelectionDialog(
+                    currentTheme = currentTheme,
+                    onThemeSelected = { mode -> viewModel.setThemeMode(mode) },
+                    onDismiss = { showThemeDialog = false }
+                )
+            }
 
             // TMDB 不可用提示
             if (uiState.tmdbUnavailable) {
@@ -207,52 +260,126 @@ fun WatchlistScreen(
                 }
             }
 
-            // 分类 Tab
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { tabScope.launch { tabPagerState.animateScrollToPage(0) } },
-                    text = { Text("${stringResource(R.string.watchlist_tab_movies)}(${filteredMovies.size})") }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { tabScope.launch { tabPagerState.animateScrollToPage(1) } },
-                    text = { Text("${stringResource(R.string.watchlist_tab_shows)}(${filteredShows.size})") }
-                )
+            // 想看 / 已看 / 资源收藏 模式切换
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                SegmentedButton(
+                    selected = selectedMode == 0,
+                    onClick = { selectedMode = 0 },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                ) {
+                    Text(stringResource(R.string.watchlist_mode_watchlist))
+                }
+                SegmentedButton(
+                    selected = selectedMode == 1,
+                    onClick = { selectedMode = 1 },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                ) {
+                    Text(stringResource(R.string.watchlist_tab_history))
+                }
+                SegmentedButton(
+                    selected = selectedMode == 2,
+                    onClick = { selectedMode = 2 },
+                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
+                ) {
+                    Text(stringResource(R.string.watchlist_mode_favorites))
+                }
             }
 
-            // 内容区域 - HorizontalPager 支持左右滑动
-            HorizontalPager(
-                state = tabPagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState)
-            ) { page ->
-                when (page) {
-                    0 -> MovieTabContent(
-                        isLoading = uiState.isLoadingMovies,
-                        isLoaded = uiState.moviesLoaded,
-                        items = filteredMovies,
-                        totalItems = uiState.movies.size,
-                        searchQuery = searchQuery,
-                        error = uiState.moviesError,
-                        onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                        onRetry = { viewModel.loadMovies(forceReload = true) },
-                        onOpenTrakt = openTraktExternal,
-                        hazeState = hazeState
+            if (selectedMode == 2) {
+                // 资源收藏列表
+                FavoriteResourcesContent(
+                    resources = filteredFavoriteResources,
+                    onResourceClick = { item -> openResourceLink(context, item) },
+                    onToggleFavorite = { item -> viewModel.toggleFavorite(item) }
+                )
+            } else {
+                // 分类 Tab
+                val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+                val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { tabScope.launch { tabPagerState.animateScrollToPage(0) } },
+                        text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
                     )
-                    1 -> ShowTabContent(
-                        isLoading = uiState.isLoadingShows,
-                        isLoaded = uiState.showsLoaded,
-                        items = filteredShows,
-                        totalItems = uiState.shows.size,
-                        searchQuery = searchQuery,
-                        error = uiState.showsError,
-                        onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
-                        onRetry = { viewModel.loadShows(forceReload = true) },
-                        onOpenTrakt = openTraktExternal,
-                        hazeState = hazeState
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { tabScope.launch { tabPagerState.animateScrollToPage(1) } },
+                        text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
                     )
+                }
+
+                // 内容区域 - HorizontalPager 支持左右滑动
+                HorizontalPager(
+                    state = tabPagerState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = hazeState)
+                ) { page ->
+                    when (page) {
+                        0 -> if (selectedMode == 1) {
+                            MovieTabContent(
+                                isLoading = uiState.isLoadingHistoryMovies,
+                                isLoaded = uiState.historyMoviesLoaded,
+                                items = filteredHistoryMovies,
+                                totalItems = uiState.historyMovies.size,
+                                searchQuery = searchQuery,
+                                error = uiState.historyMoviesError,
+                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onRetry = { viewModel.loadHistoryMovies(forceReload = true) },
+                                onOpenTrakt = null,
+                                emptyListText = stringResource(R.string.history_empty_movies),
+                                hazeState = hazeState
+                            )
+                        } else {
+                            MovieTabContent(
+                                isLoading = uiState.isLoadingMovies,
+                                isLoaded = uiState.moviesLoaded,
+                                items = filteredMovies,
+                                totalItems = uiState.movies.size,
+                                searchQuery = searchQuery,
+                                error = uiState.moviesError,
+                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onRetry = { viewModel.loadMovies(forceReload = true) },
+                                onOpenTrakt = openTraktExternal,
+                                emptyListText = stringResource(R.string.watchlist_empty_movies),
+                                hazeState = hazeState
+                            )
+                        }
+                        1 -> if (selectedMode == 1) {
+                            ShowTabContent(
+                                isLoading = uiState.isLoadingHistoryShows,
+                                isLoaded = uiState.historyShowsLoaded,
+                                items = filteredHistoryShows,
+                                totalItems = uiState.historyShows.size,
+                                searchQuery = searchQuery,
+                                error = uiState.historyShowsError,
+                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onRetry = { viewModel.loadHistoryShows(forceReload = true) },
+                                onOpenTrakt = null,
+                                emptyListText = stringResource(R.string.history_empty_shows),
+                                hazeState = hazeState
+                            )
+                        } else {
+                            ShowTabContent(
+                                isLoading = uiState.isLoadingShows,
+                                isLoaded = uiState.showsLoaded,
+                                items = filteredShows,
+                                totalItems = uiState.shows.size,
+                                searchQuery = searchQuery,
+                                error = uiState.showsError,
+                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onRetry = { viewModel.loadShows(forceReload = true) },
+                                onOpenTrakt = openTraktExternal,
+                                emptyListText = stringResource(R.string.watchlist_empty_shows),
+                                hazeState = hazeState
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -269,7 +396,8 @@ private fun MovieTabContent(
     error: String?,
     onItemClick: (MovieUiItem) -> Unit,
     onRetry: () -> Unit,
-    onOpenTrakt: () -> Unit,
+    onOpenTrakt: (() -> Unit)?,
+    emptyListText: String,
     hazeState: HazeState
 ) {
     when {
@@ -296,7 +424,7 @@ private fun MovieTabContent(
                 isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
                 emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
                     stringResource(R.string.watchlist_search_no_movies)
-                else stringResource(R.string.watchlist_empty_movies),
+                else emptyListText,
                 onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
             )
         }
@@ -324,7 +452,8 @@ private fun ShowTabContent(
     error: String?,
     onItemClick: (ShowUiItem) -> Unit,
     onRetry: () -> Unit,
-    onOpenTrakt: () -> Unit,
+    onOpenTrakt: (() -> Unit)?,
+    emptyListText: String,
     hazeState: HazeState
 ) {
     when {
@@ -351,7 +480,7 @@ private fun ShowTabContent(
                 isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
                 emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
                     stringResource(R.string.watchlist_search_no_shows)
-                else stringResource(R.string.watchlist_empty_shows),
+                else emptyListText,
                 onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
             )
         }
@@ -504,5 +633,102 @@ private fun WatchlistEmptyState(
                 modifier = Modifier.clickable { onOpenTrakt() }
             )
         }
+    }
+}
+
+/** 资源收藏列表 */
+@Composable
+private fun FavoriteResourcesContent(
+    resources: List<ResourceItem>,
+    onResourceClick: (ResourceItem) -> Unit,
+    onToggleFavorite: (ResourceItem) -> Unit
+) {
+    if (resources.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = stringResource(R.string.watchlist_favorites_empty),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            itemsIndexed(resources, key = { _, item -> item.url }) { index, item ->
+                ResourceItemCard(
+                    item = item,
+                    onClick = { onResourceClick(item) },
+                    index = index,
+                    isFavorite = true,
+                    showFavoriteIcon = true,
+                    onToggleFavorite = { onToggleFavorite(item) }
+                )
+            }
+        }
+    }
+}
+
+/** 主题选择对话框 */
+@Composable
+private fun ThemeSelectionDialog(
+    currentTheme: String,
+    onThemeSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_theme)) },
+        text = {
+            Column {
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_system),
+                    selected = currentTheme == ThemeStorage.MODE_SYSTEM,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_SYSTEM) }
+                )
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_dark),
+                    selected = currentTheme == ThemeStorage.MODE_DARK,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_DARK) }
+                )
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_light),
+                    selected = currentTheme == ThemeStorage.MODE_LIGHT,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_LIGHT) }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ThemeOptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
     }
 }

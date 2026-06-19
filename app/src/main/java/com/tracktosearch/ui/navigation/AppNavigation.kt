@@ -37,6 +37,7 @@ import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
+import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.webview.WebViewScreen
 import javax.inject.Inject
@@ -47,6 +48,7 @@ object Routes {
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}"
     const val SEARCH = "search/{keyword}"
     const val WEBVIEW = "webview/{url}/{title}"
+    const val PERSON = "person/{personId}/{personName}"
 
     fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
@@ -63,6 +65,11 @@ object Routes {
         val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
         return "webview/$encodedUrl/$encodedTitle"
+    }
+
+    fun personRoute(personId: Int, personName: String): String {
+        val encodedName = java.net.URLEncoder.encode(personName, "UTF-8")
+        return "person/$personId/$encodedName"
     }
 }
 
@@ -216,10 +223,13 @@ fun AppNavigation(
                         val imdbId = backStackEntry.arguments?.getString("imdbId") ?: ""
                         val traktRating = backStackEntry.arguments?.getFloat("traktRating")?.toDouble() ?: 0.0
 
-                        // 用于在标记已看后通知上级列表页刷新
+                        // 用于在标记已看/想看后通知上级列表页刷新
+                        // 同时检查从子详情页（推荐跳转）传递回来的变更标记
                         val previousEntry = navController.previousBackStackEntry
                         fun goBack(changed: Boolean) {
-                            previousEntry?.savedStateHandle?.set("watchlist_changed", changed)
+                            val childChanged = backStackEntry.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
+                            previousEntry?.savedStateHandle?.set("watchlist_changed", changed || childChanged)
+                            backStackEntry.savedStateHandle["watchlist_changed"] = false
                             navController.popBackStack()
                         }
 
@@ -232,10 +242,13 @@ fun AppNavigation(
                             traktRating = traktRating,
                             onBack = { changed -> goBack(changed) },
                             onPersonClick = { personId, personName ->
-                                navController.navigate(Routes.webViewRoute(
-                                    "https://www.themoviedb.org/person/$personId",
-                                    personName
-                                ))
+                                navController.navigate(Routes.personRoute(personId, personName))
+                            },
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
                             }
                         )
                     }
@@ -282,6 +295,32 @@ fun AppNavigation(
                             navController.popBackStack()
                         }
                     )
+                }
+
+                composable(
+                    route = Routes.PERSON,
+                    arguments = listOf(
+                        navArgument("personId") { type = NavType.IntType },
+                        navArgument("personName") { type = NavType.StringType; defaultValue = "" }
+                    )
+                ) { backStackEntry ->
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val personId = backStackEntry.arguments?.getInt("personId") ?: 0
+                        val personName = java.net.URLDecoder.decode(
+                            backStackEntry.arguments?.getString("personName") ?: "", "UTF-8"
+                        )
+                        PersonScreen(
+                            personId = personId,
+                            personName = personName,
+                            onBack = { navController.popBackStack() },
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            }
+                        )
+                    }
                 }
             }
             } // Box

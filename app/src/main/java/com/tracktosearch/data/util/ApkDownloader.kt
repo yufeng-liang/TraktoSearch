@@ -19,13 +19,7 @@ object ApkDownloader {
         onProgress: (Float) -> Unit,
         fallbackUrl: String = ""
     ): File = withContext(Dispatchers.IO) {
-        android.util.Log.d("ApkDownloader", "开始下载: url=$url")
-        if (fallbackUrl.isNotEmpty()) {
-            android.util.Log.d("ApkDownloader", "备用URL: $fallbackUrl")
-        }
-
         val githubToken = BuildConfig.GITHUB_UPDATE_TOKEN
-        android.util.Log.d("ApkDownloader", "GitHub token: ${if (githubToken.isNotEmpty()) "已配置(${githubToken.take(10)}...)" else "未配置"}")
 
         val client = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
@@ -36,7 +30,6 @@ object ApkDownloader {
                     addNetworkInterceptor { chain ->
                         val request = chain.request()
                         val host = request.url.host
-                        android.util.Log.d("ApkDownloader", "NetworkInterceptor: host=$host")
                         if (host == "github.com" || host.endsWith("github.com") ||
                             host == "objects.githubusercontent.com" || host.endsWith("githubusercontent.com")) {
                             val newRequest = request.newBuilder()
@@ -56,7 +49,6 @@ object ApkDownloader {
 
         // 主 URL 失败且有备用 URL，自动降级尝试
         if (result == null && fallbackUrl.isNotEmpty()) {
-            android.util.Log.w("ApkDownloader", "主URL失败，尝试备用URL...")
             tryDownload(client, fallbackUrl, context, fileName, onProgress)
                 ?: throw Exception("主URL和备用URL均下载失败")
         } else if (result == null) {
@@ -75,32 +67,27 @@ object ApkDownloader {
     ): File? {
         var response: okhttp3.Response? = null
         return try {
-            android.util.Log.d("ApkDownloader", "发送请求: $url")
             val request = Request.Builder().url(url).build()
             response = client.newCall(request).execute()
-            android.util.Log.d("ApkDownloader", "响应状态: HTTP ${response!!.code}")
 
-            if (!response!!.isSuccessful) {
-                android.util.Log.e("ApkDownloader", "HTTP ${response!!.code} ${response!!.message}")
+            if (!response.isSuccessful) {
                 return null
             }
 
-            val body = response!!.body
+            val body = response.body
             if (body == null) {
-                response!!.close()
+                response.close()
                 return null
             }
             val contentLength = body.contentLength()
-            android.util.Log.d("ApkDownloader", "文件大小: $contentLength bytes")
 
             val dir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
             if (dir == null) {
                 body.close()
-                response!!.close()
+                response.close()
                 return null
             }
             val file = File(dir, fileName)
-            android.util.Log.d("ApkDownloader", "保存路径: ${file.absolutePath}")
 
             if (file.exists()) file.delete()
 
@@ -120,10 +107,8 @@ object ApkDownloader {
                 }
             }
 
-            android.util.Log.d("ApkDownloader", "下载完成: ${file.length()} bytes")
             file
         } catch (e: Exception) {
-            android.util.Log.e("ApkDownloader", "请求异常: ${e.message}", e)
             null
         } finally {
             // response 在成功时由 body.use 关闭，失败时在此关闭

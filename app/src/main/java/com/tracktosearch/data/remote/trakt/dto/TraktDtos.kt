@@ -1,5 +1,7 @@
 package com.tracktosearch.data.remote.trakt.dto
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -42,7 +44,8 @@ data class TraktWatchlistShowItem(
 @Serializable
 data class TraktSyncRequest(
     val movies: List<TraktSyncItem>? = null,
-    val shows: List<TraktSyncItem>? = null
+    val shows: List<TraktSyncItem>? = null,
+    val episodes: List<TraktSyncItem>? = null
 )
 
 @Serializable
@@ -138,4 +141,57 @@ data class TraktEpisode(
     val ids: TraktIds = TraktIds(),
     val overview: String = "",
     val first_aired: String = ""
+)
+
+// ==================== 评分相关 DTO ====================
+
+@Serializable
+@OptIn(ExperimentalSerializationApi::class)
+data class RatingItem(
+    val ids: TraktIds,
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val rating: Int? = null
+)
+
+@Serializable
+data class RatingRequest(
+    val movies: List<RatingItem>? = null,
+    val shows: List<RatingItem>? = null
+)
+
+@Serializable
+data class TraktRatingItem(
+    val rated_at: String = "",
+    val rating: Int = 0,
+    val movie: TraktMovie? = null,
+    val show: TraktShow? = null
+)
+
+// ==================== 观看进度 DTO ====================
+
+@Serializable
+data class TraktShowProgress(
+    val aired: Int = 0,
+    val completed: Int = 0,
+    val seasons: List<TraktProgressSeason> = emptyList()
+)
+
+@Serializable
+data class TraktProgressSeason(
+    val number: Int = 0,
+    val episodes: List<TraktProgressEpisode> = emptyList()
+)
+
+@Serializable
+data class TraktProgressEpisode(
+    val number: Int = 0,
+    val completed: Boolean = false
+)
+
+@Serializable
+data class TraktSearchResult(
+    val type: String = "",
+    val score: Double = 0.0,
+    val movie: TraktMovie? = null,
+    val show: TraktShow? = null
 )

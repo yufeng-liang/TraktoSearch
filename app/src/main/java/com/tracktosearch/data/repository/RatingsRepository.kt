@@ -71,8 +71,4 @@ class RatingsRepository @Inject constructor(
         cache[imdbId] = result
         emit(result)
     }.flowOn(Dispatchers.IO)
-
-    fun clearCache() {
-        cache.clear()
-    }
 }

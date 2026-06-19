@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import android.app.AlertDialog
 import android.content.DialogInterface
@@ -12,6 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.GuestModeStorage
+import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.navigation.AppNavigation
@@ -44,6 +45,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var guestModeStorage: GuestModeStorage
+
+    @Inject
+    lateinit var themeStorage: ThemeStorage
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -90,7 +94,8 @@ class MainActivity : ComponentActivity() {
         checkCrashAndPrompt()
 
         setContent {
-            TraktToSearchTheme {
+            val themeMode by themeStorage.themeMode.collectAsState(initial = "system")
+            TraktToSearchTheme(themeMode = themeMode) {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
@@ -127,12 +132,10 @@ class MainActivity : ComponentActivity() {
             if (uri.scheme == "tracktosearch" && uri.host == "oauth") {
                 val error = uri.getQueryParameter("error")
                 if (!error.isNullOrEmpty()) {
-                    Log.d("MainActivity", "OAuth denied: $error")
                     OAuthCallback.authDenied = true
                 } else {
                     val code = uri.getQueryParameter("code")
                     if (!code.isNullOrEmpty()) {
-                        Log.d("MainActivity", "Received OAuth callback with code")
                         OAuthCallback.pendingCode = code
                     }
                 }

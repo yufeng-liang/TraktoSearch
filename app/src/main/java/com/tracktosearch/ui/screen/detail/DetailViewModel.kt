@@ -16,22 +16,38 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
-import com.tracktosearch.data.remote.tmdb.dto.TmdbCreditsResponse
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.local.ViewedItemStorage
+import com.tracktosearch.data.local.FavoriteResourceStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class RecommendationItem(
+    val traktId: Int,
+    val tmdbId: Int,
+    val title: String,
+    val displayTitle: String,
+    val year: Int?,
+    val genres: String,
+    val posterUrl: String?,
+    val imdbId: String = "",
+    val traktRating: Double = 0.0,
+    val isInWatchlist: Boolean = false,
+    val isWatched: Boolean = false
+)
 
 data class DetailUiState(
     val isLoading: Boolean = false,
@@ -48,10 +64,18 @@ data class DetailUiState(
     val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
     val isMarkedWatched: Boolean = false,
+    val isMarkingWatched: Boolean = false,       // 是否正在处理标记/取消标记已看
+    val isMarkedWatchlist: Boolean = false,      // 是否在想看列表中
+    val isMarkingWatchlist: Boolean = false,     // 是否正在处理添加/移除想看
+    // 用户评分（null=未评分）
+    val userRating: Int? = null,
+    val isRating: Boolean = false,               // 是否正在提交评分
+    val isRatingLoading: Boolean = false,        // 是否正在加载已有评分
     val error: String? = null,
     val searchAttempted: Boolean = false,
     val ratings: MultiRatings? = null,
     val viewedUrls: Set<String> = emptySet(),
+    val favoriteUrls: Set<String> = emptySet(),
     val comments: List<TraktComment> = emptyList(),
     val translatedComments: List<TraktComment> = emptyList(),
     val isTranslating: Boolean = false,
@@ -60,15 +84,27 @@ data class DetailUiState(
     val tmdbCommentPage: Int = 1,          // 当前 TMDB 评论页码
     val hasMoreComments: Boolean = false,   // 是否还有更多评论
     val isLoadingMoreComments: Boolean = false,  // 是否正在加载更多评论
-    val isMarkingWatched: Boolean = false,       // 是否正在处理标记/取消标记
     val seasons: List<TraktSeason> = emptyList(),
     val episodes: Map<Int, List<TraktEpisode>> = emptyMap(),
     val expandedSeasons: Set<Int> = emptySet(),
+    // 已看剧集：季号 -> 已看集号集合
+    val watchedEpisodeNumbers: Map<Int, Set<Int>> = emptyMap(),
+    // 正在切换已看状态的剧集（季号-集号）
+    val togglingEpisode: Pair<Int, Int>? = null,
     // 演职员
     val cast: List<TmdbCast> = emptyList(),
     val crew: List<TmdbCrew> = emptyList(),
     // 列表是否变更（标记已看后变为 true，上级页面用于决定是否刷新）
-    val watchlistChanged: Boolean = false
+    val watchlistChanged: Boolean = false,
+    // 相关推荐
+    val recommendations: List<RecommendationItem> = emptyList(),
+    val isLoadingRecommendations: Boolean = false,
+    // 各模块加载错误提示
+    val ratingsError: Boolean = false,
+    val commentsError: Boolean = false,
+    val recommendationsError: Boolean = false,
+    val seasonsError: Boolean = false,
+    val creditsError: Boolean = false
 )
 
 @HiltViewModel
@@ -78,6 +114,7 @@ class DetailViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
     private val ratingsRepository: RatingsRepository,
     private val viewedItemStorage: ViewedItemStorage,
+    private val favoriteResourceStorage: FavoriteResourceStorage,
     private val commentTranslator: CommentTranslator
 ) : ViewModel() {
 
@@ -101,6 +138,9 @@ class DetailViewModel @Inject constructor(
     private var allResources: List<ResourceItem> = emptyList()
 
     fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0) {
+        // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
+        if (currentTraktId == traktId && detailLoaded) return
+
         currentTraktId = traktId
         currentMediaType = mediaType
         currentTitle = title
@@ -169,6 +209,12 @@ class DetailViewModel @Inject constructor(
 
             // 异步获取演职员
             fetchCredits()
+
+            // 异步获取相关推荐（内部合并检查当前影视+推荐项的想看/已看状态）
+            fetchRecommendations()
+
+            // 异步获取用户评分
+            fetchUserRating()
         }
     }
 
@@ -179,42 +225,46 @@ class DetailViewModel @Inject constructor(
             tmdbRating = tmdbRating,
             traktRating = currentTraktRating
         ).onEach { ratings ->
-            _uiState.value = _uiState.value.copy(ratings = ratings)
+            _uiState.value = _uiState.value.copy(ratings = ratings, ratingsError = false)
+        }.catch {
+            _uiState.value = _uiState.value.copy(ratingsError = true)
         }.launchIn(viewModelScope)
     }
 
     private fun fetchComments() {
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
-            Log.d("DetailVM", "Fetching comments for traktId=$currentTraktId, type=$currentMediaType")
+            try {
+                // 并行加载 Trakt 和 TMDB 评论（首页各取少量）
+                val traktDeferred = async {
+                    traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = 1)
+                        .getOrDefault(emptyList())
+                }
+                val tmdbDeferred = async {
+                    if (currentTmdbId > 0) {
+                        tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = 1)
+                    } else null
+                }
 
-            // 并行加载 Trakt 和 TMDB 评论（首页各取少量）
-            val traktDeferred = async {
-                traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = 1)
-                    .getOrDefault(emptyList())
+                val traktComments = traktDeferred.await()
+                val tmdbResponse = tmdbDeferred.await()
+                val tmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
+                val allComments = traktComments + tmdbComments
+
+                val hasMoreTrakt = traktComments.size >= 10
+                val hasMoreTmdb = tmdbResponse != null && tmdbResponse.total_pages > 1
+
+                _uiState.value = _uiState.value.copy(
+                    comments = allComments,
+                    translatedComments = emptyList(),
+                    commentPage = 1,
+                    tmdbCommentPage = 1,
+                    hasMoreComments = hasMoreTrakt || hasMoreTmdb,
+                    commentsError = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(commentsError = true)
             }
-            val tmdbDeferred = async {
-                if (currentTmdbId > 0) {
-                    tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = 1)
-                } else null
-            }
-
-            val traktComments = traktDeferred.await()
-            val tmdbResponse = tmdbDeferred.await()
-            val tmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
-            val allComments = traktComments + tmdbComments
-
-            val hasMoreTrakt = traktComments.size >= 10
-            val hasMoreTmdb = tmdbResponse != null && tmdbResponse.total_pages > 1
-
-            Log.d("DetailVM", "Got ${traktComments.size} Trakt + ${tmdbComments.size} TMDB comments")
-            _uiState.value = _uiState.value.copy(
-                comments = allComments,
-                translatedComments = emptyList(),
-                commentPage = 1,
-                tmdbCommentPage = 1,
-                hasMoreComments = hasMoreTrakt || hasMoreTmdb
-            )
         }
     }
 
@@ -255,7 +305,6 @@ class DetailViewModel @Inject constructor(
             val newHasMoreTrakt = newTraktComments.size >= 10
             val newHasMoreTmdb = tmdbResponse != null && nextTmdbPage < tmdbResponse.total_pages
 
-            Log.d("DetailVM", "Loaded ${newTraktComments.size} Trakt + ${newTmdbComments.size} TMDB more comments")
             _uiState.value = _uiState.value.copy(
                 comments = _uiState.value.comments + uniqueNew,
                 commentPage = if (newTraktComments.isNotEmpty()) nextTraktPage else current.commentPage,
@@ -275,7 +324,6 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isTranslating = true)
             try {
                 val translated = commentTranslator.translateComments(comments)
-                Log.d("DetailVM", "Translation done: ${translated.size} comments")
                 _uiState.value = _uiState.value.copy(
                     translatedComments = translated,
                     isTranslating = false
@@ -316,7 +364,31 @@ class DetailViewModel @Inject constructor(
         seasonsJob = viewModelScope.launch {
             val result = traktRepository.getShowSeasons(currentTraktId)
             result.onSuccess { seasons ->
-                _uiState.value = _uiState.value.copy(seasons = seasons)
+                _uiState.value = _uiState.value.copy(seasons = seasons, seasonsError = false)
+                // 季集加载后获取观看进度
+                fetchWatchedProgress()
+            }.onFailure {
+                _uiState.value = _uiState.value.copy(seasonsError = true)
+            }
+        }
+    }
+
+    /** 获取已看剧集进度，转换为 季号 -> 已看集号集合 */
+    private fun fetchWatchedProgress() {
+        viewModelScope.launch {
+            val result = traktRepository.getShowWatchedProgress(currentTraktId)
+            result.onSuccess { progress ->
+                val watchedMap = mutableMapOf<Int, Set<Int>>()
+                progress.seasons.forEach { season ->
+                    val watchedEpisodes = season.episodes
+                        .filter { it.completed }
+                        .map { it.number }
+                        .toSet()
+                    if (watchedEpisodes.isNotEmpty()) {
+                        watchedMap[season.number] = watchedEpisodes
+                    }
+                }
+                _uiState.value = _uiState.value.copy(watchedEpisodeNumbers = watchedMap)
             }
         }
     }
@@ -324,20 +396,166 @@ class DetailViewModel @Inject constructor(
     private fun fetchCredits() {
         if (currentTmdbId <= 0) return
         viewModelScope.launch {
-            val credits = tmdbRepository.getCredits(currentTmdbId, currentMediaType)
-            credits?.let {
-                Log.d("DetailVM", "Got ${it.cast.size} cast, ${it.crew.size} crew")
-                // 按职位优先级排序：导演 > 编剧 > 制片人，去重
-                val priorityOrder = mapOf("Director" to 0, "Writer" to 1, "Producer" to 2, "Screenplay" to 1)
-                val filteredCrew = it.crew
-                    .filter { crew -> crew.job in listOf("Director", "Writer", "Producer", "Screenplay") }
-                    .distinctBy { it.id } // 去重（同一人可能有多个 job）
-                    .sortedBy { priorityOrder[it.job] ?: 99 }
+            try {
+                val credits = tmdbRepository.getCredits(currentTmdbId, currentMediaType)
+                credits?.let {
+                    // 按职位优先级排序：导演 > 编剧 > 制片人，去重
+                    val priorityOrder = mapOf("Director" to 0, "Writer" to 1, "Producer" to 2, "Screenplay" to 1)
+                    val filteredCrew = it.crew
+                        .filter { crew -> crew.job in listOf("Director", "Writer", "Producer", "Screenplay") }
+                        .distinctBy { it.id } // 去重（同一人可能有多个 job）
+                        .sortedBy { priorityOrder[it.job] ?: 99 }
+                    _uiState.value = _uiState.value.copy(
+                        cast = it.cast,
+                        crew = filteredCrew,
+                        creditsError = false
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(creditsError = true)
+            }
+        }
+    }
+
+    private fun fetchRecommendations() {
+        if (currentTraktId <= 0) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingRecommendations = true)
+            try {
+                val enriched = when (currentMediaType) {
+                    MediaType.MOVIE -> {
+                        val result = traktRepository.getRelatedMovies(currentTraktId)
+                        val movies = result.getOrDefault(emptyList())
+                        movies.map { movie ->
+                            async {
+                                val enrichment = tmdbRepository.enrichMovie(
+                                    movie.ids.tmdb, movie.title, movie.year.takeIf { it > 0 }
+                                )
+                                RecommendationItem(
+                                    traktId = movie.ids.trakt,
+                                    tmdbId = movie.ids.tmdb,
+                                    title = movie.title,
+                                    displayTitle = enrichment.chineseTitle,
+                                    year = enrichment.year,
+                                    genres = enrichment.genres,
+                                    posterUrl = enrichment.posterUrl,
+                                    imdbId = movie.ids.imdb,
+                                    traktRating = movie.rating
+                                )
+                            }
+                        }.awaitAll()
+                    }
+                    MediaType.SHOW -> {
+                        val result = traktRepository.getRelatedShows(currentTraktId)
+                        val shows = result.getOrDefault(emptyList())
+                        shows.map { show ->
+                            async {
+                                val enrichment = tmdbRepository.enrichTv(
+                                    show.ids.tmdb, show.title, show.year.takeIf { it > 0 }
+                                )
+                                RecommendationItem(
+                                    traktId = show.ids.trakt,
+                                    tmdbId = show.ids.tmdb,
+                                    title = show.title,
+                                    displayTitle = enrichment.chineseTitle,
+                                    year = enrichment.year,
+                                    genres = enrichment.genres,
+                                    posterUrl = enrichment.posterUrl,
+                                    imdbId = show.ids.imdb,
+                                    traktRating = show.rating
+                                )
+                            }
+                        }.awaitAll()
+                    }
+                }
+
+                val filtered = enriched.filter { it.tmdbId > 0 }
+
+                // 批量检查想看/已看状态（同时检查当前影视，避免重复 API 调用）
+                val allIdsToCheck = filtered.map { it.traktId } + currentTraktId
+                val statusMap = traktRepository.batchCheckStatus(allIdsToCheck, currentMediaType)
+
+                // 更新推荐项状态
+                val withStatus = filtered.map { item ->
+                    val status = statusMap[item.traktId]
+                    item.copy(
+                        isInWatchlist = status?.first ?: false,
+                        isWatched = status?.second ?: false
+                    )
+                }
+
+                // 更新当前影视的想看/已看状态
+                val currentStatus = statusMap[currentTraktId]
                 _uiState.value = _uiState.value.copy(
-                    cast = it.cast,
-                    crew = filteredCrew
+                    recommendations = withStatus,
+                    isLoadingRecommendations = false,
+                    isMarkedWatchlist = currentStatus?.first ?: false,
+                    isMarkedWatched = currentStatus?.second ?: false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingRecommendations = false,
+                    recommendationsError = true
                 )
             }
+        }
+    }
+
+    private fun fetchUserRating() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isRatingLoading = true)
+            try {
+                val rating = traktRepository.getUserRating(currentTraktId, currentMediaType)
+                _uiState.value = _uiState.value.copy(
+                    userRating = rating,
+                    isRatingLoading = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isRatingLoading = false)
+            }
+        }
+    }
+
+    /** 提交评分（1-10 分） */
+    fun setRating(rating: Int) {
+        val current = _uiState.value
+        if (current.isRating) return
+        // 点击与当前评分相同的星标 → 取消评分
+        if (current.userRating == rating) {
+            removeRating()
+            return
+        }
+        _uiState.value = current.copy(isRating = true)
+        viewModelScope.launch {
+            traktRepository.addRating(currentTraktId, rating, currentMediaType)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        userRating = rating,
+                        isRating = false
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(isRating = false)
+                }
+        }
+    }
+
+    /** 取消评分 */
+    fun removeRating() {
+        val current = _uiState.value
+        if (current.isRating) return
+        _uiState.value = current.copy(isRating = true)
+        viewModelScope.launch {
+            traktRepository.removeRating(currentTraktId, currentMediaType)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        userRating = null,
+                        isRating = false
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(isRating = false)
+                }
         }
     }
 
@@ -363,6 +581,43 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 切换某集已看/取消已看 */
+    fun toggleEpisodeWatched(seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) {
+        val current = _uiState.value
+        if (current.togglingEpisode == Pair(seasonNumber, episodeNumber)) return
+
+        val isWatched = episodeNumber in (current.watchedEpisodeNumbers[seasonNumber] ?: emptySet())
+        _uiState.value = current.copy(togglingEpisode = Pair(seasonNumber, episodeNumber))
+
+        viewModelScope.launch {
+            val result = if (isWatched) {
+                traktRepository.unmarkEpisodeWatched(episodeTraktId)
+            } else {
+                traktRepository.markEpisodeWatched(episodeTraktId)
+            }
+            result.onSuccess {
+                val newWatched = current.watchedEpisodeNumbers.toMutableMap()
+                val seasonSet = newWatched[seasonNumber]?.toMutableSet() ?: mutableSetOf()
+                if (isWatched) {
+                    seasonSet.remove(episodeNumber)
+                } else {
+                    seasonSet.add(episodeNumber)
+                }
+                if (seasonSet.isEmpty()) {
+                    newWatched.remove(seasonNumber)
+                } else {
+                    newWatched[seasonNumber] = seasonSet
+                }
+                _uiState.value = _uiState.value.copy(
+                    watchedEpisodeNumbers = newWatched,
+                    togglingEpisode = null
+                )
+            }.onFailure {
+                _uiState.value = _uiState.value.copy(togglingEpisode = null)
+            }
+        }
+    }
+
     /**
      * 启动搜索：中英文并行搜索，源级别先到先显示，全部完成后合并去重
      */
@@ -370,7 +625,6 @@ class DetailViewModel @Inject constructor(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSearching = true, error = null)
-            val startTime = System.currentTimeMillis()
 
             val isShow = currentMediaType == MediaType.SHOW
             val hasEnglish = currentOriginalTitle.isNotEmpty()
@@ -393,7 +647,6 @@ class DetailViewModel @Inject constructor(
                             chineseItems = items
                             if (!firstResultShown && items.isNotEmpty()) {
                                 firstResultShown = true
-                                Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                                 _uiState.value = _uiState.value.copy(isSearching = false)
                             }
                             updateSearchResults(chineseItems, englishItems, isShow)
@@ -404,7 +657,6 @@ class DetailViewModel @Inject constructor(
                             englishItems = items
                             if (!firstResultShown && items.isNotEmpty()) {
                                 firstResultShown = true
-                                Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                                 _uiState.value = _uiState.value.copy(isSearching = false)
                             }
                             updateSearchResults(chineseItems, englishItems, isShow)
@@ -422,7 +674,6 @@ class DetailViewModel @Inject constructor(
                     chineseItems = items
                     if (!firstResultShown && items.isNotEmpty()) {
                         firstResultShown = true
-                        Log.d("SearchPerf", "First result displayed after ${System.currentTimeMillis() - startTime}ms")
                         _uiState.value = _uiState.value.copy(isSearching = false)
                     }
                     updateSearchResults(chineseItems, englishItems, isShow)
@@ -461,10 +712,12 @@ class DetailViewModel @Inject constructor(
             allResources, state.enabledSources, state.enabledDiskTypes
         )
         val viewedUrls = viewedItemStorage.getviewedUrls()
+        val favoriteUrls = favoriteResourceStorage.getFavoriteUrls()
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
             resources = filtered,
-            viewedUrls = viewedUrls
+            viewedUrls = viewedUrls,
+            favoriteUrls = favoriteUrls
         )
     }
 
@@ -583,11 +836,12 @@ class DetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             if (targetState) {
-                // 标记为已看
+                // 标记为已看：后端会自动从想看列表移除
                 traktRepository.markAsWatched(currentTraktId, currentMediaType)
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = true,
+                            isMarkedWatchlist = false,
                             isMarkingWatched = false
                         )
                     }
@@ -599,11 +853,12 @@ class DetailViewModel @Inject constructor(
                         )
                     }
             } else {
-                // 取消标记：移除已看记录并重新加回想看
+                // 取消标记：后端会自动重新加入想看列表
                 traktRepository.removeWatched(currentTraktId, currentMediaType)
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = false,
+                            isMarkedWatchlist = true,
                             isMarkingWatched = false
                         )
                     }
@@ -614,12 +869,53 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 切换想看状态：添加/移除想看 */
+    fun toggleWatchlist() {
+        val current = _uiState.value
+        if (current.isMarkingWatchlist) return
+
+        val targetState = !current.isMarkedWatchlist
+        _uiState.value = current.copy(
+            isMarkingWatchlist = true,
+            watchlistChanged = targetState || current.watchlistChanged
+        )
+
+        viewModelScope.launch {
+            val result = if (targetState) {
+                traktRepository.addToWatchlist(currentTraktId, currentMediaType)
+            } else {
+                traktRepository.removeFromWatchlist(currentTraktId, currentMediaType)
+            }
+            if (result.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    isMarkedWatchlist = targetState,
+                    isMarkingWatchlist = false
+                )
+            } else {
+                _uiState.value = _uiState.value.copy(isMarkingWatchlist = false)
+            }
+        }
+    }
+
     fun markResourceViewed(url: String) {
         val current = _uiState.value.viewedUrls
         if (url in current) return
         viewModelScope.launch {
             viewedItemStorage.markViewed(url)
             _uiState.value = _uiState.value.copy(viewedUrls = current + url)
+        }
+    }
+
+    fun toggleFavorite(item: ResourceItem) {
+        viewModelScope.launch {
+            val nowFavorite = favoriteResourceStorage.toggleFavorite(item)
+            _uiState.value = _uiState.value.copy(
+                favoriteUrls = if (nowFavorite) {
+                    _uiState.value.favoriteUrls + item.url
+                } else {
+                    _uiState.value.favoriteUrls - item.url
+                }
+            )
         }
     }
 

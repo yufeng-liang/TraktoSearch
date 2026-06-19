@@ -242,10 +242,6 @@ class ResourceRepository @Inject constructor(
         }
     }
 
-    fun clearCache() {
-        cache.clear()
-    }
-
     /**
      * 直接从缓存拿全量（不调 API，不按 filter 过滤）。
      * 如果缓存不存在返回空。
@@ -259,15 +255,6 @@ class ResourceRepository @Inject constructor(
         } else {
             emptyList()
         }
-    }
-
-    /**
-     * 检查缓存是否存在且有效
-     */
-    fun hasValidCache(keyword: String): Boolean {
-        if (keyword.isBlank()) return false
-        val cached = cache[keyword] ?: return false
-        return System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS
     }
 
     private fun cloudTypesForPanSou(types: Set<DiskType>): String {
@@ -366,11 +353,7 @@ class ResourceRepository @Inject constructor(
 
     private suspend fun searchZreso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
         return try {
-            val cloud = if (enabledDiskTypes == ALL_DISK_TYPES || enabledDiskTypes.size > 1) {
-                enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
-            } else {
-                enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
-            }
+            val cloud = enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
             val response = withTimeoutOrNull(8_000) {
                 zresoApiService.search(keyword = keyword, cloud = cloud)
             } ?: return emptyList()

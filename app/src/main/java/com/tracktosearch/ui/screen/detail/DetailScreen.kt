@@ -14,7 +14,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -26,7 +25,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,7 +35,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -47,21 +44,21 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -75,10 +72,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -89,13 +86,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -113,8 +109,8 @@ import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.tracktosearch.R
@@ -122,6 +118,7 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
@@ -151,6 +148,8 @@ fun DetailScreen(
     traktRating: Double = 0.0,
     onBack: (changed: Boolean) -> Unit = {},
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -166,7 +165,7 @@ fun DetailScreen(
     }
 
     val listState = rememberLazyListState()
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
 
     // 评论翻译映射
@@ -226,6 +225,10 @@ fun DetailScreen(
                         isMarkedWatched = uiState.isMarkedWatched,
                         isMarkingWatched = uiState.isMarkingWatched,
                         onToggleWatched = { viewModel.toggleWatched() },
+                        isMarkedWatchlist = uiState.isMarkedWatchlist,
+                        isMarkingWatchlist = uiState.isMarkingWatchlist,
+                        onToggleWatchlist = { viewModel.toggleWatchlist() },
+                        onRatingClick = { viewModel.setRating(it) },
                         onPosterClick = { showPosterFullscreen = true },
                         onPersonClick = onPersonClick
                     )
@@ -233,7 +236,7 @@ fun DetailScreen(
 
                 // Tab 行（吸顶，共用同一个）
                 stickyHeader(key = "tab_row") {
-                    TabRow(selectedTabIndex = selectedTab) {
+                    PrimaryTabRow(selectedTabIndex = selectedTab) {
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
@@ -243,6 +246,11 @@ fun DetailScreen(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
                             text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
+                        )
+                        Tab(
+                            selected = selectedTab == 2,
+                            onClick = { selectedTab = 2 },
+                            text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})") }
                         )
                     }
                 }
@@ -266,8 +274,12 @@ fun DetailScreen(
                                 seasons = uiState.seasons,
                                 episodes = uiState.episodes,
                                 expandedSeasons = uiState.expandedSeasons,
+                                watchedEpisodeNumbers = uiState.watchedEpisodeNumbers,
+                                togglingEpisode = uiState.togglingEpisode,
                                 onToggleSeason = { viewModel.toggleSeason(it) },
-                                onEpisodeClick = { _, _ -> }
+                                onToggleEpisodeWatched = { season, episode, traktId ->
+                                    viewModel.toggleEpisodeWatched(season, episode, traktId)
+                                }
                             )
                             HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                         }
@@ -304,7 +316,10 @@ fun DetailScreen(
                                         viewModel.markResourceViewed(item.url)
                                         openResourceLink(context, item)
                                     },
-                                    index = index
+                                    index = index,
+                                    isFavorite = item.url in uiState.favoriteUrls,
+                                    showFavoriteIcon = true,
+                                    onToggleFavorite = { viewModel.toggleFavorite(item) }
                                 )
                             }
                             if (displayedCount < items.size) {
@@ -386,6 +401,20 @@ fun DetailScreen(
                         }
                     }
 
+                    if (uiState.commentsError && commentsToShow.isEmpty()) {
+                        item(key = "comments_error") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.detail_load_error),
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
                     items(
                         items = commentsToShow,
                         key = { it.id }
@@ -434,6 +463,92 @@ fun DetailScreen(
                         }
                     }
                 }
+
+                // ===== 推荐 Tab 内容 =====
+                if (selectedTab == 2) {
+                    val recommendations = uiState.recommendations
+                    when {
+                        uiState.isLoadingRecommendations -> {
+                            item(key = "rec_loading") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator()
+                                }
+                            }
+                        }
+                        uiState.recommendationsError -> {
+                            item(key = "rec_error") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.detail_load_error),
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
+                        }
+                        recommendations.isEmpty() -> {
+                            item(key = "rec_empty") {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.detail_no_recommendations),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            item(key = "rec_header") {
+                                Text(
+                                    text = stringResource(R.string.detail_recommendations_title),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
+                                )
+                            }
+                            recommendations.chunked(3).forEachIndexed { rowIndex, rowItems ->
+                                item(key = "rec_row_$rowIndex") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        rowItems.forEach { item ->
+                                            MovieCard(
+                                                title = item.displayTitle.ifEmpty { item.title },
+                                                year = item.year,
+                                                genres = item.genres,
+                                                posterUrl = item.posterUrl,
+                                                tmdbId = item.tmdbId,
+                                                onClick = {
+                                                    if (mediaType == MediaType.MOVIE) {
+                                                        onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
+                                                    } else {
+                                                        onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
+                                                    }
+                                                },
+                                                modifier = Modifier.weight(1f),
+                                                isInWatchlist = item.isInWatchlist,
+                                                isWatched = item.isWatched
+                                            )
+                                        }
+                                        repeat(3 - rowItems.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // 返回按钮（半透明背景 + Haze 模糊增强）
@@ -478,6 +593,63 @@ fun DetailScreen(
                 )
             }
 
+            // 分享按钮（半透明背景 + Haze 模糊增强）
+            val context = LocalContext.current
+            Box(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(end = 12.dp, top = 4.dp)
+                    .align(Alignment.TopEnd)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .hazeEffect(
+                        state = detailHazeState,
+                        style = HazeStyle(
+                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            blurRadius = 20.dp,
+                            noiseFactor = 0f,
+                            tint = null
+                        )
+                    )
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        shape = CircleShape
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            val shareText = buildString {
+                                append(uiState.title)
+                                if (uiState.year != null) append(" (${uiState.year})")
+                                append("\n")
+                                if (uiState.overview.isNotBlank()) {
+                                    append(uiState.overview)
+                                    append("\n")
+                                }
+                            }
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(intent, null))
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Filled.Share,
+                    contentDescription = stringResource(R.string.detail_share),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
             ScrollToTopButton(
                 listState = listState,
                 modifier = Modifier
@@ -509,6 +681,10 @@ private fun DetailHeaderContent(
     isMarkedWatched: Boolean,
     isMarkingWatched: Boolean,
     onToggleWatched: () -> Unit,
+    isMarkedWatchlist: Boolean,
+    isMarkingWatchlist: Boolean,
+    onToggleWatchlist: () -> Unit,
+    onRatingClick: (Int) -> Unit,
     onPosterClick: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
 ) {
@@ -631,64 +807,173 @@ private fun DetailHeaderContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // 多平台评分
+                // 多平台评分（始终预留固定高度，避免加载前后按钮位置跳动）
+                Spacer(modifier = Modifier.height(10.dp))
                 if (uiState.ratings != null) {
-                    Spacer(modifier = Modifier.height(6.dp))
                     RatingsRow(uiState.ratings)
+                } else {
+                    // 骨架占位：两行评分高度
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(20.dp)
+                            ) {}
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(20.dp)
+                            ) {}
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(20.dp)
+                            ) {}
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(20.dp)
+                            ) {}
+                        }
+                    }
                 }
-                // 标记已看按钮（起点对齐评分行右列MTC位置）
+                // 用户评分控件（评分行下方、按钮上方）
+                UserRatingBar(
+                    userRating = uiState.userRating,
+                    isRating = uiState.isRating,
+                    isRatingLoading = uiState.isRatingLoading,
+                    onRatingClick = onRatingClick
+                )
+                // 标记已看按钮 + 想看按钮（已看按钮对齐 RT 评分起点）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    Surface(
-                        onClick = if (isMarkingWatched) ({}) else onToggleWatched,
-                        enabled = !isMarkingWatched,
-                        shape = RoundedCornerShape(16.dp),
-                        border = if (!isMarkedWatched && !isMarkingWatched) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
-                        color = when {
-                            isMarkingWatched -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                            isMarkedWatched -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                            else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                        },
-                        tonalElevation = 0.dp,
-                        shadowElevation = 0.dp,
-                        modifier = Modifier.height(32.dp)
+                    // 左半区：想看按钮
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        Surface(
+                            onClick = if (isMarkingWatchlist) ({}) else onToggleWatchlist,
+                            enabled = !isMarkingWatchlist,
+                            shape = RoundedCornerShape(16.dp),
+                            border = if (!isMarkedWatchlist && !isMarkingWatchlist) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
+                            color = when {
+                                isMarkingWatchlist -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                isMarkedWatchlist -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                            },
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
+                            modifier = Modifier.height(32.dp)
                         ) {
-                            if (isMarkingWatched) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (isMarkedWatched) Icons.Filled.Check else Icons.Filled.Visibility,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(15.dp),
-                                    tint = if (isMarkedWatched) MaterialTheme.colorScheme.primary
-                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                if (isMarkingWatchlist) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (isMarkedWatchlist) Icons.Filled.Check else Icons.Filled.BookmarkBorder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                        tint = if (isMarkedWatchlist) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    text = when {
+                                        isMarkingWatchlist -> stringResource(R.string.detail_mark_processing)
+                                        isMarkedWatchlist -> stringResource(R.string.detail_marked_watchlist)
+                                        else -> stringResource(R.string.detail_mark_watchlist)
+                                    },
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                    color = when {
+                                        isMarkingWatchlist -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        isMarkedWatchlist -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
                                 )
                             }
-                            Text(
-                                text = when {
-                                    isMarkingWatched -> stringResource(R.string.detail_mark_processing)
-                                    isMarkedWatched -> stringResource(R.string.detail_marked_watched)
-                                    else -> stringResource(R.string.detail_mark_watched)
-                                },
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                                color = when {
-                                    isMarkingWatched -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    isMarkedWatched -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.onSurface
+                        }
+                    }
+                    // 右半区：已看按钮（起点对齐 RT 评分）
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Surface(
+                            onClick = if (isMarkingWatched) ({}) else onToggleWatched,
+                            enabled = !isMarkingWatched,
+                            shape = RoundedCornerShape(16.dp),
+                            border = if (!isMarkedWatched && !isMarkingWatched) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
+                            color = when {
+                                isMarkingWatched -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                isMarkedWatched -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                            },
+                            tonalElevation = 0.dp,
+                            shadowElevation = 0.dp,
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                if (isMarkingWatched) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (isMarkedWatched) Icons.Filled.Check else Icons.Filled.Visibility,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(15.dp),
+                                        tint = if (isMarkedWatched) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                            )
+                                Text(
+                                    text = when {
+                                        isMarkingWatched -> stringResource(R.string.detail_mark_processing)
+                                        isMarkedWatched -> stringResource(R.string.detail_marked_watched)
+                                        else -> stringResource(R.string.detail_mark_watched)
+                                    },
+                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
+                                    color = when {
+                                        isMarkingWatched -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                        isMarkedWatched -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -803,28 +1088,36 @@ private fun RatingsRow(ratings: MultiRatings) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (row1.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        // 第一行：始终渲染，无数据时用透明占位保持高度
+        Row(
+            modifier = Modifier.fillMaxWidth().height(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (row1.isNotEmpty()) {
                 for ((label, color, value) in row1) {
                     RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
                 }
                 if (row1.size == 1) Spacer(modifier = Modifier.weight(1f))
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
-        if (row2.isNotEmpty()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        // 第二行：始终渲染，无数据时用透明占位保持高度
+        Row(
+            modifier = Modifier.fillMaxWidth().height(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (row2.isNotEmpty()) {
                 for ((label, color, value) in row2) {
                     RatingBadge(label = label, color = color, value = value, modifier = Modifier.weight(1f))
                 }
                 if (row2.size == 1) Spacer(modifier = Modifier.weight(1f))
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -883,6 +1176,66 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+// ==================== 用户评分控件 ====================
+
+@Composable
+private fun UserRatingBar(
+    userRating: Int?,
+    isRating: Boolean,
+    isRatingLoading: Boolean,
+    onRatingClick: (Int) -> Unit
+) {
+    val starColor = Color(0xFFFFC107)
+    val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+
+    Column(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)) {
+        // 标签行：我的评分 + 已评分数字
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = stringResource(R.string.detail_your_rating),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (userRating != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "$userRating/10",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = starColor
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(2.dp))
+        // 星标行
+        if (isRatingLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 1.5.dp
+            )
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+                for (i in 1..10) {
+                    val isFilled = userRating != null && i <= userRating
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = !isRating,
+                                onClick = { onRatingClick(i) }
+                            ),
+                        tint = if (isFilled) starColor else emptyColor
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -1344,8 +1697,10 @@ private fun SeasonsSection(
     seasons: List<TraktSeason>,
     episodes: Map<Int, List<TraktEpisode>>,
     expandedSeasons: Set<Int>,
+    watchedEpisodeNumbers: Map<Int, Set<Int>>,
+    togglingEpisode: Pair<Int, Int>?,
     onToggleSeason: (Int) -> Unit,
-    onEpisodeClick: (seasonNumber: Int, episodeNumber: Int) -> Unit = { _, _ -> }
+    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
@@ -1365,8 +1720,10 @@ private fun SeasonsSection(
                 season = season,
                 episodes = episodes,
                 expandedSeasons = expandedSeasons,
+                watchedEpisodeNumbers = watchedEpisodeNumbers,
+                togglingEpisode = togglingEpisode,
                 onToggleSeason = onToggleSeason,
-                onEpisodeClick = onEpisodeClick
+                onToggleEpisodeWatched = onToggleEpisodeWatched
             )
         }
 
@@ -1414,15 +1771,14 @@ private fun SeasonsSection(
                             )
                         } else {
                             episodeList.forEach { ep ->
-                                Text(
-                                    text = stringResource(R.string.detail_episode, ep.number, ep.title),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier
-                                        .padding(vertical = 2.dp)
-                                        .clickable(
-                                            interactionSource = MutableInteractionSource(),
-                                            indication = null
-                                        ) { onEpisodeClick(0, ep.number) }
+                                EpisodeRow(
+                                    episode = ep,
+                                    seasonNumber = season.number,
+                                    isWatched = ep.number in (watchedEpisodeNumbers[season.number] ?: emptySet()),
+                                    isToggling = togglingEpisode == Pair(season.number, ep.number),
+                                    onToggleWatched = {
+                                        onToggleEpisodeWatched(season.number, ep.number, ep.ids.trakt)
+                                    }
                                 )
                             }
                         }
@@ -1438,8 +1794,10 @@ private fun SeasonRow(
     season: TraktSeason,
     episodes: Map<Int, List<TraktEpisode>>,
     expandedSeasons: Set<Int>,
+    watchedEpisodeNumbers: Map<Int, Set<Int>>,
+    togglingEpisode: Pair<Int, Int>?,
     onToggleSeason: (Int) -> Unit,
-    onEpisodeClick: (seasonNumber: Int, episodeNumber: Int) -> Unit
+    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
     val isExpanded = season.number in expandedSeasons
     Column {
@@ -1482,19 +1840,69 @@ private fun SeasonRow(
                     )
                 } else {
                     episodeList.forEach { ep ->
-                        Text(
-                            text = stringResource(R.string.detail_episode, ep.number, ep.title),
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier
-                                .padding(vertical = 2.dp)
-                                .clickable(
-                                    interactionSource = MutableInteractionSource(),
-                                    indication = null
-                                ) { onEpisodeClick(season.number, ep.number) }
+                        EpisodeRow(
+                            episode = ep,
+                            seasonNumber = season.number,
+                            isWatched = ep.number in (watchedEpisodeNumbers[season.number] ?: emptySet()),
+                            isToggling = togglingEpisode == Pair(season.number, ep.number),
+                            onToggleWatched = {
+                                onToggleEpisodeWatched(season.number, ep.number, ep.ids.trakt)
+                            }
                         )
                     }
                 }
             }
+        }
+    }
+}
+
+/** 单集行：集号+标题 + 已看切换图标 */
+@Composable
+private fun EpisodeRow(
+    episode: TraktEpisode,
+    seasonNumber: Int,
+    isWatched: Boolean,
+    isToggling: Boolean,
+    onToggleWatched: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.detail_episode, episode.number, episode.title),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (isWatched) MaterialTheme.colorScheme.onSurfaceVariant
+            else MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier
+                .weight(1f)
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onToggleWatched
+                )
+        )
+        if (isToggling) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp).padding(2.dp),
+                strokeWidth = 2.dp
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Filled.CheckCircle,
+                contentDescription = if (isWatched) "已看" else "未看",
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onToggleWatched
+                    ),
+                tint = if (isWatched) Color(0xFF4CAF50)
+                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+            )
         }
     }
 }
@@ -1546,563 +1954,6 @@ private fun EmptyState(onRetry: () -> Unit) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.detail_retry))
-            }
-        }
-    }
-}
-
-// ==================== 资源 Tab（独立滚动，含头部） ====================
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun ResourcesLazyContent(
-    uiState: DetailUiState,
-    tmdbId: Int,
-    listState: LazyListState,
-    selectedTab: Int,
-    onTabChange: (Int) -> Unit,
-    isMarkedWatched: Boolean,
-    isMarkingWatched: Boolean,
-    onToggleWatched: () -> Unit,
-    onPosterClick: () -> Unit,
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
-    onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit,
-    onResourceClick: (ResourceItem) -> Unit,
-    onRetry: () -> Unit,
-    onToggleSeason: (Int) -> Unit
-) {
-    val items = uiState.resources
-    val enabledSources = uiState.enabledSources
-    val enabledDiskTypes = uiState.enabledDiskTypes
-    val viewedUrls = uiState.viewedUrls
-    val isSearching = uiState.isSearching
-    val searchAttempted = uiState.searchAttempted
-
-    val initialCount = 30
-    var displayedCount by remember { mutableIntStateOf(initialCount.coerceAtMost(items.size)) }
-
-    // 数据到达时更新 displayedCount（解决初始化时 items 为空导致 displayedCount=0 的竞态）
-    LaunchedEffect(items.size) {
-        if (items.isNotEmpty() && displayedCount == 0) {
-            displayedCount = initialCount.coerceAtMost(items.size)
-        }
-    }
-
-    // 滚动到底部自动加载更多资源
-    val shouldLoadMoreResources by remember {
-        derivedStateOf {
-            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
-            lastVisibleItem != null && lastVisibleItem.index >= listState.layoutInfo.totalItemsCount - 2
-        }
-    }
-    LaunchedEffect(shouldLoadMoreResources) {
-        if (shouldLoadMoreResources && displayedCount < items.size) {
-            displayedCount = (displayedCount + 30).coerceAtMost(items.size)
-        }
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp)
-    ) {
-        // 头部信息（随内容滚动）
-        item {
-            DetailHeaderContent(
-                uiState = uiState,
-                tmdbId = tmdbId,
-                isMarkedWatched = isMarkedWatched,
-                isMarkingWatched = isMarkingWatched,
-                onToggleWatched = onToggleWatched,
-                onPosterClick = onPosterClick,
-                onPersonClick = onPersonClick
-            )
-        }
-
-        // Tab 行（吸顶）
-        stickyHeader {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onTabChange(0) },
-                    text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onTabChange(1) },
-                    text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
-                )
-            }
-        }
-        // 筛选器
-        item {
-            FilterSection(
-                enabledSources = enabledSources,
-                enabledDiskTypes = enabledDiskTypes,
-                onToggleSource = onToggleSource,
-                onToggleDiskType = onToggleDiskType
-            )
-        }
-
-        // 季/集信息（仅电视剧）
-        if (uiState.seasons.isNotEmpty()) {
-            item {
-                SeasonsSection(
-                    seasons = uiState.seasons,
-                    episodes = uiState.episodes,
-                    expandedSeasons = uiState.expandedSeasons,
-                    onToggleSeason = onToggleSeason,
-                    onEpisodeClick = { _, _ -> }
-                )
-                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-            }
-        }
-
-        // 资源列表
-        when {
-            isSearching -> {
-                item {
-                    SearchingState(
-                        sourceCount = enabledSources.size,
-                        diskTypeCount = enabledDiskTypes.size
-                    )
-                }
-            }
-            items.isEmpty() && searchAttempted -> {
-                item { EmptyState(onRetry = onRetry) }
-            }
-            else -> {
-                item {
-                    Text(
-                        text = stringResource(R.string.detail_found_resources, items.size),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
-                    )
-                }
-                itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }) { index, item ->
-                    ResourceItemCard(
-                        item = item,
-                        isViewed = item.url in viewedUrls,
-                        onClick = { onResourceClick(item) },
-                        index = index
-                    )
-                }
-                if (displayedCount < items.size) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.detail_load_more_text, displayedCount, items.size),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else if (items.size > initialCount) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.detail_all_loaded, items.size),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==================== 评论 Tab（独立滚动，含头部） ====================
-
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-private fun CommentsLazyContent(
-    uiState: DetailUiState,
-    tmdbId: Int,
-    listState: LazyListState,
-    selectedTab: Int,
-    onTabChange: (Int) -> Unit,
-    isMarkedWatched: Boolean,
-    isMarkingWatched: Boolean,
-    onToggleWatched: () -> Unit,
-    onPosterClick: () -> Unit,
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
-    onTranslateComments: (Int) -> Unit,
-    onLoadMoreComments: () -> Unit
-) {
-    val commentsToShow = uiState.comments
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 16.dp)
-    ) {
-        // 头部信息（随内容滚动）
-        item {
-            DetailHeaderContent(
-                uiState = uiState,
-                tmdbId = tmdbId,
-                isMarkedWatched = isMarkedWatched,
-                isMarkingWatched = isMarkingWatched,
-                onToggleWatched = onToggleWatched,
-                onPosterClick = onPosterClick,
-                onPersonClick = onPersonClick
-            )
-        }
-
-        // Tab 行（吸顶）
-        stickyHeader {
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { onTabChange(0) },
-                    text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { onTabChange(1) },
-                    text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
-                )
-            }
-        }
-        item(key = "comments_header") {
-            val translatedMap = remember(uiState.translatedComments) {
-                uiState.translatedComments.associateBy { it.id }
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.detail_comments),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.weight(1f)
-                )
-                if (commentsToShow.isNotEmpty() && uiState.translatedComments.size < commentsToShow.size) {
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                        modifier = Modifier
-                            .clickable(enabled = !uiState.isTranslating) { onTranslateComments(-1) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(3.dp)
-                        ) {
-                            if (uiState.isTranslating) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(13.dp),
-                                    strokeWidth = 1.5.dp
-                                )
-                            }
-                            Text(
-                                text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
-                                else stringResource(R.string.detail_translate_all),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        items(
-            items = commentsToShow,
-            key = { it.id }
-        ) { comment ->
-            val translatedMap = remember(uiState.translatedComments) {
-                uiState.translatedComments.associateBy { it.id }
-            }
-            CommentItem(
-                comment = comment,
-                translatedText = translatedMap[comment.id]?.comment,
-                onTranslate = onTranslateComments,
-                isTranslating = uiState.isTranslating,
-                isThisTranslating = (uiState.translatingCommentId == comment.id)
-            )
-        }
-
-        if (uiState.hasMoreComments || uiState.isLoadingMoreComments) {
-            item(key = "load_more_comments") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (uiState.isLoadingMoreComments) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 3.dp
-                        )
-                    } else {
-                        Text(
-                            text = stringResource(R.string.detail_load_more_comments),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        } else if (commentsToShow.size > 5) {
-            item(key = "all_comments_loaded") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.detail_all_comments_loaded, commentsToShow.size),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ==================== 资源 Tab（旧版，保留兼容） ====================
-
-private fun LazyListScope.resourcesTabItems(
-    uiState: DetailUiState,
-    onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit,
-    onResourceClick: (ResourceItem) -> Unit,
-    onRetry: () -> Unit,
-    onToggleSeason: (Int) -> Unit
-) {
-    val items = uiState.resources
-    val enabledSources = uiState.enabledSources
-    val enabledDiskTypes = uiState.enabledDiskTypes
-    val viewedUrls = uiState.viewedUrls
-    val isSearching = uiState.isSearching
-    val searchAttempted = uiState.searchAttempted
-
-    val initialCount = 30
-    val loadMoreStep = 30
-    var displayedCount by mutableStateOf(initialCount.coerceAtMost(items.size))
-
-    // 筛选器
-    item {
-        FilterSection(
-            enabledSources = enabledSources,
-            enabledDiskTypes = enabledDiskTypes,
-            onToggleSource = onToggleSource,
-            onToggleDiskType = onToggleDiskType
-        )
-    }
-
-    // 季/集信息（仅电视剧）
-    if (uiState.seasons.isNotEmpty()) {
-        item {
-            SeasonsSection(
-                seasons = uiState.seasons,
-                episodes = uiState.episodes,
-                expandedSeasons = uiState.expandedSeasons,
-                onToggleSeason = onToggleSeason,
-                onEpisodeClick = { _, _ -> }
-            )
-            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-        }
-    }
-
-    // 资源列表
-    when {
-        isSearching -> {
-            item {
-                SearchingState(
-                    sourceCount = enabledSources.size,
-                    diskTypeCount = enabledDiskTypes.size
-                )
-            }
-        }
-        items.isEmpty() && searchAttempted -> {
-            item {
-                EmptyState(onRetry = onRetry)
-            }
-        }
-        else -> {
-            item {
-                Text(
-                    text = stringResource(R.string.detail_found_resources, items.size),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
-                )
-            }
-            itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }) { index, item ->
-                ResourceItemCard(
-                    item = item,
-                    isViewed = item.url in viewedUrls,
-                    onClick = { onResourceClick(item) },
-                    index = index
-                )
-            }
-            if (displayedCount < items.size) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.detail_load_more_text, displayedCount, items.size),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else if (items.size > initialCount) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 16.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.detail_all_loaded, items.size),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ==================== 评论 Tab ====================
-
-private fun LazyListScope.commentsTabItems(
-    uiState: DetailUiState,
-    onTranslateComments: (Int) -> Unit,
-    onLoadMoreComments: () -> Unit
-) {
-    val commentsToShow = uiState.comments
-
-    item(key = "comments_header") {
-        val translatedMap = remember(uiState.translatedComments) {
-            uiState.translatedComments.associateBy { it.id }
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.detail_comments),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            if (commentsToShow.isNotEmpty() && uiState.translatedComments.size < commentsToShow.size) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-                    modifier = Modifier
-                        .clickable(enabled = !uiState.isTranslating) { onTranslateComments(-1) }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp)
-                    ) {
-                        if (uiState.isTranslating) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(13.dp),
-                                strokeWidth = 1.5.dp
-                            )
-                        }
-                        Text(
-                            text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
-                            else stringResource(R.string.detail_translate_all),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    items(
-        items = commentsToShow,
-        key = { it.id }
-    ) { comment ->
-        val translatedMap = remember(uiState.translatedComments) {
-            uiState.translatedComments.associateBy { it.id }
-        }
-        CommentItem(
-            comment = comment,
-            translatedText = translatedMap[comment.id]?.comment,
-            onTranslate = onTranslateComments,
-            isTranslating = uiState.isTranslating,
-            isThisTranslating = (uiState.translatingCommentId == comment.id)
-        )
-    }
-
-    if (uiState.hasMoreComments || uiState.isLoadingMoreComments) {
-        item(key = "load_more_comments") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                if (uiState.isLoadingMoreComments) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        strokeWidth = 3.dp
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.detail_load_more_comments),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    } else if (commentsToShow.size > 5) {
-        item(key = "all_comments_loaded") {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.detail_all_comments_loaded, commentsToShow.size),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
     }
@@ -2242,7 +2093,7 @@ private fun CommentItem(
 
 // ==================== 工具函数 ====================
 
-private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
+internal fun openResourceLink(context: android.content.Context, item: ResourceItem) {
     val appScheme = when (item.diskType) {
         DiskType.QUARK -> "quark://"
         DiskType.BAIDU -> "baidunetdisk://"
@@ -2298,6 +2149,7 @@ private fun PosterFullscreenOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
 
     // 进入时检查是否已保存
@@ -2393,7 +2245,7 @@ private fun PosterFullscreenOverlay(
                 if (isSaved == true) {
                     Toast.makeText(context, "已保存到相册", Toast.LENGTH_SHORT).show()
                 } else {
-                    savePosterToGallery(context, posterUrl, title) {
+                    savePosterToGallery(context, scope, posterUrl, title) {
                         isSaved = true
                     }
                 }
@@ -2436,9 +2288,9 @@ private fun PosterFullscreenOverlay(
     }
 }
 
-private fun savePosterToGallery(context: android.content.Context, posterUrl: String, title: String, onSaved: () -> Unit = {}) {
+private fun savePosterToGallery(context: android.content.Context, scope: CoroutineScope, posterUrl: String, title: String, onSaved: () -> Unit = {}) {
     val imageLoader = context.imageLoader
-    GlobalScope.launch(Dispatchers.IO) {
+    scope.launch(Dispatchers.IO) {
         try {
             val result = imageLoader.execute(
                 ImageRequest.Builder(context)
@@ -2448,7 +2300,7 @@ private fun savePosterToGallery(context: android.content.Context, posterUrl: Str
             )
             val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
             if (bitmap != null) {
-                saveBitmapToGallery(context, bitmap, title)
+                saveBitmapToGallery(context, scope, bitmap, title)
                 onSaved()
             }
         } catch (_: Exception) {
@@ -2459,7 +2311,7 @@ private fun savePosterToGallery(context: android.content.Context, posterUrl: Str
     }
 }
 
-private fun saveBitmapToGallery(context: android.content.Context, bitmap: Bitmap, title: String) {
+private fun saveBitmapToGallery(context: android.content.Context, scope: CoroutineScope, bitmap: Bitmap, title: String) {
     val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
     val filename = "TrackToSearch_${safeName}.jpg"
     val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
@@ -2467,7 +2319,7 @@ private fun saveBitmapToGallery(context: android.content.Context, bitmap: Bitmap
     // 检查是否已存在同名文件（防重复保存）
     val existingUri = queryExistingFile(context, filename, relativePath)
     if (existingUri != null) {
-        GlobalScope.launch(Dispatchers.Main) {
+        scope.launch(Dispatchers.Main) {
             Toast.makeText(context, "已存在: $filename", Toast.LENGTH_SHORT).show()
         }
         return
@@ -2483,7 +2335,7 @@ private fun saveBitmapToGallery(context: android.content.Context, bitmap: Bitmap
         context.contentResolver.openOutputStream(uri)?.use { stream ->
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
         }
-        GlobalScope.launch(Dispatchers.Main) {
+        scope.launch(Dispatchers.Main) {
             Toast.makeText(context, "已保存: $relativePath/$filename", Toast.LENGTH_SHORT).show()
         }
     }

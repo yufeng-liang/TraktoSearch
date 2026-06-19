@@ -99,3 +99,45 @@ data class TmdbReviewAuthor(
     val avatar_path: String? = null,
     val rating: Double? = null
 )
+
+@Serializable
+data class TmdbPerson(
+    val id: Int = 0,
+    val name: String = "",
+    val birthday: String? = null,
+    val deathday: String? = null,
+    val biography: String = "",
+    val place_of_birth: String? = null,
+    val profile_path: String? = null,
+    val known_for_department: String = ""
+)
+
+@Serializable
+data class TmdbPersonMovieCredits(
+    val cast: List<TmdbPersonMovieCredit> = emptyList()
+)
+
+@Serializable
+data class TmdbPersonMovieCredit(
+    val id: Int = 0,
+    val title: String = "",
+    val poster_path: String? = null,
+    val character: String = "",
+    val release_date: String = "",
+    val vote_average: Double = 0.0
+)
+
+@Serializable
+data class TmdbPersonTvCredits(
+    val cast: List<TmdbPersonTvCredit> = emptyList()
+)
+
+@Serializable
+data class TmdbPersonTvCredit(
+    val id: Int = 0,
+    val name: String = "",
+    val poster_path: String? = null,
+    val character: String = "",
+    val first_air_date: String = "",
+    val vote_average: Double = 0.0
+)

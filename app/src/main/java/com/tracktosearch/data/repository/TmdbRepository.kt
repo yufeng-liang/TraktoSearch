@@ -185,34 +185,6 @@ class TmdbRepository @Inject constructor(
         rating = 0.0
     )
 
-    fun buildPosterUrl(posterPath: String?): String? {
-        return posterPath?.let { "$IMAGE_BASE_URL$it" }
-    }
-
-    suspend fun getMovieDetail(tmdbId: Int): TmdbMovieDetail? {
-        movieDetailCache[tmdbId]?.let { return it }
-        return try {
-            val response = tmdbApiService.getMovieDetail(tmdbId)
-            if (response.isSuccessful) {
-                response.body()?.also { movieDetailCache[tmdbId] = it }
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
-    suspend fun getTvDetail(tmdbId: Int): TmdbTvDetail? {
-        tvDetailCache[tmdbId]?.let { return it }
-        return try {
-            val response = tmdbApiService.getTvDetail(tmdbId)
-            if (response.isSuccessful) {
-                response.body()?.also { tvDetailCache[tmdbId] = it }
-            } else null
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     suspend fun getCredits(tmdbId: Int, mediaType: MediaType): TmdbCreditsResponse? {
         creditsCache[tmdbId]?.let { return it }
         return try {
@@ -228,10 +200,6 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    fun buildProfileUrl(profilePath: String?): String? {
-        return profilePath?.let { "$IMAGE_BASE_URL$it" }
-    }
-
     suspend fun getReviews(tmdbId: Int, mediaType: MediaType, page: Int = 1): TmdbReviewsResponse? {
         return try {
             val response = when (mediaType) {
@@ -242,5 +210,40 @@ class TmdbRepository @Inject constructor(
         } catch (_: Exception) {
             null
         }
+    }
+
+    suspend fun getPersonDetail(personId: Int): TmdbPerson? {
+        return try {
+            val response = tmdbApiService.getPersonDetail(personId)
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    suspend fun getPersonMovieCredits(personId: Int): List<TmdbPersonMovieCredit> {
+        return try {
+            val response = tmdbApiService.getPersonMovieCredits(personId)
+            if (response.isSuccessful) {
+                response.body()?.cast?.sortedByDescending { it.vote_average }?.take(20) ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getPersonTvCredits(personId: Int): List<TmdbPersonTvCredit> {
+        return try {
+            val response = tmdbApiService.getPersonTvCredits(personId)
+            if (response.isSuccessful) {
+                response.body()?.cast?.sortedByDescending { it.vote_average }?.take(20) ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun buildProfileUrl(profilePath: String?): String? {
+        return profilePath?.let { "$IMAGE_BASE_URL$it" }
     }
 }

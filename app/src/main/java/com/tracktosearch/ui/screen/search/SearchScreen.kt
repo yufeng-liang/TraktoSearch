@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,8 +24,9 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -56,6 +56,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.dto.ResourceType
+import com.tracktosearch.data.remote.dto.inferResourceType
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.EmptyView
@@ -92,8 +94,6 @@ fun SearchScreen(
     }
     val viewedUrls by viewedItemStorage.viewedUrls.collectAsState(initial = emptySet())
 
-    val searchHistoryLoaded by remember { derivedStateOf { uiState.searchHistoryLoaded } }
-
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -101,6 +101,14 @@ fun SearchScreen(
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
         focusManager.clearFocus()
+    }
+
+    // 有搜索结果时，返回手势清空搜索并回到默认页（豆瓣热榜）
+    BackHandler(enabled = uiState.resources.isNotEmpty() || uiState.keyword.isNotEmpty()) {
+        searchQuery = ""
+        viewModel.clearResults()
+        focusManager.clearFocus()
+        keyboardController?.hide()
     }
 
     // 豆瓣热榜全量弹窗状态
@@ -248,13 +256,24 @@ fun SearchScreen(
                     // 搜索结果
                     var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
                     var filterExpanded by remember { mutableStateOf(false) }
+                    val typeFilter = uiState.typeFilter
 
-                    val filteredResources = remember(uiState.resources, selectedDiskType) {
-                        if (selectedDiskType != null) {
-                            uiState.resources.filter { it.diskType == selectedDiskType }
-                        } else {
-                            uiState.resources
-                        }
+                    val filteredResources = remember(uiState.resources, selectedDiskType, typeFilter) {
+                        uiState.resources
+                            .let { resources ->
+                                if (typeFilter != ResourceType.ALL) {
+                                    resources.filter { inferResourceType(it.name) == typeFilter }
+                                } else {
+                                    resources
+                                }
+                            }
+                            .let { resources ->
+                                if (selectedDiskType != null) {
+                                    resources.filter { it.diskType == selectedDiskType }
+                                } else {
+                                    resources
+                                }
+                            }
                     }
 
                     val listState = rememberLazyListState()
@@ -264,6 +283,31 @@ fun SearchScreen(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
+                            item {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 4.dp, bottom = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    FilterChip(
+                                        selected = typeFilter == ResourceType.ALL,
+                                        onClick = { viewModel.setTypeFilter(ResourceType.ALL) },
+                                        label = { Text("全部") }
+                                    )
+                                    FilterChip(
+                                        selected = typeFilter == ResourceType.MOVIE,
+                                        onClick = { viewModel.setTypeFilter(ResourceType.MOVIE) },
+                                        label = { Text("电影") }
+                                    )
+                                    FilterChip(
+                                        selected = typeFilter == ResourceType.SHOW,
+                                        onClick = { viewModel.setTypeFilter(ResourceType.SHOW) },
+                                        label = { Text("电视剧") }
+                                    )
+                                }
+                            }
                             item {
                                 Row(
                                     modifier = Modifier
@@ -357,7 +401,9 @@ fun SearchScreen(
                         },
                         onViewAll = { category ->
                             showDoubanAllDialog = category.id
-                        }
+                        },
+                        onRetry = { viewModel.retryDoubanCategory(it) },
+                        onRetryAll = { viewModel.retryAllDoubanHot() }
                     )
                 }
             }
@@ -392,8 +438,43 @@ fun SearchScreen(
 private fun DoubanHotContent(
     categories: List<DoubanHotCategory>,
     onItemClick: (DoubanHotItem) -> Unit,
-    onViewAll: (DoubanHotCategory) -> Unit
+    onViewAll: (DoubanHotCategory) -> Unit,
+    onRetry: (String) -> Unit,
+    onRetryAll: () -> Unit
 ) {
+    // 全部榜单加载失败时，显示整页重试
+    val allFailed = categories.isNotEmpty() && categories.all { it.error != null && it.items.isEmpty() }
+
+    if (allFailed) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudOff,
+                contentDescription = null,
+                modifier = Modifier.size(48.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                text = "热榜加载失败，请检查网络后重试",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = onRetryAll) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("重试")
+            }
+        }
+        return
+    }
+
     LazyColumn(
         contentPadding = PaddingValues(
             start = 16.dp,
@@ -418,7 +499,8 @@ private fun DoubanHotContent(
             DoubanHotCategorySection(
                 category = category,
                 onItemClick = onItemClick,
-                onViewAll = { onViewAll(category) }
+                onViewAll = { onViewAll(category) },
+                onRetry = { onRetry(category.id) }
             )
         }
     }
@@ -428,7 +510,8 @@ private fun DoubanHotContent(
 private fun DoubanHotCategorySection(
     category: DoubanHotCategory,
     onItemClick: (DoubanHotItem) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit
 ) {
     Column {
         // 榜单标题 + 全部按钮
@@ -466,11 +549,25 @@ private fun DoubanHotCategorySection(
                 }
             }
         } else if (category.error != null) {
-            Text(
-                text = category.error ?: "加载失败",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "加载失败",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.width(12.dp))
+                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("重试", style = MaterialTheme.typography.labelSmall)
+                }
+            }
         } else {
             // 横向滚动卡片列表
             LazyRow(

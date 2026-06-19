@@ -38,11 +38,21 @@
     <string name="watchlist_search_no_movies">No movies match your search</string>
     <string name="watchlist_search_no_shows">No TV shows match your search</string>
     <string name="watchlist_logout">Logout</string>
+    <string name="watchlist_mode_watchlist">Watchlist</string>
+    <string name="watchlist_tab_history">History</string>
+    <string name="history_empty_movies">No watched movies yet</string>
+    <string name="history_empty_shows">No watched TV shows yet</string>
+    <string name="watchlist_mode_favorites">Favorites</string>
+    <string name="watchlist_favorites_empty">No favorite resources yet</string>
+    <string name="resource_favorite">Favorite</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">Back</string>
-    <string name="detail_mark_watched">Mark as Watched</string>
+    <string name="detail_share">Share</string>
     <string name="detail_marked_watched">Watched</string>
+    <string name="detail_mark_watched">Mark as Watched</string>
+    <string name="detail_mark_watchlist">Watchlist</string>
+    <string name="detail_marked_watchlist">In Watchlist</string>
     <string name="detail_mark_processing">Processing</string>
     <string name="detail_no_overview">No overview available</string>
     <string name="detail_overview_label">Overview</string>
@@ -125,6 +135,10 @@
     <string name="detail_spoiler">Spoiler</string>
     <string name="detail_tab_resources">Resources</string>
     <string name="detail_tab_comments">Comments</string>
+    <string name="detail_tab_recommendations">Recommendations</string>
+    <string name="detail_no_recommendations">No recommendations</string>
+    <string name="detail_load_error">Failed to load. Please retry.</string>
+    <string name="detail_recommendations_title">Related Recommendations</string>
     <string name="detail_translating">Translating…</string>
     <string name="detail_translate_failed">Translation failed</string>
     <string name="detail_translate">Translate</string>
@@ -143,6 +157,18 @@
     <string name="detail_cast_close">Close</string>
     <string name="detail_specials">Specials</string>
     <string name="detail_actor">Actor</string>
+    <string name="detail_your_rating">Your Rating</string>
+
+    <!-- Person Screen -->
+    <string name="person_movie_credits">Movie Credits</string>
+    <string name="person_tv_credits">TV Credits</string>
+    <string name="person_no_biography">No biography available</string>
+
+    <!-- Theme -->
+    <string name="settings_theme">Theme</string>
+    <string name="theme_system">Follow System</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_light">Light</string>
 
     <!-- Update -->
     <string name="update_title">New version available</string>
