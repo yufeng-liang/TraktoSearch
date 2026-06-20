@@ -18,7 +18,10 @@ data class TraktMovie(
     val title: String = "",
     val year: Int = 0,
     val ids: TraktIds = TraktIds(),
-    val rating: Double = 0.0
+    val rating: Double = 0.0,
+    val genres: List<String> = emptyList(),
+    @kotlinx.serialization.SerialName("poster_path")
+    val posterPath: String? = null
 )
 
 @Serializable
@@ -26,18 +29,21 @@ data class TraktShow(
     val title: String = "",
     val year: Int = 0,
     val ids: TraktIds = TraktIds(),
-    val rating: Double = 0.0
+    val rating: Double = 0.0,
+    val genres: List<String> = emptyList()
 )
 
 @Serializable
 data class TraktWatchlistMovieItem(
     val listed_at: String = "",
+    val watched_at: String = "",
     val movie: TraktMovie = TraktMovie()
 )
 
 @Serializable
 data class TraktWatchlistShowItem(
     val listed_at: String = "",
+    val watched_at: String = "",
     val show: TraktShow = TraktShow()
 )
 

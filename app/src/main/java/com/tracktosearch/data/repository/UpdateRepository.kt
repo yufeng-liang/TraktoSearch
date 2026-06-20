@@ -4,6 +4,8 @@ import android.util.Log
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import java.text.SimpleDateFormat
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,26 +33,123 @@ class UpdateRepository @Inject constructor(
         private const val RELEASE_REPO = "TrackToSearch-release"
     }
 
+    // 缓存上次获取的 changelog，避免重复请求
+    @Volatile
+    private var cachedChangelog: String? = null
+
+    @Volatile
+    private var cachedFullChangelog: String? = null
+
+    @Volatile
+    private var cachedLatestVersion: String? = null
+
+    /** 仅获取更新日志（带缓存），用于设置页展示 */
+    suspend fun fetchChangelog(): String {
+        cachedChangelog?.let { return it }
+        val info = checkForUpdate()
+        val changelog = info?.changelog ?: ""
+        cachedChangelog = changelog
+        if (info != null) cachedLatestVersion = info.latestVersion
+        return changelog
+    }
+
+    /** 获取所有版本的更新日志（带缓存），按版本从新到旧排列 */
+    suspend fun fetchAllChangelogs(): String {
+        cachedFullChangelog?.let { return it }
+
+        // 优先从 GitHub 获取所有 releases
+        val result = tryFetchAllFromGitHub() ?: tryFetchAllFromGitee()
+        if (result != null) {
+            cachedFullChangelog = result
+            return result
+        }
+        return ""
+    }
+
+    private suspend fun tryFetchAllFromGitHub(): String? {
+        return try {
+            val releases = gitHubApi.getAllReleases(GITHUB_OWNER, GITHUB_REPO)
+            if (releases.isEmpty()) return null
+            formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
+        } catch (e: Exception) {
+            Log.w(TAG, "GitHub fetch all releases failed", e)
+            null
+        }
+    }
+
+    private suspend fun tryFetchAllFromGitee(): String? {
+        return try {
+            val releases = giteeApi.getAllReleases(GITEE_OWNER, GITEE_REPO)
+            if (releases.isEmpty()) return null
+            formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
+        } catch (e: Exception) {
+            Log.w(TAG, "Gitee fetch all releases failed", e)
+            null
+        }
+    }
+
+    private fun formatAllChangelogs(releases: List<ReleaseInfo>): String {
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val inputFormats = arrayOf(
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
+            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
+            SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        )
+
+        return releases
+            .filter { it.body.isNotBlank() }
+            .joinToString("\n\n---\n\n") { release ->
+                val dateStr = release.createdAt.takeIf { it.isNotBlank() }?.let { dateStr ->
+                    inputFormats.firstNotNullOfOrNull { fmt ->
+                        try { fmt.parse(dateStr)?.let { dateFormat.format(it) } } catch (_: Exception) { null }
+                    }
+                } ?: ""
+                val header = if (dateStr.isNotBlank()) {
+                    "## ${release.tagName}（$dateStr）"
+                } else {
+                    "## ${release.tagName}"
+                }
+                "$header\n\n${sanitizeChangelog(release.body)}"
+            }
+    }
+
+    private data class ReleaseInfo(
+        val tagName: String,
+        val body: String,
+        val createdAt: String
+    )
+
+    /** 获取缓存的最新版本号 */
+    fun getCachedLatestVersion(): String? = cachedLatestVersion
+
     suspend fun checkForUpdate(): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
 
         // 优先尝试 GitHub（版本检测）
         val gitHubResult = tryFetchFromGitHub()
         if (gitHubResult != null) {
+            cachedChangelog = gitHubResult.changelog
+            cachedLatestVersion = gitHubResult.latestVersion
             if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
                 val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
                 if (downloadUrl.isEmpty()) return null
-                return gitHubResult.copy(downloadUrl = downloadUrl)
+                return gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
             }
-            return null
+            // 版本相同，返回 hasUpdate=false 的信息以便 UI 显示"已是最新"
+            return gitHubResult.copy(hasUpdate = false)
         }
 
         // GitHub 请求失败，降级到 Gitee
         val giteeResult = tryFetchFromGitee()
-        if (giteeResult != null && isNewerVersion(giteeResult.latestVersion, currentVersion)) {
-            val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
-            if (downloadUrl.isEmpty()) return null
-            return giteeResult.copy(downloadUrl = downloadUrl)
+        if (giteeResult != null) {
+            cachedChangelog = giteeResult.changelog
+            cachedLatestVersion = giteeResult.latestVersion
+            if (isNewerVersion(giteeResult.latestVersion, currentVersion)) {
+                val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
+                if (downloadUrl.isEmpty()) return null
+                return giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+            }
+            return giteeResult.copy(hasUpdate = false)
         }
 
         return null

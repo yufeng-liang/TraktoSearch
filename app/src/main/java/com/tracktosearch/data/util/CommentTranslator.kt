@@ -18,6 +18,9 @@ class CommentTranslator @Inject constructor() {
 
     private val jsonDecoder = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
+    // 翻译结果缓存（相同评论的翻译不会变，永久缓存）
+    private val translationCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
+
     // 百度翻译 API 配置
     // 大模型文本翻译使用 API Key（Bearer Token）
     // 通用文本翻译使用 APP ID + 密钥（MD5 签名）
@@ -33,6 +36,11 @@ class CommentTranslator @Inject constructor() {
         val targetLang = getTargetLangCode()
         if (targetLang == "en") return comment
 
+        // 命中缓存则直接返回
+        translationCache[comment.id]?.let { cached ->
+            return comment.copy(comment = cached)
+        }
+
         return withContext(Dispatchers.IO) {
             try {
                 withTimeoutOrNull(10000) {
@@ -41,6 +49,7 @@ class CommentTranslator @Inject constructor() {
                     if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                     if (!result.isNullOrEmpty() && result != comment.comment) {
+                        translationCache[comment.id] = result
                         comment.copy(comment = result)
                     } else {
                         comment
@@ -65,6 +74,10 @@ class CommentTranslator @Inject constructor() {
 
         return withContext(Dispatchers.IO) {
             comments.map { comment ->
+                // 命中缓存则直接返回
+                translationCache[comment.id]?.let { cached ->
+                    return@map comment.copy(comment = cached)
+                }
                 try {
                     withTimeoutOrNull(10000) {
                         var result = translateWithBaiduAI(comment.comment, targetLang)
@@ -72,6 +85,7 @@ class CommentTranslator @Inject constructor() {
                         if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                         if (!result.isNullOrEmpty() && result != comment.comment) {
+                            translationCache[comment.id] = result
                             comment.copy(comment = result)
                         } else {
                             comment

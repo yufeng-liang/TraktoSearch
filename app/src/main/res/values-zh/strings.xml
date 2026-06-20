@@ -3,8 +3,16 @@
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
+    <string name="tab_discover">发现</string>
     <string name="tab_me">我的</string>
+    <string name="tab_settings">设置</string>
     <string name="press_back_again">再按一次返回桌面</string>
+
+    <!-- Discover Screen -->
+    <string name="discover_title">发现</string>
+    <string name="discover_popular">热门电影</string>
+    <string name="discover_upcoming">即将上映</string>
+    <string name="discover_recommended">为你推荐</string>
 
     <!-- Search Screen -->
     <string name="search_title">搜索资源</string>
@@ -17,10 +25,14 @@
     <string name="search_empty_hint">输入关键词开始搜索</string>
     <string name="search_default_hint">搜索你感兴趣的影视资源</string>
     <string name="search_results">搜索结果 (%1$d)</string>
+    <string name="search_filter_type">影视类型</string>
+    <string name="search_filter_disk">网盘类型</string>
     <string name="search_clear_input">清空</string>
     <string name="search_history_title">搜索历史</string>
     <string name="search_history_clear_all">清空全部</string>
     <string name="search_history_delete">删除</string>
+    <string name="search_popular_title">热门搜索</string>
+    <string name="search_suggestions_title">搜索建议</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">我的想看</string>
@@ -40,6 +52,8 @@
     <string name="watchlist_logout">退出登录</string>
     <string name="watchlist_mode_watchlist">想看</string>
     <string name="watchlist_tab_history">已看历史</string>
+    <string name="watchlist_search_watchlist">搜索我的想看</string>
+    <string name="watchlist_search_history">搜索我的已看历史</string>
     <string name="history_empty_movies">还没有已看的电影</string>
     <string name="history_empty_shows">还没有已看的电视剧</string>
 
@@ -51,12 +65,15 @@
     <string name="detail_mark_watchlist">想看</string>
     <string name="detail_marked_watchlist">已想看</string>
     <string name="detail_mark_processing">处理中</string>
+    <string name="detail_login_required_title">需要登录</string>
+    <string name="detail_login_required_message">请先登录，即可使用想看、已看和评分功能。</string>
+    <string name="detail_login_go">去登录</string>
     <string name="detail_no_overview">暂无简介</string>
     <string name="detail_overview_label">简介</string>
     <string name="detail_filter_sources">搜索源</string>
     <string name="detail_filter_disk_types">网盘类型</string>
     <string name="detail_searching">正在搜索网盘资源…</string>
-    <string name="detail_searching_info">来源: %1$d 个 · 网盘: %2$d 种</string>
+    <string name="detail_searching_info">%1$d/%2$d 源已完成</string>
     <string name="detail_no_resources">未找到网盘资源</string>
     <string name="detail_retry">重试</string>
     <string name="detail_found_resources">找到 %1$d 个资源</string>
@@ -140,8 +157,8 @@
     <string name="detail_translate_failed">翻译失败</string>
     <string name="detail_translate">翻译</string>
     <string name="detail_translate_all">全部翻译</string>
-    <string name="detail_translated">已翻译</string>
-    <string name="detail_original">原文</string>
+    <string name="detail_translated">查看译文</string>
+    <string name="detail_original">查看原文</string>
     <string name="detail_load_more_comments">下滑加载更多</string>
     <string name="detail_all_comments_loaded">已加载全部 %1$d 条评论</string>
     <string name="detail_cast_crew">演职员</string>
@@ -159,13 +176,68 @@
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
     <string name="person_tv_credits">参演电视剧</string>
+    <string name="person_all">全部 ></string>
+    <string name="person_load_more">加载更多</string>
+    <string name="detail_close">关闭</string>
     <string name="person_no_biography">暂无简介</string>
 
     <!-- Theme -->
-    <string name="settings_theme">主题</string>
+    <string name="settings_theme">主题模式</string>
     <string name="theme_system">跟随系统</string>
     <string name="theme_dark">深色</string>
     <string name="theme_light">浅色</string>
+
+    <!-- Language -->
+    <string name="settings_language">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_appearance">外观</string>
+    <string name="settings_search">搜索源</string>
+    <string name="settings_storage">存储</string>
+    <string name="settings_clear_cache">清除缓存</string>
+    <string name="settings_clear_cache_confirm">确定要清除所有缓存数据吗？</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="settings_check_update">检查更新</string>
+    <string name="settings_changelog">更新日志</string>
+    <string name="settings_account">账户</string>
+    <string name="settings_logout_confirm">确定要退出登录吗？</string>
+    <string name="settings_source_github">GitHub</string>
+    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_licenses">开源许可证</string>
+    <string name="settings_cache">缓存</string>
+    <string name="settings_cache_clear">清除</string>
+    <string name="settings_latest_version">最新版本 v%1$s</string>
+    <string name="settings_already_latest">已是最新版本 v%1$s</string>
+    <string name="settings_discover_sections">发现页栏目</string>
+    <string name="settings_discover_sections_desc">设置发现页各栏目的显示与排序</string>
+    <string name="settings_logout_button">登出</string>
+
+    <!-- 数据管理 -->
+    <string name="settings_data_management">数据管理</string>
+    <string name="settings_export_json">导出数据 (JSON)</string>
+    <string name="settings_export_json_desc">导出想看和历史为 JSON</string>
+    <string name="settings_export_csv">导出为 CSV</string>
+    <string name="settings_export_csv_desc">导出想看列表为 CSV</string>
+    <string name="settings_import_letterboxd">从 Letterboxd 导入</string>
+    <string name="settings_import_letterboxd_desc">从 Letterboxd CSV 导入想看</string>
+    <string name="settings_import_imdb">从 IMDb 导入</string>
+    <string name="settings_import_imdb_desc">从 IMDb CSV 导入想看</string>
+
+    <!-- Notification -->
+    <string name="settings_notification">通知提醒</string>
+    <string name="settings_notification_enabled">启用通知</string>
+    <string name="settings_notification_enabled_desc">接收上映和新季开播提醒</string>
+    <string name="settings_notification_release">上映提醒</string>
+    <string name="settings_notification_release_desc">想看列表中的影视上映/上线时提醒</string>
+    <string name="settings_notification_new_season">新季提醒</string>
+    <string name="settings_notification_new_season_desc">想看的电视剧新一季开播时提醒</string>
 
     <!-- Update -->
     <string name="update_title">发现新版本</string>
@@ -175,4 +247,125 @@
     <string name="update_downloading">正在下载…</string>
     <string name="update_download_failed">下载失败，请尝试浏览器下载</string>
     <string name="update_install">正在安装…</string>
+
+    <!-- Statistics -->
+    <string name="statistics_title">观看统计</string>
+    <string name="statistics_total">总计</string>
+    <string name="statistics_this_month">本月</string>
+    <string name="statistics_this_year">本年</string>
+    <string name="statistics_heatmap">观看热力图</string>
+    <string name="statistics_genre_distribution">类型分布</string>
+    <string name="statistics_genre_ranking">最常看的类型排行</string>
+    <string name="statistics_less">少</string>
+    <string name="statistics_more">多</string>
+    <string name="statistics_info">统计说明</string>
+    <string name="statistics_info_overview">Q：上方的数字是什么意思？\nA：显示你的观看总数、本月观看数和本年观看数，数据来源于你的 Trakt 观看历史。</string>
+    <string name="statistics_info_heatmap">Q：这里的观看热力图是什么意思？\nA：类似 GitHub 的贡献图，每个方块代表一天，颜色越深表示当天观看越多，覆盖过去一整年。</string>
+    <string name="statistics_info_genre_distribution">Q：类型分布饼图是什么意思？\nA：展示你观看历史中各类型占比。点击每一块可查看具体数量和百分比。</string>
+    <string name="statistics_info_genre_ranking">Q：最常看的类型排行是什么意思？\nA：按观看数量对你的类型进行排名，前三名分别用金牌、银牌、铜牌标记。</string>
+
+    <!-- Common UI -->
+    <string name="common_retry">重试</string>
+    <string name="common_close">关闭</string>
+    <string name="common_load_failed">加载失败</string>
+    <string name="common_no_data">暂无数据</string>
+    <string name="common_loading">加载中…</string>
+    <string name="common_save_success">已保存到相册</string>
+    <string name="common_save_failed">保存失败</string>
+    <string name="common_save_exists">已存在: %1$s</string>
+    <string name="common_saved_path">已保存: %1$s/%2$s</string>
+    <string name="common_copy_success">已复制</string>
+    <string name="common_open_failed">无法打开此链接</string>
+
+    <!-- Search Filter -->
+    <string name="search_filter_all">全部</string>
+    <string name="search_filter_movie">电影</string>
+    <string name="search_filter_show">电视剧</string>
+    <string name="search_view_all">查看全部</string>
+    <string name="error_no_data">暂无数据</string>
+
+    <!-- Statistics -->
+    <string name="statistics_pie_hint">点击饼图查看详情</string>
+    <string name="statistics_heatmap_hint">点击格子查看详情</string>
+    <string name="statistics_item_count">%1$s: %2$d 部 (%3$s)</string>
+    <string name="statistics_date_count_watched">%1$s · 观看 %2$d 部</string>
+    <string name="statistics_date_no_data">%1$s · 无观看记录</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_watched">已看</string>
+    <string name="cd_not_watched">未看</string>
+    <string name="cd_saved">已保存</string>
+    <string name="cd_save">保存</string>
+    <string name="cd_edit">编辑</string>
+    <string name="cd_delete">删除</string>
+    <string name="cd_close">关闭</string>
+    <string name="cd_back_to_top">返回顶部</string>
+    <string name="cd_clear">清除</string>
+
+    <!-- Settings: Custom Search Source -->
+    <string name="settings_custom_search_source_title">添加自定义搜索源</string>
+    <string name="settings_custom_search_source_subtitle">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
+    <string name="settings_add_source">添加自定义搜索源</string>
+    <string name="settings_edit_source">编辑搜索源</string>
+    <string name="settings_delete_source">删除搜索源</string>
+    <string name="settings_delete_source_confirm">确定要删除「%1$s」吗？</string>
+    <string name="settings_source_name">名称</string>
+    <string name="settings_source_base_url">Base URL（如 https://so.252035.xyz/）</string>
+    <string name="settings_source_api_path">API 路径（如 api/search）</string>
+    <string name="settings_source_keyword_param">关键字参数名（如 kw）</string>
+    <string name="settings_source_disk_param">网盘类型参数名（可选）</string>
+    <string name="settings_source_disk_param_value">网盘类型参数值（可选）</string>
+    <string name="settings_source_src_param">来源参数名（可选，如 src）</string>
+    <string name="settings_source_src_value">来源参数值（可选，如 all）</string>
+    <string name="settings_source_parse_mode">解析模式</string>
+    <string name="settings_source_parse_mode_pansou">PanSou 模板</string>
+    <string name="settings_source_parse_mode_zreso">Zreso 模板</string>
+    <string name="settings_source_parse_mode_custom">自定义 JSONPath</string>
+    <string name="settings_source_jsonpath_title">JSONPath 表达式</string>
+    <string name="settings_source_jsonpath_list">列表路径（如 $.data.results）</string>
+    <string name="settings_source_jsonpath_name">名称路径（如 title）</string>
+    <string name="settings_source_jsonpath_url">URL 路径（如 url）</string>
+    <string name="settings_source_jsonpath_disk">网盘类型路径（如 type）</string>
+    <string name="settings_source_jsonpath_date">日期路径（如 datetime）</string>
+    <string name="settings_source_test">测试</string>
+    <string name="settings_source_save">保存</string>
+    <string name="settings_source_unnamed">未命名</string>
+    <string name="settings_source_test_success">测试成功，解析到 %1$d 条结果</string>
+    <string name="settings_source_test_empty">连接成功，但未解析到结果</string>
+    <string name="settings_cache_cleared">缓存已清除</string>
+    <string name="settings_cache_clear_failed">清除缓存失败：%1$s</string>
+    <string name="settings_no_changelog">暂无更新日志</string>
+
+    <!-- Genre Names -->
+    <string name="genre_action">动作</string>
+    <string name="genre_adventure">冒险</string>
+    <string name="genre_animation">动画</string>
+    <string name="genre_anime">动漫</string>
+    <string name="genre_comedy">喜剧</string>
+    <string name="genre_crime">犯罪</string>
+    <string name="genre_documentary">纪录片</string>
+    <string name="genre_drama">剧情</string>
+    <string name="genre_fantasy">奇幻</string>
+    <string name="genre_history">历史</string>
+    <string name="genre_horror">恐怖</string>
+    <string name="genre_music">音乐</string>
+    <string name="genre_musical">歌舞</string>
+    <string name="genre_mystery">悬疑</string>
+    <string name="genre_romance">爱情</string>
+    <string name="genre_scifi">科幻</string>
+    <string name="genre_sport">体育</string>
+    <string name="genre_thriller">惊悚</string>
+    <string name="genre_war">战争</string>
+    <string name="genre_western">西部</string>
+    <string name="genre_family">家庭</string>
+    <string name="genre_kids">儿童</string>
+    <string name="genre_news">新闻</string>
+    <string name="genre_reality">真人秀</string>
+    <string name="genre_soap">肥皂剧</string>
+    <string name="genre_talk">脱口秀</string>
+    <string name="genre_spy">谍战</string>
+    <string name="genre_superhero">超级英雄</string>
+    <string name="genre_biography">传记</string>
+    <string name="genre_noir">黑色电影</string>
+    <string name="genre_game_show">游戏节目</string>
 </resources>

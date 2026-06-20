@@ -7,6 +7,7 @@ data class GitHubRelease(
     val tag_name: String = "",
     val name: String = "",
     val body: String = "",
+    val created_at: String = "",
     val assets: List<GitHubAsset> = emptyList()
 )
 
@@ -23,6 +24,7 @@ data class GiteeRelease(
     val tag_name: String = "",
     val name: String = "",
     val body: String = "",
+    val created_at: String = "",
     val assets: List<GiteeAsset> = emptyList()
 )
 

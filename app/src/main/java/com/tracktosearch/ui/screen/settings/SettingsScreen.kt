@@ -1,0 +1,1321 @@
+package com.tracktosearch.ui.screen.settings
+
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.tracktosearch.BuildConfig
+import com.tracktosearch.R
+import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.data.local.LanguageStorage
+import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.ChangelogContent
+import com.tracktosearch.ui.component.UpdateDialog
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    onLogout: () -> Unit = {},
+    isLoggedIn: Boolean = true,
+    modifier: Modifier = Modifier,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
+    val currentTheme by viewModel.themeMode.collectAsState()
+    val currentLanguage by viewModel.language.collectAsState()
+    val pansouEnabled by viewModel.pansouEnabled.collectAsState()
+    val panhubEnabled by viewModel.panhubEnabled.collectAsState()
+    val zresoEnabled by viewModel.zresoEnabled.collectAsState()
+    val exportImportState by viewModel.exportImportState.collectAsState()
+    val customSources by viewModel.customSources.collectAsState()
+    val testResults by viewModel.testResults.collectAsState()
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showChangelogDialog by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
+    var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
+    var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(exportImportState.message) {
+        exportImportState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearMessage()
+        }
+    }
+
+    val exportJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri?.let { viewModel.exportData(it, ExportFormat.JSON) }
+    }
+
+    val exportCsvLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri ->
+        uri?.let { viewModel.exportData(it, ExportFormat.CSV) }
+    }
+
+    val importLetterboxdLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.importFromLetterboxd(it) }
+    }
+
+    val importImdbLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.importFromImdb(it) }
+    }
+
+    val openUrl: (String) -> Unit = { url ->
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+    }
+
+    val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+    val updateInfo by viewModel.updateInfo.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_title)) }
+            )
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+    ) { padding ->
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentPadding = PaddingValues(bottom = 80.dp)
+        ) {
+            // 主题设置
+            item { SettingsSectionHeader(stringResource(R.string.settings_appearance)) }
+            item {
+                val themeName = when (currentTheme) {
+                    ThemeStorage.MODE_DARK -> stringResource(R.string.theme_dark)
+                    ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
+                    else -> stringResource(R.string.theme_system)
+                }
+                SettingsItem(
+                    icon = Icons.Default.Palette,
+                    title = stringResource(R.string.settings_theme),
+                    subtitle = themeName,
+                    onClick = { showThemeDialog = true }
+                )
+            }
+            item {
+                val languageName = when (currentLanguage) {
+                    LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
+                    LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
+                    LanguageStorage.LANGUAGE_JAPANESE -> stringResource(R.string.language_japanese)
+                    LanguageStorage.LANGUAGE_KOREAN -> stringResource(R.string.language_korean)
+                    else -> stringResource(R.string.language_system)
+                }
+                SettingsItem(
+                    icon = Icons.Default.Language,
+                    title = stringResource(R.string.settings_language),
+                    subtitle = languageName,
+                    onClick = { showLanguageDialog = true }
+                )
+            }
+
+            // 搜索源管理
+            item { SettingsSectionHeader(stringResource(R.string.settings_search)) }
+            item { SearchSourceItem("PanSou", pansouEnabled) { viewModel.setPansouEnabled(it) } }
+            item { SearchSourceItem("PanHub", panhubEnabled) { viewModel.setPanhubEnabled(it) } }
+            item { SearchSourceItem("Zreso", zresoEnabled) { viewModel.setZresoEnabled(it) } }
+
+            // 自定义搜索源
+            items(customSources.size) { index ->
+                val source = customSources[index]
+                val testResult = testResults[source.id]
+                CustomSearchSourceItem(
+                    source = source,
+                    testResult = testResult,
+                    onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
+                    onEdit = { showEditCustomSource = source },
+                    onDelete = { showDeleteCustomSource = source },
+                    onTest = { viewModel.testCustomSource(source) }
+                )
+            }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Add,
+                    title = "添加自定义搜索源",
+                    subtitle = "支持 PanSou/Zreso 兼容源或自定义 JSONPath",
+                    onClick = { showEditCustomSource = CustomSearchSource(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = "",
+                        baseUrl = "",
+                        apiPath = "api/search",
+                        keywordParam = "kw",
+                        cloudTypesParam = "cloud_types",
+                        cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
+                        srcParam = "src",
+                        srcValue = "all"
+                    ) }
+                )
+            }
+
+            // 通知设置（仅登录用户可见，通知依赖 Trakt 想看列表）
+            if (isLoggedIn) {
+                item { SettingsSectionHeader(stringResource(R.string.settings_notification)) }
+                item {
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    SwitchSettingsItem(
+                        title = stringResource(R.string.settings_notification_enabled),
+                        subtitle = stringResource(R.string.settings_notification_enabled_desc),
+                        checked = notificationEnabled,
+                        onCheckedChange = { viewModel.setNotificationEnabled(it) }
+                    )
+                }
+                item {
+                    val releaseEnabled by viewModel.releaseReminderEnabled.collectAsState()
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    SwitchSettingsItem(
+                        title = stringResource(R.string.settings_notification_release),
+                        subtitle = stringResource(R.string.settings_notification_release_desc),
+                        checked = releaseEnabled,
+                        enabled = notificationEnabled,
+                        onCheckedChange = { viewModel.setReleaseReminderEnabled(it) }
+                    )
+                }
+                item {
+                    val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsState()
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    SwitchSettingsItem(
+                        title = stringResource(R.string.settings_notification_new_season),
+                        subtitle = stringResource(R.string.settings_notification_new_season_desc),
+                        checked = newSeasonEnabled,
+                        enabled = notificationEnabled,
+                        onCheckedChange = { viewModel.setNewSeasonReminderEnabled(it) }
+                    )
+                }
+            }
+
+            // 发现页栏目
+            item { SettingsSectionHeader(stringResource(R.string.settings_discover_sections)) }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Explore,
+                    title = stringResource(R.string.settings_discover_sections),
+                    subtitle = stringResource(R.string.settings_discover_sections_desc),
+                    onClick = { showDiscoverSectionsDialog = true }
+                )
+            }
+
+            // 数据管理（仅登录用户可见，依赖 Trakt API）
+            if (isLoggedIn) {
+                item { SettingsSectionHeader(stringResource(R.string.settings_data_management)) }
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FileUpload,
+                        title = stringResource(R.string.settings_export_json),
+                        subtitle = stringResource(R.string.settings_export_json_desc),
+                        onClick = {
+                            if (!exportImportState.isExporting) {
+                                exportJsonLauncher.launch("trakt-export.json")
+                            }
+                        }
+                    )
+                }
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FileUpload,
+                        title = stringResource(R.string.settings_export_csv),
+                        subtitle = stringResource(R.string.settings_export_csv_desc),
+                        onClick = {
+                            if (!exportImportState.isExporting) {
+                                exportCsvLauncher.launch("trakt-export.csv")
+                            }
+                        }
+                    )
+                }
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FileDownload,
+                        title = stringResource(R.string.settings_import_letterboxd),
+                        subtitle = stringResource(R.string.settings_import_letterboxd_desc),
+                        onClick = {
+                            if (!exportImportState.isImporting) {
+                                importLetterboxdLauncher.launch("text/*")
+                            }
+                        }
+                    )
+                }
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FileDownload,
+                        title = stringResource(R.string.settings_import_imdb),
+                        subtitle = stringResource(R.string.settings_import_imdb_desc),
+                        onClick = {
+                            if (!exportImportState.isImporting) {
+                                importImdbLauncher.launch("text/*")
+                            }
+                        }
+                    )
+                }
+            }
+
+            // 关于
+            item { SettingsSectionHeader(stringResource(R.string.settings_about)) }
+            item {
+                val latestVersion by viewModel.latestVersion.collectAsState()
+                val isChecking by viewModel.isCheckingUpdate.collectAsState()
+                val updateInfo by viewModel.updateInfo.collectAsState()
+                VersionItem(
+                    localVersion = BuildConfig.VERSION_NAME,
+                    latestVersion = latestVersion,
+                    isChecking = isChecking,
+                    hasUpdate = updateInfo?.hasUpdate == true,
+                    onCheckUpdate = { viewModel.checkUpdate() }
+                )
+            }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Info,
+                    title = stringResource(R.string.settings_changelog),
+                    subtitle = "",
+                    onClick = {
+                        viewModel.loadChangelog()
+                        showChangelogDialog = true
+                    }
+                )
+            }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Code,
+                    title = stringResource(R.string.settings_source_github),
+                    subtitle = "yufeng-liang/TrackToSearch",
+                    onClick = { openUrl("https://github.com/yufeng-liang/TrackToSearch") }
+                )
+            }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Code,
+                    title = stringResource(R.string.settings_source_gitee),
+                    subtitle = "yufeng-liang/TrackToSearch",
+                    onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch") }
+                )
+            }
+
+            // 缓存管理（倒数第二）
+            item { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
+            item {
+                val cacheInfo by viewModel.cacheInfo.collectAsState()
+                CacheItem(
+                    sizeText = cacheInfo,
+                    onClear = { showClearCacheDialog = true }
+                )
+            }
+
+            // 账户（仅登录用户可见）
+            if (isLoggedIn) {
+                item { SettingsSectionHeader(stringResource(R.string.settings_account)) }
+                item {
+                    LogoutItem(onClick = { showLogoutDialog = true })
+                }
+            }
+        }
+    }
+
+    if (showThemeDialog) {
+        ThemeSelectionDialog(
+            currentTheme = currentTheme,
+            onThemeSelected = { viewModel.setThemeMode(it); showThemeDialog = false },
+            onDismiss = { showThemeDialog = false }
+        )
+    }
+
+    if (showLanguageDialog) {
+        LanguageSelectionDialog(
+            currentLanguage = currentLanguage,
+            onLanguageSelected = {
+                viewModel.setLanguage(it)
+                showLanguageDialog = false
+                // 重建 Activity 以应用语言变更（ComponentActivity 不自动处理 AppCompatDelegate 的 locale 变更）
+                (context as? android.app.Activity)?.recreate()
+            },
+            onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    if (showChangelogDialog) {
+        ChangelogDialog(
+            viewModel = viewModel,
+            onDismiss = { showChangelogDialog = false }
+        )
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text(stringResource(R.string.settings_account)) },
+            text = { Text(stringResource(R.string.settings_logout_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showLogoutDialog = false
+                    onLogout()
+                }) {
+                    Text(stringResource(R.string.settings_logout_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showClearCacheDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheDialog = false },
+            title = { Text(stringResource(R.string.settings_cache)) },
+            text = { Text(stringResource(R.string.settings_clear_cache_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showClearCacheDialog = false
+                    viewModel.clearCache()
+                }) {
+                    Text(stringResource(R.string.settings_cache_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showDiscoverSectionsDialog) {
+        DiscoverSectionsDialog(
+            viewModel = viewModel,
+            onDismiss = { showDiscoverSectionsDialog = false }
+        )
+    }
+
+    // 检测到新版本时弹出更新弹窗（复用首页 UpdateDialog）
+    if (showUpdateDialog && updateInfo != null) {
+        UpdateDialog(
+            updateInfo = updateInfo!!,
+            onDismiss = { viewModel.dismissUpdateDialog() }
+        )
+    }
+
+    // 自定义搜索源编辑弹窗
+    showEditCustomSource?.let { source ->
+        CustomSourceEditDialog(
+            source = source,
+            isNew = customSources.none { it.id == source.id },
+            onSave = {
+                if (customSources.none { s -> s.id == it.id }) {
+                    viewModel.addCustomSource(it)
+                } else {
+                    viewModel.updateCustomSource(it)
+                }
+                showEditCustomSource = null
+            },
+            onDismiss = { showEditCustomSource = null }
+        )
+    }
+
+    // 删除确认弹窗
+    showDeleteCustomSource?.let { source ->
+        AlertDialog(
+            onDismissRequest = { showDeleteCustomSource = null },
+            title = { Text(stringResource(R.string.settings_delete_source)) },
+            text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteCustomSource(source.id)
+                    showDeleteCustomSource = null
+                }) {
+                    Text(stringResource(R.string.cd_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteCustomSource = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+}
+
+@Composable
+fun SettingsItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: (() -> Unit)?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (onClick != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun SearchSourceItem(
+    name: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+@Composable
+fun SwitchSettingsItem(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = if (enabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+/** 主题选择对话框 */
+@Composable
+private fun ThemeSelectionDialog(
+    currentTheme: String,
+    onThemeSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_theme)) },
+        text = {
+            Column {
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_system),
+                    selected = currentTheme == ThemeStorage.MODE_SYSTEM,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_SYSTEM) }
+                )
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_dark),
+                    selected = currentTheme == ThemeStorage.MODE_DARK,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_DARK) }
+                )
+                ThemeOptionRow(
+                    label = stringResource(R.string.theme_light),
+                    selected = currentTheme == ThemeStorage.MODE_LIGHT,
+                    onClick = { onThemeSelected(ThemeStorage.MODE_LIGHT) }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        }
+    )
+}
+
+@Composable
+private fun ThemeOptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
+/** 语言选择对话框 */
+@Composable
+private fun LanguageSelectionDialog(
+    currentLanguage: String,
+    onLanguageSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_language)) },
+        text = {
+            Column {
+                LanguageOptionRow(
+                    label = stringResource(R.string.language_system),
+                    selected = currentLanguage == LanguageStorage.LANGUAGE_SYSTEM,
+                    onClick = {
+                        onLanguageSelected(LanguageStorage.LANGUAGE_SYSTEM)
+                        onDismiss()
+                    }
+                )
+                LanguageOptionRow(
+                    label = stringResource(R.string.language_chinese),
+                    selected = currentLanguage == LanguageStorage.LANGUAGE_CHINESE,
+                    onClick = {
+                        onLanguageSelected(LanguageStorage.LANGUAGE_CHINESE)
+                        onDismiss()
+                    }
+                )
+                LanguageOptionRow(
+                    label = stringResource(R.string.language_english),
+                    selected = currentLanguage == LanguageStorage.LANGUAGE_ENGLISH,
+                    onClick = {
+                        onLanguageSelected(LanguageStorage.LANGUAGE_ENGLISH)
+                        onDismiss()
+                    }
+                )
+                LanguageOptionRow(
+                    label = stringResource(R.string.language_japanese),
+                    selected = currentLanguage == LanguageStorage.LANGUAGE_JAPANESE,
+                    onClick = {
+                        onLanguageSelected(LanguageStorage.LANGUAGE_JAPANESE)
+                        onDismiss()
+                    }
+                )
+                LanguageOptionRow(
+                    label = stringResource(R.string.language_korean),
+                    selected = currentLanguage == LanguageStorage.LANGUAGE_KOREAN,
+                    onClick = {
+                        onLanguageSelected(LanguageStorage.LANGUAGE_KOREAN)
+                        onDismiss()
+                    }
+                )
+            }
+        },
+        confirmButton = {}
+    )
+}
+
+@Composable
+private fun LanguageOptionRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(label)
+    }
+}
+
+/** 版本项：显示本地版本 + 最新版本状态 + 检查更新按钮（固定高度防跳动） */
+@Composable
+fun VersionItem(
+    localVersion: String,
+    latestVersion: String?,
+    isChecking: Boolean,
+    hasUpdate: Boolean,
+    onCheckUpdate: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 72.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Info,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_version),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            // 版本副标题：有新版本用主题色显示"最新版本 xxx"，无新版本显示"已是最新版本xxx"
+            val subtitle = if (latestVersion != null) {
+                if (hasUpdate) {
+                    stringResource(R.string.settings_latest_version, latestVersion)
+                } else {
+                    stringResource(R.string.settings_already_latest, latestVersion)
+                }
+            } else {
+                "v$localVersion"
+            }
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (hasUpdate) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // 按钮区域固定宽度，防止 loading 态高度变化
+        Box(modifier = Modifier.size(width = 100.dp, height = 36.dp), contentAlignment = Alignment.Center) {
+            if (isChecking) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                OutlinedButton(
+                    onClick = onCheckUpdate,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                ) {
+                    Text(stringResource(R.string.settings_check_update))
+                }
+            }
+        }
+    }
+}
+
+/** 缓存项：显示"缓存"标题 + 空间占用大小 + 右侧"清除"按钮 */
+@Composable
+fun CacheItem(
+    sizeText: String,
+    onClear: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Storage,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.settings_cache),
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = sizeText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        OutlinedButton(
+            onClick = onClear,
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+        ) {
+            Text(stringResource(R.string.settings_cache_clear))
+        }
+    }
+}
+
+/** 退出登录项：文字"退出登录" + 右侧红色"登出"按钮 */
+@Composable
+fun LogoutItem(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Logout,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            text = stringResource(R.string.watchlist_logout),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        Button(
+            onClick = onClick,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            ),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+        ) {
+            Text(stringResource(R.string.settings_logout_button))
+        }
+    }
+}
+
+/** 更新日志对话框：从仓库获取 md 渲染显示 */
+@Composable
+fun ChangelogDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    val changelog by viewModel.changelog.collectAsState()
+    val isLoading by viewModel.isLoadingChangelog.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_changelog)) },
+        text = {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+            ) {
+                when {
+                    isLoading && changelog == null -> {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                    }
+                    changelog != null && changelog!!.isNotBlank() -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            ChangelogContent(text = changelog!!)
+                        }
+                    }
+                    else -> {
+                        Text(
+                            text = stringResource(R.string.settings_no_changelog),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        }
+    )
+}
+
+/** 发现页栏目设置对话框：显示/隐藏开关 + 上移/下移排序 */
+@Composable
+fun DiscoverSectionsDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    val sections by viewModel.discoverSections.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_discover_sections)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                sections.forEachIndexed { index, section ->
+                    DiscoverSectionRow(
+                        name = getSectionDisplayName(section.id),
+                        visible = section.visible,
+                        isFirst = index == 0,
+                        isLast = index == sections.size - 1,
+                        onToggle = { viewModel.setSectionVisible(section.id, it) },
+                        onMoveUp = { viewModel.moveSectionUp(section.id) },
+                        onMoveDown = { viewModel.moveSectionDown(section.id) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        }
+    )
+}
+
+@Composable
+private fun DiscoverSectionRow(
+    name: String,
+    visible: Boolean,
+    isFirst: Boolean,
+    isLast: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f)
+        )
+        IconButton(onClick = onMoveUp, enabled = !isFirst) {
+            Icon(
+                imageVector = Icons.Default.ArrowUpward,
+                contentDescription = null,
+                tint = if (!isFirst) MaterialTheme.colorScheme.onSurfaceVariant
+                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+            )
+        }
+        IconButton(onClick = onMoveDown, enabled = !isLast) {
+            Icon(
+                imageVector = Icons.Default.ArrowDownward,
+                contentDescription = null,
+                tint = if (!isLast) MaterialTheme.colorScheme.onSurfaceVariant
+                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+            )
+        }
+        Switch(
+            checked = visible,
+            onCheckedChange = onToggle
+        )
+    }
+}
+
+/** 栏目 ID 转为显示名称 */
+private fun getSectionDisplayName(id: String): String {
+    return when (id) {
+        "douban-movie" -> "新片榜"
+        "douban-weekly" -> "口碑榜"
+        "douban-top250" -> "Top250"
+        "douban-us-box" -> "北美票房榜"
+        "tmdb-popular" -> "热门电影"
+        "tmdb-upcoming" -> "即将上映"
+        "trakt-recommendations" -> "为你推荐"
+        else -> id
+    }
+}
+
+/** 自定义搜索源列表项 */
+@Composable
+fun CustomSearchSourceItem(
+    source: CustomSearchSource,
+    testResult: SettingsViewModel.TestResultState?,
+    onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onTest: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = source.name.ifBlank { stringResource(R.string.settings_source_unnamed) },
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = source.baseUrl,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onTest, enabled = source.enabled) {
+                if (testResult?.isTesting == true) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    Text(stringResource(R.string.settings_source_test), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit), modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
+            }
+            Switch(checked = source.enabled, onCheckedChange = onToggle)
+        }
+        // 测试结果
+        testResult?.message?.let { msg ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = msg,
+                style = MaterialTheme.typography.bodySmall,
+                color = when {
+                    testResult.success == true -> MaterialTheme.colorScheme.primary
+                    testResult.success == false -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+/** 自定义搜索源编辑弹窗 */
+@Composable
+fun CustomSourceEditDialog(
+    source: CustomSearchSource,
+    isNew: Boolean,
+    onSave: (CustomSearchSource) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var name by remember { mutableStateOf(source.name) }
+    var baseUrl by remember { mutableStateOf(source.baseUrl) }
+    var apiPath by remember { mutableStateOf(source.apiPath) }
+    var keywordParam by remember { mutableStateOf(source.keywordParam) }
+    var cloudTypesParam by remember { mutableStateOf(source.cloudTypesParam ?: "") }
+    var cloudTypesValue by remember { mutableStateOf(source.cloudTypesValue ?: "") }
+    var srcParam by remember { mutableStateOf(source.srcParam ?: "") }
+    var srcValue by remember { mutableStateOf(source.srcValue ?: "") }
+    var parseMode by remember { mutableStateOf(source.parseMode) }
+    var listPath by remember { mutableStateOf(source.listPath ?: "") }
+    var namePath by remember { mutableStateOf(source.namePath ?: "") }
+    var urlPath by remember { mutableStateOf(source.urlPath ?: "") }
+    var diskTypePath by remember { mutableStateOf(source.diskTypePath ?: "") }
+    var datePath by remember { mutableStateOf(source.datePath ?: "") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (isNew) stringResource(R.string.settings_add_source) else stringResource(R.string.settings_edit_source)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 500.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.settings_source_name)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = baseUrl,
+                    onValueChange = { baseUrl = it },
+                    label = { Text(stringResource(R.string.settings_source_base_url)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = apiPath,
+                    onValueChange = { apiPath = it },
+                    label = { Text(stringResource(R.string.settings_source_api_path)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = keywordParam,
+                    onValueChange = { keywordParam = it },
+                    label = { Text(stringResource(R.string.settings_source_keyword_param)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = cloudTypesParam,
+                    onValueChange = { cloudTypesParam = it },
+                    label = { Text(stringResource(R.string.settings_source_disk_param)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = cloudTypesValue,
+                    onValueChange = { cloudTypesValue = it },
+                    label = { Text(stringResource(R.string.settings_source_disk_param_value)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = srcParam,
+                    onValueChange = { srcParam = it },
+                    label = { Text(stringResource(R.string.settings_source_src_param)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = srcValue,
+                    onValueChange = { srcValue = it },
+                    label = { Text(stringResource(R.string.settings_source_src_value)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(stringResource(R.string.settings_source_parse_mode), style = MaterialTheme.typography.bodySmall)
+                val parseModes = listOf(
+                    "pansou_template" to stringResource(R.string.settings_source_parse_mode_pansou),
+                    "zreso_template" to stringResource(R.string.settings_source_parse_mode_zreso),
+                    "custom" to stringResource(R.string.settings_source_parse_mode_custom)
+                )
+                parseModes.chunked(2).forEach { rowModes ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowModes.forEach { (mode, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { parseMode = mode }
+                        ) {
+                            RadioButton(
+                                selected = parseMode == mode,
+                                onClick = { parseMode = mode }
+                            )
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                        // 奇数行补齐占位
+                        if (rowModes.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+
+                // 自定义 JSONPath 字段
+                if (parseMode == "custom") {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(stringResource(R.string.settings_source_jsonpath_title), style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(
+                        value = listPath,
+                        onValueChange = { listPath = it },
+                        label = { Text(stringResource(R.string.settings_source_jsonpath_list)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = namePath,
+                        onValueChange = { namePath = it },
+                        label = { Text(stringResource(R.string.settings_source_jsonpath_name)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = urlPath,
+                        onValueChange = { urlPath = it },
+                        label = { Text(stringResource(R.string.settings_source_jsonpath_url)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = diskTypePath,
+                        onValueChange = { diskTypePath = it },
+                        label = { Text(stringResource(R.string.settings_source_jsonpath_disk)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = datePath,
+                        onValueChange = { datePath = it },
+                        label = { Text(stringResource(R.string.settings_source_jsonpath_date)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSave(source.copy(
+                        name = name.trim(),
+                        baseUrl = baseUrl.trim(),
+                        apiPath = apiPath.trim(),
+                        keywordParam = keywordParam.trim(),
+                        cloudTypesParam = cloudTypesParam.trim().ifBlank { null },
+                        cloudTypesValue = cloudTypesValue.trim().ifBlank { null },
+                        srcParam = srcParam.trim().ifBlank { null },
+                        srcValue = srcValue.trim().ifBlank { null },
+                        parseMode = parseMode,
+                        listPath = listPath.trim().ifBlank { null },
+                        namePath = namePath.trim().ifBlank { null },
+                        urlPath = urlPath.trim().ifBlank { null },
+                        diskTypePath = diskTypePath.trim().ifBlank { null },
+                        datePath = datePath.trim().ifBlank { null }
+                    ))
+                },
+                enabled = name.isNotBlank() && baseUrl.isNotBlank()
+            ) {
+                Text(stringResource(R.string.settings_source_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
+}

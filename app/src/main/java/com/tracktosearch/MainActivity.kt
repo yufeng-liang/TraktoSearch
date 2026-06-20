@@ -4,21 +4,25 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import com.tracktosearch.ui.util.showToast
 import android.widget.Toast
 import android.app.AlertDialog
 import android.content.DialogInterface
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.os.LocaleListCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.GuestModeStorage
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.ui.navigation.Routes
@@ -27,6 +31,7 @@ import com.tracktosearch.ui.theme.TraktToSearchTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 // 全局共享的 OAuth 结果，供 MainActivity 传递给 LoginViewModel
@@ -38,7 +43,7 @@ object OAuthCallback {
 }
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var tokenStorage: TokenStorage
@@ -48,6 +53,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var themeStorage: ThemeStorage
+
+    @Inject
+    lateinit var languageStorage: LanguageStorage
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashScreen = installSplashScreen()
@@ -71,7 +79,7 @@ class MainActivity : ComponentActivity() {
 
         var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
-        var initialTab by mutableStateOf(0) // 0=搜索, 1=我的
+        var initialTab by mutableStateOf(0) // 0=搜索, 1=发现, 2=我的, 3=设置
 
         splashScreen.setKeepOnScreenCondition { !isReady }
 
@@ -83,7 +91,12 @@ class MainActivity : ComponentActivity() {
                 isGuest -> Routes.MAIN
                 else -> Routes.LOGIN
             }
-            initialTab = if (isValid) 1 else 0
+            initialTab = if (isValid) 2 else 0
+
+            // 应用语言设置
+            val language = languageStorage.language.first()
+            applyLanguage(language)
+
             isReady = true
         }
 
@@ -143,6 +156,34 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun applyLanguage(language: String) {
+        val locales = when (language) {
+            LanguageStorage.LANGUAGE_CHINESE -> LocaleListCompat.forLanguageTags("zh-CN")
+            LanguageStorage.LANGUAGE_ENGLISH -> LocaleListCompat.forLanguageTags("en")
+            LanguageStorage.LANGUAGE_JAPANESE -> LocaleListCompat.forLanguageTags("ja")
+            LanguageStorage.LANGUAGE_KOREAN -> LocaleListCompat.forLanguageTags("ko")
+            else -> LocaleListCompat.getEmptyLocaleList()
+        }
+        AppCompatDelegate.setApplicationLocales(locales)
+        // ComponentActivity 不会自动处理 AppCompatDelegate 的 locale 变更，
+        // 需手动更新 Configuration 以使 Compose 读取到正确的 locale
+        if (locales.isEmpty) {
+            // 跟随系统：清除自定义 locale
+            val config = resources.configuration
+            config.setLocale(Locale.getDefault())
+            @Suppress("DEPRECATION")
+            resources.updateConfiguration(config, resources.displayMetrics)
+        } else {
+            val tag = locales.get(0)?.toLanguageTag() ?: return
+            val locale = Locale.forLanguageTag(tag)
+            Locale.setDefault(locale)
+            val config = resources.configuration
+            config.setLocale(locale)
+            @Suppress("DEPRECATION")
+            resources.updateConfiguration(config, resources.displayMetrics)
+        }
+    }
+
     private fun checkCrashAndPrompt() {
         val crashCount = CrashHandler.getAndResetCrashCount(this)
         if (crashCount >= 2) {
@@ -185,7 +226,7 @@ class MainActivity : ComponentActivity() {
             clipboard.setPrimaryClip(
                 android.content.ClipData.newPlainText("Crash Log", body)
             )
-            Toast.makeText(this, "日志已复制到剪贴板，请手动发送至 1577865546@qq.com", Toast.LENGTH_LONG).show()
+            showToast("日志已复制到剪贴板，请手动发送至 1577865546@qq.com", Toast.LENGTH_LONG)
         }
     }
 }

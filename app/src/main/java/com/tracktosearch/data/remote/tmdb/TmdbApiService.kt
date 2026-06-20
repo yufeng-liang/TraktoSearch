@@ -64,12 +64,39 @@ interface TmdbApiService {
     @GET("person/{person_id}/movie_credits")
     suspend fun getPersonMovieCredits(
         @Path("person_id") id: Int,
-        @Query("language") language: String = "zh-CN"
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
     ): Response<TmdbPersonMovieCredits>
 
     @GET("person/{person_id}/tv_credits")
     suspend fun getPersonTvCredits(
         @Path("person_id") id: Int,
-        @Query("language") language: String = "zh-CN"
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
     ): Response<TmdbPersonTvCredits>
+
+    @GET("search/movie")
+    suspend fun searchMovie(
+        @Query("query") query: String,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
+    @GET("movie/popular")
+    suspend fun getPopularMovies(
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
+    @GET("movie/upcoming")
+    suspend fun getUpcomingMovies(
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
+    @GET("movie/top_rated")
+    suspend fun getTopRatedMovies(
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
 }

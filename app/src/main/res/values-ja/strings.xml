@@ -1,0 +1,387 @@
+<resources>
+    <string name="app_name">TraktToSearch</string>
+
+    <!-- Main Screen -->
+    <string name="tab_search">検索</string>
+    <string name="tab_discover">発見</string>
+    <string name="tab_me">マイ</string>
+    <string name="tab_settings">設定</string>
+    <string name="press_back_again">もう一度押して終了</string>
+
+    <!-- Discover Screen -->
+    <string name="discover_title">発見</string>
+    <string name="discover_popular">人気</string>
+    <string name="discover_upcoming">公開予定</string>
+    <string name="discover_recommended">おすすめ</string>
+
+    <!-- Search Screen -->
+    <string name="search_title">リソース検索</string>
+    <string name="search_back">戻る</string>
+    <string name="search_placeholder">映画タイトルを入力してクラウドリソースを検索</string>
+    <string name="search_button">検索</string>
+    <string name="search_loading">検索中…</string>
+    <string name="search_failed">検索失敗: %1$s</string>
+    <string name="search_no_results">リソースが見つかりません</string>
+    <string name="search_empty_hint">キーワードを入力して検索を開始</string>
+    <string name="search_default_hint">映画やテレビ番組を検索</string>
+    <string name="search_results">検索結果 (%1$d)</string>
+    <string name="search_clear_input">クリア</string>
+    <string name="search_history_title">検索履歴</string>
+    <string name="search_history_clear_all">すべてクリア</string>
+    <string name="search_history_delete">削除</string>
+    <string name="search_popular_title">人気の検索</string>
+    <string name="search_suggestions_title">サジェスチョン</string>
+
+    <!-- Watchlist Screen -->
+    <string name="watchlist_title">マイウォッチリスト</string>
+    <string name="watchlist_search">検索</string>
+    <string name="watchlist_refresh">更新</string>
+    <string name="logout">ログアウト</string>
+    <string name="watchlist_tab_movies">映画</string>
+    <string name="watchlist_tab_shows">テレビ</string>
+    <string name="watchlist_retry">再試行</string>
+    <string name="watchlist_loading">読み込み中…</string>
+    <string name="watchlist_mode_watchlist">ウォッチリスト</string>
+    <string name="watchlist_tab_history">履歴</string>
+
+    <!-- Detail Screen -->
+    <string name="detail_back">戻る</string>
+    <string name="detail_share">共有</string>
+    <string name="detail_marked_watched">視聴済み</string>
+    <string name="detail_mark_watched">視聴済みにする</string>
+    <string name="detail_no_overview">あらすじがありません</string>
+    <string name="detail_overview_label">あらすじ</string>
+    <string name="detail_retry">再試行</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">TraktToSearch</string>
+    <string name="login_button">Traktでログイン</string>
+    <string name="login_failed">ログイン失敗</string>
+    <string name="login_retry">再試行</string>
+    <string name="login_guest">ゲストとして続行</string>
+
+    <!-- Loading / Empty / Error Views -->
+    <string name="loading_default">読み込み中…</string>
+    <string name="empty_default">データがありません</string>
+    <string name="error_retry">再試行</string>
+
+    <!-- Theme -->
+    <string name="settings_theme">テーマ</string>
+    <string name="theme_system">システムに従う</string>
+    <string name="theme_dark">ダーク</string>
+    <string name="theme_light">ライト</string>
+
+    <!-- Language -->
+    <string name="settings_language">言語</string>
+    <string name="language_system">システムに従う</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+
+    <!-- Settings -->
+    <string name="settings_title">設定</string>
+    <string name="settings_appearance">外観</string>
+    <string name="settings_search">検索</string>
+    <string name="settings_storage">ストレージ</string>
+    <string name="settings_clear_cache">キャッシュクリア</string>
+    <string name="settings_about">について</string>
+    <string name="settings_version">バージョン</string>
+    <string name="settings_cache">キャッシュ</string>
+    <string name="settings_cache_clear">クリア</string>
+    <string name="settings_latest_version">最新バージョン v%1$s</string>
+    <string name="settings_already_latest">最新です v%1$s</string>
+    <string name="settings_discover_sections">発見セクション</string>
+    <string name="settings_discover_sections_desc">発見ページのセクション表示と並び順</string>
+    <string name="settings_logout_button">ログアウト</string>
+
+    <!-- Data Management -->
+    <string name="settings_data_management">データ管理</string>
+
+    <!-- Notification -->
+    <string name="settings_notification">通知</string>
+    <string name="settings_notification_enabled">通知を有効化</string>
+    <string name="settings_notification_enabled_desc">公開と新シーズンの通知を受け取る</string>
+    <string name="settings_notification_release">公開通知</string>
+    <string name="settings_notification_new_season">新シーズン通知</string>
+
+    <!-- Statistics -->
+    <string name="statistics_title">統計</string>
+    <string name="statistics_total">合計</string>
+    <string name="statistics_this_month">今月</string>
+    <string name="statistics_this_year">今年</string>
+    <string name="statistics_heatmap">視聴ヒートマップ</string>
+    <string name="statistics_genre_distribution">ジャンル分布</string>
+    <string name="statistics_genre_ranking">トップジャンル</string>
+    <string name="statistics_less">少</string>
+    <string name="statistics_more">多</string>
+
+    <!-- Search Filter -->
+    <string name="search_filter_type">タイプ</string>
+    <string name="search_filter_disk">ディスクタイプ</string>
+
+    <!-- Watchlist Screen (追加) -->
+    <string name="watchlist_poster_error">ポスターと中国語タイトルの読み込みに失敗しました。ネットワークプロキシを有効にして更新してください</string>
+    <string name="watchlist_load_failed">読み込み失敗: %1$s</string>
+    <string name="watchlist_empty_movies">ウォッチリストが空です</string>
+    <string name="watchlist_empty_shows">ウォッチリストが空です</string>
+    <string name="watchlist_search_no_movies">一致する映画がありません</string>
+    <string name="watchlist_search_no_shows">一致するテレビ番組がありません</string>
+    <string name="watchlist_logout">ログアウト</string>
+    <string name="watchlist_search_watchlist">ウォッチリストを検索</string>
+    <string name="watchlist_search_history">履歴を検索</string>
+    <string name="history_empty_movies">視聴した映画はまだありません</string>
+    <string name="history_empty_shows">視聴したテレビ番組はまだありません</string>
+
+    <!-- Detail Screen (追加) -->
+    <string name="detail_mark_watchlist">ウォッチリスト</string>
+    <string name="detail_marked_watchlist">ウォッチリストに追加済み</string>
+    <string name="detail_mark_processing">処理中</string>
+    <string name="detail_login_required_title">ログインが必要</string>
+    <string name="detail_login_required_message">ログインして、ウォッチリスト・視聴済み・評価機能をご利用ください</string>
+    <string name="detail_login_go">ログインする</string>
+    <string name="detail_filter_sources">検索ソース</string>
+    <string name="detail_filter_disk_types">ディスクタイプ</string>
+    <string name="detail_searching">クラウドリソースを検索中…</string>
+    <string name="detail_searching_info">%1$d/%2$d ソース完了</string>
+    <string name="detail_no_resources">クラウドリソースが見つかりません</string>
+    <string name="detail_found_resources">%1$d 個のリソースが見つかりました</string>
+    <string name="detail_load_more">さらに読み込む (%1$d/%2$d)</string>
+    <string name="detail_all_loaded">全 %1$d 件表示中</string>
+    <string name="detail_disk_type_quark">Quark</string>
+    <string name="detail_disk_type_baidu">Baidu</string>
+    <string name="detail_disk_type_ali">Ali</string>
+    <string name="detail_disk_type_xunlei">Xunlei</string>
+    <string name="detail_disk_type_uc">UC</string>
+    <string name="detail_disk_type_115">115</string>
+    <string name="detail_disk_type_magnet">マグネット</string>
+    <string name="detail_disk_type_other">その他</string>
+
+    <!-- Resource Item Card -->
+    <string name="resource_viewed">閲覧済み</string>
+    <string name="resource_scan">スキャン</string>
+    <string name="resource_invalid">無効</string>
+
+    <!-- Disk Type Labels -->
+    <string name="disk_quark">Quark</string>
+    <string name="disk_baidu">Baidu</string>
+    <string name="disk_ali">Ali</string>
+    <string name="disk_xunlei">Xunlei</string>
+    <string name="disk_uc">UC</string>
+    <string name="disk_115">115</string>
+    <string name="disk_magnet">マグネット</string>
+    <string name="disk_other">その他</string>
+
+    <!-- Login Screen (追加) -->
+    <string name="login_subtitle">ウォッチリストからリソースへ、すぐに</string>
+    <string name="login_connecting">Traktに接続中…</string>
+    <string name="login_connecting_hint">お待ちください。アカウント情報を取得中です</string>
+    <string name="login_denied">認証が拒否されました</string>
+    <string name="login_success">ログイン成功、読み込み中…</string>
+    <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
+
+    <!-- Login Prompt Screen -->
+    <string name="login_prompt_title">Traktにログイン</string>
+    <string name="login_prompt_desc">ログイン後にウォッチリストを同期\n見たいリソースをすぐに見つけよう</string>
+    <string name="login_prompt_button">Traktでログイン</string>
+    <string name="login_prompt_guest">ゲストとして続ける</string>
+
+    <!-- Ratings -->
+    <string name="rating_trakt">Trakt</string>
+
+    <!-- Detail Info (追加) -->
+    <string name="detail_director">監督</string>
+    <string name="detail_actors">キャスト</string>
+    <string name="detail_comments">コメント</string>
+    <string name="detail_no_comments">コメントはまだありません</string>
+    <string name="detail_seasons">シーズン</string>
+    <string name="detail_season">シーズン%1$d</string>
+    <string name="detail_episode_count">%1$d エピソード</string>
+    <string name="detail_episode">第%1$d話 %2$s</string>
+    <string name="detail_original_title">原題: %1$s</string>
+    <string name="detail_runtime_hours">%1$d時間%2$d分</string>
+    <string name="detail_runtime_minutes">%1$d分</string>
+    <string name="detail_year">%1$d年</string>
+    <string name="detail_collapse">折りたたむ ▲</string>
+    <string name="detail_expand">展開する ▼</string>
+    <string name="detail_load_more_text">スクロールしてさらに読み込む (%1$d/%2$d)</string>
+    <string name="detail_spoiler">ネタバレ</string>
+    <string name="detail_tab_resources">リソース</string>
+    <string name="detail_tab_comments">コメント</string>
+    <string name="detail_tab_recommendations">おすすめ</string>
+    <string name="detail_no_recommendations">おすすめはありません</string>
+    <string name="detail_load_error">読み込みに失敗しました。再試行してください</string>
+    <string name="detail_recommendations_title">関連おすすめ</string>
+    <string name="detail_translating">翻訳中…</string>
+    <string name="detail_translate_failed">翻訳失敗</string>
+    <string name="detail_translate">翻訳</string>
+    <string name="detail_translate_all">すべて翻訳</string>
+    <string name="detail_translated">翻訳を表示</string>
+    <string name="detail_original">原文を表示</string>
+    <string name="detail_load_more_comments">下にスクロールしてさらに読み込む</string>
+    <string name="detail_all_comments_loaded">全 %1$d 件のコメントを読み込みました</string>
+    <string name="detail_cast_crew">キャスト＆スタッフ</string>
+    <string name="detail_cast_all">すべて ></string>
+    <string name="detail_director_tag">監督</string>
+    <string name="detail_cast_as">%1$s 役</string>
+    <string name="detail_writer_tag">脚本</string>
+    <string name="detail_producer_tag">プロデューサー</string>
+    <string name="detail_cast_all_title">キャスト＆スタッフ一覧</string>
+    <string name="detail_cast_close">閉じる</string>
+    <string name="detail_specials">スペシャル</string>
+    <string name="detail_actor">俳優</string>
+    <string name="detail_your_rating">マイ評価</string>
+
+    <!-- Person Screen -->
+    <string name="person_movie_credits">映画出演</string>
+    <string name="person_tv_credits">テレビ出演</string>
+    <string name="person_all">すべて ></string>
+    <string name="person_load_more">さらに読み込む</string>
+    <string name="detail_close">閉じる</string>
+    <string name="person_no_biography">経歴はありません</string>
+
+    <!-- Settings (追加) -->
+    <string name="settings_clear_cache_confirm">キャッシュデータをすべて削除してもよろしいですか？</string>
+    <string name="settings_check_update">アップデートを確認</string>
+    <string name="settings_changelog">更新履歴</string>
+    <string name="settings_account">アカウント</string>
+    <string name="settings_logout_confirm">ログアウトしてもよろしいですか？</string>
+    <string name="settings_source_github">GitHub</string>
+    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_licenses">オープンソースライセンス</string>
+
+    <!-- Data Management (追加) -->
+    <string name="settings_export_json">データをエクスポート (JSON)</string>
+    <string name="settings_export_json_desc">ウォッチリストと履歴をJSONとしてエクスポート</string>
+    <string name="settings_export_csv">CSVとしてエクスポート</string>
+    <string name="settings_export_csv_desc">ウォッチリストをCSVとしてエクスポート</string>
+    <string name="settings_import_letterboxd">Letterboxdからインポート</string>
+    <string name="settings_import_letterboxd_desc">Letterboxd CSVからウォッチリストをインポート</string>
+    <string name="settings_import_imdb">IMDbからインポート</string>
+    <string name="settings_import_imdb_desc">IMDb CSVからウォッチリストをインポート</string>
+
+    <!-- Notification (追加) -->
+    <string name="settings_notification_release_desc">ウォッチリストの作品が公開されたら通知</string>
+    <string name="settings_notification_new_season_desc">新しいシーズンが放送されたら通知</string>
+
+    <!-- Update -->
+    <string name="update_title">新しいバージョンがあります</string>
+    <string name="update_download">今すぐ更新</string>
+    <string name="update_later">後で通知</string>
+    <string name="update_browser_download">ブラウザでダウンロード</string>
+    <string name="update_downloading">ダウンロード中…</string>
+    <string name="update_download_failed">ダウンロードに失敗しました。ブラウザでダウンロードしてください</string>
+    <string name="update_install">インストール中…</string>
+
+    <!-- Statistics (追加) -->
+    <string name="statistics_info">統計の説明</string>
+    <string name="statistics_info_overview">Q：上部の数字は何ですか？\nA：総視聴数、今月の視聴数、今年の視聴数を表示しています。データはTraktの視聴履歴に基づきます。</string>
+    <string name="statistics_info_heatmap">Q：視聴ヒートマップとは？\nA：GitHubのコントリビューショングラフと同様に、各マス目は1日を表します。色が濃いほどその日の視聴が多いことを示し、過去1年分をカバーします。</string>
+    <string name="statistics_info_genre_distribution">Q：ジャンル分布の円グラフとは？\nA：視聴履歴における各ジャンルの割合を表示します。各スライスをタップすると正確な数とパーセンテージが表示されます。</string>
+    <string name="statistics_info_genre_ranking">Q：トップジャンルランキングとは？\nA：視聴数に基づいてジャンルをランキング表示します。上位3つは金、銀、銅のメダルでマークされます。</string>
+
+    <!-- Common UI -->
+    <string name="common_retry">再試行</string>
+    <string name="common_close">閉じる</string>
+    <string name="common_load_failed">読み込み失敗</string>
+    <string name="common_no_data">データがありません</string>
+    <string name="common_loading">読み込み中…</string>
+    <string name="common_save_success">アルバムに保存しました</string>
+    <string name="common_save_failed">保存失敗</string>
+    <string name="common_save_exists">既に存在: %1$s</string>
+    <string name="common_saved_path">保存先: %1$s/%2$s</string>
+    <string name="common_copy_success">コピーしました</string>
+    <string name="common_open_failed">このリンクを開けません</string>
+
+    <!-- Search Filter (追加) -->
+    <string name="search_filter_all">すべて</string>
+    <string name="search_filter_movie">映画</string>
+    <string name="search_filter_show">テレビ番組</string>
+    <string name="search_view_all">すべて表示</string>
+    <string name="error_no_data">データがありません</string>
+
+    <!-- Statistics -->
+    <string name="statistics_pie_hint">円グラフをタップして詳細を見る</string>
+    <string name="statistics_heatmap_hint">マス目をタップして詳細を見る</string>
+    <string name="statistics_item_count">%1$s: %2$d 作品 (%3$s)</string>
+    <string name="statistics_date_count_watched">%1$s · %2$d 作品視聴</string>
+    <string name="statistics_date_no_data">%1$s · 視聴記録なし</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_watched">視聴済み</string>
+    <string name="cd_not_watched">未視聴</string>
+    <string name="cd_saved">保存済み</string>
+    <string name="cd_save">保存</string>
+    <string name="cd_edit">編集</string>
+    <string name="cd_delete">削除</string>
+    <string name="cd_close">閉じる</string>
+    <string name="cd_back_to_top">トップに戻る</string>
+    <string name="cd_clear">クリア</string>
+
+    <!-- Settings: Custom Search Source -->
+    <string name="settings_custom_search_source_title">カスタム検索ソースを追加</string>
+    <string name="settings_custom_search_source_subtitle">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
+    <string name="settings_add_source">カスタム検索ソースを追加</string>
+    <string name="settings_edit_source">検索ソースを編集</string>
+    <string name="settings_delete_source">検索ソースを削除</string>
+    <string name="settings_delete_source_confirm">「%1$s」を削除してもよろしいですか？</string>
+    <string name="settings_source_name">名前</string>
+    <string name="settings_source_base_url">Base URL（例: https://so.252035.xyz/）</string>
+    <string name="settings_source_api_path">APIパス（例: api/search）</string>
+    <string name="settings_source_keyword_param">キーワードパラメータ名（例: kw）</string>
+    <string name="settings_source_disk_param">ディスクタイプパラメータ名（任意）</string>
+    <string name="settings_source_disk_param_value">ディスクタイプパラメータ値（任意）</string>
+    <string name="settings_source_src_param">ソースパラメータ名（任意、例: src）</string>
+    <string name="settings_source_src_value">ソースパラメータ値（任意、例: all）</string>
+    <string name="settings_source_parse_mode">解析モード</string>
+    <string name="settings_source_parse_mode_pansou">PanSouテンプレート</string>
+    <string name="settings_source_parse_mode_zreso">Zresoテンプレート</string>
+    <string name="settings_source_parse_mode_custom">カスタムJSONPath</string>
+    <string name="settings_source_jsonpath_title">JSONPath式</string>
+    <string name="settings_source_jsonpath_list">リストパス（例: $.data.results）</string>
+    <string name="settings_source_jsonpath_name">名前パス（例: title）</string>
+    <string name="settings_source_jsonpath_url">URLパス（例: url）</string>
+    <string name="settings_source_jsonpath_disk">ディスクタイプパス（例: type）</string>
+    <string name="settings_source_jsonpath_date">日付パス（例: datetime）</string>
+    <string name="settings_source_test">テスト</string>
+    <string name="settings_source_save">保存</string>
+    <string name="settings_source_unnamed">無名</string>
+    <string name="settings_source_test_success">テスト成功、%1$d 件の結果を解析</string>
+    <string name="settings_source_test_empty">接続成功しましたが、結果が解析されませんでした</string>
+    <string name="settings_cache_cleared">キャッシュをクリアしました</string>
+    <string name="settings_cache_clear_failed">キャッシュクリア失敗: %1$s</string>
+    <string name="settings_no_changelog">更新履歴はありません</string>
+
+    <!-- Genre Names -->
+    <string name="genre_action">アクション</string>
+    <string name="genre_adventure">アドベンチャー</string>
+    <string name="genre_animation">アニメーション</string>
+    <string name="genre_anime">アニメ</string>
+    <string name="genre_comedy">コメディ</string>
+    <string name="genre_crime">犯罪</string>
+    <string name="genre_documentary">ドキュメンタリー</string>
+    <string name="genre_drama">ドラマ</string>
+    <string name="genre_fantasy">ファンタジー</string>
+    <string name="genre_history">歴史</string>
+    <string name="genre_horror">ホラー</string>
+    <string name="genre_music">音楽</string>
+    <string name="genre_musical">ミュージカル</string>
+    <string name="genre_mystery">ミステリー</string>
+    <string name="genre_romance">ロマンス</string>
+    <string name="genre_scifi">SF</string>
+    <string name="genre_sport">スポーツ</string>
+    <string name="genre_thriller">スリラー</string>
+    <string name="genre_war">戦争</string>
+    <string name="genre_western">西部劇</string>
+    <string name="genre_family">家族</string>
+    <string name="genre_kids">子供向け</string>
+    <string name="genre_news">ニュース</string>
+    <string name="genre_reality">リアリティ番組</string>
+    <string name="genre_soap">ソープオペラ</string>
+    <string name="genre_talk">トーク番組</string>
+    <string name="genre_spy">スパイ</string>
+    <string name="genre_superhero">スーパーヒーロー</string>
+    <string name="genre_biography">伝記</string>
+    <string name="genre_noir">フィルムノワール</string>
+    <string name="genre_game_show">ゲーム番組</string>
+</resources>

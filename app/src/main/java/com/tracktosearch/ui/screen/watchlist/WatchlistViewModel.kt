@@ -3,14 +3,14 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
-import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
-import com.tracktosearch.data.local.FavoriteResourceStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.local.db.MediaItemEntity
+import com.tracktosearch.data.local.db.OfflineCacheManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -73,18 +73,15 @@ data class WatchlistUiState(
     val historyMoviesError: String? = null,
     val historyShowsError: String? = null,
     val historyMoviesLoaded: Boolean = false,
-    val historyShowsLoaded: Boolean = false,
-    // 资源收藏
-    val favoriteResources: List<ResourceItem> = emptyList(),
-    val favoriteResourcesLoaded: Boolean = false
+    val historyShowsLoaded: Boolean = false
 )
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
-    private val favoriteResourceStorage: FavoriteResourceStorage,
-    private val themeStorage: ThemeStorage
+    private val themeStorage: ThemeStorage,
+    private val offlineCacheManager: OfflineCacheManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
@@ -160,11 +157,19 @@ class WatchlistViewModel @Inject constructor(
                     moviePage = _uiState.value.moviePage + 1,
                     tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
                 )
+                // 写入离线缓存（仅首页）
+                if (_uiState.value.moviePage == 2) {
+                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
+                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, entities)
+                }
             }.onFailure { e ->
+                // 从离线缓存读取
+                val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
                 _uiState.value = _uiState.value.copy(
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                     moviesLoaded = true,
-                    moviesError = e.message ?: "加载失败"
+                    movies = if (cached.isNotEmpty()) cached.map { it.toMovieUiItem() } else _uiState.value.movies,
+                    moviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
         }
@@ -226,11 +231,19 @@ class WatchlistViewModel @Inject constructor(
                     showPage = _uiState.value.showPage + 1,
                     tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
                 )
+                // 写入离线缓存（仅首页）
+                if (_uiState.value.showPage == 2) {
+                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
+                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW, entities)
+                }
             }.onFailure { e ->
+                // 从离线缓存读取
+                val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
                 _uiState.value = _uiState.value.copy(
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                     showsLoaded = true,
-                    showsError = e.message ?: "加载失败"
+                    shows = if (cached.isNotEmpty()) cached.map { it.toShowUiItem() } else _uiState.value.shows,
+                    showsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
         }
@@ -264,11 +277,17 @@ class WatchlistViewModel @Inject constructor(
                     historyMoviesLoaded = true,
                     tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
                 )
+                // 写入离线缓存
+                val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_MOVIE) }
+                offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_HISTORY_MOVIE, entities)
             }.onFailure { e ->
+                // 从离线缓存读取
+                val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_HISTORY_MOVIE)
                 _uiState.value = _uiState.value.copy(
                     isLoadingHistoryMovies = false,
                     historyMoviesLoaded = true,
-                    historyMoviesError = e.message ?: "加载失败"
+                    historyMovies = if (cached.isNotEmpty()) cached.map { it.toMovieUiItem() } else _uiState.value.historyMovies,
+                    historyMoviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
         }
@@ -301,11 +320,17 @@ class WatchlistViewModel @Inject constructor(
                     historyShowsLoaded = true,
                     tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
                 )
+                // 写入离线缓存
+                val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_SHOW) }
+                offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_HISTORY_SHOW, entities)
             }.onFailure { e ->
+                // 从离线缓存读取
+                val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_HISTORY_SHOW)
                 _uiState.value = _uiState.value.copy(
                     isLoadingHistoryShows = false,
                     historyShowsLoaded = true,
-                    historyShowsError = e.message ?: "加载失败"
+                    historyShows = if (cached.isNotEmpty()) cached.map { it.toShowUiItem() } else _uiState.value.historyShows,
+                    historyShowsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
         }
@@ -371,26 +396,6 @@ class WatchlistViewModel @Inject constructor(
         )
     }
 
-    fun loadFavoriteResources(forceReload: Boolean = false) {
-        if (!forceReload && _uiState.value.favoriteResourcesLoaded) return
-        viewModelScope.launch {
-            val resources = favoriteResourceStorage.getFavoriteResources()
-            _uiState.value = _uiState.value.copy(
-                favoriteResources = resources,
-                favoriteResourcesLoaded = true
-            )
-        }
-    }
-
-    fun toggleFavorite(item: ResourceItem) {
-        viewModelScope.launch {
-            favoriteResourceStorage.toggleFavorite(item)
-            _uiState.value = _uiState.value.copy(
-                favoriteResources = _uiState.value.favoriteResources.filterNot { it.url == item.url }
-            )
-        }
-    }
-
     private fun createPlaceholderMovie(item: TraktWatchlistMovieItem): MovieUiItem {
         return MovieUiItem(
             traktId = item.movie.ids.trakt,
@@ -423,16 +428,12 @@ class WatchlistViewModel @Inject constructor(
 
     fun refresh() {
         val wasHistoryLoaded = _uiState.value.historyMoviesLoaded || _uiState.value.historyShowsLoaded
-        val wasFavoritesLoaded = _uiState.value.favoriteResourcesLoaded
         _uiState.value = WatchlistUiState()
         loadMovies(forceReload = true)
         loadShows(forceReload = true)
         if (wasHistoryLoaded) {
             loadHistoryMovies(forceReload = true)
             loadHistoryShows(forceReload = true)
-        }
-        if (wasFavoritesLoaded) {
-            loadFavoriteResources(forceReload = true)
         }
     }
 
@@ -453,9 +454,6 @@ class WatchlistViewModel @Inject constructor(
         if (state.historyMoviesLoaded || state.historyShowsLoaded) {
             loadHistoryMovies(forceReload = true)
             loadHistoryShows(forceReload = true)
-        }
-        if (state.favoriteResourcesLoaded) {
-            loadFavoriteResources(forceReload = true)
         }
     }
 
@@ -498,3 +496,59 @@ private suspend fun <T> retryIO(times: Int, block: suspend () -> T): T {
     }
     throw lastException!!
 }
+
+// ========== 离线缓存转换扩展 ==========
+
+private fun MovieUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
+    traktId = traktId,
+    tmdbId = tmdbId,
+    type = type,
+    title = title,
+    displayTitle = displayTitle,
+    year = year,
+    genres = genres,
+    posterUrl = posterUrl,
+    imdbId = imdbId,
+    traktRating = traktRating,
+    listedAt = listedAt
+)
+
+private fun ShowUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
+    traktId = traktId,
+    tmdbId = tmdbId,
+    type = type,
+    title = title,
+    displayTitle = displayTitle,
+    year = year,
+    genres = genres,
+    posterUrl = posterUrl,
+    imdbId = imdbId,
+    traktRating = traktRating,
+    listedAt = listedAt
+)
+
+private fun MediaItemEntity.toMovieUiItem() = MovieUiItem(
+    traktId = traktId,
+    tmdbId = tmdbId,
+    title = title,
+    displayTitle = displayTitle,
+    year = year,
+    genres = genres,
+    posterUrl = posterUrl,
+    imdbId = imdbId,
+    traktRating = traktRating,
+    listedAt = listedAt
+)
+
+private fun MediaItemEntity.toShowUiItem() = ShowUiItem(
+    traktId = traktId,
+    tmdbId = tmdbId,
+    title = title,
+    displayTitle = displayTitle,
+    year = year,
+    genres = genres,
+    posterUrl = posterUrl,
+    imdbId = imdbId,
+    traktRating = traktRating,
+    listedAt = listedAt
+)

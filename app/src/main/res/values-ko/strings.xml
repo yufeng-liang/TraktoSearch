@@ -1,0 +1,387 @@
+<resources>
+    <string name="app_name">TraktToSearch</string>
+
+    <!-- Main Screen -->
+    <string name="tab_search">검색</string>
+    <string name="tab_discover">발견</string>
+    <string name="tab_me">마이</string>
+    <string name="tab_settings">설정</string>
+    <string name="press_back_again">한 번 더 눌러 종료</string>
+
+    <!-- Discover Screen -->
+    <string name="discover_title">발견</string>
+    <string name="discover_popular">인기</string>
+    <string name="discover_upcoming">예정</string>
+    <string name="discover_recommended">추천</string>
+
+    <!-- Search Screen -->
+    <string name="search_title">리소스 검색</string>
+    <string name="search_back">뒤로</string>
+    <string name="search_placeholder">영화 제목을 입력하여 클라우드 리소스 검색</string>
+    <string name="search_button">검색</string>
+    <string name="search_loading">검색 중…</string>
+    <string name="search_failed">검색 실패: %1$s</string>
+    <string name="search_no_results">리소스를 찾을 수 없습니다</string>
+    <string name="search_empty_hint">키워드를 입력하여 검색 시작</string>
+    <string name="search_default_hint">영화 및 TV 프로그램 검색</string>
+    <string name="search_results">검색 결과 (%1$d)</string>
+    <string name="search_clear_input">지우기</string>
+    <string name="search_history_title">검색 기록</string>
+    <string name="search_history_clear_all">전체 지우기</string>
+    <string name="search_history_delete">삭제</string>
+    <string name="search_popular_title">인기 검색</string>
+    <string name="search_suggestions_title">제안</string>
+
+    <!-- Watchlist Screen -->
+    <string name="watchlist_title">내 관심목록</string>
+    <string name="watchlist_search">검색</string>
+    <string name="watchlist_refresh">새로고침</string>
+    <string name="logout">로그아웃</string>
+    <string name="watchlist_tab_movies">영화</string>
+    <string name="watchlist_tab_shows">TV</string>
+    <string name="watchlist_retry">재시도</string>
+    <string name="watchlist_loading">로딩 중…</string>
+    <string name="watchlist_mode_watchlist">관심목록</string>
+    <string name="watchlist_tab_history">기록</string>
+
+    <!-- Detail Screen -->
+    <string name="detail_back">뒤로</string>
+    <string name="detail_share">공유</string>
+    <string name="detail_marked_watched">시청함</string>
+    <string name="detail_mark_watched">시청한 것으로 표시</string>
+    <string name="detail_no_overview">줄거리 없음</string>
+    <string name="detail_overview_label">줄거리</string>
+    <string name="detail_retry">재시도</string>
+
+    <!-- Login Screen -->
+    <string name="login_title">TraktToSearch</string>
+    <string name="login_button">Trakt로 로그인</string>
+    <string name="login_failed">로그인 실패</string>
+    <string name="login_retry">재시도</string>
+    <string name="login_guest">게스트로 계속</string>
+
+    <!-- Loading / Empty / Error Views -->
+    <string name="loading_default">로딩 중…</string>
+    <string name="empty_default">데이터 없음</string>
+    <string name="error_retry">재시도</string>
+
+    <!-- Theme -->
+    <string name="settings_theme">테마</string>
+    <string name="theme_system">시스템 따르기</string>
+    <string name="theme_dark">다크</string>
+    <string name="theme_light">라이트</string>
+
+    <!-- Language -->
+    <string name="settings_language">언어</string>
+    <string name="language_system">시스템 따르기</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
+    <string name="language_japanese">日本語</string>
+    <string name="language_korean">한국어</string>
+
+    <!-- Settings -->
+    <string name="settings_title">설정</string>
+    <string name="settings_appearance">외관</string>
+    <string name="settings_search">검색</string>
+    <string name="settings_storage">저장소</string>
+    <string name="settings_clear_cache">캐시 지우기</string>
+    <string name="settings_about">정보</string>
+    <string name="settings_version">버전</string>
+    <string name="settings_cache">캐시</string>
+    <string name="settings_cache_clear">지우기</string>
+    <string name="settings_latest_version">최신 버전 v%1$s</string>
+    <string name="settings_already_latest">최신 버전 v%1$s</string>
+    <string name="settings_discover_sections">발견 섹션</string>
+    <string name="settings_discover_sections_desc">발견 페이지 섹션 표시 및 정렬</string>
+    <string name="settings_logout_button">로그아웃</string>
+
+    <!-- Data Management -->
+    <string name="settings_data_management">데이터 관리</string>
+
+    <!-- Notification -->
+    <string name="settings_notification">알림</string>
+    <string name="settings_notification_enabled">알림 활성화</string>
+    <string name="settings_notification_enabled_desc">개봉 및 새 시즌 알림 받기</string>
+    <string name="settings_notification_release">개봉 알림</string>
+    <string name="settings_notification_new_season">새 시즌 알림</string>
+
+    <!-- Statistics -->
+    <string name="statistics_title">통계</string>
+    <string name="statistics_total">전체</string>
+    <string name="statistics_this_month">이번 달</string>
+    <string name="statistics_this_year">올해</string>
+    <string name="statistics_heatmap">시청 히트맵</string>
+    <string name="statistics_genre_distribution">장르 분포</string>
+    <string name="statistics_genre_ranking">인기 장르</string>
+    <string name="statistics_less">적음</string>
+    <string name="statistics_more">많음</string>
+
+    <!-- Search Filter -->
+    <string name="search_filter_type">유형</string>
+    <string name="search_filter_disk">디스크 유형</string>
+
+    <!-- Watchlist Screen (추가) -->
+    <string name="watchlist_poster_error">포스터 및 중국어 제목 로딩 실패. 네트워크 프록시를 활성화하고 새로고침해주세요</string>
+    <string name="watchlist_load_failed">로딩 실패: %1$s</string>
+    <string name="watchlist_empty_movies">관심목록이 비어 있습니다</string>
+    <string name="watchlist_empty_shows">관심목록이 비어 있습니다</string>
+    <string name="watchlist_search_no_movies">일치하는 영화가 없습니다</string>
+    <string name="watchlist_search_no_shows">일치하는 TV 프로그램이 없습니다</string>
+    <string name="watchlist_logout">로그아웃</string>
+    <string name="watchlist_search_watchlist">관심목록 검색</string>
+    <string name="watchlist_search_history">기록 검색</string>
+    <string name="history_empty_movies">시청한 영화가 아직 없습니다</string>
+    <string name="history_empty_shows">시청한 TV 프로그램이 아직 없습니다</string>
+
+    <!-- Detail Screen (추가) -->
+    <string name="detail_mark_watchlist">관심목록</string>
+    <string name="detail_marked_watchlist">관심목록에 추가됨</string>
+    <string name="detail_mark_processing">처리 중</string>
+    <string name="detail_login_required_title">로그인 필요</string>
+    <string name="detail_login_required_message">로그인 후 관심목록, 시청함, 평점 기능을 이용할 수 있습니다</string>
+    <string name="detail_login_go">로그인하기</string>
+    <string name="detail_filter_sources">검색 소스</string>
+    <string name="detail_filter_disk_types">디스크 유형</string>
+    <string name="detail_searching">클라우드 리소스 검색 중…</string>
+    <string name="detail_searching_info">%1$d/%2$d 소스 완료</string>
+    <string name="detail_no_resources">클라우드 리소스를 찾을 수 없습니다</string>
+    <string name="detail_found_resources">%1$d개의 리소스를 찾았습니다</string>
+    <string name="detail_load_more">더 불러오기 (%1$d/%2$d)</string>
+    <string name="detail_all_loaded">전체 %1$d개 표시 중</string>
+    <string name="detail_disk_type_quark">Quark</string>
+    <string name="detail_disk_type_baidu">Baidu</string>
+    <string name="detail_disk_type_ali">Ali</string>
+    <string name="detail_disk_type_xunlei">Xunlei</string>
+    <string name="detail_disk_type_uc">UC</string>
+    <string name="detail_disk_type_115">115</string>
+    <string name="detail_disk_type_magnet">마그넷</string>
+    <string name="detail_disk_type_other">기타</string>
+
+    <!-- Resource Item Card -->
+    <string name="resource_viewed">조회함</string>
+    <string name="resource_scan">스캔</string>
+    <string name="resource_invalid">유효하지 않음</string>
+
+    <!-- Disk Type Labels -->
+    <string name="disk_quark">Quark</string>
+    <string name="disk_baidu">Baidu</string>
+    <string name="disk_ali">Ali</string>
+    <string name="disk_xunlei">Xunlei</string>
+    <string name="disk_uc">UC</string>
+    <string name="disk_115">115</string>
+    <string name="disk_magnet">마그넷</string>
+    <string name="disk_other">기타</string>
+
+    <!-- Login Screen (추가) -->
+    <string name="login_subtitle">관심목록에서 리소스까지, 한 번에</string>
+    <string name="login_connecting">Trakt에 연결 중…</string>
+    <string name="login_connecting_hint">잠시만 기다려주세요. 계정 정보를 가져오는 중입니다</string>
+    <string name="login_denied">인증이 거부되었습니다</string>
+    <string name="login_success">로그인 성공, 로딩 중…</string>
+    <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
+
+    <!-- Login Prompt Screen -->
+    <string name="login_prompt_title">Trakt에 로그인</string>
+    <string name="login_prompt_desc">로그인 후 관심목록 동기화\n보고 싶은 리소스를 바로 찾아보세요</string>
+    <string name="login_prompt_button">Trakt로 로그인</string>
+    <string name="login_prompt_guest">게스트로 계속</string>
+
+    <!-- Ratings -->
+    <string name="rating_trakt">Trakt</string>
+
+    <!-- Detail Info (추가) -->
+    <string name="detail_director">감독</string>
+    <string name="detail_actors">출연진</string>
+    <string name="detail_comments">댓글</string>
+    <string name="detail_no_comments">아직 댓글이 없습니다</string>
+    <string name="detail_seasons">시즌</string>
+    <string name="detail_season">시즌 %1$d</string>
+    <string name="detail_episode_count">%1$d 에피소드</string>
+    <string name="detail_episode">제%1$d화 %2$s</string>
+    <string name="detail_original_title">원제: %1$s</string>
+    <string name="detail_runtime_hours">%1$d시간 %2$d분</string>
+    <string name="detail_runtime_minutes">%1$d분</string>
+    <string name="detail_year">%1$d년</string>
+    <string name="detail_collapse">접기 ▲</string>
+    <string name="detail_expand">펼치기 ▼</string>
+    <string name="detail_load_more_text">스크롤하여 더 불러오기 (%1$d/%2$d)</string>
+    <string name="detail_spoiler">스포일러</string>
+    <string name="detail_tab_resources">리소스</string>
+    <string name="detail_tab_comments">댓글</string>
+    <string name="detail_tab_recommendations">추천</string>
+    <string name="detail_no_recommendations">추천이 없습니다</string>
+    <string name="detail_load_error">로딩에 실패했습니다. 다시 시도해주세요</string>
+    <string name="detail_recommendations_title">관련 추천</string>
+    <string name="detail_translating">번역 중…</string>
+    <string name="detail_translate_failed">번역 실패</string>
+    <string name="detail_translate">번역</string>
+    <string name="detail_translate_all">모두 번역</string>
+    <string name="detail_translated">번역 보기</string>
+    <string name="detail_original">원문 보기</string>
+    <string name="detail_load_more_comments">아래로 스크롤하여 더 불러오기</string>
+    <string name="detail_all_comments_loaded">전체 %1$d개 댓글 로딩 완료</string>
+    <string name="detail_cast_crew">출연진 및 제작진</string>
+    <string name="detail_cast_all">전체 ></string>
+    <string name="detail_director_tag">감독</string>
+    <string name="detail_cast_as">%1$s 역</string>
+    <string name="detail_writer_tag">각본</string>
+    <string name="detail_producer_tag">프로듀서</string>
+    <string name="detail_cast_all_title">전체 출연진 및 제작진</string>
+    <string name="detail_cast_close">닫기</string>
+    <string name="detail_specials">스페셜</string>
+    <string name="detail_actor">배우</string>
+    <string name="detail_your_rating">내 평점</string>
+
+    <!-- Person Screen -->
+    <string name="person_movie_credits">영화 출연</string>
+    <string name="person_tv_credits">TV 출연</string>
+    <string name="person_all">전체 ></string>
+    <string name="person_load_more">더 불러오기</string>
+    <string name="detail_close">닫기</string>
+    <string name="person_no_biography">약력이 없습니다</string>
+
+    <!-- Settings (추가) -->
+    <string name="settings_clear_cache_confirm">모든 캐시 데이터를 삭제하시겠습니까?</string>
+    <string name="settings_check_update">업데이트 확인</string>
+    <string name="settings_changelog">업데이트 내역</string>
+    <string name="settings_account">계정</string>
+    <string name="settings_logout_confirm">로그아웃하시겠습니까?</string>
+    <string name="settings_source_github">GitHub</string>
+    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_licenses">오픈소스 라이선스</string>
+
+    <!-- Data Management (추가) -->
+    <string name="settings_export_json">데이터 내보내기 (JSON)</string>
+    <string name="settings_export_json_desc">관심목록과 기록을 JSON으로 내보내기</string>
+    <string name="settings_export_csv">CSV로 내보내기</string>
+    <string name="settings_export_csv_desc">관심목록을 CSV로 내보내기</string>
+    <string name="settings_import_letterboxd">Letterboxd에서 가져오기</string>
+    <string name="settings_import_letterboxd_desc">Letterboxd CSV에서 관심목록 가져오기</string>
+    <string name="settings_import_imdb">IMDb에서 가져오기</string>
+    <string name="settings_import_imdb_desc">IMDb CSV에서 관심목록 가져오기</string>
+
+    <!-- Notification (추가) -->
+    <string name="settings_notification_release_desc">관심목록의 작품이 공개되면 알림</string>
+    <string name="settings_notification_new_season_desc">새 시즌이 방영되면 알림</string>
+
+    <!-- Update -->
+    <string name="update_title">새 버전이 있습니다</string>
+    <string name="update_download">지금 업데이트</string>
+    <string name="update_later">나중에 알림</string>
+    <string name="update_browser_download">브라우저에서 다운로드</string>
+    <string name="update_downloading">다운로드 중…</string>
+    <string name="update_download_failed">다운로드 실패. 브라우저에서 다운로드해주세요</string>
+    <string name="update_install">설치 중…</string>
+
+    <!-- Statistics (추가) -->
+    <string name="statistics_info">통계 설명</string>
+    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: 총 시청 수, 이번 달 시청 수, 올해 시청 수를 표시합니다. 데이터는 Trakt 시청 기록을 기반으로 합니다.</string>
+    <string name="statistics_info_heatmap">Q: 시청 히트맵이란?\nA: GitHub의 기여 그래프와 유사하게 각 사각형은 하루를 나타냅니다. 색상이 진할수록 해당 날짜에 더 많이 시청했음을 의미하며, 지난 1년을 포함합니다.</string>
+    <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: 시청 기록에서 각 장르의 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
+    <string name="statistics_info_genre_ranking">Q: 인기 장르 순위란?\nA: 시청 수에 따라 장르를 순위별로 표시합니다. 상위 3개는 금, 은, 동 메달로 표시됩니다.</string>
+
+    <!-- Common UI -->
+    <string name="common_retry">재시도</string>
+    <string name="common_close">닫기</string>
+    <string name="common_load_failed">로딩 실패</string>
+    <string name="common_no_data">데이터 없음</string>
+    <string name="common_loading">로딩 중…</string>
+    <string name="common_save_success">앨범에 저장되었습니다</string>
+    <string name="common_save_failed">저장 실패</string>
+    <string name="common_save_exists">이미 존재: %1$s</string>
+    <string name="common_saved_path">저장 위치: %1$s/%2$s</string>
+    <string name="common_copy_success">복사되었습니다</string>
+    <string name="common_open_failed">이 링크를 열 수 없습니다</string>
+
+    <!-- Search Filter (추가) -->
+    <string name="search_filter_all">전체</string>
+    <string name="search_filter_movie">영화</string>
+    <string name="search_filter_show">TV 프로그램</string>
+    <string name="search_view_all">전체 보기</string>
+    <string name="error_no_data">데이터 없음</string>
+
+    <!-- Statistics -->
+    <string name="statistics_pie_hint">파이 차트를 탭하여 자세히 보기</string>
+    <string name="statistics_heatmap_hint">격자를 탭하여 자세히 보기</string>
+    <string name="statistics_item_count">%1$s: %2$d개 (%3$s)</string>
+    <string name="statistics_date_count_watched">%1$s · %2$d개 시청</string>
+    <string name="statistics_date_no_data">%1$s · 시청 기록 없음</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_watched">시청함</string>
+    <string name="cd_not_watched">시청 안함</string>
+    <string name="cd_saved">저장됨</string>
+    <string name="cd_save">저장</string>
+    <string name="cd_edit">편집</string>
+    <string name="cd_delete">삭제</string>
+    <string name="cd_close">닫기</string>
+    <string name="cd_back_to_top">맨 위로</string>
+    <string name="cd_clear">지우기</string>
+
+    <!-- Settings: Custom Search Source -->
+    <string name="settings_custom_search_source_title">사용자 정의 검색 소스 추가</string>
+    <string name="settings_custom_search_source_subtitle">PanSou/Zreso 호환 소스 또는 사용자 정의 JSONPath 지원</string>
+    <string name="settings_add_source">사용자 정의 검색 소스 추가</string>
+    <string name="settings_edit_source">검색 소스 편집</string>
+    <string name="settings_delete_source">검색 소스 삭제</string>
+    <string name="settings_delete_source_confirm">「%1$s」을(를) 삭제하시겠습니까?</string>
+    <string name="settings_source_name">이름</string>
+    <string name="settings_source_base_url">Base URL (예: https://so.252035.xyz/)</string>
+    <string name="settings_source_api_path">API 경로 (예: api/search)</string>
+    <string name="settings_source_keyword_param">키워드 매개변수명 (예: kw)</string>
+    <string name="settings_source_disk_param">디스크 유형 매개변수명 (선택)</string>
+    <string name="settings_source_disk_param_value">디스크 유형 매개변수값 (선택)</string>
+    <string name="settings_source_src_param">소스 매개변수명 (선택, 예: src)</string>
+    <string name="settings_source_src_value">소스 매개변수값 (선택, 예: all)</string>
+    <string name="settings_source_parse_mode">파싱 모드</string>
+    <string name="settings_source_parse_mode_pansou">PanSou 템플릿</string>
+    <string name="settings_source_parse_mode_zreso">Zreso 템플릿</string>
+    <string name="settings_source_parse_mode_custom">사용자 정의 JSONPath</string>
+    <string name="settings_source_jsonpath_title">JSONPath 표현식</string>
+    <string name="settings_source_jsonpath_list">리스트 경로 (예: $.data.results)</string>
+    <string name="settings_source_jsonpath_name">이름 경로 (예: title)</string>
+    <string name="settings_source_jsonpath_url">URL 경로 (예: url)</string>
+    <string name="settings_source_jsonpath_disk">디스크 유형 경로 (예: type)</string>
+    <string name="settings_source_jsonpath_date">날짜 경로 (예: datetime)</string>
+    <string name="settings_source_test">테스트</string>
+    <string name="settings_source_save">저장</string>
+    <string name="settings_source_unnamed">이름 없음</string>
+    <string name="settings_source_test_success">테스트 성공, %1$d개 결과 파싱</string>
+    <string name="settings_source_test_empty">연결 성공했지만 결과를 파싱하지 못했습니다</string>
+    <string name="settings_cache_cleared">캐시가 지워졌습니다</string>
+    <string name="settings_cache_clear_failed">캐시 지우기 실패: %1$s</string>
+    <string name="settings_no_changelog">업데이트 내역이 없습니다</string>
+
+    <!-- Genre Names -->
+    <string name="genre_action">액션</string>
+    <string name="genre_adventure">모험</string>
+    <string name="genre_animation">애니메이션</string>
+    <string name="genre_anime">애니</string>
+    <string name="genre_comedy">코미디</string>
+    <string name="genre_crime">범죄</string>
+    <string name="genre_documentary">다큐멘터리</string>
+    <string name="genre_drama">드라마</string>
+    <string name="genre_fantasy">판타지</string>
+    <string name="genre_history">역사</string>
+    <string name="genre_horror">공포</string>
+    <string name="genre_music">음악</string>
+    <string name="genre_musical">뮤지컬</string>
+    <string name="genre_mystery">미스터리</string>
+    <string name="genre_romance">로맨스</string>
+    <string name="genre_scifi">SF</string>
+    <string name="genre_sport">스포츠</string>
+    <string name="genre_thriller">스릴러</string>
+    <string name="genre_war">전쟁</string>
+    <string name="genre_western">서부</string>
+    <string name="genre_family">가족</string>
+    <string name="genre_kids">어린이</string>
+    <string name="genre_news">뉴스</string>
+    <string name="genre_reality">리얼리티</string>
+    <string name="genre_soap">연속극</string>
+    <string name="genre_talk">토크쇼</string>
+    <string name="genre_spy">스파이</string>
+    <string name="genre_superhero">슈퍼히어로</string>
+    <string name="genre_biography">전기</string>
+    <string name="genre_noir">필름 누아르</string>
+    <string name="genre_game_show">게임 쇼</string>
+</resources>

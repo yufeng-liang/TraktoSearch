@@ -2,6 +2,7 @@ package com.tracktosearch.data.remote.update
 
 import retrofit2.http.GET
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface GitHubUpdateApiService {
     @GET("repos/{owner}/{repo}/releases/latest")
@@ -9,6 +10,12 @@ interface GitHubUpdateApiService {
         @Path("owner") owner: String,
         @Path("repo") repo: String
     ): GitHubRelease
+
+    @GET("repos/{owner}/{repo}/releases?per_page=100")
+    suspend fun getAllReleases(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String
+    ): List<GitHubRelease>
 }
 
 interface GiteeUpdateApiService {
@@ -17,5 +24,12 @@ interface GiteeUpdateApiService {
     suspend fun getLatestRelease(
         @Path("owner") owner: String,
         @Path("repo") repo: String
+    ): List<GiteeRelease>
+
+    @GET("repos/{owner}/{repo}/releases?per_page=100&direction=desc")
+    suspend fun getAllReleases(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Query("page") page: Int = 1
     ): List<GiteeRelease>
 }

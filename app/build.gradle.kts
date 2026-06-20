@@ -17,8 +17,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 23
-        versionName = "2.8.0"
+        versionCode = 24
+        versionName = "2.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -92,6 +92,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.browser)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.appcompat)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -138,4 +139,18 @@ dependencies {
     // Markdown
     implementation(libs.richtext.commonmark)
     implementation(libs.richtext.ui.material)
+
+    // Room
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
+    // WorkManager
+    implementation(libs.work.runtime.ktx)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.compiler.work)
+
+    // Glance (Widget)
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
 }

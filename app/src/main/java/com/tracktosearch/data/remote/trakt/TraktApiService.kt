@@ -36,6 +36,7 @@ interface TraktApiService {
     @GET("sync/history")
     suspend fun getMovieHistory(
         @Query("type") type: String = "movies",
+        @Query("extended") extended: String = "full",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 200
     ): Response<List<TraktWatchlistMovieItem>>
@@ -43,6 +44,7 @@ interface TraktApiService {
     @GET("sync/history")
     suspend fun getShowHistory(
         @Query("type") type: String = "shows",
+        @Query("extended") extended: String = "full",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 200
     ): Response<List<TraktWatchlistShowItem>>
@@ -111,4 +113,10 @@ interface TraktApiService {
         @Path("id") id: Int,
         @Query("type") type: String
     ): Response<List<TraktSearchResult>>
+
+    @GET("recommendations/movies")
+    suspend fun getMovieRecommendations(
+        @Query("limit") limit: Int = 10,
+        @Query("extended") extended: String = "full"
+    ): Response<List<TraktMovie>>
 }

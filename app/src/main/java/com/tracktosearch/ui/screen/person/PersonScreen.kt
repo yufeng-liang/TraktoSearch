@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +21,10 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -28,11 +33,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +64,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
+import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
@@ -81,6 +92,9 @@ fun PersonScreen(
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
+    // 全部作品展开状态
+    var showAllMovies by remember { mutableStateOf(false) }
+    var showAllTvShows by remember { mutableStateOf(false) }
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
@@ -89,12 +103,7 @@ fun PersonScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
-                    }
+                    PersonSkeletonContent()
                 }
                 uiState.error != null -> {
                     Box(
@@ -130,32 +139,54 @@ fun PersonScreen(
 
                         if (uiState.movieCredits.isNotEmpty()) {
                             item(key = "movie_credits_section") {
-                                Text(
-                                    text = stringResource(R.string.person_movie_credits),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp)
-                                )
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp)
-                                ) {
-                                    items(uiState.movieCredits, key = { "movie_${it.id}" }) { credit ->
-                                        CreditCard(
-                                            title = credit.title,
-                                            subtitle = credit.character,
-                                            year = credit.release_date.take(4),
-                                            posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                            isResolving = uiState.resolvingTmdbId == credit.id,
-                                            onClick = {
-                                                viewModel.resolveAndNavigate(
-                                                    tmdbId = credit.id,
-                                                    title = credit.title,
-                                                    isMovie = true,
-                                                    onNavigate = onMovieClick
-                                                )
-                                            }
+                                Column {
+                                    // 标题 + 全部按钮
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, top = 32.dp, bottom = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.person_movie_credits),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
                                         )
+                                        Row(
+                                            modifier = Modifier
+                                                .clickable { showAllMovies = true }
+                                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.person_all),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
+                                    ) {
+                                        items(uiState.movieCredits, key = { "movie_${it.id}" }) { credit ->
+                                            CreditCard(
+                                                title = credit.title,
+                                                subtitle = credit.character,
+                                                year = credit.release_date.take(4),
+                                                posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                isResolving = uiState.resolvingTmdbId == credit.id,
+                                                onClick = {
+                                                    viewModel.resolveAndNavigate(
+                                                        tmdbId = credit.id,
+                                                        title = credit.title,
+                                                        isMovie = true,
+                                                        onNavigate = onMovieClick
+                                                    )
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -163,32 +194,54 @@ fun PersonScreen(
 
                         if (uiState.tvCredits.isNotEmpty()) {
                             item(key = "tv_credits_section") {
-                                Text(
-                                    text = stringResource(R.string.person_tv_credits),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp)
-                                )
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    contentPadding = PaddingValues(horizontal = 16.dp)
-                                ) {
-                                    items(uiState.tvCredits, key = { "tv_${it.id}" }) { credit ->
-                                        CreditCard(
-                                            title = credit.name,
-                                            subtitle = credit.character,
-                                            year = credit.first_air_date.take(4),
-                                            posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                            isResolving = uiState.resolvingTmdbId == credit.id,
-                                            onClick = {
-                                                viewModel.resolveAndNavigate(
-                                                    tmdbId = credit.id,
-                                                    title = credit.name,
-                                                    isMovie = false,
-                                                    onNavigate = onShowClick
-                                                )
-                                            }
+                                Column {
+                                    // 标题 + 全部按钮
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, top = 32.dp, bottom = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.person_tv_credits),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
                                         )
+                                        Row(
+                                            modifier = Modifier
+                                                .clickable { showAllTvShows = true }
+                                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.person_all),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                    LazyRow(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
+                                    ) {
+                                        items(uiState.tvCredits, key = { "tv_${it.id}" }) { credit ->
+                                            CreditCard(
+                                                title = credit.name,
+                                                subtitle = credit.character,
+                                                year = credit.first_air_date.take(4),
+                                                posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                isResolving = uiState.resolvingTmdbId == credit.id,
+                                                onClick = {
+                                                    viewModel.resolveAndNavigate(
+                                                        tmdbId = credit.id,
+                                                        title = credit.name,
+                                                        isMovie = false,
+                                                        onNavigate = onShowClick
+                                                    )
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -242,6 +295,356 @@ fun PersonScreen(
                             .padding(bottom = 16.dp, end = 16.dp),
                         hazeState = hazeState
                     )
+
+                    // 全部参演电影
+                    if (showAllMovies) {
+                        AllMovieCreditsSheet(
+                            title = stringResource(R.string.person_movie_credits),
+                            credits = uiState.movieCredits,
+                            resolvingTmdbId = uiState.resolvingTmdbId,
+                            hasMore = uiState.hasMoreMovies,
+                            onLoadMore = { viewModel.loadMoreMovies() },
+                            onMovieClick = onMovieClick,
+                            viewModel = viewModel,
+                            onDismiss = { showAllMovies = false }
+                        )
+                    }
+
+                    // 全部参演电视剧
+                    if (showAllTvShows) {
+                        AllTvCreditsSheet(
+                            title = stringResource(R.string.person_tv_credits),
+                            credits = uiState.tvCredits,
+                            resolvingTmdbId = uiState.resolvingTmdbId,
+                            hasMore = uiState.hasMoreTvShows,
+                            onLoadMore = { viewModel.loadMoreTvShows() },
+                            onShowClick = onShowClick,
+                            viewModel = viewModel,
+                            onDismiss = { showAllTvShows = false }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 全部参演电影弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AllMovieCreditsSheet(
+    title: String,
+    credits: List<TmdbPersonMovieCredit>,
+    resolvingTmdbId: Int?,
+    hasMore: Boolean,
+    onLoadMore: () -> Unit,
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
+    viewModel: PersonViewModel,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.detail_close))
+                }
+            }
+
+            // Grid 列表
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxHeight(0.85f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(credits, key = { "movie_${it.id}" }) { credit ->
+                    CreditCard(
+                        title = credit.title,
+                        subtitle = credit.character,
+                        year = credit.release_date.take(4),
+                        posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        isResolving = resolvingTmdbId == credit.id,
+                        onClick = {
+                            viewModel.resolveAndNavigate(
+                                tmdbId = credit.id,
+                                title = credit.title,
+                                isMovie = true,
+                                onNavigate = onMovieClick
+                            )
+                            onDismiss()
+                        }
+                    )
+                }
+                if (hasMore) {
+                    item(span = { GridItemSpan(3) }) {
+                        LaunchedEffect(credits.size) { onLoadMore() }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 全部参演电视剧弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AllTvCreditsSheet(
+    title: String,
+    credits: List<TmdbPersonTvCredit>,
+    resolvingTmdbId: Int?,
+    hasMore: Boolean,
+    onLoadMore: () -> Unit,
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
+    viewModel: PersonViewModel,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.detail_close))
+                }
+            }
+
+            // Grid 列表
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxHeight(0.85f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(credits, key = { "tv_${it.id}" }) { credit ->
+                    CreditCard(
+                        title = credit.name,
+                        subtitle = credit.character,
+                        year = credit.first_air_date.take(4),
+                        posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        isResolving = resolvingTmdbId == credit.id,
+                        onClick = {
+                            viewModel.resolveAndNavigate(
+                                tmdbId = credit.id,
+                                title = credit.name,
+                                isMovie = false,
+                                onNavigate = onShowClick
+                            )
+                            onDismiss()
+                        }
+                    )
+                }
+                if (hasMore) {
+                    item(span = { GridItemSpan(3) }) {
+                        LaunchedEffect(credits.size) { onLoadMore() }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonSkeletonContent() {
+    // 骨架背景色
+    val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    // 文字骨架圆角
+    val textShape = RoundedCornerShape(4.dp)
+    // 头像/卡片骨架圆角
+    val cardShape = RoundedCornerShape(8.dp)
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
+        contentPadding = PaddingValues(bottom = 16.dp)
+    ) {
+        // 顶部头部区域骨架
+        item(key = "skeleton_header") {
+            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 48.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // 头像骨架（120x180 圆角矩形）
+                    Box(
+                        modifier = Modifier
+                            .width(120.dp)
+                            .height(180.dp)
+                            .clip(cardShape)
+                            .background(skeletonColor)
+                    )
+                    // 右侧文字骨架
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        // 姓名骨架（宽一些）
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.7f)
+                                .height(24.dp)
+                                .clip(textShape)
+                                .background(skeletonColor)
+                        )
+                        // 信息骨架（窄一些）
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.5f)
+                                .height(16.dp)
+                                .clip(textShape)
+                                .background(skeletonColor)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f)
+                                .height(16.dp)
+                                .clip(textShape)
+                                .background(skeletonColor)
+                        )
+                    }
+                }
+
+                // 简介区域骨架（3-4 行不同宽度）
+                Spacer(modifier = Modifier.height(24.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(16.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(16.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.95f)
+                        .height(16.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(16.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+            }
+        }
+
+        // 电影作品区域骨架
+        item(key = "skeleton_movie_section") {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                // 标题骨架
+                Box(
+                    modifier = Modifier
+                        .padding(start = 16.dp)
+                        .width(120.dp)
+                        .height(20.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // 横向滚动的卡片骨架
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    items(4) { _ ->
+                        Box(
+                            modifier = Modifier
+                                .width(100.dp)
+                                .height(150.dp)
+                                .clip(cardShape)
+                                .background(skeletonColor)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 电视剧作品区域骨架
+        item(key = "skeleton_tv_section") {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                // 标题骨架
+                Box(
+                    modifier = Modifier
+                        .padding(start = 16.dp)
+                        .width(120.dp)
+                        .height(20.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // 横向滚动的卡片骨架
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    items(4) { _ ->
+                        Box(
+                            modifier = Modifier
+                                .width(100.dp)
+                                .height(150.dp)
+                                .clip(cardShape)
+                                .background(skeletonColor)
+                        )
+                    }
                 }
             }
         }
@@ -366,6 +769,13 @@ private fun PersonHeaderContent(
         if (biography.isNotEmpty()) {
             Spacer(modifier = Modifier.height(12.dp))
             Text(
+                text = stringResource(R.string.detail_overview_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
                 text = biography,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -380,6 +790,13 @@ private fun PersonHeaderContent(
             )
         } else {
             Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.detail_overview_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.person_no_biography),
                 style = MaterialTheme.typography.bodyMedium,

@@ -1,15 +1,10 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -59,9 +54,6 @@ fun ResourceItemCard(
     isViewed: Boolean = false,
     onClick: () -> Unit,
     index: Int = 0,
-    isFavorite: Boolean = false,
-    showFavoriteIcon: Boolean = false,
-    onToggleFavorite: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val style = diskStyleOf(item.diskType)
@@ -170,25 +162,6 @@ fun ResourceItemCard(
                         text = formatFileDate(item.fileDate),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                // 收藏图标
-                if (showFavoriteIcon) {
-                    if (item.fileDate.isNotEmpty()) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        contentDescription = stringResource(R.string.resource_favorite),
-                        tint = if (isFavorite) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(18.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = onToggleFavorite
-                            )
                     )
                 }
             }

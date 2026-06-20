@@ -2,6 +2,8 @@ package com.tracktosearch.ui.component
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,7 +35,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.R
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.util.ApkDownloader
 import com.tracktosearch.data.util.ApkInstaller
@@ -53,22 +57,40 @@ private sealed class DownloadState {
  * - 标题字号缩小为 titleMedium，保持加粗
  * - 列表符号（•）与文字垂直居中对齐
  * - 支持简单的 **粗体** 内联标记
+ * - 支持 --- 水平分隔线
  */
 @Composable
-private fun ChangelogContent(text: String) {
+fun ChangelogContent(text: String) {
     Column(modifier = Modifier.fillMaxWidth()) {
         text.lineSequence()
             .map { it.trimEnd() }
-            .filter { it.isNotBlank() }
             .forEach { line ->
+                if (line.isBlank()) return@forEach
                 val trimmed = line.trimStart()
                 when {
+                    // 水平分隔线
+                    trimmed == "---" || trimmed == "***" || trimmed == "___" -> {
+                        Spacer(modifier = Modifier.height(1.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant)
+                        )
+                        Spacer(modifier = Modifier.height(1.dp))
+                    }
                     // Markdown 标题 # / ## / ...
                     trimmed.startsWith("#") -> {
+                        val level = trimmed.takeWhile { it == '#' }.length
                         val clean = trimmed.trimStart('#').trimStart()
+                        val style = when (level) {
+                            1 -> MaterialTheme.typography.titleLarge
+                            2 -> MaterialTheme.typography.titleMedium
+                            else -> MaterialTheme.typography.titleSmall
+                        }
                         Text(
                             text = parseInlineMarkdown(clean),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = style,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -107,7 +129,7 @@ private fun ChangelogContent(text: String) {
 }
 
 /** 解析 **粗体** 内联标记 */
-private fun parseInlineMarkdown(input: String): androidx.compose.ui.text.AnnotatedString {
+fun parseInlineMarkdown(input: String): androidx.compose.ui.text.AnnotatedString {
     return buildAnnotatedString {
         var i = 0
         while (i < input.length) {
@@ -186,14 +208,14 @@ fun UpdateDialog(
                         }
                         is DownloadState.Completed -> {
                             Text(
-                                text = "下载完成",
+                                text = stringResource(R.string.common_save_success),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
                         is DownloadState.Error -> {
                             Text(
-                                text = "下载失败: ${state.message}",
+                                text = stringResource(R.string.update_download_failed),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -237,7 +259,7 @@ fun UpdateDialog(
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                            Text("稍后提醒")
+                            Text(stringResource(R.string.update_later))
                         }
                     }
                 }
@@ -246,7 +268,7 @@ fun UpdateDialog(
                         downloadJob?.cancel()
                         downloadState = DownloadState.Idle
                     }, modifier = Modifier.fillMaxWidth()) {
-                        Text("取消下载")
+                        Text(stringResource(R.string.common_close))
                     }
                 }
                 is DownloadState.Completed -> {
@@ -255,11 +277,11 @@ fun UpdateDialog(
                             ApkInstaller.installApk(context, state.file)
                             onDismiss()
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("安装更新")
+                            Text(stringResource(R.string.update_download))
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                            Text("稍后安装")
+                            Text(stringResource(R.string.update_later))
                         }
                     }
                 }
@@ -268,7 +290,7 @@ fun UpdateDialog(
                         Button(onClick = {
                             downloadState = DownloadState.Idle
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("重试下载")
+                            Text(stringResource(R.string.error_retry))
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = {

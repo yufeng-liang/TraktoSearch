@@ -4,7 +4,8 @@ import android.content.Intent
 import android.net.Uri
 import android.graphics.Bitmap
 import android.os.Environment
-import android.widget.Toast
+import com.tracktosearch.ui.util.showToast
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.tween
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
@@ -61,6 +63,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -83,6 +86,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +97,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -150,6 +157,7 @@ fun DetailScreen(
     onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
+    onNavigateToLogin: () -> Unit = {},
     viewModel: DetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -240,17 +248,17 @@ fun DetailScreen(
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { selectedTab = 0 },
-                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})") }
+                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", modifier = Modifier.animateContentSize()) }
                         )
                         Tab(
                             selected = selectedTab == 1,
                             onClick = { selectedTab = 1 },
-                            text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})") }
+                            text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", modifier = Modifier.animateContentSize()) }
                         )
                         Tab(
                             selected = selectedTab == 2,
                             onClick = { selectedTab = 2 },
-                            text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})") }
+                            text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", modifier = Modifier.animateContentSize()) }
                         )
                     }
                 }
@@ -291,8 +299,8 @@ fun DetailScreen(
                         uiState.isSearching -> {
                             item(key = "searching") {
                                 SearchingState(
-                                    sourceCount = uiState.enabledSources.size,
-                                    diskTypeCount = uiState.enabledDiskTypes.size
+                                    completedSources = uiState.completedSources,
+                                    totalSources = uiState.totalSources
                                 )
                             }
                         }
@@ -316,10 +324,7 @@ fun DetailScreen(
                                         viewModel.markResourceViewed(item.url)
                                         openResourceLink(context, item)
                                     },
-                                    index = index,
-                                    isFavorite = item.url in uiState.favoriteUrls,
-                                    showFavoriteIcon = true,
-                                    onToggleFavorite = { viewModel.toggleFavorite(item) }
+                                    index = index
                                 )
                             }
                             if (displayedCount < items.size) {
@@ -632,6 +637,14 @@ fun DetailScreen(
                                     append(uiState.overview)
                                     append("\n")
                                 }
+                                // 附带前两个资源搜索结果的网盘链接
+                                val topResources = uiState.resources.take(2)
+                                if (topResources.isNotEmpty()) {
+                                    append("\n资源链接：\n")
+                                    topResources.forEachIndexed { index, item ->
+                                        append("${index + 1}. ${item.name}\n${item.url}\n")
+                                    }
+                                }
                             }
                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "text/plain"
@@ -667,6 +680,28 @@ fun DetailScreen(
                     onDismiss = { showPosterFullscreen = false }
                 )
             }
+
+            // 未登录用户引导登录弹窗
+            if (uiState.showLoginPrompt) {
+                AlertDialog(
+                    onDismissRequest = { viewModel.dismissLoginPrompt() },
+                    title = { Text(stringResource(R.string.detail_login_required_title)) },
+                    text = { Text(stringResource(R.string.detail_login_required_message)) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.dismissLoginPrompt()
+                            onNavigateToLogin()
+                        }) {
+                            Text(stringResource(R.string.detail_login_go))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.dismissLoginPrompt() }) {
+                            Text(stringResource(android.R.string.cancel))
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -693,19 +728,21 @@ private fun DetailHeaderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Max)
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // 海报
+            // 海报（宽度随高度等比例变化，海报比例 2:3）
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
-                    .width(132.dp)
-                    .height(198.dp)
+                    .fillMaxHeight()
+                    .aspectRatio(2f / 3f)
                     .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
             ) {
                 if (uiState.posterUrl != null) {
+                    var posterScale by remember { mutableFloatStateOf(1f) }
                     val sharedTransitionScope = LocalSharedTransitionScope.current
                     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
                     val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -730,6 +767,12 @@ private fun DetailHeaderContent(
                         contentDescription = uiState.displayTitle,
                         contentScale = ContentScale.Crop,
                         modifier = posterModifier
+                            .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
+                            .pointerInput(Unit) {
+                                detectTransformGestures { _, _, zoom, _ ->
+                                    posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                                }
+                            }
                     )
                 } else {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -1191,26 +1234,26 @@ private fun UserRatingBar(
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
-    Column(modifier = Modifier.padding(top = 8.dp, bottom = 6.dp)) {
-        // 标签行：我的评分 + 已评分数字
-        Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        // 标签：我的评分
+        Text(
+            text = stringResource(R.string.detail_your_rating),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (userRating != null) {
             Text(
-                text = stringResource(R.string.detail_your_rating),
+                text = "$userRating/10",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontWeight = FontWeight.Bold,
+                color = starColor
             )
-            if (userRating != null) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "$userRating/10",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = starColor
-                )
-            }
         }
-        Spacer(modifier = Modifier.height(2.dp))
-        // 星标行
+        // 星标（紧跟在文字右边）
         if (isRatingLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(14.dp),
@@ -1616,7 +1659,7 @@ private fun FilterSection(
     val labelWidth = 64.dp
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        // 搜索源
+        // 搜索源（横向滚动）
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -1627,10 +1670,14 @@ private fun FilterSection(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.width(labelWidth)
             )
-            Row(
+            LazyRow(
+                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                for (source in ResourceRepository.ALL_SOURCES) {
+                items(
+                    items = enabledSources.toList(),
+                    key = { it }
+                ) { source ->
                     val label = when (source) {
                         "pansou" -> "PanSou"
                         "panhub" -> "PanHub"
@@ -1639,7 +1686,7 @@ private fun FilterSection(
                     FilterChip(
                         selected = source in enabledSources,
                         onClick = { onToggleSource(source) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
                 }
@@ -1660,6 +1707,7 @@ private fun FilterSection(
                 modifier = Modifier.width(labelWidth)
             )
             LazyRow(
+                modifier = Modifier.weight(1f),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(
@@ -1679,10 +1727,8 @@ private fun FilterSection(
                     FilterChip(
                         selected = type in enabledDiskTypes,
                         onClick = { onToggleDiskType(type) },
-                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                        modifier = Modifier
-                            .height(28.dp)
-                            .widthIn(min = 48.dp)
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        modifier = Modifier.height(28.dp)
                     )
                 }
             }
@@ -1910,7 +1956,7 @@ private fun EpisodeRow(
 // ==================== 搜索状态 ====================
 
 @Composable
-private fun SearchingState(sourceCount: Int, diskTypeCount: Int) {
+private fun SearchingState(completedSources: Int, totalSources: Int) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1927,7 +1973,7 @@ private fun SearchingState(sourceCount: Int, diskTypeCount: Int) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.detail_searching_info, sourceCount, diskTypeCount),
+                text = stringResource(R.string.detail_searching_info, completedSources, totalSources),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -2127,7 +2173,7 @@ internal fun openResourceLink(context: android.content.Context, item: ResourceIt
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = android.content.ClipData.newPlainText("magnet", item.url)
         clipboard.setPrimaryClip(clip)
-        android.widget.Toast.makeText(context, "磁力链接已复制到剪贴板", android.widget.Toast.LENGTH_SHORT).show()
+        context.showToast("磁力链接已复制到剪贴板")
         return
     }
 
@@ -2136,7 +2182,7 @@ internal fun openResourceLink(context: android.content.Context, item: ResourceIt
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
         context.startActivity(browserIntent)
     } catch (_: Exception) {
-        android.widget.Toast.makeText(context, "无法打开此链接", android.widget.Toast.LENGTH_SHORT).show()
+        context.showToast("无法打开此链接")
     }
 }
 
@@ -2164,6 +2210,7 @@ private fun PosterFullscreenOverlay(
 
     // 海报大图 overlay 的 Haze 状态
     val posterHazeState = remember { HazeState() }
+    var posterScale by remember { mutableFloatStateOf(1f) }
 
     Box(
         modifier = Modifier
@@ -2191,6 +2238,12 @@ private fun PosterFullscreenOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
                 .aspectRatio(2f / 3f)
+                .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, zoom, _ ->
+                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                    }
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -2243,7 +2296,7 @@ private fun PosterFullscreenOverlay(
             // 保存按钮（已保存时显示勾选图标）
             IconButton(onClick = {
                 if (isSaved == true) {
-                    Toast.makeText(context, "已保存到相册", Toast.LENGTH_SHORT).show()
+                    context.showToast("已保存到相册")
                 } else {
                     savePosterToGallery(context, scope, posterUrl, title) {
                         isSaved = true
@@ -2305,7 +2358,7 @@ private fun savePosterToGallery(context: android.content.Context, scope: Corouti
             }
         } catch (_: Exception) {
             withContext(Dispatchers.Main) {
-                Toast.makeText(context, "保存失败", Toast.LENGTH_SHORT).show()
+                context.showToast("保存失败")
             }
         }
     }
@@ -2320,7 +2373,7 @@ private fun saveBitmapToGallery(context: android.content.Context, scope: Corouti
     val existingUri = queryExistingFile(context, filename, relativePath)
     if (existingUri != null) {
         scope.launch(Dispatchers.Main) {
-            Toast.makeText(context, "已存在: $filename", Toast.LENGTH_SHORT).show()
+            context.showToast("已存在: $filename")
         }
         return
     }
@@ -2336,7 +2389,7 @@ private fun saveBitmapToGallery(context: android.content.Context, scope: Corouti
             bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
         }
         scope.launch(Dispatchers.Main) {
-            Toast.makeText(context, "已保存: $relativePath/$filename", Toast.LENGTH_SHORT).show()
+            context.showToast("已保存: $relativePath/$filename")
         }
     }
 }

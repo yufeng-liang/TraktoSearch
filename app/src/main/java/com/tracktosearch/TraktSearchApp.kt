@@ -1,6 +1,8 @@
 package com.tracktosearch
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -12,9 +14,17 @@ import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 @HiltAndroidApp
-class TraktSearchApp : Application(), ImageLoaderFactory {
+class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider {
+
+    @Inject lateinit var workerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
 
     override fun onCreate() {
         super.onCreate()

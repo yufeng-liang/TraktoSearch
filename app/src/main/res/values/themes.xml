@@ -3,11 +3,13 @@
     <style name="Theme.TraktToSearch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/ic_launcher_background</item>
         <item name="postSplashScreenTheme">@style/Theme.TraktToSearch.Main</item>
     </style>
 
-    <style name="Theme.TraktToSearch.Main" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.TraktToSearch.Main" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

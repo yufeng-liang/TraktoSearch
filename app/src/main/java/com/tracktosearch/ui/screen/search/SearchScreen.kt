@@ -2,17 +2,19 @@ package com.tracktosearch.ui.screen.search
 
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
-import android.widget.Toast
+
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -21,15 +23,12 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -39,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -50,8 +48,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.DiskType
@@ -59,10 +55,10 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.dto.ResourceType
 import com.tracktosearch.data.remote.dto.inferResourceType
 import com.tracktosearch.data.local.ViewedItemStorage
-import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ScrollToTopButton
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -81,6 +77,7 @@ fun SearchScreen(
     onBack: (() -> Unit)? = null,
     onSearchClick: ((String) -> Unit)? = null,
     onOpenWebView: (url: String) -> Unit = {},
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
@@ -103,19 +100,12 @@ fun SearchScreen(
         focusManager.clearFocus()
     }
 
-    // 有搜索结果时，返回手势清空搜索并回到默认页（豆瓣热榜）
+    // 有搜索结果时，返回手势清空搜索
     BackHandler(enabled = uiState.resources.isNotEmpty() || uiState.keyword.isNotEmpty()) {
         searchQuery = ""
         viewModel.clearResults()
         focusManager.clearFocus()
         keyboardController?.hide()
-    }
-
-    // 豆瓣热榜全量弹窗状态
-    var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(showDoubanAllDialog) {
-        val catId = showDoubanAllDialog ?: return@LaunchedEffect
-        viewModel.loadDoubanHotAll(catId, limit = 50)
     }
 
     var hadQuery by rememberSaveable { mutableStateOf(false) }
@@ -139,568 +129,204 @@ fun SearchScreen(
         }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(stringResource(R.string.search_title))
-                        Spacer(Modifier.width(12.dp))
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            modifier = Modifier
-                                .widthIn(min = 0.dp)
-                                .wrapContentWidth()
-                                .padding(end = 16.dp)
-                                .focusRequester(focusRequester)
-                                .onFocusChanged { focusState ->
-                                    isSearchFocused = focusState.isFocused
-                                },
-                            placeholder = {
-                                Text(
-                                    text = stringResource(R.string.search_placeholder),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Visible
-                                )
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        when {
+            // 搜索结果
+            uiState.resources.isNotEmpty() -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // 搜索框（顶部）
+                    SearchBarTop(
+                        searchQuery = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {
+                            viewModel.search(searchQuery)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onClear = { searchQuery = "" },
+                        onBack = onBack,
+                        focusRequester = focusRequester,
+                        onFocusChanged = { isSearchFocused = it }
+                    )
+                    // 搜索结果数
+                    Text(
+                        text = stringResource(R.string.search_results, uiState.resources.size),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                    // 搜索结果列表
+                    SearchResultsContent(
+                        resources = uiState.resources,
+                        typeFilter = uiState.typeFilter,
+                        viewedUrls = viewedUrls,
+                        onTypeFilterChange = { viewModel.setTypeFilter(it) },
+                        onItemClick = { item ->
+                            openResourceLink(context, item)
+                            viewModel.markViewed(item.url)
+                        }
+                    )
+                }
+            }
+            // 加载中
+            uiState.isLoading -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SearchBarTop(
+                        searchQuery = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {
+                            viewModel.search(searchQuery)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onClear = { searchQuery = "" },
+                        onBack = onBack,
+                        focusRequester = focusRequester,
+                        onFocusChanged = { isSearchFocused = it }
+                    )
+                    LoadingView(message = stringResource(R.string.search_loading))
+                }
+            }
+            // 搜索无结果
+            uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    SearchBarTop(
+                        searchQuery = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {
+                            viewModel.search(searchQuery)
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onClear = { searchQuery = "" },
+                        onBack = onBack,
+                        focusRequester = focusRequester,
+                        onFocusChanged = { isSearchFocused = it }
+                    )
+                    EmptyView(message = stringResource(R.string.search_no_results))
+                }
+            }
+            // 默认页：居中搜索框 + 搜索历史
+            else -> {
+                // 搜索框居中布局（屏幕上方约 1/3 处）
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.weight(1f))
+                    // 图标
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(56.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    // 搜索框
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                            .onFocusChanged { focusState ->
+                                isSearchFocused = focusState.isFocused
                             },
-                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                            singleLine = true,
-                            shape = RoundedCornerShape(24.dp),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = {
-                                    if (searchQuery.isNotBlank()) {
+                        placeholder = {
+                            Text(
+                                text = stringResource(R.string.search_placeholder),
+                                maxLines = 1
+                            )
+                        },
+                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(24.dp),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (searchQuery.isNotBlank()) {
+                                    viewModel.search(searchQuery)
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                }
+                            }
+                        ),
+                        trailingIcon = {
+                            if (searchQuery.isNotEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { searchQuery = "" },
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = stringResource(R.string.search_clear_input),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    TextButton(onClick = {
                                         viewModel.search(searchQuery)
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
+                                    }) {
+                                        Text(stringResource(R.string.search_button))
                                     }
                                 }
-                            ),
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(
-                                            onClick = { searchQuery = "" },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Default.Close,
-                                                contentDescription = stringResource(R.string.search_clear_input),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                        TextButton(onClick = {
-                                            viewModel.search(searchQuery)
-                                            focusManager.clearFocus()
-                                            keyboardController?.hide()
-                                        }) {
-                                            Text(stringResource(R.string.search_button))
-                                        }
-                                    }
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    // 搜索建议 / 搜索历史 + 热门搜索
+                    if (searchQuery.isNotEmpty()) {
+                        // 输入时显示自动补全建议
+                        val suggestions = remember(searchQuery, uiState.searchHistory) {
+                            viewModel.getSuggestions(searchQuery)
+                        }
+                        if (suggestions.isNotEmpty()) {
+                            SearchSuggestionsInline(
+                                suggestions = suggestions,
+                                onSuggestionClick = { keyword ->
+                                    searchQuery = keyword
+                                    viewModel.search(keyword)
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
                                 }
+                            )
+                        }
+                    } else {
+                        // 搜索历史
+                        if (uiState.searchHistory.isNotEmpty()) {
+                            SearchHistoryInline(
+                                history = uiState.searchHistory,
+                                onHistoryClick = { keyword ->
+                                    searchQuery = keyword
+                                    viewModel.search(keyword)
+                                    focusManager.clearFocus()
+                                    keyboardController?.hide()
+                                },
+                                onHistoryDelete = { viewModel.removeHistory(it) },
+                                onClearAll = { viewModel.clearHistory() }
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        // 热门搜索
+                        PopularSearchesSection(
+                            popularSearches = viewModel.popularSearches,
+                            onPopularClick = { keyword ->
+                                searchQuery = keyword
+                                viewModel.search(keyword)
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
                             }
                         )
                     }
-                },
-                navigationIcon = {
-                    if (onBack != null) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.search_back))
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // 搜索框聚焦且为空时，在搜索框下方展开搜索历史
-            if (isSearchFocused && searchQuery.isEmpty() && uiState.searchHistory.isNotEmpty()) {
-                SearchHistoryInline(
-                    history = uiState.searchHistory,
-                    onHistoryClick = { keyword ->
-                        searchQuery = keyword
-                        viewModel.search(keyword)
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                    onHistoryDelete = { viewModel.removeHistory(it) },
-                    onClearAll = { viewModel.clearHistory() }
-                )
-            }
-
-            // 内容区域
-            when {
-                uiState.isLoading -> {
-                    LoadingView(message = stringResource(R.string.search_loading))
+                    Spacer(modifier = Modifier.weight(1f))
                 }
-                uiState.error != null && uiState.resources.isEmpty() -> {
-                    EmptyView(message = stringResource(R.string.search_failed, uiState.error ?: ""))
-                }
-                uiState.resources.isEmpty() && uiState.keyword.isNotEmpty() -> {
-                    EmptyView(message = stringResource(R.string.search_no_results))
-                }
-                uiState.resources.isNotEmpty() -> {
-                    // 搜索结果
-                    var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
-                    var filterExpanded by remember { mutableStateOf(false) }
-                    val typeFilter = uiState.typeFilter
-
-                    val filteredResources = remember(uiState.resources, selectedDiskType, typeFilter) {
-                        uiState.resources
-                            .let { resources ->
-                                if (typeFilter != ResourceType.ALL) {
-                                    resources.filter { inferResourceType(it.name) == typeFilter }
-                                } else {
-                                    resources
-                                }
-                            }
-                            .let { resources ->
-                                if (selectedDiskType != null) {
-                                    resources.filter { it.diskType == selectedDiskType }
-                                } else {
-                                    resources
-                                }
-                            }
-                    }
-
-                    val listState = rememberLazyListState()
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 4.dp, bottom = 2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    FilterChip(
-                                        selected = typeFilter == ResourceType.ALL,
-                                        onClick = { viewModel.setTypeFilter(ResourceType.ALL) },
-                                        label = { Text("全部") }
-                                    )
-                                    FilterChip(
-                                        selected = typeFilter == ResourceType.MOVIE,
-                                        onClick = { viewModel.setTypeFilter(ResourceType.MOVIE) },
-                                        label = { Text("电影") }
-                                    )
-                                    FilterChip(
-                                        selected = typeFilter == ResourceType.SHOW,
-                                        onClick = { viewModel.setTypeFilter(ResourceType.SHOW) },
-                                        label = { Text("电视剧") }
-                                    )
-                                }
-                            }
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 4.dp, bottom = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.search_results, filteredResources.size),
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Spacer(Modifier.weight(1f))
-                                    Box {
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable { filterExpanded = true }
-                                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "网盘类型",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Spacer(Modifier.width(2.dp))
-                                            Text(
-                                                text = selectedDiskType?.let {
-                                                    diskTypeDisplayName(it)
-                                                } ?: "全部",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                            Icon(
-                                                Icons.Default.ArrowDropDown,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp),
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                        DropdownMenu(
-                                            expanded = filterExpanded,
-                                            onDismissRequest = { filterExpanded = false }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text("全部") },
-                                                onClick = {
-                                                    selectedDiskType = null
-                                                    filterExpanded = false
-                                                }
-                                            )
-                                            DiskType.entries.filter { it != DiskType.OTHER }.forEach { type ->
-                                                DropdownMenuItem(
-                                                    text = { Text(diskTypeDisplayName(type)) },
-                                                    onClick = {
-                                                        selectedDiskType = type
-                                                        filterExpanded = false
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
-                                val isViewed = item.url in viewedUrls
-                                ResourceItemCard(
-                                    item = item,
-                                    isViewed = isViewed,
-                                    index = index,
-                                    onClick = {
-                                        openResourceLink(context, item)
-                                        viewModel.markViewed(item.url)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-                !isSearchFocused && uiState.resources.isEmpty() && uiState.keyword.isEmpty() -> {
-                    // 默认页：豆瓣热榜（搜索框聚焦时隐藏，展示搜索历史）
-                    DoubanHotContent(
-                        categories = uiState.doubanHotCategories,
-                        onItemClick = { item ->
-                            val displayTitle = item.title
-                                .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-                                .replace(Regex("^#\\d+\\s*"), "")
-                            copyToClipboard(context, displayTitle)
-                            if (item.url.isNotBlank()) {
-                                onOpenWebView(item.url)
-                            }
-                        },
-                        onViewAll = { category ->
-                            showDoubanAllDialog = category.id
-                        },
-                        onRetry = { viewModel.retryDoubanCategory(it) },
-                        onRetryAll = { viewModel.retryAllDoubanHot() }
-                    )
-                }
-            }
-        }
-    }
-
-    // 豆瓣热榜全量弹窗
-    showDoubanAllDialog?.let { catId ->
-        val category = uiState.doubanHotCategories.find { it.id == catId }
-        if (category != null) {
-            DoubanHotAllSheet(
-                category = category,
-                onItemClick = { item ->
-                    val displayTitle = item.title
-                        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-                        .replace(Regex("^#\\d+\\s*"), "")
-                    copyToClipboard(context, displayTitle)
-                    if (item.url.isNotBlank()) {
-                        onOpenWebView(item.url)
-                    }
-                },
-                onLoadMore = {
-                    viewModel.loadDoubanHotAll(catId, page = category.currentPage + 1, limit = 50)
-                },
-                onDismiss = { showDoubanAllDialog = null }
-            )
-        }
-    }
-}
-
-@Composable
-private fun DoubanHotContent(
-    categories: List<DoubanHotCategory>,
-    onItemClick: (DoubanHotItem) -> Unit,
-    onViewAll: (DoubanHotCategory) -> Unit,
-    onRetry: (String) -> Unit,
-    onRetryAll: () -> Unit
-) {
-    // 全部榜单加载失败时，显示整页重试
-    val allFailed = categories.isNotEmpty() && categories.all { it.error != null && it.items.isEmpty() }
-
-    if (allFailed) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 32.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = Icons.Default.CloudOff,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                text = "热榜加载失败，请检查网络后重试",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = onRetryAll) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("重试")
-            }
-        }
-        return
-    }
-
-    LazyColumn(
-        contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = 24.dp,
-            bottom = 80.dp // 底部安全区，避免被悬浮导航栏遮挡
-        ),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        // 标题
-        item {
-            Text(
-                text = "豆瓣热榜",
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-
-        // 各榜单
-        items(categories, key = { it.id }) { category ->
-            DoubanHotCategorySection(
-                category = category,
-                onItemClick = onItemClick,
-                onViewAll = { onViewAll(category) },
-                onRetry = { onRetry(category.id) }
-            )
-        }
-    }
-}
-
-@Composable
-private fun DoubanHotCategorySection(
-    category: DoubanHotCategory,
-    onItemClick: (DoubanHotItem) -> Unit,
-    onViewAll: () -> Unit,
-    onRetry: () -> Unit
-) {
-    Column {
-        // 榜单标题 + 全部按钮
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = category.label,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            Row(
-                modifier = Modifier
-                    .clickable { onViewAll() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = if (category.id == "douban-top250") "全部250 >" else "全部10 >",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-
-        if (category.isLoading) {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(5) {
-                    DoubanHotCardSkeleton()
-                }
-            }
-        } else if (category.error != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "加载失败",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Spacer(Modifier.width(12.dp))
-                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("重试", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        } else {
-            // 横向滚动卡片列表
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                items(category.items, key = { it.id ?: it.title }) { item ->
-                    DoubanHotCard(
-                        item = item,
-                        onClick = { onItemClick(item) }
-                    )
-                }
-                // Top250 保留箭头卡片
-                if (category.id == "douban-top250") {
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(172.dp)
-                                .clickable { onViewAll() },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    Icons.Default.ArrowForwardIos,
-                                    contentDescription = "查看全部",
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun DoubanHotCard(
-    item: DoubanHotItem,
-    onClick: () -> Unit
-) {
-    val context = LocalContext.current
-    // 从标题中提取评分，如 【7.7】痴迷 → 7.7
-    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)
-    val displayTitle = item.title
-        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-        .replace(Regex("^#\\d+\\s*"), "")
-
-    Card(
-        modifier = Modifier
-            .width(99.dp)
-            .clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column {
-            // 海报 - 使用 2:3 宽高比，和 MovieCard 一致
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-            ) {
-                if (!item.cover.isNullOrBlank()) {
-                    val imageRequest = remember(item.cover) {
-                        ImageRequest.Builder(context)
-                            .data(item.cover)
-                            .size(300)
-                            .crossfade(true)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onError = { Log.e("DoubanHot", "Failed to load cover: ${item.cover}, error: ${it.result.throwable}") }
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-                // 评分标签 - 海报右上角
-                if (rating != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF68BD5B) // 豆瓣绿色
-                    ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-            // 名字
-            Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
-                Text(
-                    text = displayTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
         }
     }
@@ -708,170 +334,222 @@ private fun DoubanHotCard(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DoubanHotAllSheet(
-    category: DoubanHotCategory,
-    onItemClick: (DoubanHotItem) -> Unit,
-    onLoadMore: () -> Unit,
-    onDismiss: () -> Unit
+private fun SearchBarTop(
+    searchQuery: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClear: () -> Unit,
+    onBack: (() -> Unit)?,
+    focusRequester: FocusRequester,
+    onFocusChanged: (Boolean) -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            // 标题栏
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = category.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                TextButton(onClick = onDismiss) {
-                    Text("关闭")
-                }
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.search_back))
             }
-
-            // Grid 列表
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.8f),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(category.items, key = { it.id ?: it.title }) { item ->
-                    DoubanHotGridItem(
-                        item = item,
-                        onClick = {
-                            onItemClick(item)
-                            onDismiss()
-                        }
-                    )
-                }
-                // 加载更多
-                if (category.hasMore) {
-                    item(span = { GridItemSpan(3) }) {
-                        LaunchedEffect(category.currentPage) { onLoadMore() }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester)
+                .onFocusChanged { focusState ->
+                    onFocusChanged(focusState.isFocused)
+                },
+            placeholder = {
+                Text(
+                    text = stringResource(R.string.search_placeholder),
+                    maxLines = 1,
+                    overflow = TextOverflow.Visible
+                )
+            },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            shape = RoundedCornerShape(24.dp),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(36.dp)
                         ) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(R.string.search_clear_input),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        TextButton(onClick = onSearch) {
+                            Text(stringResource(R.string.search_button))
                         }
                     }
                 }
             }
+        )
+        // 当有返回按钮时，右侧添加等宽 Spacer 保持左右边距一致
+        if (onBack != null) {
+            Spacer(modifier = Modifier.width(44.dp))
         }
     }
 }
 
 @Composable
-private fun DoubanHotGridItem(
-    item: DoubanHotItem,
-    onClick: () -> Unit
+private fun SearchResultsContent(
+    resources: List<ResourceItem>,
+    typeFilter: ResourceType,
+    viewedUrls: Set<String>,
+    onTypeFilterChange: (ResourceType) -> Unit,
+    onItemClick: (ResourceItem) -> Unit
 ) {
-    val context = LocalContext.current
-    // 从标题中提取评分
-    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)
-    val displayTitle = item.title
-        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-        .replace(Regex("^#\\d+\\s*"), "")
+    var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
 
-    Card(
-        modifier = Modifier.clickable { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column {
-            // 海报
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-            ) {
-                if (!item.cover.isNullOrBlank()) {
-                    val imageRequest = remember(item.cover) {
-                        ImageRequest.Builder(context)
-                            .data(item.cover)
-                            .size(300)
-                            .crossfade(true)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onError = { Log.e("DoubanHot", "Failed to load cover: ${item.cover}, error: ${it.result.throwable}") }
-                    )
+    val filteredResources = remember(resources, selectedDiskType, typeFilter) {
+        resources
+            .let { rs ->
+                if (typeFilter != ResourceType.ALL) {
+                    rs.filter { inferResourceType(it.name) == typeFilter }
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
+                    rs
                 }
-                // 评分标签
-                if (rating != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF68BD5B)
+            }
+            .let { rs ->
+                if (selectedDiskType != null) {
+                    rs.filter { it.diskType == selectedDiskType }
+                } else {
+                    rs
+                }
+            }
+    }
+
+    val listState = rememberLazyListState()
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            // 影视类型筛选
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.search_filter_type),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(64.dp)
+                    )
+                    LazyRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
+                        item {
+                            FilterChip(
+                                selected = typeFilter == ResourceType.ALL,
+                                onClick = { onTypeFilterChange(ResourceType.ALL) },
+                                label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = typeFilter == ResourceType.MOVIE,
+                                onClick = { onTypeFilterChange(ResourceType.MOVIE) },
+                                label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            )
+                        }
+                        item {
+                            FilterChip(
+                                selected = typeFilter == ResourceType.SHOW,
+                                onClick = { onTypeFilterChange(ResourceType.SHOW) },
+                                label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            )
+                        }
                     }
                 }
             }
-            // 标题（黑体）+ 描述
-            Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                Text(
-                    text = displayTitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (item.desc.isNotBlank()) {
+            // 网盘类型筛选
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        text = item.desc,
-                        style = MaterialTheme.typography.labelSmall,
+                        text = stringResource(R.string.search_filter_disk),
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 1.dp)
+                        modifier = Modifier.width(64.dp)
                     )
+                    LazyRow(
+                        modifier = Modifier.weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item {
+                            FilterChip(
+                                selected = selectedDiskType == null,
+                                onClick = { selectedDiskType = null },
+                                label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            )
+                        }
+                        items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
+                            FilterChip(
+                                selected = selectedDiskType == type,
+                                onClick = { selectedDiskType = type },
+                                label = {
+                                    val label = when (type) {
+                                        DiskType.QUARK -> stringResource(R.string.disk_quark)
+                                        DiskType.BAIDU -> stringResource(R.string.disk_baidu)
+                                        DiskType.ALI -> stringResource(R.string.disk_ali)
+                                        DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
+                                        DiskType.UC -> stringResource(R.string.disk_uc)
+                                        DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
+                                        DiskType.MAGNET -> stringResource(R.string.disk_magnet)
+                                        DiskType.OTHER -> stringResource(R.string.disk_other)
+                                    }
+                                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            )
+                        }
+                    }
                 }
+            }
+            itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
+                val isViewed = item.url in viewedUrls
+                ResourceItemCard(
+                    item = item,
+                    isViewed = isViewed,
+                    index = index,
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(300),
+                        placementSpec = tween(300)
+                    )
+                )
             }
         }
+        // 快速回顶按钮
+        ScrollToTopButton(
+            listState = listState,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
+        )
     }
 }
 
@@ -885,7 +563,6 @@ private fun SearchHistoryInline(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp)
     ) {
         Row(
             modifier = Modifier
@@ -943,6 +620,78 @@ private fun SearchHistoryInline(
     }
 }
 
+@Composable
+private fun SearchSuggestionsInline(
+    suggestions: List<String>,
+    onSuggestionClick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+    ) {
+        Text(
+            text = stringResource(R.string.search_suggestions_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        suggestions.forEach { keyword ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSuggestionClick(keyword) }
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = keyword,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PopularSearchesSection(
+    popularSearches: List<String>,
+    onPopularClick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+    ) {
+        Text(
+            text = stringResource(R.string.search_popular_title),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            popularSearches.forEach { keyword ->
+                FilterChip(
+                    selected = false,
+                    onClick = { onPopularClick(keyword) },
+                    label = { Text(keyword) }
+                )
+            }
+        }
+    }
+}
+
 private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
     val url = item.url
 
@@ -976,19 +725,404 @@ private fun openResourceLink(context: android.content.Context, item: ResourceIte
     } catch (_: Exception) {}
 }
 
-private fun copyToClipboard(context: android.content.Context, text: String) {
-    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("影片名", text))
-    Toast.makeText(context, "已复制: $text", Toast.LENGTH_SHORT).show()
-}
-
 private fun diskTypeDisplayName(type: DiskType): String = when (type) {
-    DiskType.QUARK -> "夸克"
-    DiskType.BAIDU -> "百度"
-    DiskType.ALI -> "阿里"
-    DiskType.XUNLEI -> "迅雷"
+    DiskType.QUARK -> "Quark"
+    DiskType.BAIDU -> "Baidu"
+    DiskType.ALI -> "Ali"
+    DiskType.XUNLEI -> "Xunlei"
     DiskType.UC -> "UC"
     DiskType.ONEONEFIVE -> "115"
-    DiskType.MAGNET -> "磁力"
-    DiskType.OTHER -> "其他"
+    DiskType.MAGNET -> "Magnet"
+    DiskType.OTHER -> "Other"
+}
+
+// ========== 豆瓣热榜组件（供 DiscoverScreen 复用） ==========
+
+@Composable
+fun DoubanHotCategorySection(
+    category: DoubanHotCategory,
+    resolvingItemId: Int?,
+    onItemClick: (DoubanHotItem) -> Unit,
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit
+) {
+    Column {
+        // 榜单标题 + 全部按钮
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = category.label,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            Row(
+                modifier = Modifier
+                    .clickable { onViewAll() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.search_view_all),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        if (category.isLoading) {
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(5) {
+                    com.tracktosearch.ui.component.DoubanHotCardSkeleton()
+                }
+            }
+        } else if (category.error != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.common_load_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(Modifier.width(12.dp))
+                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        } else {
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(category.items, key = { it.id ?: it.title }) { item ->
+                    DoubanHotCard(
+                        item = item,
+                        isResolving = resolvingItemId == item.id,
+                        onClick = { onItemClick(item) }
+                    )
+                }
+                // Top250 保留箭头卡片
+                if (category.id == "douban-top250") {
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(172.dp)
+                                .clickable { onViewAll() },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.ArrowForwardIos,
+                                    contentDescription = "查看全部",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DoubanHotCard(
+    item: DoubanHotItem,
+    isResolving: Boolean = false,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
+    val rating = ratingMatch?.groupValues?.get(1)
+    val displayTitle = item.title
+        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
+        .replace(Regex("^#\\d+\\s*"), "")
+
+    Card(
+        modifier = Modifier
+            .width(99.dp)
+            .clickable(enabled = !isResolving) { onClick() },
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+            ) {
+                if (!item.cover.isNullOrBlank()) {
+                    val imageRequest = remember(item.cover) {
+                        coil.request.ImageRequest.Builder(context)
+                            .data(item.cover)
+                            .size(300)
+                            .crossfade(true)
+                            .build()
+                    }
+                    coil.compose.AsyncImage(
+                        model = imageRequest,
+                        contentDescription = displayTitle,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+                if (rating != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF68BD5B)
+                    ) {
+                        Text(
+                            text = rating,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                if (isResolving) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+            Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
+                Text(
+                    text = displayTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DoubanHotAllSheet(
+    category: DoubanHotCategory,
+    resolvingItemId: Int?,
+    onItemClick: (DoubanHotItem) -> Unit,
+    onLoadMore: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = category.label,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_close))
+                }
+            }
+
+            androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxHeight(0.8f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                gridItems(category.items, key = { it.id ?: it.title }) { item ->
+                    DoubanHotGridItem(
+                        item = item,
+                        isResolving = resolvingItemId == item.id,
+                        onClick = {
+                            onItemClick(item)
+                            onDismiss()
+                        }
+                    )
+                }
+                if (category.hasMore) {
+                    item(span = { GridItemSpan(3) }) {
+                        LaunchedEffect(category.currentPage) { onLoadMore() }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DoubanHotGridItem(
+    item: DoubanHotItem,
+    isResolving: Boolean = false,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
+    val rating = ratingMatch?.groupValues?.get(1)
+    val displayTitle = item.title
+        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
+        .replace(Regex("^#\\d+\\s*"), "")
+
+    Card(
+        modifier = Modifier.clickable(enabled = !isResolving) { onClick() },
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+            ) {
+                if (!item.cover.isNullOrBlank()) {
+                    val imageRequest = remember(item.cover) {
+                        coil.request.ImageRequest.Builder(context)
+                            .data(item.cover)
+                            .size(300)
+                            .crossfade(true)
+                            .build()
+                    }
+                    coil.compose.AsyncImage(
+                        model = imageRequest,
+                        contentDescription = displayTitle,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                    }
+                }
+                if (rating != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFF68BD5B)
+                    ) {
+                        Text(
+                            text = rating,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                if (isResolving) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+            Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                Text(
+                    text = displayTitle,
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                if (item.desc.isNotBlank()) {
+                    Text(
+                        text = item.desc,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                }
+            }
+        }
+    }
 }

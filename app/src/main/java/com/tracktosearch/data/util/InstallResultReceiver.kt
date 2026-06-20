@@ -4,7 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.widget.Toast
+import com.tracktosearch.ui.util.showToast
 
 class InstallResultReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -19,7 +19,7 @@ class InstallResultReceiver : BroadcastReceiver() {
                 }
             }
             PackageInstaller.STATUS_SUCCESS -> {
-                Toast.makeText(context, "安装成功", Toast.LENGTH_SHORT).show()
+                context.showToast("安装成功")
             }
             PackageInstaller.STATUS_FAILURE, PackageInstaller.STATUS_FAILURE_ABORTED,
             PackageInstaller.STATUS_FAILURE_BLOCKED, PackageInstaller.STATUS_FAILURE_CONFLICT,
@@ -27,7 +27,7 @@ class InstallResultReceiver : BroadcastReceiver() {
             PackageInstaller.STATUS_FAILURE_STORAGE -> {
                 val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
                     ?: "安装失败 (code=$status)"
-                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                context.showToast(message, android.widget.Toast.LENGTH_LONG)
             }
         }
     }

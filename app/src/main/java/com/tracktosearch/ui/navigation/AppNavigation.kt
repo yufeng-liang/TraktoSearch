@@ -39,6 +39,7 @@ import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
+import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.webview.WebViewScreen
 import javax.inject.Inject
 
@@ -49,6 +50,7 @@ object Routes {
     const val SEARCH = "search/{keyword}"
     const val WEBVIEW = "webview/{url}/{title}"
     const val PERSON = "person/{personId}/{personName}"
+    const val STATISTICS = "statistics"
 
     fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
@@ -109,7 +111,7 @@ fun AppNavigation(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
                                 onLoginSuccess()
-                                mainInitialTab = 1  // 登录成功后默认进入"我的"页
+                                mainInitialTab = 2  // 登录成功后默认进入"我的"页
                                 currentStartDest = Routes.MAIN
                                 navController.navigate(Routes.MAIN) {
                                     popUpTo(0) { inclusive = true }
@@ -145,7 +147,7 @@ fun AppNavigation(
                         // 版本更新检查：首页加载完成后检查，仅一次
                         // 已登录：等想看列表加载完成；未登录：立即检查
                         val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
-                        var updateInfo by rememberSaveable { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
+                        var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
                         var updateChecked by rememberSaveable { mutableStateOf(false) }
                         val uiState by watchlistViewModel.uiState.collectAsState()
                         // 用 snapshotFlow 监听条件，避免 LaunchedEffect key 变化导致协程取消
@@ -165,12 +167,14 @@ fun AppNavigation(
                             }
                         }
 
-                        // 更新弹窗
+                        // 更新弹窗（仅有新版本时才显示）
                         updateInfo?.let { info ->
-                            UpdateDialog(
-                                updateInfo = info,
-                                onDismiss = { updateInfo = null }
-                            )
+                            if (info.hasUpdate) {
+                                UpdateDialog(
+                                    updateInfo = info,
+                                    onDismiss = { updateInfo = null }
+                                )
+                            }
                         }
 
                         MainScreen(
@@ -192,6 +196,9 @@ fun AppNavigation(
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(Routes.MAIN) { inclusive = false }
                                 }
+                            },
+                            onStatisticsClick = {
+                                navController.navigate(Routes.STATISTICS)
                             },
                             onLogout = {
                                 onLogout()
@@ -249,6 +256,11 @@ fun AppNavigation(
                             },
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onNavigateToLogin = {
+                                navController.navigate(Routes.LOGIN) {
+                                    popUpTo(Routes.MAIN) { inclusive = false }
+                                }
                             }
                         )
                     }
@@ -267,7 +279,10 @@ fun AppNavigation(
                         val keyword = backStackEntry.arguments?.getString("keyword") ?: ""
                         SearchScreen(
                             initialKeyword = keyword,
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            }
                         )
                     }
                 }
@@ -319,6 +334,14 @@ fun AppNavigation(
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
                             }
+                        )
+                    }
+                }
+
+                composable(Routes.STATISTICS) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        StatisticsScreen(
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }

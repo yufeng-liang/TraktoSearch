@@ -1,5 +1,9 @@
 package com.tracktosearch.data.repository
 
+import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.data.local.CustomSearchSourceStorage
+import com.tracktosearch.data.local.SearchSourceStorage
+import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -12,6 +16,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
@@ -23,8 +29,30 @@ import javax.inject.Singleton
 class ResourceRepository @Inject constructor(
     private val panSouApiService: PanSouApiService,
     @Named("panhub") private val panHubApiService: PanSouApiService,
-    private val zresoApiService: ZresoApiService
+    private val zresoApiService: ZresoApiService,
+    private val searchSourceStorage: SearchSourceStorage,
+    private val customSearchSourceStorage: CustomSearchSourceStorage,
+    private val customSearchService: CustomSearchService
 ) {
+
+    /**
+     * 根据设置页开关计算实际启用的搜索源（与调用方传入的 enabledSources 取交集）。
+     * 设置页关闭的源永远不参与搜索。
+     */
+    private fun storageEnabledSourcesFlow(): Flow<Set<String>> = combine(
+        searchSourceStorage.pansouEnabled,
+        searchSourceStorage.panhubEnabled,
+        searchSourceStorage.zresoEnabled
+    ) { pansou, panhub, zreso ->
+        buildSet {
+            if (pansou) add(SOURCE_PANSOU)
+            if (panhub) add(SOURCE_PANHUB)
+            if (zreso) add(SOURCE_ZRESO)
+        }
+    }
+
+    /** 获取当前启用的搜索源（同步，用于 UI 初始化） */
+    suspend fun getEnabledSources(): Set<String> = storageEnabledSourcesFlow().first()
 
     companion object {
         const val SOURCE_PANSOU = "pansou"
@@ -58,13 +86,16 @@ class ResourceRepository @Inject constructor(
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
 
+        // 设置页关闭的源不参与搜索
+        val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
+
         val now = System.currentTimeMillis()
         val cached = cache[keyword]
         val allItems = if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
             cached.items
         } else {
             // 只查询用户选中的源，避免无效请求
-            val fetched = fetchEnabledSources(keyword, enabledSources, enabledDiskTypes, isShow)
+            val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow)
             // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
             if (fetched.isNotEmpty()) {
                 cache[keyword] = KeywordCache(fetched, now)
@@ -72,7 +103,7 @@ class ResourceRepository @Inject constructor(
             fetched
         }
 
-        return Result.success(filterItems(allItems, enabledSources, enabledDiskTypes))
+        return Result.success(filterItems(allItems, effectiveSources, enabledDiskTypes))
     }
 
     /**
@@ -90,70 +121,97 @@ class ResourceRepository @Inject constructor(
     }
 
     /**
-     * 增量搜索接口：先到的源先发射，等所有源完成后发射合并结果。
-     * 发射 1~2 次：
-     *   - 第 1 次：最快的源返回时立即发射（先到先显示）
-     *   - 第 2 次：所有源完成后发射合并去重结果（数据完整性）
+     * 增量搜索接口：每完成一个源就发射累积结果。
+     * 发射次数等于启用的源数量（每个源完成后各发射一次）。
      * 如果有缓存则只发射 1 次。
+     *
+     * @param onSourceComplete 每个源完成时的回调（参数为源名称）
      */
     fun searchResourcesFlow(
         keyword: String,
         enabledSources: Set<String> = ALL_SOURCES,
         enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
-        isShow: Boolean = false
+        isShow: Boolean = false,
+        onSourceComplete: ((String) -> Unit)? = null
     ): Flow<List<ResourceItem>> = channelFlow {
         if (keyword.isBlank()) { send(emptyList()); return@channelFlow }
+
+        // 设置页关闭的源不参与搜索
+        val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
 
         val now = System.currentTimeMillis()
         val cached = cache[keyword]
         if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
-            send(filterItems(cached.items, enabledSources, enabledDiskTypes))
+            send(filterItems(cached.items, effectiveSources, enabledDiskTypes))
+            // 缓存命中：所有源视为已完成
+            effectiveSources.forEach { onSourceComplete?.invoke(it) }
             return@channelFlow
         }
 
-        val deferreds = mutableListOf<Deferred<List<ResourceItem>>>()
-        if (SOURCE_PANSOU in enabledSources) {
-            deferreds.add(async {
+        val sourceList = mutableListOf<Pair<String, Deferred<List<ResourceItem>>>>()
+        if (SOURCE_PANSOU in effectiveSources) {
+            sourceList.add(SOURCE_PANSOU to async {
                 runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
-        if (SOURCE_PANHUB in enabledSources) {
-            deferreds.add(async {
+        if (SOURCE_PANHUB in effectiveSources) {
+            sourceList.add(SOURCE_PANHUB to async {
                 runCatching { searchPanHub(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
-        if (SOURCE_ZRESO in enabledSources) {
-            deferreds.add(async {
+        if (SOURCE_ZRESO in effectiveSources) {
+            sourceList.add(SOURCE_ZRESO to async {
                 runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
+        // 自定义源
+        val customSources = customSearchSourceStorage.sources.first().filter { it.enabled }
+        for (source in customSources) {
+            sourceList.add(source.id to async {
+                runCatching {
+                    withTimeoutOrNull(8_000) {
+                        customSearchService.search(source, keyword)
+                    } ?: emptyList()
+                }.getOrDefault(emptyList())
+            })
+        }
 
-        if (deferreds.isEmpty()) { send(emptyList()); return@channelFlow }
-        if (deferreds.size == 1) {
-            val items = deferreds.first().await()
+        if (sourceList.isEmpty()) { send(emptyList()); return@channelFlow }
+        if (sourceList.size == 1) {
+            val (source, deferred) = sourceList.first()
+            val items = deferred.await()
             if (items.isNotEmpty()) cache[keyword] = KeywordCache(items, now)
+            onSourceComplete?.invoke(source)
             send(items)
             return@channelFlow
         }
 
-        // 多源：select 先拿到最快的源，立即发射
-        val firstCompleted = select<Deferred<List<ResourceItem>>> {
-            for (d in deferreds) d.onAwait { d }
-        }
-        val firstItems = firstCompleted.await()
-        send(firstItems)
+        // 多源：逐个等待完成，每次发射累积结果（去重排序）
+        val accumulated = mutableListOf<ResourceItem>()
+        val pending = sourceList.toMutableList()
+        while (pending.isNotEmpty()) {
+            val (completedSource, completedItems) = select<Pair<String, List<ResourceItem>>> {
+                for ((source, deferred) in pending) {
+                    deferred.onAwait { items -> source to items }
+                }
+            }
+            pending.removeIf { it.first == completedSource }
+            accumulated.addAll(completedItems)
+            onSourceComplete?.invoke(completedSource)
 
-        // 等剩余源完成，合并去重后再次发射
-        val restItems = deferreds
-            .filter { it !== firstCompleted }
-            .flatMap { runCatching { it.await() }.getOrDefault(emptyList()) }
-        val allItems = (firstItems + restItems)
-            .distinctBy { it.url }
-            .sortedWith(resourceComparator(isShow))
-        if (allItems.isNotEmpty()) {
-            cache[keyword] = KeywordCache(allItems, System.currentTimeMillis())
+            val current = accumulated
+                .distinctBy { it.url }
+                .sortedWith(resourceComparator(isShow))
+            send(current)
         }
-        send(allItems)
+
+        // 缓存最终合并结果
+        if (accumulated.isNotEmpty()) {
+            cache[keyword] = KeywordCache(
+                accumulated.distinctBy { it.url }.sortedWith(resourceComparator(isShow)),
+                System.currentTimeMillis()
+            )
+        }
     }.flowOn(Dispatchers.IO)
 
     /**
@@ -179,6 +237,9 @@ class ResourceRepository @Inject constructor(
         enabledDiskTypes: Set<DiskType>,
         isShow: Boolean
     ): List<ResourceItem> {
+        // 获取启用的自定义源
+        val customSources = customSearchSourceStorage.sources.first().filter { it.enabled }
+
         return coroutineScope {
             val deferreds = mutableListOf<Deferred<List<ResourceItem>>>()
 
@@ -195,6 +256,16 @@ class ResourceRepository @Inject constructor(
             if (SOURCE_ZRESO in enabledSources) {
                 deferreds.add(async {
                     runCatching { searchZreso(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                })
+            }
+            // 自定义源
+            for (source in customSources) {
+                deferreds.add(async {
+                    runCatching {
+                        withTimeoutOrNull(8_000) {
+                            customSearchService.search(source, keyword)
+                        } ?: emptyList()
+                    }.getOrDefault(emptyList())
                 })
             }
 

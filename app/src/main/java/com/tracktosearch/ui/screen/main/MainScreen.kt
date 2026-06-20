@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.main
 
+import com.tracktosearch.ui.util.showToast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,12 +17,13 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -47,7 +49,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
+import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
@@ -68,10 +72,11 @@ fun MainScreen(
     onSearchClick: (keyword: String) -> Unit,
     onOpenWebView: (url: String) -> Unit,
     onNavigateToLogin: () -> Unit,
+    onStatisticsClick: () -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
-    val pagerState = rememberPagerState(initialPage = initialTab) { 2 }
+    val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
     val scope = rememberCoroutineScope()
 
     // Pager 滑动 → 同步 selectedTab
@@ -93,7 +98,7 @@ fun MainScreen(
             (context as? android.app.Activity)?.finish()
         } else {
             lastBackTime = now
-            android.widget.Toast.makeText(context, pressBackAgainText, android.widget.Toast.LENGTH_SHORT).show()
+            context.showToast(pressBackAgainText)
         }
     }
 
@@ -143,16 +148,23 @@ fun MainScreen(
                         initialKeyword = "",
                         onSearchClick = onSearchClick,
                         onOpenWebView = onOpenWebView,
+                        onMovieClick = onMovieClick,
                         modifier = Modifier.fillMaxSize()
                     )
-                    1 -> {
+                    1 -> DiscoverScreen(
+                        onMovieClick = onMovieClick,
+                        onShowClick = onShowClick,
+                        onOpenWebView = onOpenWebView,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    2 -> {
                         if (isLoggedIn) {
                             WatchlistScreen(
                                 onMovieClick = onMovieClick,
                                 onShowClick = onShowClick,
                                 onSearchClick = onSearchClick,
                                 onOpenWebView = onOpenWebView,
-                                onLogout = onLogout,
+                                onStatisticsClick = onStatisticsClick,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -163,11 +175,16 @@ fun MainScreen(
                             )
                         }
                     }
+                    3 -> SettingsScreen(
+                        onLogout = onLogout,
+                        isLoggedIn = isLoggedIn,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
             }
 
-            // 悬浮底部导航（真正毛玻璃模糊效果）
-            val navBarWidth = (screenWidthDp * 0.48).dp
+            // 悬浮底部导航（4 Tab 毛玻璃）
+            val navBarWidth = (screenWidthDp * 0.65).dp
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(28.dp)
             Box(
@@ -192,22 +209,14 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 左半边：搜索页
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable { scope.launch { pagerState.animateScrollToPage(0) } },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = stringResource(R.string.tab_search),
-                            tint = if (selectedTab == 0) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    // 分隔线
+                    // Tab 0: 搜索
+                    NavTabItem(
+                        icon = Icons.Default.Search,
+                        label = stringResource(R.string.tab_search),
+                        selected = selectedTab == 0,
+                        weight = 1f,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(0) } }
+                    )
                     HorizontalDivider(
                         modifier = Modifier
                             .fillMaxHeight()
@@ -215,23 +224,70 @@ fun MainScreen(
                             .padding(vertical = 10.dp),
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
-                    // 右半边：我的页
-                    Box(
+                    // Tab 1: 发现
+                    NavTabItem(
+                        icon = Icons.Default.Explore,
+                        label = stringResource(R.string.tab_discover),
+                        selected = selectedTab == 1,
+                        weight = 1f,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } }
+                    )
+                    HorizontalDivider(
                         modifier = Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable { scope.launch { pagerState.animateScrollToPage(1) } },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = stringResource(R.string.tab_me),
-                            tint = if (selectedTab == 1) MaterialTheme.colorScheme.primary
-                                   else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .padding(vertical = 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    // Tab 2: 我的
+                    NavTabItem(
+                        icon = Icons.Default.Person,
+                        label = stringResource(R.string.tab_me),
+                        selected = selectedTab == 2,
+                        weight = 1f,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(2) } }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .padding(vertical = 10.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+                    // Tab 3: 设置
+                    NavTabItem(
+                        icon = Icons.Default.Settings,
+                        label = stringResource(R.string.tab_settings),
+                        selected = selectedTab == 3,
+                        weight = 1f,
+                        onClick = { scope.launch { pagerState.animateScrollToPage(3) } }
+                    )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    weight: Float,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .weight(weight)
+            .fillMaxSize()
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (selected) MaterialTheme.colorScheme.primary
+                   else MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

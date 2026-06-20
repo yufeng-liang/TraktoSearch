@@ -141,3 +141,20 @@ data class TmdbPersonTvCredit(
     val first_air_date: String = "",
     val vote_average: Double = 0.0
 )
+
+@Serializable
+data class TmdbSearchResponse(
+    val page: Int = 1,
+    val results: List<TmdbSearchResult> = emptyList(),
+    val total_pages: Int = 0,
+    val total_results: Int = 0
+)
+
+@Serializable
+data class TmdbSearchResult(
+    val id: Int = 0,
+    val title: String = "",
+    val overview: String = "",
+    val poster_path: String? = null,
+    val release_date: String = ""
+)

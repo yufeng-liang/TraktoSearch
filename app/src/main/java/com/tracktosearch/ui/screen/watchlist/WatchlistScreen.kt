@@ -2,21 +2,19 @@ package com.tracktosearch.ui.screen.watchlist
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
@@ -45,13 +43,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.tracktosearch.R
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
-import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.screen.detail.openResourceLink
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.launch
@@ -63,7 +58,7 @@ fun WatchlistScreen(
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
     onOpenWebView: (url: String) -> Unit,
-    onLogout: () -> Unit,
+    onStatisticsClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -95,7 +90,7 @@ fun WatchlistScreen(
     }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
-    // 0=想看, 1=已看历史, 2=资源收藏
+    // 0=想看, 1=已看历史
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     val tabPagerState = rememberPagerState(initialPage = 0) { 2 }
     val tabScope = rememberCoroutineScope()
@@ -107,7 +102,6 @@ fun WatchlistScreen(
                 viewModel.loadHistoryMovies()
                 viewModel.loadHistoryShows()
             }
-            2 -> viewModel.loadFavoriteResources()
         }
     }
 
@@ -121,7 +115,6 @@ fun WatchlistScreen(
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
     val currentTheme by viewModel.themeMode.collectAsState()
-    var showThemeDialog by remember { mutableStateOf(false) }
 
     // 根据搜索关键词过滤当前 Tab 的列表
     val filteredMovies = remember(uiState.movies, searchQuery) {
@@ -152,12 +145,6 @@ fun WatchlistScreen(
             it.title.contains(searchQuery, ignoreCase = true)
         }
     }
-    val filteredFavoriteResources = remember(uiState.favoriteResources, searchQuery) {
-        if (searchQuery.isBlank()) uiState.favoriteResources
-        else uiState.favoriteResources.filter {
-            it.name.contains(searchQuery, ignoreCase = true)
-        }
-    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -171,9 +158,14 @@ fun WatchlistScreen(
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
                         placeholder = {
+                            // 搜索框提示文字根据选中模式动态变化：想看/已看历史
                             Text(
-                                if (searchQuery.isBlank()) stringResource(R.string.watchlist_title)
-                                else stringResource(R.string.search_placeholder)
+                                if (searchQuery.isBlank()) {
+                                    when (selectedMode) {
+                                        0 -> stringResource(R.string.watchlist_search_watchlist)
+                                        else -> stringResource(R.string.watchlist_search_history)
+                                    }
+                                } else stringResource(R.string.search_placeholder)
                             )
                         },
                         singleLine = true,
@@ -202,14 +194,11 @@ fun WatchlistScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = { showThemeDialog = true }) {
-                        Icon(Icons.Default.Palette, contentDescription = stringResource(R.string.settings_theme))
+                    IconButton(onClick = onStatisticsClick) {
+                        Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.statistics_title))
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
-                    }
-                    IconButton(onClick = onLogout) {
-                        Icon(Icons.Default.Logout, contentDescription = stringResource(R.string.logout))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -223,14 +212,6 @@ fun WatchlistScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-
-            if (showThemeDialog) {
-                ThemeSelectionDialog(
-                    currentTheme = currentTheme,
-                    onThemeSelected = { mode -> viewModel.setThemeMode(mode) },
-                    onDismiss = { showThemeDialog = false }
-                )
-            }
 
             // TMDB 不可用提示
             if (uiState.tmdbUnavailable) {
@@ -260,45 +241,30 @@ fun WatchlistScreen(
                 }
             }
 
-            // 想看 / 已看 / 资源收藏 模式切换
+            // 想看 / 已看 模式切换
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 SegmentedButton(
                     selected = selectedMode == 0,
                     onClick = { selectedMode = 0 },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3)
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_mode_watchlist))
                 }
                 SegmentedButton(
                     selected = selectedMode == 1,
                     onClick = { selectedMode = 1 },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3)
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_tab_history))
                 }
-                SegmentedButton(
-                    selected = selectedMode == 2,
-                    onClick = { selectedMode = 2 },
-                    shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3)
-                ) {
-                    Text(stringResource(R.string.watchlist_mode_favorites))
-                }
             }
 
-            if (selectedMode == 2) {
-                // 资源收藏列表
-                FavoriteResourcesContent(
-                    resources = filteredFavoriteResources,
-                    onResourceClick = { item -> openResourceLink(context, item) },
-                    onToggleFavorite = { item -> viewModel.toggleFavorite(item) }
-                )
-            } else {
-                // 分类 Tab
-                val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+            // 分类 Tab
+            val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
                 val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
                 PrimaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
@@ -381,7 +347,6 @@ fun WatchlistScreen(
                         }
                     }
                 }
-            }
         }
     }
 }
@@ -522,7 +487,11 @@ private fun MovieGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { onItemClick(item) }
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(300),
+                        placementSpec = tween(300)
+                    )
                 )
             }
         }
@@ -560,7 +529,11 @@ private fun ShowGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { onItemClick(item) }
+                    onClick = { onItemClick(item) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = tween(300),
+                        placementSpec = tween(300)
+                    )
                 )
             }
         }
@@ -632,44 +605,6 @@ private fun WatchlistEmptyState(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.clickable { onOpenTrakt() }
             )
-        }
-    }
-}
-
-/** 资源收藏列表 */
-@Composable
-private fun FavoriteResourcesContent(
-    resources: List<ResourceItem>,
-    onResourceClick: (ResourceItem) -> Unit,
-    onToggleFavorite: (ResourceItem) -> Unit
-) {
-    if (resources.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(R.string.watchlist_favorites_empty),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 4.dp)
-        ) {
-            itemsIndexed(resources, key = { _, item -> item.url }) { index, item ->
-                ResourceItemCard(
-                    item = item,
-                    onClick = { onResourceClick(item) },
-                    index = index,
-                    isFavorite = true,
-                    showFavoriteIcon = true,
-                    onToggleFavorite = { onToggleFavorite(item) }
-                )
-            }
         }
     }
 }

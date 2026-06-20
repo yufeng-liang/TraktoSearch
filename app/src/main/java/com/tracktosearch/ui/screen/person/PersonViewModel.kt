@@ -10,7 +10,6 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +21,10 @@ data class PersonUiState(
     val person: TmdbPerson? = null,
     val movieCredits: List<TmdbPersonMovieCredit> = emptyList(),
     val tvCredits: List<TmdbPersonTvCredit> = emptyList(),
+    val hasMoreMovies: Boolean = false,
+    val hasMoreTvShows: Boolean = false,
+    val isLoadingMoreMovies: Boolean = false,
+    val isLoadingMoreTvShows: Boolean = false,
     val error: String? = null,
     val resolvingTmdbId: Int? = null
 )
@@ -37,34 +40,86 @@ class PersonViewModel @Inject constructor(
 
     private var currentPersonId: Int = 0
     private var loaded: Boolean = false
+    private var movieCreditsPage: Int = 1
+    private var tvCreditsPage: Int = 1
 
     fun loadPerson(personId: Int) {
         if (currentPersonId == personId && loaded) return
         currentPersonId = personId
         loaded = false
+        movieCreditsPage = 1
+        tvCreditsPage = 1
 
         _uiState.value = PersonUiState(isLoading = true)
 
         viewModelScope.launch {
-            val personDeferred = async { tmdbRepository.getPersonDetail(personId) }
-            val movieCreditsDeferred = async { tmdbRepository.getPersonMovieCredits(personId) }
-            val tvCreditsDeferred = async { tmdbRepository.getPersonTvCredits(personId) }
+            try {
+                val personDeferred = async { tmdbRepository.getPersonDetail(personId) }
+                val movieCreditsDeferred = async { tmdbRepository.getPersonMovieCredits(personId, page = 1) }
+                val tvCreditsDeferred = async { tmdbRepository.getPersonTvCredits(personId, page = 1) }
 
-            val person = personDeferred.await()
-            val movieCredits = movieCreditsDeferred.await()
-            val tvCredits = tvCreditsDeferred.await()
+                val person = personDeferred.await()
+                val movieCreditsPageResult = movieCreditsDeferred.await()
+                val tvCreditsPageResult = tvCreditsDeferred.await()
 
-            if (person == null) {
-                _uiState.value = PersonUiState(error = "Failed to load person")
-            } else {
-                _uiState.value = PersonUiState(
-                    isLoading = false,
-                    person = person,
-                    movieCredits = movieCredits,
-                    tvCredits = tvCredits
-                )
+                if (person == null) {
+                    _uiState.value = PersonUiState(error = "Failed to load person")
+                } else {
+                    _uiState.value = PersonUiState(
+                        isLoading = false,
+                        person = person,
+                        movieCredits = movieCreditsPageResult.items,
+                        tvCredits = tvCreditsPageResult.items,
+                        hasMoreMovies = movieCreditsPageResult.hasMore,
+                        hasMoreTvShows = tvCreditsPageResult.hasMore
+                    )
+                }
+                loaded = true
+            } catch (_: Exception) {
+                _uiState.value = PersonUiState(error = "Failed to load person data")
             }
-            loaded = true
+        }
+    }
+
+    fun loadMoreMovies() {
+        val state = _uiState.value
+        if (state.isLoadingMoreMovies || !state.hasMoreMovies) return
+        val nextPage = movieCreditsPage + 1
+
+        _uiState.value = state.copy(isLoadingMoreMovies = true)
+        viewModelScope.launch {
+            try {
+                val result = tmdbRepository.getPersonMovieCredits(currentPersonId, page = nextPage)
+                movieCreditsPage = nextPage
+                _uiState.value = _uiState.value.copy(
+                    movieCredits = _uiState.value.movieCredits + result.items,
+                    hasMoreMovies = result.hasMore,
+                    isLoadingMoreMovies = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingMoreMovies = false)
+            }
+        }
+    }
+
+    fun loadMoreTvShows() {
+        val state = _uiState.value
+        if (state.isLoadingMoreTvShows || !state.hasMoreTvShows) return
+        val nextPage = tvCreditsPage + 1
+
+        _uiState.value = state.copy(isLoadingMoreTvShows = true)
+        viewModelScope.launch {
+            try {
+                val result = tmdbRepository.getPersonTvCredits(currentPersonId, page = nextPage)
+                tvCreditsPage = nextPage
+                _uiState.value = _uiState.value.copy(
+                    tvCredits = _uiState.value.tvCredits + result.items,
+                    hasMoreTvShows = result.hasMore,
+                    isLoadingMoreTvShows = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingMoreTvShows = false)
+            }
         }
     }
 

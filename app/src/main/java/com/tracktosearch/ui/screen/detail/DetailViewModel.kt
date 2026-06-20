@@ -18,7 +18,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.local.ViewedItemStorage
-import com.tracktosearch.data.local.FavoriteResourceStorage
+import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,10 +29,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 data class RecommendationItem(
@@ -63,6 +65,9 @@ data class DetailUiState(
     val resources: List<ResourceItem> = emptyList(),
     val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
+    // 资源搜索进度：已完成源数 / 总源数
+    val completedSources: Int = 0,
+    val totalSources: Int = ResourceRepository.ALL_SOURCES.size,
     val isMarkedWatched: Boolean = false,
     val isMarkingWatched: Boolean = false,       // 是否正在处理标记/取消标记已看
     val isMarkedWatchlist: Boolean = false,      // 是否在想看列表中
@@ -75,7 +80,6 @@ data class DetailUiState(
     val searchAttempted: Boolean = false,
     val ratings: MultiRatings? = null,
     val viewedUrls: Set<String> = emptySet(),
-    val favoriteUrls: Set<String> = emptySet(),
     val comments: List<TraktComment> = emptyList(),
     val translatedComments: List<TraktComment> = emptyList(),
     val isTranslating: Boolean = false,
@@ -104,7 +108,10 @@ data class DetailUiState(
     val commentsError: Boolean = false,
     val recommendationsError: Boolean = false,
     val seasonsError: Boolean = false,
-    val creditsError: Boolean = false
+    val creditsError: Boolean = false,
+    // 未登录用户引导登录
+    val isLoggedIn: Boolean = true,
+    val showLoginPrompt: Boolean = false
 )
 
 @HiltViewModel
@@ -114,8 +121,8 @@ class DetailViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
     private val ratingsRepository: RatingsRepository,
     private val viewedItemStorage: ViewedItemStorage,
-    private val favoriteResourceStorage: FavoriteResourceStorage,
-    private val commentTranslator: CommentTranslator
+    private val commentTranslator: CommentTranslator,
+    private val tokenStorage: TokenStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DetailUiState())
@@ -136,6 +143,7 @@ class DetailViewModel @Inject constructor(
     private var seasonsJob: Job? = null
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
+    private var isLoggedIn: Boolean = false
 
     fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0) {
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
@@ -160,6 +168,10 @@ class DetailViewModel @Inject constructor(
         )
 
         viewModelScope.launch {
+            // 先检查登录状态
+            isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+            _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+
             var tmdbRating = 0.0
             if (tmdbId <= 0) {
                 _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title.replace("+", " "))
@@ -375,6 +387,8 @@ class DetailViewModel @Inject constructor(
 
     /** 获取已看剧集进度，转换为 季号 -> 已看集号集合 */
     private fun fetchWatchedProgress() {
+        // 未登录跳过观看进度查询
+        if (!isLoggedIn) return
         viewModelScope.launch {
             val result = traktRepository.getShowWatchedProgress(currentTraktId)
             result.onSuccess { progress ->
@@ -471,27 +485,35 @@ class DetailViewModel @Inject constructor(
 
                 val filtered = enriched.filter { it.tmdbId > 0 }
 
-                // 批量检查想看/已看状态（同时检查当前影视，避免重复 API 调用）
-                val allIdsToCheck = filtered.map { it.traktId } + currentTraktId
-                val statusMap = traktRepository.batchCheckStatus(allIdsToCheck, currentMediaType)
+                if (isLoggedIn) {
+                    // 已登录：批量检查想看/已看状态（同时检查当前影视，避免重复 API 调用）
+                    val allIdsToCheck = filtered.map { it.traktId } + currentTraktId
+                    val statusMap = traktRepository.batchCheckStatus(allIdsToCheck, currentMediaType)
 
-                // 更新推荐项状态
-                val withStatus = filtered.map { item ->
-                    val status = statusMap[item.traktId]
-                    item.copy(
-                        isInWatchlist = status?.first ?: false,
-                        isWatched = status?.second ?: false
+                    // 更新推荐项状态
+                    val withStatus = filtered.map { item ->
+                        val status = statusMap[item.traktId]
+                        item.copy(
+                            isInWatchlist = status?.first ?: false,
+                            isWatched = status?.second ?: false
+                        )
+                    }
+
+                    // 更新当前影视的想看/已看状态
+                    val currentStatus = statusMap[currentTraktId]
+                    _uiState.value = _uiState.value.copy(
+                        recommendations = withStatus,
+                        isLoadingRecommendations = false,
+                        isMarkedWatchlist = currentStatus?.first ?: false,
+                        isMarkedWatched = currentStatus?.second ?: false
+                    )
+                } else {
+                    // 未登录：跳过状态查询，直接展示推荐列表
+                    _uiState.value = _uiState.value.copy(
+                        recommendations = filtered,
+                        isLoadingRecommendations = false
                     )
                 }
-
-                // 更新当前影视的想看/已看状态
-                val currentStatus = statusMap[currentTraktId]
-                _uiState.value = _uiState.value.copy(
-                    recommendations = withStatus,
-                    isLoadingRecommendations = false,
-                    isMarkedWatchlist = currentStatus?.first ?: false,
-                    isMarkedWatched = currentStatus?.second ?: false
-                )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingRecommendations = false,
@@ -502,6 +524,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchUserRating() {
+        // 未登录跳过用户评分查询
+        if (!isLoggedIn) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRatingLoading = true)
             try {
@@ -520,6 +544,11 @@ class DetailViewModel @Inject constructor(
     fun setRating(rating: Int) {
         val current = _uiState.value
         if (current.isRating) return
+        // 未登录：弹出登录引导
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
         // 点击与当前评分相同的星标 → 取消评分
         if (current.userRating == rating) {
             removeRating()
@@ -586,6 +615,12 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.togglingEpisode == Pair(seasonNumber, episodeNumber)) return
 
+        // 未登录：弹出登录引导
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
+
         val isWatched = episodeNumber in (current.watchedEpisodeNumbers[seasonNumber] ?: emptySet())
         _uiState.value = current.copy(togglingEpisode = Pair(seasonNumber, episodeNumber))
 
@@ -624,14 +659,36 @@ class DetailViewModel @Inject constructor(
     private fun startSearch() {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isSearching = true, error = null)
+            // 从设置页读取启用的搜索源，初始化筛选状态
+            val storageEnabledSources = resourceRepository.getEnabledSources()
+            _uiState.value = _uiState.value.copy(
+                isSearching = true,
+                error = null,
+                completedSources = 0,
+                totalSources = storageEnabledSources.size,
+                enabledSources = storageEnabledSources
+            )
 
             val isShow = currentMediaType == MediaType.SHOW
             val hasEnglish = currentOriginalTitle.isNotEmpty()
 
-            val chineseFlow = resourceRepository.searchResourcesFlow(currentKeyword, isShow = isShow)
+            // 线程安全地跟踪已完成的源（中英文搜索共享同一集合，去重计数）
+            val completedSourceNames = ConcurrentHashMap.newKeySet<String>()
+            val onSourceComplete: (String) -> Unit = { source ->
+                if (completedSourceNames.add(source)) {
+                    _uiState.value = _uiState.value.copy(
+                        completedSources = completedSourceNames.size
+                    )
+                }
+            }
+
+            val chineseFlow = resourceRepository.searchResourcesFlow(
+                currentKeyword, isShow = isShow, onSourceComplete = onSourceComplete
+            )
             val englishFlow = if (hasEnglish) {
-                resourceRepository.searchResourcesFlow(currentOriginalTitle, isShow = isShow)
+                resourceRepository.searchResourcesFlow(
+                    currentOriginalTitle, isShow = isShow, onSourceComplete = onSourceComplete
+                )
             } else null
 
             var firstResultShown = false
@@ -712,12 +769,10 @@ class DetailViewModel @Inject constructor(
             allResources, state.enabledSources, state.enabledDiskTypes
         )
         val viewedUrls = viewedItemStorage.getviewedUrls()
-        val favoriteUrls = favoriteResourceStorage.getFavoriteUrls()
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
             resources = filtered,
-            viewedUrls = viewedUrls,
-            favoriteUrls = favoriteUrls
+            viewedUrls = viewedUrls
         )
     }
 
@@ -736,14 +791,23 @@ class DetailViewModel @Inject constructor(
         if (!detailLoaded) return
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            val state = _uiState.value
-            _uiState.value = state.copy(isSearching = true, error = null)
+            // 从设置页读取启用的搜索源，更新筛选状态
+            val storageEnabledSources = resourceRepository.getEnabledSources()
+            val state = _uiState.value.copy(
+                enabledSources = storageEnabledSources,
+                totalSources = storageEnabledSources.size
+            )
+            _uiState.value = state.copy(
+                isSearching = true,
+                error = null,
+                completedSources = 0
+            )
             val isShow = currentMediaType == MediaType.SHOW
 
             // 强制刷新中文名搜索
             val chineseResult = resourceRepository.refreshResources(
                 keyword = currentKeyword,
-                enabledSources = state.enabledSources,
+                enabledSources = storageEnabledSources,
                 enabledDiskTypes = state.enabledDiskTypes,
                 isShow = isShow
             )
@@ -751,7 +815,7 @@ class DetailViewModel @Inject constructor(
             val englishResult = if (currentOriginalTitle.isNotEmpty()) {
                 resourceRepository.refreshResources(
                     keyword = currentOriginalTitle,
-                    enabledSources = state.enabledSources,
+                    enabledSources = storageEnabledSources,
                     enabledDiskTypes = state.enabledDiskTypes,
                     isShow = isShow
                 )
@@ -775,7 +839,7 @@ class DetailViewModel @Inject constructor(
             }
 
             val filtered = resourceRepository.filterItems(
-                allResources, state.enabledSources, state.enabledDiskTypes
+                allResources, storageEnabledSources, _uiState.value.enabledDiskTypes
             )
             _uiState.value = _uiState.value.copy(
                 isSearching = false,
@@ -826,6 +890,12 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatched) return
 
+        // 未登录：弹出登录引导
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
+
         val targetState = !current.isMarkedWatched
         // 标记已看 → 立即通知刷新（不等 API 完成，确保返回时列表更新）
         // 取消标记 → 设为 false，避免无变更时重复拉取
@@ -874,6 +944,12 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatchlist) return
 
+        // 未登录：弹出登录引导
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
+
         val targetState = !current.isMarkedWatchlist
         _uiState.value = current.copy(
             isMarkingWatchlist = true,
@@ -897,25 +973,17 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 关闭登录引导弹窗 */
+    fun dismissLoginPrompt() {
+        _uiState.value = _uiState.value.copy(showLoginPrompt = false)
+    }
+
     fun markResourceViewed(url: String) {
         val current = _uiState.value.viewedUrls
         if (url in current) return
         viewModelScope.launch {
             viewedItemStorage.markViewed(url)
             _uiState.value = _uiState.value.copy(viewedUrls = current + url)
-        }
-    }
-
-    fun toggleFavorite(item: ResourceItem) {
-        viewModelScope.launch {
-            val nowFavorite = favoriteResourceStorage.toggleFavorite(item)
-            _uiState.value = _uiState.value.copy(
-                favoriteUrls = if (nowFavorite) {
-                    _uiState.value.favoriteUrls + item.url
-                } else {
-                    _uiState.value.favoriteUrls - item.url
-                }
-            )
         }
     }
 

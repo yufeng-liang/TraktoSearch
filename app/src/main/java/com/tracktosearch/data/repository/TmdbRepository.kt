@@ -2,6 +2,7 @@ package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.tmdb.dto.*
+import com.tracktosearch.data.util.TtlCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,13 +12,36 @@ class TmdbRepository @Inject constructor(
 ) {
     companion object {
         private const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+        private const val TTL_DETAIL = 30 * 60 * 1000L       // 详情 30 分钟
+        private const val TTL_CREDITS = 60 * 60 * 1000L      // 演职员 1 小时
+        private const val TTL_SEARCH = 60 * 60 * 1000L       // 搜索/ID转换 1 小时
+        private const val TTL_PERSON = 60 * 60 * 1000L       // 人物信息 1 小时
+        private const val TTL_REVIEWS = 10 * 60 * 1000L      // 评论 10 分钟
+        private const val TTL_LISTS = 60 * 60 * 1000L        // 列表类 1 小时
+        private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
     }
 
-    private val movieDetailCache = mutableMapOf<Int, TmdbMovieDetail>()
-    private val tvDetailCache = mutableMapOf<Int, TmdbTvDetail>()
-    private val movieTitleCache = mutableMapOf<Int, String>()
-    private val tvTitleCache = mutableMapOf<Int, String>()
-    private val creditsCache = mutableMapOf<Int, TmdbCreditsResponse>()
+    /** 人物作品分页结果 */
+    data class PersonCreditsPage<T>(
+        val items: List<T>,
+        val hasMore: Boolean
+    )
+
+    // 带 TTL 的缓存
+    private val movieDetailCache = TtlCache<TmdbMovieDetail>(TTL_DETAIL)
+    private val tvDetailCache = TtlCache<TmdbTvDetail>(TTL_DETAIL)
+    private val movieTitleCache = TtlCache<String>(TTL_DETAIL)
+    private val tvTitleCache = TtlCache<String>(TTL_DETAIL)
+    private val creditsCache = TtlCache<TmdbCreditsResponse>(TTL_CREDITS)
+    private val searchMovieCache = TtlCache<TmdbSearchResult>(TTL_SEARCH)
+    private val personDetailCache = TtlCache<TmdbPerson>(TTL_PERSON)
+    // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
+    private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON)
+    private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON)
+    private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS)
+    private val popularMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
+    private val upcomingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
+    private val topRatedMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
 
     data class MovieEnrichment(
         val posterUrl: String?,
@@ -44,9 +68,10 @@ class TmdbRepository @Inject constructor(
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
-        val cached = movieDetailCache[tmdbId]
+        val key = tmdbId.toString()
+        val cached = movieDetailCache.get(key)
         if (cached != null) {
-            val chineseTitle = movieTitleCache.getOrPut(tmdbId) {
+            val chineseTitle = movieTitleCache.getOrPut(key) {
                 resolveMovieChineseTitle(tmdbId, originalTitle, cached)
             }
             return MovieEnrichment(
@@ -66,9 +91,9 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getMovieDetail(tmdbId)
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackMovie(originalTitle, year)
-                movieDetailCache[tmdbId] = detail
+                movieDetailCache.put(key, detail)
                 val chineseTitle = resolveMovieChineseTitle(tmdbId, originalTitle, detail)
-                movieTitleCache[tmdbId] = chineseTitle
+                movieTitleCache.put(key, chineseTitle)
                 MovieEnrichment(
                     posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
                     chineseTitle = chineseTitle,
@@ -89,9 +114,10 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
-        val cached = tvDetailCache[tmdbId]
+        val key = tmdbId.toString()
+        val cached = tvDetailCache.get(key)
         if (cached != null) {
-            val chineseTitle = tvTitleCache.getOrPut(tmdbId) {
+            val chineseTitle = tvTitleCache.getOrPut(key) {
                 resolveTvChineseTitle(tmdbId, originalName, cached)
             }
             return TvEnrichment(
@@ -111,9 +137,9 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getTvDetail(tmdbId)
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackTv(originalName, year)
-                tvDetailCache[tmdbId] = detail
+                tvDetailCache.put(key, detail)
                 val chineseTitle = resolveTvChineseTitle(tmdbId, originalName, detail)
-                tvTitleCache[tmdbId] = chineseTitle
+                tvTitleCache.put(key, chineseTitle)
                 TvEnrichment(
                     posterUrl = detail.poster_path?.let { "$IMAGE_BASE_URL$it" },
                     chineseTitle = chineseTitle,
@@ -186,14 +212,15 @@ class TmdbRepository @Inject constructor(
     )
 
     suspend fun getCredits(tmdbId: Int, mediaType: MediaType): TmdbCreditsResponse? {
-        creditsCache[tmdbId]?.let { return it }
+        val key = tmdbId.toString()
+        creditsCache.get(key)?.let { return it }
         return try {
             val response = when (mediaType) {
                 MediaType.MOVIE -> tmdbApiService.getMovieCredits(tmdbId)
                 MediaType.SHOW -> tmdbApiService.getCredits(tmdbId)
             }
             if (response.isSuccessful) {
-                response.body()?.also { creditsCache[tmdbId] = it }
+                response.body()?.also { creditsCache.put(key, it) }
             } else null
         } catch (_: Exception) {
             null
@@ -201,49 +228,178 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getReviews(tmdbId: Int, mediaType: MediaType, page: Int = 1): TmdbReviewsResponse? {
+        val key = "${tmdbId}_${mediaType.name}_$page"
+        reviewsCache.get(key)?.let { return it }
         return try {
             val response = when (mediaType) {
                 MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
                 MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
             }
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful) {
+                response.body()?.also { reviewsCache.put(key, it) }
+            } else null
         } catch (_: Exception) {
             null
         }
     }
 
     suspend fun getPersonDetail(personId: Int): TmdbPerson? {
+        val key = personId.toString()
+        personDetailCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getPersonDetail(personId)
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful) {
+                response.body()?.also { personDetailCache.put(key, it) }
+            } else null
         } catch (_: Exception) {
             null
         }
     }
 
-    suspend fun getPersonMovieCredits(personId: Int): List<TmdbPersonMovieCredit> {
-        return try {
-            val response = tmdbApiService.getPersonMovieCredits(personId)
-            if (response.isSuccessful) {
-                response.body()?.cast?.sortedByDescending { it.vote_average }?.take(20) ?: emptyList()
-            } else emptyList()
+    suspend fun getPersonMovieCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonMovieCredit> {
+        val key = personId.toString()
+        val full = try {
+            personMovieCreditsCache.get(key) ?: run {
+                val response = tmdbApiService.getPersonMovieCredits(personId, page = 1)
+                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
+                personMovieCreditsCache.put(key, result)
+                result
+            }
         } catch (_: Exception) {
             emptyList()
         }
+        val start = (page - 1) * PERSON_CREDITS_PAGE_SIZE
+        val slice = full.drop(start).take(PERSON_CREDITS_PAGE_SIZE)
+        val hasMore = start + PERSON_CREDITS_PAGE_SIZE < full.size
+        return PersonCreditsPage(slice, hasMore)
     }
 
-    suspend fun getPersonTvCredits(personId: Int): List<TmdbPersonTvCredit> {
-        return try {
-            val response = tmdbApiService.getPersonTvCredits(personId)
-            if (response.isSuccessful) {
-                response.body()?.cast?.sortedByDescending { it.vote_average }?.take(20) ?: emptyList()
-            } else emptyList()
+    suspend fun getPersonTvCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonTvCredit> {
+        val key = personId.toString()
+        val full = try {
+            personTvCreditsCache.get(key) ?: run {
+                val response = tmdbApiService.getPersonTvCredits(personId, page = 1)
+                val result = response.body()?.cast?.sortedByDescending { it.vote_average } ?: emptyList()
+                personTvCreditsCache.put(key, result)
+                result
+            }
         } catch (_: Exception) {
             emptyList()
         }
+        val start = (page - 1) * PERSON_CREDITS_PAGE_SIZE
+        val slice = full.drop(start).take(PERSON_CREDITS_PAGE_SIZE)
+        val hasMore = start + PERSON_CREDITS_PAGE_SIZE < full.size
+        return PersonCreditsPage(slice, hasMore)
     }
 
     fun buildProfileUrl(profilePath: String?): String? {
         return profilePath?.let { "$IMAGE_BASE_URL$it" }
+    }
+
+    // 通过标题搜索电影，返回第一个匹配结果
+    suspend fun searchMovie(query: String): TmdbSearchResult? {
+        val key = query.trim()
+        searchMovieCache.get(key)?.let { return it }
+        return try {
+            val response = tmdbApiService.searchMovie(query = query)
+            if (response.isSuccessful) {
+                response.body()?.results?.firstOrNull()?.also {
+                    searchMovieCache.put(key, it)
+                }
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 热门电影 */
+    suspend fun getPopularMovies(): List<TmdbSearchResult> {
+        popularMoviesCache.get("default")?.let { return it }
+        return try {
+            val response = tmdbApiService.getPopularMovies()
+            if (response.isSuccessful) {
+                val results = response.body()?.results ?: emptyList()
+                popularMoviesCache.put("default", results)
+                results
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 热门电影（分页） */
+    suspend fun getPopularMovies(page: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getPopularMovies(page = page)
+            if (response.isSuccessful) {
+                response.body()?.results ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 即将上映 */
+    suspend fun getUpcomingMovies(): List<TmdbSearchResult> {
+        upcomingMoviesCache.get("default")?.let { return it }
+        return try {
+            val response = tmdbApiService.getUpcomingMovies()
+            if (response.isSuccessful) {
+                val results = response.body()?.results ?: emptyList()
+                upcomingMoviesCache.put("default", results)
+                results
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 即将上映（分页） */
+    suspend fun getUpcomingMovies(page: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getUpcomingMovies(page = page)
+            if (response.isSuccessful) {
+                response.body()?.results ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 高分电影（未登录时的推荐降级） */
+    suspend fun getTopRatedMovies(): List<TmdbSearchResult> {
+        topRatedMoviesCache.get("default")?.let { return it }
+        return try {
+            val response = tmdbApiService.getTopRatedMovies()
+            if (response.isSuccessful) {
+                val results = response.body()?.results ?: emptyList()
+                topRatedMoviesCache.put("default", results)
+                results
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 高分电影（分页） */
+    suspend fun getTopRatedMovies(page: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getTopRatedMovies(page = page)
+            if (response.isSuccessful) {
+                response.body()?.results ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 获取电影详情（含海报路径） */
+    suspend fun getMovieDetail(movieId: Int): TmdbMovieDetail? {
+        return try {
+            val response = tmdbApiService.getMovieDetail(movieId)
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) {
+            null
+        }
     }
 }

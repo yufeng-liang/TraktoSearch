@@ -2,6 +2,7 @@ package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.data.util.TtlCache
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -9,7 +10,23 @@ import javax.inject.Singleton
 class TraktRepository @Inject constructor(
     private val traktApiService: TraktApiService
 ) {
+    companion object {
+        private const val TTL_ID_MAPPING = 60 * 60 * 1000L   // ID 转换 1 小时
+        private const val TTL_COMMENTS = 10 * 60 * 1000L     // 评论 10 分钟
+        private const val TTL_RELATED = 30 * 60 * 1000L      // 相关推荐 30 分钟
+        private const val TTL_RECOMMENDATIONS = 60 * 60 * 1000L // 个性化推荐 1 小时
+    }
+
+    // 带 TTL 的缓存
+    private val searchByTmdbCache = TtlCache<List<TraktSearchResult>>(TTL_ID_MAPPING)
+    private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS)
+    private val relatedMoviesCache = TtlCache<List<TraktMovie>>(TTL_RELATED)
+    private val relatedShowsCache = TtlCache<List<TraktShow>>(TTL_RELATED)
+    private val recommendationsCache = TtlCache<List<TraktMovie>>(TTL_RECOMMENDATIONS)
+
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
+        val key = "${tmdbId}_${type.name}"
+        searchByTmdbCache.get(key)?.let { return Result.success(it) }
         return try {
             val typeStr = when (type) {
                 MediaType.MOVIE -> "movie"
@@ -17,7 +34,9 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.searchByTmdb(tmdbId, typeStr)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val body = response.body() ?: emptyList()
+                searchByTmdbCache.put(key, body)
+                Result.success(body)
             } else {
                 Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
             }
@@ -95,14 +114,90 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /** 获取全部电影观看历史（跨页拉取），用于统计 */
+    suspend fun getAllMovieHistory(): Result<List<TraktWatchlistMovieItem>> {
+        val allItems = mutableListOf<TraktWatchlistMovieItem>()
+        var page = 1
+        var totalPages = 1
+        while (page <= totalPages) {
+            val result = getMovieHistory(page = page, limit = 200)
+            result.onSuccess { (items, tp) ->
+                allItems.addAll(items)
+                totalPages = tp
+            }.onFailure { e ->
+                return Result.failure(e)
+            }
+            page++
+        }
+        return Result.success(allItems)
+    }
+
+    /** 获取全部电视剧观看历史（跨页拉取），用于统计 */
+    suspend fun getAllShowHistory(): Result<List<TraktWatchlistShowItem>> {
+        val allItems = mutableListOf<TraktWatchlistShowItem>()
+        var page = 1
+        var totalPages = 1
+        while (page <= totalPages) {
+            val result = getShowHistory(page = page, limit = 200)
+            result.onSuccess { (items, tp) ->
+                allItems.addAll(items)
+                totalPages = tp
+            }.onFailure { e ->
+                return Result.failure(e)
+            }
+            page++
+        }
+        return Result.success(allItems)
+    }
+
+    /** 获取全部电影想看列表（跨页拉取），用于通知检查 */
+    suspend fun getAllMovieWatchlist(): Result<List<TraktWatchlistMovieItem>> {
+        val allItems = mutableListOf<TraktWatchlistMovieItem>()
+        var page = 1
+        var totalPages = 1
+        while (page <= totalPages) {
+            val result = getMovieWatchlist(page = page, limit = 200)
+            result.onSuccess { (items, tp) ->
+                allItems.addAll(items)
+                totalPages = tp
+            }.onFailure { e ->
+                return Result.failure(e)
+            }
+            page++
+        }
+        return Result.success(allItems)
+    }
+
+    /** 获取全部电视剧想看列表（跨页拉取），用于通知检查 */
+    suspend fun getAllShowWatchlist(): Result<List<TraktWatchlistShowItem>> {
+        val allItems = mutableListOf<TraktWatchlistShowItem>()
+        var page = 1
+        var totalPages = 1
+        while (page <= totalPages) {
+            val result = getShowWatchlist(page = page, limit = 200)
+            result.onSuccess { (items, tp) ->
+                allItems.addAll(items)
+                totalPages = tp
+            }.onFailure { e ->
+                return Result.failure(e)
+            }
+            page++
+        }
+        return Result.success(allItems)
+    }
+
     suspend fun getComments(traktId: Int, type: MediaType, limit: Int = 5, page: Int = 1): Result<List<TraktComment>> {
+        val key = "${traktId}_${type.name}_${limit}_$page"
+        commentsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = when (type) {
                 MediaType.MOVIE -> traktApiService.getMovieComments(traktId.toString(), limit, page)
                 MediaType.SHOW -> traktApiService.getShowComments(traktId.toString(), limit, page)
             }
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val body = response.body() ?: emptyList()
+                commentsCache.put(key, body)
+                Result.success(body)
             } else {
                 Result.failure(Exception("Failed to fetch comments: ${response.code()}"))
             }
@@ -226,10 +321,14 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getRelatedMovies(traktId: Int, limit: Int = 10): Result<List<TraktMovie>> {
+        val key = "${traktId}_${limit}"
+        relatedMoviesCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getRelatedMovies(traktId, limit = limit)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val body = response.body() ?: emptyList()
+                relatedMoviesCache.put(key, body)
+                Result.success(body)
             } else {
                 Result.failure(Exception("Failed to fetch related movies: ${response.code()}"))
             }
@@ -239,10 +338,14 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getRelatedShows(traktId: Int, limit: Int = 10): Result<List<TraktShow>> {
+        val key = "${traktId}_${limit}"
+        relatedShowsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getRelatedShows(traktId, limit = limit)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val body = response.body() ?: emptyList()
+                relatedShowsCache.put(key, body)
+                Result.success(body)
             } else {
                 Result.failure(Exception("Failed to fetch related shows: ${response.code()}"))
             }
@@ -438,6 +541,24 @@ class TraktRepository @Inject constructor(
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** 个性化推荐（已登录用户） */
+    suspend fun getRecommendations(limit: Int = 10): Result<List<TraktMovie>> {
+        val key = "recommendations_${limit}"
+        recommendationsCache.get(key)?.let { return Result.success(it) }
+        return try {
+            val response = traktApiService.getMovieRecommendations(limit = limit)
+            if (response.isSuccessful) {
+                val body = response.body() ?: emptyList()
+                recommendationsCache.put(key, body)
+                Result.success(body)
+            } else {
+                Result.failure(Exception("Failed to fetch recommendations: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 }

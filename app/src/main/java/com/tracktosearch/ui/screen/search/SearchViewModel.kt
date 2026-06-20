@@ -6,10 +6,15 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.dto.ResourceType
+import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.data.repository.TmdbRepository
+import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.TtlCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +42,8 @@ data class SearchUiState(
     val error: String? = null,
     val searchHistory: List<String> = emptyList(),
     val doubanHotCategories: List<DoubanHotCategory> = emptyList(),
-    val typeFilter: ResourceType = ResourceType.ALL
+    val typeFilter: ResourceType = ResourceType.ALL,
+    val resolvingItemId: Int? = null
 )
 
 @HiltViewModel
@@ -45,7 +51,9 @@ class SearchViewModel @Inject constructor(
     private val resourceRepository: ResourceRepository,
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
-    private val doubanHotApi: DoubanHotApiService
+    private val doubanHotApi: DoubanHotApiService,
+    private val tmdbRepository: TmdbRepository,
+    private val traktRepository: TraktRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -53,7 +61,15 @@ class SearchViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
+    // 热门搜索词（硬编码）
+    val popularSearches: List<String> = listOf(
+        "流浪地球", "满江红", "消失的她", "封神", "狂飙", "三体", "长津湖", "你好李焕英"
+    )
+
     companion object {
+        private const val TTL_SEARCH = 10 * 60 * 1000L      // 资源搜索 10 分钟
+        private const val TTL_DOUBAN = 60 * 60 * 1000L      // 豆瓣热榜 1 小时
+
         private val DOUBAN_CATEGORIES = listOf(
             "douban-movie" to "新片榜",
             "douban-weekly" to "口碑榜",
@@ -61,6 +77,11 @@ class SearchViewModel @Inject constructor(
             "douban-us-box" to "北美票房榜"
         )
     }
+
+    // 搜索结果缓存
+    private val searchResultCache = TtlCache<List<ResourceItem>>(TTL_SEARCH)
+    // 豆瓣热榜缓存
+    private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
 
     init {
         viewModelScope.launch {
@@ -70,7 +91,6 @@ class SearchViewModel @Inject constructor(
                 )
             }
         }
-        loadDoubanHot()
     }
 
     private fun loadDoubanHot() {
@@ -91,6 +111,21 @@ class SearchViewModel @Inject constructor(
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
+            // 10 分钟内用缓存
+            val cacheKey = "${categoryId}_1_10"
+            doubanHotCache.get(cacheKey)?.let { data ->
+                val updated = _uiState.value.doubanHotCategories.toMutableList()
+                if (index < updated.size) {
+                    updated[index] = updated[index].copy(
+                        items = data.items,
+                        isLoading = false,
+                        error = null,
+                        total = data.total
+                    )
+                    _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
+                }
+                return@launch
+            }
             try {
                 val response = doubanHotApi.getDoubanHot(category = categoryId, limit = 10)
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -103,6 +138,7 @@ class SearchViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
+                doubanHotCache.put(cacheKey, response.data)
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -143,6 +179,25 @@ class SearchViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(doubanHotCategories = current)
                 }
             }
+            // 1 小时内用缓存（仅首页）
+            val cacheKey = "${categoryId}_${page}_$limit"
+            if (page == 1) {
+                doubanHotCache.get(cacheKey)?.let { data ->
+                    val updated = _uiState.value.doubanHotCategories.toMutableList()
+                    if (idx >= 0) {
+                        updated[idx] = updated[idx].copy(
+                            items = data.items,
+                            isLoading = false,
+                            error = null,
+                            currentPage = page,
+                            hasMore = data.hasMore || data.items.size >= limit,
+                            total = data.total
+                        )
+                        _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
+                    }
+                    return@launch
+                }
+            }
             try {
                 val response = doubanHotApi.getDoubanHot(category = categoryId, page = page, limit = limit)
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -160,6 +215,9 @@ class SearchViewModel @Inject constructor(
                         total = if (response.data.total > 0) response.data.total else updated[idx].total
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
+                }
+                if (page == 1) {
+                    doubanHotCache.put(cacheKey, response.data)
                 }
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -187,9 +245,21 @@ class SearchViewModel @Inject constructor(
                 error = null,
                 typeFilter = ResourceType.ALL
             )
+
+            // 10 分钟内相同关键词用缓存
+            val cached = searchResultCache.get(keyword.trim())
+            if (cached != null) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    resources = cached
+                )
+                return@launch
+            }
+
             resourceRepository.searchResourcesFlow(keyword = keyword)
                 .collect { items ->
                     if (items.isNotEmpty()) {
+                        searchResultCache.put(keyword.trim(), items)
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             resources = items
@@ -206,6 +276,15 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             searchHistoryStorage.remove(keyword)
         }
+    }
+
+    // 根据输入文本过滤搜索历史，返回最多 5 条建议（以输入文本开头或包含输入文本）
+    fun getSuggestions(query: String): List<String> {
+        if (query.isBlank()) return emptyList()
+        val trimmed = query.trim()
+        return _uiState.value.searchHistory
+            .filter { it != trimmed && (it.startsWith(trimmed, ignoreCase = true) || it.contains(trimmed, ignoreCase = true)) }
+            .take(5)
     }
 
     fun clearHistory() {
@@ -227,6 +306,44 @@ class SearchViewModel @Inject constructor(
 
     fun setTypeFilter(filter: ResourceType) {
         _uiState.value = _uiState.value.copy(typeFilter = filter)
+    }
+
+    // 豆瓣热榜卡片点击：通过 TMDB 搜索标题，再转换为 Trakt ID 后跳转详情页
+    fun resolveAndNavigate(
+        item: DoubanHotItem,
+        onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit
+    ) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(resolvingItemId = item.id)
+            try {
+                // 提取标题（去除 【评分】 和 #序号 前缀）
+                val cleanTitle = item.title
+                    .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
+                    .replace(Regex("^#\\d+\\s*"), "")
+                    .trim()
+
+                // 1. 用 TMDB 搜索
+                val searchResult = tmdbRepository.searchMovie(cleanTitle)
+                if (searchResult == null || searchResult.id <= 0) {
+                    _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                    return@launch
+                }
+
+                // 2. 用 Trakt search/tmdb/{id} 转换为 trakt id
+                val traktResult = traktRepository.searchByTmdb(searchResult.id, MediaType.MOVIE)
+                traktResult.onSuccess { searchResults ->
+                    val first = searchResults.firstOrNull()
+                    val traktId = first?.movie?.ids?.trakt
+                    val imdbId = first?.movie?.ids?.imdb ?: ""
+                    if (traktId != null && traktId > 0) {
+                        onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0)
+                    }
+                }
+                _uiState.value = _uiState.value.copy(resolvingItemId = null)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(resolvingItemId = null)
+            }
+        }
     }
 
     fun markViewed(url: String) {
