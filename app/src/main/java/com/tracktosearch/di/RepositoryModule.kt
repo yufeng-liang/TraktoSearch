@@ -1,5 +1,6 @@
 package com.tracktosearch.di
 
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.repository.ResourceRepository
@@ -26,8 +27,9 @@ object RepositoryModule {
     @Provides
     @Singleton
     fun provideTmdbRepository(
-        tmdbApiService: TmdbApiService
+        tmdbApiService: TmdbApiService,
+        languageStorage: LanguageStorage
     ): TmdbRepository {
-        return TmdbRepository(tmdbApiService)
+        return TmdbRepository(tmdbApiService, languageStorage)
     }
 }

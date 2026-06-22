@@ -176,6 +176,25 @@ data class TraktRatingItem(
 // ==================== 观看进度 DTO ====================
 
 @Serializable
+data class TraktWatchedShow(
+    val plays: Int = 0,
+    val show: TraktShow = TraktShow(),
+    val seasons: List<TraktWatchedSeason> = emptyList()
+)
+
+@Serializable
+data class TraktWatchedSeason(
+    val number: Int = 0,
+    val episodes: List<TraktWatchedEpisode> = emptyList()
+)
+
+@Serializable
+data class TraktWatchedEpisode(
+    val number: Int = 0,
+    val completed: Boolean = false
+)
+
+@Serializable
 data class TraktShowProgress(
     val aired: Int = 0,
     val completed: Int = 0,

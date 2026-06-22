@@ -51,8 +51,25 @@ class ResourceRepository @Inject constructor(
         }
     }
 
-    /** 获取当前启用的搜索源（同步，用于 UI 初始化） */
-    suspend fun getEnabledSources(): Set<String> = storageEnabledSourcesFlow().first()
+    /** 获取当前启用的搜索源（同步，用于 UI 初始化），包含自定义源 */
+    suspend fun getEnabledSources(): Set<String> {
+        val builtIn = storageEnabledSourcesFlow().first()
+        val customEnabled = customSearchSourceStorage.sources.first()
+            .filter { it.enabled }
+            .map { it.id }
+            .toSet()
+        return builtIn + customEnabled
+    }
+
+    /** 获取所有自定义源（已启用的） */
+    suspend fun getEnabledCustomSources(): List<CustomSearchSource> {
+        return customSearchSourceStorage.sources.first().filter { it.enabled }
+    }
+
+    /** 根据 ID 获取自定义源名称 */
+    suspend fun getSourceName(sourceId: String): String? {
+        return customSearchSourceStorage.sources.first().find { it.id == sourceId }?.name
+    }
 
     companion object {
         const val SOURCE_PANSOU = "pansou"

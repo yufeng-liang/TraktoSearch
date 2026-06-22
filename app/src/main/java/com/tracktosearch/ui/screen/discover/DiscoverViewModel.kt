@@ -84,10 +84,10 @@ class DiscoverViewModel @Inject constructor(
         private const val TTL_DOUBAN = 60 * 60 * 1000L // 豆瓣热榜 1 小时
 
         private val DOUBAN_CATEGORIES = listOf(
-            "douban-movie" to "新片榜",
-            "douban-weekly" to "口碑榜",
-            "douban-top250" to "Top250",
-            "douban-us-box" to "北美票房榜"
+            "douban-movie",
+            "douban-weekly",
+            "douban-top250",
+            "douban-us-box"
         )
     }
 
@@ -102,12 +102,12 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadDoubanHot() {
-        val categories = DOUBAN_CATEGORIES.map { (id, label) ->
-            DoubanHotCategory(id = id, label = label, isLoading = true)
+        val categories = DOUBAN_CATEGORIES.map { id ->
+            DoubanHotCategory(id = id, label = "", isLoading = true)
         }
         _uiState.value = _uiState.value.copy(doubanHotCategories = categories)
 
-        DOUBAN_CATEGORIES.forEachIndexed { index, (categoryId, _) ->
+        DOUBAN_CATEGORIES.forEachIndexed { index, categoryId ->
             loadDoubanCategory(index, categoryId)
         }
     }
@@ -161,7 +161,7 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun retryDoubanCategory(categoryId: String) {
-        val index = DOUBAN_CATEGORIES.indexOfFirst { it.first == categoryId }
+        val index = DOUBAN_CATEGORIES.indexOfFirst { it == categoryId }
         if (index >= 0) {
             loadDoubanCategory(index, categoryId)
         }

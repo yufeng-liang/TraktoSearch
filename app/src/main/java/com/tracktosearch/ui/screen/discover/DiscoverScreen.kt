@@ -40,8 +40,20 @@ import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
+import com.tracktosearch.ui.util.performHapticClick
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 
-@OptIn(ExperimentalMaterial3Api::class)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
@@ -84,52 +96,56 @@ fun DiscoverScreen(
         uiState.doubanHotCategories.isNotEmpty() &&
         uiState.doubanHotCategories.filter { it.id in visibleDoubanIds }.all { it.error != null && it.items.isEmpty() }
 
+    val discoverHazeState = remember { HazeState() }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.discover_title)) }
-            )
-        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        if (allDoubanFailed) {
-            Column(
-                modifier = modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CloudOff,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    text = stringResource(R.string.common_load_failed),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = { viewModel.retryAll() }) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.error_retry))
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (allDoubanFailed) {
+                Column(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.common_load_failed),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { viewModel.retryAll() }) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.error_retry))
+                    }
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = modifier.fillMaxSize().padding(paddingValues),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 8.dp,
-                    bottom = 80.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+            } else {
+                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                LazyColumn(
+                    modifier = modifier
+                        .fillMaxSize()
+                        .hazeSource(state = discoverHazeState),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 56.dp + statusBarHeight,
+                        bottom = 80.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
                 // 根据用户设置（显示/隐藏 + 排序）渲染各栏目
                 sectionConfigs.filter { it.visible }.forEach { config ->
@@ -143,6 +159,7 @@ fun DiscoverScreen(
                                         category = category,
                                         resolvingItemId = uiState.resolvingItemId,
                                         onItemClick = { item ->
+                                            context.performHapticClick()
                                             val displayTitle = item.title
                                                 .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
                                                 .replace(Regex("^#\\d+\\s*"), "")
@@ -167,12 +184,13 @@ fun DiscoverScreen(
                                     error = uiState.popularError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
+                                        context.performHapticClick()
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbPopular() },
-                                    onViewAll = { showPopularAll = true }
+                                    onViewAll = { context.performHapticClick(); showPopularAll = true }
                                 )
                             }
                         }
@@ -186,12 +204,13 @@ fun DiscoverScreen(
                                     error = uiState.upcomingError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
+                                        context.performHapticClick()
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbUpcoming() },
-                                    onViewAll = { showUpcomingAll = true }
+                                    onViewAll = { context.performHapticClick(); showUpcomingAll = true }
                                 )
                             }
                         }
@@ -205,16 +224,43 @@ fun DiscoverScreen(
                                     error = uiState.recommendationsError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
+                                        context.performHapticClick()
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTraktRecommendations() },
-                                    onViewAll = { showRecommendationsAll = true }
+                                    onViewAll = { context.performHapticClick(); showRecommendationsAll = true }
                                 )
                             }
                         }
                     }
+                }
+            }
+            }
+            // Haze模糊渐变TopAppBar（含状态栏）
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = discoverHazeState,
+                        style = HazeMaterials.thin()
+                    ) {
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f
+                        )
+                    }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding())
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        text = stringResource(R.string.discover_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }
@@ -330,7 +376,7 @@ private fun TmdbMovieSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "全部(${movies.size}) >",
+                        text = stringResource(R.string.discover_view_all, movies.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -398,7 +444,7 @@ private fun TraktRecommendationSection(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "全部(${movies.size}) >",
+                        text = stringResource(R.string.discover_view_all, movies.size),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -529,6 +575,23 @@ private fun MovieCard(
                         )
                     }
                 }
+                // 年份角标（海报右下角）
+                if (year.isNotEmpty()) {
+                    Text(
+                        text = year,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = Color.Black,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color.White.copy(alpha = 0.9f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                }
             }
             Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
                 Text(
@@ -537,13 +600,6 @@ private fun MovieCard(
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-                if (year.isNotEmpty()) {
-                    Text(
-                        text = year,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
         }
     }
@@ -762,4 +818,13 @@ private fun TraktMovieAllSheet(
             }
         }
     }
+}
+
+@Composable
+private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) {
+    "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
+    "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
+    "douban-top250" -> stringResource(R.string.discover_douban_top250)
+    "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+    else -> categoryId
 }

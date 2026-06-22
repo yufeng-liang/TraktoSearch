@@ -85,6 +85,11 @@ interface TraktApiService {
     @GET("shows/{id}/progress/watched")
     suspend fun getShowWatchedProgress(@Path("id") id: Int): Response<TraktShowProgress>
 
+    @GET("sync/watched/shows")
+    suspend fun getWatchedShows(
+        @Query("extended") extended: String = "full"
+    ): Response<List<TraktWatchedShow>>
+
     @GET("movies/{id}/related")
     suspend fun getRelatedMovies(
         @Path("id") id: Int,
@@ -112,6 +117,18 @@ interface TraktApiService {
     suspend fun searchByTmdb(
         @Path("id") id: Int,
         @Query("type") type: String
+    ): Response<List<TraktSearchResult>>
+
+    @GET("search/movie")
+    suspend fun searchMovies(
+        @Query("query") query: String,
+        @Query("limit") limit: Int = 20
+    ): Response<List<TraktSearchResult>>
+
+    @GET("search/show")
+    suspend fun searchShows(
+        @Query("query") query: String,
+        @Query("limit") limit: Int = 20
     ): Response<List<TraktSearchResult>>
 
     @GET("recommendations/movies")

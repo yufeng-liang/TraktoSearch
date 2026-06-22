@@ -49,6 +49,8 @@
     <string name="detail_share">共有</string>
     <string name="detail_marked_watched">視聴済み</string>
     <string name="detail_mark_watched">視聴済みにする</string>
+    <string name="detail_mark_watched_title">視聴済みにするエピソードを選択</string>
+    <string name="detail_loading_episodes">エピソードを読み込み中…</string>
     <string name="detail_no_overview">あらすじがありません</string>
     <string name="detail_overview_label">あらすじ</string>
     <string name="detail_retry">再試行</string>
@@ -110,6 +112,8 @@
     <string name="statistics_total">合計</string>
     <string name="statistics_this_month">今月</string>
     <string name="statistics_this_year">今年</string>
+    <string name="statistics_shows">作品</string>
+    <string name="statistics_episodes">エピソード</string>
     <string name="statistics_heatmap">視聴ヒートマップ</string>
     <string name="statistics_genre_distribution">ジャンル分布</string>
     <string name="statistics_genre_ranking">トップジャンル</string>
@@ -132,6 +136,13 @@
     <string name="watchlist_search_history">履歴を検索</string>
     <string name="history_empty_movies">視聴した映画はまだありません</string>
     <string name="history_empty_shows">視聴したテレビ番組はまだありません</string>
+    <string name="watchlist_search_on_trakt">Traktで検索</string>
+
+    <!-- Trakt Search Screen -->
+    <string name="trakt_search_hint_movies">Traktで映画を検索</string>
+    <string name="trakt_search_hint_shows">Traktでテレビ番組を検索</string>
+    <string name="trakt_search_no_movies">Traktで映画が見つかりません</string>
+    <string name="trakt_search_no_shows">Traktでテレビ番組が見つかりません</string>
 
     <!-- Detail Screen (追加) -->
     <string name="detail_mark_watchlist">ウォッチリスト</string>
@@ -283,6 +294,7 @@
     <!-- Common UI -->
     <string name="common_retry">再試行</string>
     <string name="common_close">閉じる</string>
+    <string name="common_confirm">確認</string>
     <string name="common_load_failed">読み込み失敗</string>
     <string name="common_no_data">データがありません</string>
     <string name="common_loading">読み込み中…</string>
@@ -351,6 +363,14 @@
     <string name="settings_cache_cleared">キャッシュをクリアしました</string>
     <string name="settings_cache_clear_failed">キャッシュクリア失敗: %1$s</string>
     <string name="settings_no_changelog">更新履歴はありません</string>
+
+    <string name="settings_add_custom_source">カスタム検索ソースを追加</string>
+    <string name="settings_add_custom_source_desc">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
+    <string name="discover_douban_new_movies">新作映画</string>
+    <string name="discover_douban_weekly">今週のベスト</string>
+    <string name="discover_douban_top250">トップ250</string>
+    <string name="discover_douban_us_box">全米興行収入</string>
+    <string name="discover_view_all">すべて(%d) ></string>
 
     <!-- Genre Names -->
     <string name="genre_action">アクション</string>

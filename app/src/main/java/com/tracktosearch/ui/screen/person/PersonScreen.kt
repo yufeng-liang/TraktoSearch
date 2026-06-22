@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.person
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,7 +26,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,7 +56,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.ui.platform.LocalContext
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,6 +75,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.MovieCard
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -77,6 +85,7 @@ import dev.chrisbanes.haze.hazeSource
 fun PersonScreen(
     personId: Int,
     personName: String,
+    profileUrl: String? = null,
     onBack: () -> Unit = {},
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
@@ -127,8 +136,9 @@ fun PersonScreen(
                     ) {
                         item(key = "person_header") {
                             PersonHeaderContent(
+                                personId = uiState.person!!.id,
                                 name = uiState.person!!.name,
-                                profileUrl = uiState.person!!.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                profileUrl = profileUrl ?: uiState.person!!.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
                                 birthday = uiState.person!!.birthday,
                                 deathday = uiState.person!!.deathday,
                                 placeOfBirth = uiState.person!!.place_of_birth,
@@ -170,7 +180,7 @@ fun PersonScreen(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                                         contentPadding = PaddingValues(horizontal = 16.dp)
                                     ) {
-                                        items(uiState.movieCredits, key = { "movie_${it.id}" }) { credit ->
+                                        itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }) { _, credit ->
                                             CreditCard(
                                                 title = credit.title,
                                                 subtitle = credit.character,
@@ -225,7 +235,7 @@ fun PersonScreen(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                                         contentPadding = PaddingValues(horizontal = 16.dp)
                                     ) {
-                                        items(uiState.tvCredits, key = { "tv_${it.id}" }) { credit ->
+                                        itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }) { _, credit ->
                                             CreditCard(
                                                 title = credit.name,
                                                 subtitle = credit.character,
@@ -373,7 +383,7 @@ private fun AllMovieCreditsSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(credits, key = { "movie_${it.id}" }) { credit ->
+                itemsIndexed(credits, key = { index, credit -> "movie_${credit.id}_$index" }) { _, credit ->
                     CreditCard(
                         title = credit.title,
                         subtitle = credit.character,
@@ -453,7 +463,7 @@ private fun AllTvCreditsSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(credits, key = { "tv_${it.id}" }) { credit ->
+                itemsIndexed(credits, key = { index, credit -> "tv_${credit.id}_$index" }) { _, credit ->
                     CreditCard(
                         title = credit.name,
                         subtitle = credit.character,
@@ -651,8 +661,10 @@ private fun PersonSkeletonContent() {
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun PersonHeaderContent(
+    personId: Int,
     name: String,
     profileUrl: String?,
     birthday: String?,
@@ -662,6 +674,8 @@ private fun PersonHeaderContent(
     knownForDepartment: String
 ) {
     val context = LocalContext.current
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     var showFullBio by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 48.dp)) {
@@ -678,15 +692,29 @@ private fun PersonHeaderContent(
                     .height(180.dp)
             ) {
                 if (profileUrl != null) {
+                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier
+                                .sharedElement(
+                                    rememberSharedContentState(key = "person-avatar-$personId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                                .fillMaxSize()
+                        }
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                     SubcomposeAsyncImage(
                         model = remember(profileUrl) {
                             ImageRequest.Builder(context)
                                 .data(profileUrl)
                                 .size(240)
+                                .crossfade(true)
                                 .build()
                         },
                         contentDescription = name,
                         contentScale = ContentScale.Crop,
+                        modifier = imageModifier,
                         loading = {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 CircularProgressIndicator(

@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.watchlist
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -47,11 +48,20 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.util.performHapticClick
+import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
@@ -59,6 +69,7 @@ fun WatchlistScreen(
     onSearchClick: (keyword: String) -> Unit,
     onOpenWebView: (url: String) -> Unit,
     onStatisticsClick: () -> Unit,
+    onTraktSearch: (type: String, query: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -147,73 +158,21 @@ fun WatchlistScreen(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = {
-            TopAppBar(
-                title = {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        placeholder = {
-                            // 搜索框提示文字根据选中模式动态变化：想看/已看历史
-                            Text(
-                                if (searchQuery.isBlank()) {
-                                    when (selectedMode) {
-                                        0 -> stringResource(R.string.watchlist_search_watchlist)
-                                        else -> stringResource(R.string.watchlist_search_history)
-                                    }
-                                } else stringResource(R.string.search_placeholder)
-                            )
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                focusManager.clearFocus()
-                            }
-                        ),
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    searchQuery = ""
-                                }) {
-                                    Icon(
-                                        Icons.Filled.Close,
-                                        contentDescription = "清除",
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            } else {
-                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
-                            }
-                        }
-                    )
-                },
-                actions = {
-                    IconButton(onClick = onStatisticsClick) {
-                        Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.statistics_title))
-                    }
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        }
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        Column(
-            modifier = modifier
+        Box(
+            modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(top = 56.dp + statusBarHeight)
+            ) {
 
-            // TMDB 不可用提示
+                // TMDB 不可用提示
             if (uiState.tmdbUnavailable) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -298,6 +257,7 @@ fun WatchlistScreen(
                                 onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                                 onRetry = { viewModel.loadHistoryMovies(forceReload = true) },
                                 onOpenTrakt = null,
+                                onTraktSearch = null,
                                 emptyListText = stringResource(R.string.history_empty_movies),
                                 hazeState = hazeState
                             )
@@ -312,6 +272,7 @@ fun WatchlistScreen(
                                 onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                                 onRetry = { viewModel.loadMovies(forceReload = true) },
                                 onOpenTrakt = openTraktExternal,
+                                onTraktSearch = { query -> onTraktSearch("movie", query) },
                                 emptyListText = stringResource(R.string.watchlist_empty_movies),
                                 hazeState = hazeState
                             )
@@ -327,6 +288,7 @@ fun WatchlistScreen(
                                 onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                                 onRetry = { viewModel.loadHistoryShows(forceReload = true) },
                                 onOpenTrakt = null,
+                                onTraktSearch = null,
                                 emptyListText = stringResource(R.string.history_empty_shows),
                                 hazeState = hazeState
                             )
@@ -341,12 +303,84 @@ fun WatchlistScreen(
                                 onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
                                 onRetry = { viewModel.loadShows(forceReload = true) },
                                 onOpenTrakt = openTraktExternal,
+                                onTraktSearch = { query -> onTraktSearch("show", query) },
                                 emptyListText = stringResource(R.string.watchlist_empty_shows),
                                 hazeState = hazeState
                             )
                         }
                     }
                 }
+        }
+            // Haze模糊渐变TopAppBar（含状态栏）
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin()
+                    ) {
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f
+                        )
+                    }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding())
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = {
+                        Text(
+                            if (searchQuery.isBlank()) {
+                                when (selectedMode) {
+                                    0 -> stringResource(R.string.watchlist_search_watchlist)
+                                    else -> stringResource(R.string.watchlist_search_history)
+                                }
+                            } else stringResource(R.string.search_placeholder)
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus()
+                        }
+                    ),
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = {
+                                searchQuery = ""
+                            }) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "清除",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        } else {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                        }
+                    }
+                )
+                IconButton(onClick = onStatisticsClick) {
+                    Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.statistics_title))
+                }
+                IconButton(onClick = { viewModel.refresh() }) {
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
+                }
+            }
+            }
         }
     }
 }
@@ -362,6 +396,7 @@ private fun MovieTabContent(
     onItemClick: (MovieUiItem) -> Unit,
     onRetry: () -> Unit,
     onOpenTrakt: (() -> Unit)?,
+    onTraktSearch: ((String) -> Unit)?,
     emptyListText: String,
     hazeState: HazeState
 ) {
@@ -387,10 +422,12 @@ private fun MovieTabContent(
         items.isEmpty() && isLoaded -> {
             WatchlistEmptyState(
                 isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
+                searchQuery = searchQuery,
                 emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
                     stringResource(R.string.watchlist_search_no_movies)
                 else emptyListText,
-                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
+                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null,
+                onTraktSearch = if (searchQuery.isNotBlank() && totalItems > 0) onTraktSearch else null
             )
         }
         else -> {
@@ -418,6 +455,7 @@ private fun ShowTabContent(
     onItemClick: (ShowUiItem) -> Unit,
     onRetry: () -> Unit,
     onOpenTrakt: (() -> Unit)?,
+    onTraktSearch: ((String) -> Unit)?,
     emptyListText: String,
     hazeState: HazeState
 ) {
@@ -443,10 +481,12 @@ private fun ShowTabContent(
         items.isEmpty() && isLoaded -> {
             WatchlistEmptyState(
                 isSearchResult = searchQuery.isNotBlank() && totalItems > 0,
+                searchQuery = searchQuery,
                 emptyText = if (searchQuery.isNotBlank() && totalItems > 0)
                     stringResource(R.string.watchlist_search_no_shows)
                 else emptyListText,
-                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null
+                onOpenTrakt = if (totalItems == 0) onOpenTrakt else null,
+                onTraktSearch = if (searchQuery.isNotBlank() && totalItems > 0) onTraktSearch else null
             )
         }
         else -> {
@@ -469,6 +509,7 @@ private fun MovieGrid(
     onItemClick: (MovieUiItem) -> Unit,
     hazeState: HazeState
 ) {
+    val context = LocalContext.current
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
@@ -487,7 +528,7 @@ private fun MovieGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { onItemClick(item) },
+                    onClick = { context.performHapticClick(); onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)
@@ -511,6 +552,7 @@ private fun ShowGrid(
     onItemClick: (ShowUiItem) -> Unit,
     hazeState: HazeState
 ) {
+    val context = LocalContext.current
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
@@ -529,7 +571,7 @@ private fun ShowGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { onItemClick(item) },
+                    onClick = { context.performHapticClick(); onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)
@@ -567,8 +609,10 @@ private fun SkeletonGrid() {
 @Composable
 private fun WatchlistEmptyState(
     isSearchResult: Boolean,
+    searchQuery: String = "",
     emptyText: String,
-    onOpenTrakt: (() -> Unit)?
+    onOpenTrakt: (() -> Unit)?,
+    onTraktSearch: ((String) -> Unit)?
 ) {
     Column(
         modifier = Modifier
@@ -583,6 +627,22 @@ private fun WatchlistEmptyState(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
+        // 搜索无结果时，显示"在Trakt上搜索"按钮
+        if (isSearchResult && onTraktSearch != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            OutlinedButton(
+                onClick = { onTraktSearch(searchQuery) },
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.watchlist_search_on_trakt))
+            }
+        }
         if (!isSearchResult && onOpenTrakt != null) {
             Spacer(modifier = Modifier.height(4.dp))
             val annotatedString = buildAnnotatedString {

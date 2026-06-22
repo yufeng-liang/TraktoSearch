@@ -59,6 +59,7 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.util.performHapticClick
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -270,6 +271,7 @@ fun SearchScreen(
                                         )
                                     }
                                     TextButton(onClick = {
+                                        context.performHapticClick()
                                         viewModel.search(searchQuery)
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
@@ -343,6 +345,7 @@ private fun SearchBarTop(
     focusRequester: FocusRequester,
     onFocusChanged: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -389,7 +392,7 @@ private fun SearchBarTop(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                        TextButton(onClick = onSearch) {
+                        TextButton(onClick = { context.performHapticClick(); onSearch() }) {
                             Text(stringResource(R.string.search_button))
                         }
                     }
@@ -411,6 +414,7 @@ private fun SearchResultsContent(
     onTypeFilterChange: (ResourceType) -> Unit,
     onItemClick: (ResourceItem) -> Unit
 ) {
+    val context = LocalContext.current
     var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
 
     val filteredResources = remember(resources, selectedDiskType, typeFilter) {
@@ -460,21 +464,21 @@ private fun SearchResultsContent(
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.ALL,
-                                onClick = { onTypeFilterChange(ResourceType.ALL) },
+                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.ALL) },
                                 label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.MOVIE,
-                                onClick = { onTypeFilterChange(ResourceType.MOVIE) },
+                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.MOVIE) },
                                 label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.SHOW,
-                                onClick = { onTypeFilterChange(ResourceType.SHOW) },
+                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.SHOW) },
                                 label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
@@ -503,14 +507,14 @@ private fun SearchResultsContent(
                         item {
                             FilterChip(
                                 selected = selectedDiskType == null,
-                                onClick = { selectedDiskType = null },
+                                onClick = { context.performHapticClick(); selectedDiskType = null },
                                 label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
                             FilterChip(
                                 selected = selectedDiskType == type,
-                                onClick = { selectedDiskType = type },
+                                onClick = { context.performHapticClick(); selectedDiskType = type },
                                 label = {
                                     val label = when (type) {
                                         DiskType.QUARK -> stringResource(R.string.disk_quark)
@@ -756,7 +760,7 @@ fun DoubanHotCategorySection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = category.label,
+                text = doubanCategoryLabel(category.id),
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
             )
             Row(
@@ -971,7 +975,7 @@ fun DoubanHotAllSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = category.label,
+                    text = doubanCategoryLabel(category.id),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -1125,4 +1129,13 @@ private fun DoubanHotGridItem(
             }
         }
     }
+}
+
+@Composable
+private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) {
+    "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
+    "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
+    "douban-top250" -> stringResource(R.string.discover_douban_top250)
+    "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+    else -> categoryId
 }

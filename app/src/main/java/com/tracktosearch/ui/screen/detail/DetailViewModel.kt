@@ -64,6 +64,7 @@ data class DetailUiState(
     val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
     val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
+    val customSourceNames: Map<String, String> = emptyMap(), // 自定义源 ID -> 名称
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
     // 资源搜索进度：已完成源数 / 总源数
     val completedSources: Int = 0,
@@ -111,7 +112,9 @@ data class DetailUiState(
     val creditsError: Boolean = false,
     // 未登录用户引导登录
     val isLoggedIn: Boolean = true,
-    val showLoginPrompt: Boolean = false
+    val showLoginPrompt: Boolean = false,
+    // 电视剧标记已看弹窗
+    val showMarkWatchedDialog: Boolean = false
 )
 
 @HiltViewModel
@@ -659,14 +662,17 @@ class DetailViewModel @Inject constructor(
     private fun startSearch() {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            // 从设置页读取启用的搜索源，初始化筛选状态
+            // 从设置页读取启用的搜索源（含自定义源），初始化筛选状态
             val storageEnabledSources = resourceRepository.getEnabledSources()
+            val customSources = resourceRepository.getEnabledCustomSources()
+            val customNames = customSources.associate { it.id to it.name }
             _uiState.value = _uiState.value.copy(
                 isSearching = true,
                 error = null,
                 completedSources = 0,
                 totalSources = storageEnabledSources.size,
-                enabledSources = storageEnabledSources
+                enabledSources = storageEnabledSources,
+                customSourceNames = customNames
             )
 
             val isShow = currentMediaType == MediaType.SHOW
@@ -791,10 +797,13 @@ class DetailViewModel @Inject constructor(
         if (!detailLoaded) return
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            // 从设置页读取启用的搜索源，更新筛选状态
+            // 从设置页读取启用的搜索源（含自定义源），更新筛选状态
             val storageEnabledSources = resourceRepository.getEnabledSources()
+            val customSources = resourceRepository.getEnabledCustomSources()
+            val customNames = customSources.associate { it.id to it.name }
             val state = _uiState.value.copy(
                 enabledSources = storageEnabledSources,
+                customSourceNames = customNames,
                 totalSources = storageEnabledSources.size
             )
             _uiState.value = state.copy(
@@ -896,34 +905,10 @@ class DetailViewModel @Inject constructor(
             return
         }
 
-        val targetState = !current.isMarkedWatched
-        // 标记已看 → 立即通知刷新（不等 API 完成，确保返回时列表更新）
-        // 取消标记 → 设为 false，避免无变更时重复拉取
-        _uiState.value = current.copy(
-            isMarkingWatched = true,
-            watchlistChanged = targetState // 标记时 true，取消时 false
-        )
-
-        viewModelScope.launch {
-            if (targetState) {
-                // 标记为已看：后端会自动从想看列表移除
-                traktRepository.markAsWatched(currentTraktId, currentMediaType)
-                    .onSuccess {
-                        _uiState.value = _uiState.value.copy(
-                            isMarkedWatched = true,
-                            isMarkedWatchlist = false,
-                            isMarkingWatched = false
-                        )
-                    }
-                    .onFailure {
-                        // 失败则回滚状态，同时撤销刷新标记
-                        _uiState.value = _uiState.value.copy(
-                            isMarkingWatched = false,
-                            watchlistChanged = false
-                        )
-                    }
-            } else {
-                // 取消标记：后端会自动重新加入想看列表
+        // 如果已标记已看，则取消标记
+        if (current.isMarkedWatched) {
+            _uiState.value = current.copy(isMarkingWatched = true, watchlistChanged = false)
+            viewModelScope.launch {
                 traktRepository.removeWatched(currentTraktId, currentMediaType)
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
@@ -936,6 +921,64 @@ class DetailViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(isMarkingWatched = false)
                     }
             }
+            return
+        }
+
+        // 电视剧：弹出季/集勾选弹窗
+        if (currentMediaType == MediaType.SHOW) {
+            _uiState.value = _uiState.value.copy(showMarkWatchedDialog = true)
+            return
+        }
+
+        // 电影：直接标记
+        _uiState.value = current.copy(isMarkingWatched = true, watchlistChanged = true)
+        viewModelScope.launch {
+            traktRepository.markAsWatched(currentTraktId, currentMediaType)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isMarkedWatched = true,
+                        isMarkedWatchlist = false,
+                        isMarkingWatched = false
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isMarkingWatched = false,
+                        watchlistChanged = false
+                    )
+                }
+        }
+    }
+
+    /** 关闭标记已看弹窗 */
+    fun dismissMarkWatchedDialog() {
+        _uiState.value = _uiState.value.copy(showMarkWatchedDialog = false)
+    }
+
+    /** 提交勾选的季/集为已看 */
+    fun submitMarkWatched(selectedEpisodeIds: List<Int>) {
+        _uiState.value = _uiState.value.copy(
+            showMarkWatchedDialog = false,
+            isMarkingWatched = true,
+            watchlistChanged = true
+        )
+        viewModelScope.launch {
+            traktRepository.markEpisodesWatched(selectedEpisodeIds)
+                .onSuccess {
+                    // 标记成功后刷新观看进度
+                    fetchWatchedProgress()
+                    _uiState.value = _uiState.value.copy(
+                        isMarkedWatched = true,
+                        isMarkedWatchlist = false,
+                        isMarkingWatched = false
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(
+                        isMarkingWatched = false,
+                        watchlistChanged = false
+                    )
+                }
         }
     }
 

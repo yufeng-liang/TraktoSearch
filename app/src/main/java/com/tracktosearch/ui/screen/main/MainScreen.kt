@@ -2,19 +2,25 @@ package com.tracktosearch.ui.screen.main
 
 import com.tracktosearch.ui.util.showToast
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -27,8 +33,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -48,7 +55,9 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.settings.SettingsScreen
@@ -73,6 +82,7 @@ fun MainScreen(
     onOpenWebView: (url: String) -> Unit,
     onNavigateToLogin: () -> Unit,
     onStatisticsClick: () -> Unit,
+    onTraktSearch: (type: String, query: String) -> Unit,
     onLogout: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
@@ -104,18 +114,16 @@ fun MainScreen(
 
     // 悬浮导航显隐状态
     var isFabVisible by remember { mutableFloatStateOf(1f) }
-    val fabOffset by animateFloatAsState(
-        targetValue = if (isFabVisible > 0.5f) 0f else 100f,
+    val fabOffset by animateDpAsState(
+        targetValue = if (isFabVisible > 0.5f) 0.dp else 100.dp,
         animationSpec = tween(durationMillis = 200),
         label = "fabOffset"
     )
 
-    val density = LocalDensity.current
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
                 val delta = available.y
-                // 下滑（内容向上滚动）隐藏，上滑（内容向下滚动）显示
                 if (delta < -10) {
                     isFabVisible = 0f
                 } else if (delta > 10) {
@@ -128,6 +136,14 @@ fun MainScreen(
 
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
+
+    // Tab 数据
+    val tabs = listOf(
+        TabData(Icons.Default.Search, R.string.tab_search),
+        TabData(Icons.Default.Explore, R.string.tab_discover),
+        TabData(Icons.Default.Person, R.string.tab_me),
+        TabData(Icons.Default.Settings, R.string.tab_settings)
+    )
 
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { innerPadding ->
         Box(
@@ -165,12 +181,13 @@ fun MainScreen(
                                 onSearchClick = onSearchClick,
                                 onOpenWebView = onOpenWebView,
                                 onStatisticsClick = onStatisticsClick,
+                                onTraktSearch = onTraktSearch,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             LoginPromptScreen(
                                 onNavigateToLogin = onNavigateToLogin,
-                                onContinueAsGuest = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                onContinueAsGuest = { scope.launch { pagerState.scrollToPage(0) } },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -183,17 +200,17 @@ fun MainScreen(
                 }
             }
 
-            // 悬浮底部导航（4 Tab 毛玻璃）
-            val navBarWidth = (screenWidthDp * 0.65).dp
+            // 悬浮底部导航（4 Tab 毛玻璃 + 选中背景高亮动效）
+            val navBarWidth = (screenWidthDp * 0.80).dp
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(28.dp)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBarHeight + 8.dp)
-                    .offset(y = with(density) { fabOffset.dp })
+                    .offset(y = fabOffset)
                     .width(navBarWidth)
-                    .height(52.dp)
+                    .height(64.dp)
                     .shadow(elevation = 16.dp, shape = navBarShape)
                     .hazeEffect(
                         state = hazeState,
@@ -205,89 +222,97 @@ fun MainScreen(
                         shape = navBarShape
                     )
             ) {
-                androidx.compose.foundation.layout.Row(
-                    modifier = Modifier.fillMaxSize(),
+                // 滑动高亮指示器（药丸形背景，先绘制在底层）
+                val tabCount = tabs.size
+                val rowPadding = 8.dp
+                val tabWidth = (navBarWidth - rowPadding * 2) / tabCount
+                val indicatorOffsetX by animateDpAsState(
+                    targetValue = rowPadding + tabWidth * selectedTab,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "indicatorOffset"
+                )
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffsetX)
+                        .align(Alignment.CenterStart)
+                        .padding(vertical = 8.dp)
+                        .width(tabWidth)
+                        .height(48.dp)
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                )
+
+                // Tab 内容（绘制在指示器上方）
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Tab 0: 搜索
-                    NavTabItem(
-                        icon = Icons.Default.Search,
-                        label = stringResource(R.string.tab_search),
-                        selected = selectedTab == 0,
-                        weight = 1f,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(0) } }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    // Tab 1: 发现
-                    NavTabItem(
-                        icon = Icons.Default.Explore,
-                        label = stringResource(R.string.tab_discover),
-                        selected = selectedTab == 1,
-                        weight = 1f,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(1) } }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    // Tab 2: 我的
-                    NavTabItem(
-                        icon = Icons.Default.Person,
-                        label = stringResource(R.string.tab_me),
-                        selected = selectedTab == 2,
-                        weight = 1f,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(2) } }
-                    )
-                    HorizontalDivider(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .width(1.dp)
-                            .padding(vertical = 10.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-                    // Tab 3: 设置
-                    NavTabItem(
-                        icon = Icons.Default.Settings,
-                        label = stringResource(R.string.tab_settings),
-                        selected = selectedTab == 3,
-                        weight = 1f,
-                        onClick = { scope.launch { pagerState.animateScrollToPage(3) } }
-                    )
+                    tabs.forEachIndexed { index, tab ->
+                        val isSelected = selectedTab == index
+                        NavTabItem(
+                            icon = tab.icon,
+                            labelRes = tab.labelRes,
+                            selected = isSelected,
+                            weight = 1f,
+                            onClick = {
+                                if (selectedTab != index) {
+                                    scope.launch { pagerState.scrollToPage(index) }
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+private data class TabData(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val labelRes: Int
+)
+
 @Composable
 private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
+    labelRes: Int,
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit
 ) {
-    Box(
+    val interactionSource = remember { MutableInteractionSource() }
+    Column(
         modifier = Modifier
             .weight(weight)
             .fillMaxSize()
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = label,
+            contentDescription = stringResource(labelRes),
             tint = if (selected) MaterialTheme.colorScheme.primary
-                   else MaterialTheme.colorScheme.onSurfaceVariant
+                   else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            text = stringResource(labelRes),
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.primary
+                   else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
         )
     }
 }

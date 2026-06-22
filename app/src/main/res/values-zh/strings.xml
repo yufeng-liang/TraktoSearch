@@ -56,12 +56,21 @@
     <string name="watchlist_search_history">搜索我的已看历史</string>
     <string name="history_empty_movies">还没有已看的电影</string>
     <string name="history_empty_shows">还没有已看的电视剧</string>
+    <string name="watchlist_search_on_trakt">在 Trakt 上搜索</string>
+
+    <!-- Trakt Search Screen -->
+    <string name="trakt_search_hint_movies">在 Trakt 上搜索电影</string>
+    <string name="trakt_search_hint_shows">在 Trakt 上搜索电视剧</string>
+    <string name="trakt_search_no_movies">在 Trakt 上未找到电影</string>
+    <string name="trakt_search_no_shows">在 Trakt 上未找到电视剧</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">返回</string>
     <string name="detail_share">分享</string>
     <string name="detail_marked_watched">已看过</string>
     <string name="detail_mark_watched">标记已看</string>
+    <string name="detail_mark_watched_title">选择要标记已看的集</string>
+    <string name="detail_loading_episodes">加载剧集中…</string>
     <string name="detail_mark_watchlist">想看</string>
     <string name="detail_marked_watchlist">已想看</string>
     <string name="detail_mark_processing">处理中</string>
@@ -253,6 +262,8 @@
     <string name="statistics_total">总计</string>
     <string name="statistics_this_month">本月</string>
     <string name="statistics_this_year">本年</string>
+    <string name="statistics_shows">部剧</string>
+    <string name="statistics_episodes">集</string>
     <string name="statistics_heatmap">观看热力图</string>
     <string name="statistics_genre_distribution">类型分布</string>
     <string name="statistics_genre_ranking">最常看的类型排行</string>
@@ -267,6 +278,7 @@
     <!-- Common UI -->
     <string name="common_retry">重试</string>
     <string name="common_close">关闭</string>
+    <string name="common_confirm">确定</string>
     <string name="common_load_failed">加载失败</string>
     <string name="common_no_data">暂无数据</string>
     <string name="common_loading">加载中…</string>
@@ -335,6 +347,14 @@
     <string name="settings_cache_cleared">缓存已清除</string>
     <string name="settings_cache_clear_failed">清除缓存失败：%1$s</string>
     <string name="settings_no_changelog">暂无更新日志</string>
+
+    <string name="settings_add_custom_source">添加自定义搜索源</string>
+    <string name="settings_add_custom_source_desc">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
+    <string name="discover_douban_new_movies">新片榜</string>
+    <string name="discover_douban_weekly">口碑榜</string>
+    <string name="discover_douban_top250">Top250</string>
+    <string name="discover_douban_us_box">北美票房榜</string>
+    <string name="discover_view_all">全部(%d) ></string>
 
     <!-- Genre Names -->
     <string name="genre_action">动作</string>

@@ -21,6 +21,8 @@ import javax.inject.Inject
 @Immutable
 data class StatisticsUiState(
     val totalWatched: Int = 0,
+    val totalShowCount: Int = 0,
+    val totalEpisodeCount: Int = 0,
     val thisMonthWatched: Int = 0,
     val thisYearWatched: Int = 0,
     val genreDistribution: Map<String, Int> = emptyMap(),
@@ -67,12 +69,17 @@ class StatisticsViewModel @Inject constructor(
             try {
                 val movieResult = traktRepository.getAllMovieHistory()
                 val showResult = traktRepository.getAllShowHistory()
+                val watchedShowsResult = traktRepository.getWatchedShowsWithEpisodes()
 
                 val movies = movieResult.getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
                     return@launch
                 }
                 val shows = showResult.getOrElse {
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                    return@launch
+                }
+                val watchedShows = watchedShowsResult.getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
                     return@launch
                 }
@@ -89,6 +96,12 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 val totalWatched = movies.size + shows.size
+                val totalShowCount = watchedShows.size
+                val totalEpisodeCount = watchedShows.sumOf { show ->
+                    show.seasons.sumOf { season ->
+                        season.episodes.count { it.completed }
+                    }
+                }
 
                 // 本月/本年统计
                 val calendar = Calendar.getInstance()
@@ -131,6 +144,8 @@ class StatisticsViewModel @Inject constructor(
 
                 _uiState.value = StatisticsUiState(
                     totalWatched = totalWatched,
+                    totalShowCount = totalShowCount,
+                    totalEpisodeCount = totalEpisodeCount,
                     thisMonthWatched = thisMonthWatched,
                     thisYearWatched = thisYearWatched,
                     genreDistribution = genreCount.toMap().toList()

@@ -13,13 +13,34 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
@@ -58,10 +79,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var languageStorage: LanguageStorage
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
-        // 参考 Google NowInAndroid 官方方案：enableEdgeToEdge 处理所有沉浸式逻辑
-        // 状态栏完全透明，导航栏也完全透明（我们的悬浮导航栏自行处理小白条区域）
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = android.graphics.Color.TRANSPARENT,
@@ -72,16 +90,13 @@ class MainActivity : AppCompatActivity() {
                 darkScrim = android.graphics.Color.TRANSPARENT,
             ),
         )
-        // 关闭小米 HyperOS 导航栏对比度增强（系统自动加的半透明遮罩）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
 
         var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
-        var initialTab by mutableStateOf(0) // 0=搜索, 1=发现, 2=我的, 3=设置
-
-        splashScreen.setKeepOnScreenCondition { !isReady }
+        var initialTab by mutableStateOf(0)
 
         lifecycleScope.launch {
             val isValid = tokenStorage.isTokenValid()
@@ -93,17 +108,13 @@ class MainActivity : AppCompatActivity() {
             }
             initialTab = if (isValid) 2 else 0
 
-            // 应用语言设置
             val language = languageStorage.language.first()
             applyLanguage(language)
 
             isReady = true
         }
 
-        // 处理 OAuth 回调
         handleIntent(intent)
-
-        // 检测崩溃次数，>=2 次时提醒用户分享日志
         checkCrashAndPrompt()
 
         setContent {
@@ -129,6 +140,43 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     )
+                } else {
+                    // 自定义开屏页
+                    val context = LocalContext.current
+                    val launcherBitmap = remember {
+                        android.graphics.BitmapFactory.decodeResource(
+                            context.resources, R.mipmap.ic_launcher
+                        )?.asImageBitmap()
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Bottom
+                        ) {
+                            if (launcherBitmap != null) {
+                                Image(
+                                    bitmap = launcherBitmap,
+                                    contentDescription = "App Icon",
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "v${getAppVersion(context)}",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(80.dp))
+                        }
+                    }
                 }
             }
         }
@@ -221,12 +269,20 @@ class MainActivity : AppCompatActivity() {
         try {
             startActivity(intent)
         } catch (e: Exception) {
-            // 没有邮件客户端，复制到剪贴板
             val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
             clipboard.setPrimaryClip(
                 android.content.ClipData.newPlainText("Crash Log", body)
             )
             showToast("日志已复制到剪贴板，请手动发送至 1577865546@qq.com", Toast.LENGTH_LONG)
+        }
+    }
+
+    private fun getAppVersion(context: android.content.Context): String {
+        return try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            packageInfo.versionName ?: "1.0.0"
+        } catch (_: Exception) {
+            "1.0.0"
         }
     }
 }

@@ -150,6 +150,20 @@ class TraktRepository @Inject constructor(
         return Result.success(allItems)
     }
 
+    /** 获取已看电视剧列表（含每部剧的已看集数），用于统计 */
+    suspend fun getWatchedShowsWithEpisodes(): Result<List<TraktWatchedShow>> {
+        return try {
+            val response = traktApiService.getWatchedShows()
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else {
+                Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** 获取全部电影想看列表（跨页拉取），用于通知检查 */
     suspend fun getAllMovieWatchlist(): Result<List<TraktWatchlistMovieItem>> {
         val allItems = mutableListOf<TraktWatchlistMovieItem>()
@@ -256,7 +270,25 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Failed to mark episode watched: ${response.code()}"))
+                Result.failure(Exception("Failed to mark episode: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 批量标记多集为已看 */
+    suspend fun markEpisodesWatched(episodeTraktIds: List<Int>): Result<Unit> {
+        if (episodeTraktIds.isEmpty()) return Result.success(Unit)
+        return try {
+            val request = TraktSyncRequest(
+                episodes = episodeTraktIds.map { TraktSyncItem(TraktIds(trakt = it)) }
+            )
+            val response = traktApiService.addToHistory(request)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to mark episodes: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -541,6 +573,34 @@ class TraktRepository @Inject constructor(
             } else null
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Trakt 文本搜索（电影） */
+    suspend fun searchMovies(query: String, limit: Int = 20): Result<List<TraktSearchResult>> {
+        return try {
+            val response = traktApiService.searchMovies(query, limit)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else {
+                Result.failure(Exception("Failed to search movies: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** Trakt 文本搜索（电视剧） */
+    suspend fun searchShows(query: String, limit: Int = 20): Result<List<TraktSearchResult>> {
+        return try {
+            val response = traktApiService.searchShows(query, limit)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else {
+                Result.failure(Exception("Failed to search shows: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 

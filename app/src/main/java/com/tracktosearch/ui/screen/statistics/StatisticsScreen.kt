@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
@@ -33,6 +34,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -45,6 +47,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tracktosearch.R
+import com.tracktosearch.ui.util.performHapticClick
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -52,7 +65,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun StatisticsScreen(
     onBack: () -> Unit,
@@ -65,69 +78,50 @@ fun StatisticsScreen(
         viewModel.loadStatistics()
     }
 
+    val statsHazeState = remember { HazeState() }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(stringResource(R.string.statistics_title))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        IconButton(onClick = { showInfoDialog = true }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Help,
-                                contentDescription = stringResource(R.string.statistics_info),
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back))
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.loadStatistics() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                )
-            )
-        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        if (uiState.error != null) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = uiState.error!!,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Button(onClick = { viewModel.loadStatistics() }) {
-                    Text(stringResource(R.string.watchlist_retry))
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            if (uiState.error != null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = uiState.error!!,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = { viewModel.loadStatistics() }) {
+                        Text(stringResource(R.string.watchlist_retry))
+                    }
                 }
-            }
-        } else {
-            val listState = rememberLazyListState()
-            LazyColumn(
-                state = listState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+            } else {
+                val listState = rememberLazyListState()
+                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = statsHazeState),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 56.dp + statusBarHeight,
+                        bottom = 16.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // 总览卡片（数字跳动动画）
                 item(key = "overview") {
@@ -178,6 +172,48 @@ fun StatisticsScreen(
                         }
                     }
                 }
+            }
+            }
+            // Haze模糊渐变TopAppBar（含状态栏）
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = statsHazeState,
+                        style = HazeMaterials.thin()
+                    ) {
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f
+                        )
+                    }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding())
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back))
+                }
+                Text(stringResource(R.string.statistics_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = { showInfoDialog = true }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Help,
+                        contentDescription = stringResource(R.string.statistics_info),
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                IconButton(onClick = { viewModel.loadStatistics() }) {
+                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
+                }
+            }
             }
         }
     }
@@ -236,28 +272,89 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
 /** 总览卡片：数字跳动动画 */
 @Composable
 private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        AnimatedStatCard(
-            modifier = Modifier.weight(1f),
-            title = stringResource(R.string.statistics_total),
-            targetValue = uiState.totalWatched,
-            isVisible = isVisible
-        )
-        AnimatedStatCard(
-            modifier = Modifier.weight(1f),
-            title = stringResource(R.string.statistics_this_month),
-            targetValue = uiState.thisMonthWatched,
-            isVisible = isVisible
-        )
-        AnimatedStatCard(
-            modifier = Modifier.weight(1f),
-            title = stringResource(R.string.statistics_this_year),
-            targetValue = uiState.thisYearWatched,
-            isVisible = isVisible
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            AnimatedStatCard(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.statistics_total),
+                targetValue = uiState.totalWatched,
+                isVisible = isVisible
+            )
+            AnimatedStatCard(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.statistics_this_month),
+                targetValue = uiState.thisMonthWatched,
+                isVisible = isVisible
+            )
+            AnimatedStatCard(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.statistics_this_year),
+                targetValue = uiState.thisYearWatched,
+                isVisible = isVisible
+            )
+        }
+        // 电视剧统计：X部 / Y集
+        if (uiState.totalShowCount > 0) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val animatedShows by animateIntAsState(
+                            targetValue = if (isVisible) uiState.totalShowCount else 0,
+                            animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
+                            label = "showCount"
+                        )
+                        Text(
+                            text = "$animatedShows",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = stringResource(R.string.statistics_shows),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Text(
+                        text = "/",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val animatedEpisodes by animateIntAsState(
+                            targetValue = if (isVisible) uiState.totalEpisodeCount else 0,
+                            animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
+                            label = "episodeCount"
+                        )
+                        Text(
+                            text = "$animatedEpisodes",
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Text(
+                            text = stringResource(R.string.statistics_episodes),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -370,6 +467,7 @@ private fun localizedGenreName(genre: String): String = when (genre) {
 /** 类型分布饼图（展开动画 + 点击交互） */
 @Composable
 private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolean = true) {
+    val context = LocalContext.current
     val totalCount = genreDistribution.values.sum()
     if (totalCount == 0) return
 
@@ -457,7 +555,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                         topLeft = Offset(center.x - canvasRadius + offsetX, center.y - canvasRadius + offsetY),
                         size = Size(canvasRadius * 2, canvasRadius * 2)
                     )
-                    startAngle += fullSweep
+                    startAngle += animatedSweep
                 }
             }
 
@@ -499,7 +597,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { selectedIndex = if (selectedIndex == index) -1 else index },
+                            .clickable { context.performHapticClick(); selectedIndex = if (selectedIndex == index) -1 else index },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -608,6 +706,7 @@ private fun GenreRanking(genreDistribution: Map<String, Int>, isVisible: Boolean
 /** 观看热力图（Canvas 统一绘制，点击格子查看详情，支持翻页查看历史） */
 @Composable
 private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = true) {
+    val context = LocalContext.current
     // 翻页偏移：0 = 最近13周，每次 -13 往前翻一页
     var weekOffset by remember { mutableStateOf(0) }
 
@@ -624,8 +723,15 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
     val endCal = (startCal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 13 * 7 - 1) }
 
     val dateKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val monthFormat = SimpleDateFormat("M月", Locale.CHINESE)
-    val fullDateFormat = SimpleDateFormat("yyyy年M月d日", Locale.CHINESE)
+    val appLocale = context.resources.configuration.locales.get(0)
+    val locale = when (appLocale.language) {
+        "en" -> Locale.ENGLISH
+        "ja" -> Locale.JAPANESE
+        "ko" -> Locale.KOREAN
+        else -> Locale.CHINESE
+    }
+    val monthFormat = if (locale == Locale.CHINESE) SimpleDateFormat("M月", Locale.CHINESE) else SimpleDateFormat("MMM", locale)
+    val fullDateFormat = if (locale == Locale.CHINESE) SimpleDateFormat("yyyy年M月d日", Locale.CHINESE) else SimpleDateFormat("yyyy/M/d", locale)
     val rangeFormat = SimpleDateFormat("yyyy/M/d", Locale.US)
     val rangeStart = rangeFormat.format(startCal.time)
     val rangeEnd = rangeFormat.format(endCal.time)
@@ -747,6 +853,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                             if (weekIdx in weeks.indices && dayIdx in 0 until 7) {
                                 val cell = weeks[weekIdx][dayIdx]
                                 if (!cell.isFuture) {
+                                    context.performHapticClick()
                                     selectedCell = cell
                                 }
                             }
@@ -771,8 +878,14 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                 )
             }
 
-            // 2. 绘制星期标签（一二三四五六日）
-            val weekdayLabels = listOf("一", "二", "三", "四", "五", "六", "日")
+            // 2. 绘制星期标签
+            val weekdayLabels = when (locale) {
+                Locale.CHINESE -> listOf("一", "二", "三", "四", "五", "六", "日")
+                Locale.ENGLISH -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+                Locale.JAPANESE -> listOf("月", "火", "水", "木", "金", "土", "日")
+                Locale.KOREAN -> listOf("월", "화", "수", "목", "금", "토", "일")
+                else -> listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+            }
             weekdayLabels.forEachIndexed { dayIdx, label ->
                 val y = monthLabelHeightPx + dayIdx * slotPx + weekdayYOffset
                 drawText(
@@ -896,6 +1009,15 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                         .size(14.dp)
                         .clip(RoundedCornerShape(3.dp))
                         .background(color)
+                        .then(
+                            if (level == 0) {
+                                Modifier.border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(3.dp)
+                                )
+                            } else Modifier
+                        )
                 )
                 Spacer(modifier = Modifier.width(2.dp))
             }

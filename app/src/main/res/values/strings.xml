@@ -56,12 +56,21 @@
     <string name="watchlist_search_history">Search my history</string>
     <string name="history_empty_movies">No watched movies yet</string>
     <string name="history_empty_shows">No watched TV shows yet</string>
+    <string name="watchlist_search_on_trakt">Search on Trakt</string>
+
+    <!-- Trakt Search Screen -->
+    <string name="trakt_search_hint_movies">Search movies on Trakt</string>
+    <string name="trakt_search_hint_shows">Search TV shows on Trakt</string>
+    <string name="trakt_search_no_movies">No movies found on Trakt</string>
+    <string name="trakt_search_no_shows">No TV shows found on Trakt</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">Back</string>
     <string name="detail_share">Share</string>
     <string name="detail_marked_watched">Watched</string>
     <string name="detail_mark_watched">Mark as Watched</string>
+    <string name="detail_mark_watched_title">Select Episodes to Mark as Watched</string>
+    <string name="detail_loading_episodes">Loading episodes…</string>
     <string name="detail_mark_watchlist">Watchlist</string>
     <string name="detail_marked_watchlist">In Watchlist</string>
     <string name="detail_mark_processing">Processing</string>
@@ -253,6 +262,8 @@
     <string name="statistics_total">Total</string>
     <string name="statistics_this_month">This Month</string>
     <string name="statistics_this_year">This Year</string>
+    <string name="statistics_shows">Shows</string>
+    <string name="statistics_episodes">Episodes</string>
     <string name="statistics_heatmap">Watching Heatmap</string>
     <string name="statistics_genre_distribution">Genre Distribution</string>
     <string name="statistics_genre_ranking">Top Genres</string>
@@ -267,6 +278,7 @@
     <!-- Common UI -->
     <string name="common_retry">Retry</string>
     <string name="common_close">Close</string>
+    <string name="common_confirm">Confirm</string>
     <string name="common_load_failed">Load failed</string>
     <string name="common_no_data">No data</string>
     <string name="common_loading">Loading…</string>
@@ -335,6 +347,14 @@
     <string name="settings_cache_cleared">Cache cleared</string>
     <string name="settings_cache_clear_failed">Clear cache failed: %1$s</string>
     <string name="settings_no_changelog">No changelog available</string>
+
+    <string name="settings_add_custom_source">Add Custom Search Source</string>
+    <string name="settings_add_custom_source_desc">Support PanSou/Zreso compatible sources or custom JSONPath</string>
+    <string name="discover_douban_new_movies">New Movies</string>
+    <string name="discover_douban_weekly">Weekly Best</string>
+    <string name="discover_douban_top250">Top 250</string>
+    <string name="discover_douban_us_box">US Box Office</string>
+    <string name="discover_view_all">All (%d) ></string>
 
     <!-- Genre Names -->
     <string name="genre_action">Action</string>

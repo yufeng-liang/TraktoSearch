@@ -40,6 +40,7 @@ import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
+import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.webview.WebViewScreen
 import javax.inject.Inject
 
@@ -49,8 +50,14 @@ object Routes {
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}"
     const val SEARCH = "search/{keyword}"
     const val WEBVIEW = "webview/{url}/{title}"
-    const val PERSON = "person/{personId}/{personName}"
+    const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
+    const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
+
+    fun traktSearchRoute(type: String, query: String): String {
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+        return "traktSearch/$type/$encodedQuery"
+    }
 
     fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
@@ -69,9 +76,10 @@ object Routes {
         return "webview/$encodedUrl/$encodedTitle"
     }
 
-    fun personRoute(personId: Int, personName: String): String {
+    fun personRoute(personId: Int, personName: String, profileUrl: String): String {
         val encodedName = java.net.URLEncoder.encode(personName, "UTF-8")
-        return "person/$personId/$encodedName"
+        val encodedProfileUrl = java.net.URLEncoder.encode(profileUrl, "UTF-8")
+        return "person/$personId/$encodedName/$encodedProfileUrl"
     }
 }
 
@@ -200,6 +208,9 @@ fun AppNavigation(
                             onStatisticsClick = {
                                 navController.navigate(Routes.STATISTICS)
                             },
+                            onTraktSearch = { type, query ->
+                                navController.navigate(Routes.traktSearchRoute(type, query))
+                            },
                             onLogout = {
                                 onLogout()
                                 currentStartDest = Routes.LOGIN
@@ -248,8 +259,8 @@ fun AppNavigation(
                             imdbId = imdbId,
                             traktRating = traktRating,
                             onBack = { changed -> goBack(changed) },
-                            onPersonClick = { personId, personName ->
-                                navController.navigate(Routes.personRoute(personId, personName))
+                            onPersonClick = { personId, personName, profileUrl ->
+                                navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))
                             },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
@@ -316,7 +327,8 @@ fun AppNavigation(
                     route = Routes.PERSON,
                     arguments = listOf(
                         navArgument("personId") { type = NavType.IntType },
-                        navArgument("personName") { type = NavType.StringType; defaultValue = "" }
+                        navArgument("personName") { type = NavType.StringType; defaultValue = "" },
+                        navArgument("profileUrl") { type = NavType.StringType; defaultValue = "" }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
@@ -324,9 +336,13 @@ fun AppNavigation(
                         val personName = java.net.URLDecoder.decode(
                             backStackEntry.arguments?.getString("personName") ?: "", "UTF-8"
                         )
+                        val profileUrl = java.net.URLDecoder.decode(
+                            backStackEntry.arguments?.getString("profileUrl") ?: "", "UTF-8"
+                        ).takeIf { it.isNotEmpty() }
                         PersonScreen(
                             personId = personId,
                             personName = personName,
+                            profileUrl = profileUrl,
                             onBack = { navController.popBackStack() },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
@@ -342,6 +358,37 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         StatisticsScreen(
                             onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(
+                    route = Routes.TRAKT_SEARCH,
+                    arguments = listOf(
+                        navArgument("type") { type = NavType.StringType },
+                        navArgument("query") { type = NavType.StringType; defaultValue = "" }
+                    )
+                ) { backStackEntry ->
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val typeStr = backStackEntry.arguments?.getString("type") ?: "movie"
+                        val query = java.net.URLDecoder.decode(
+                            backStackEntry.arguments?.getString("query") ?: "", "UTF-8"
+                        )
+                        val mediaType = if (typeStr == "show") MediaType.SHOW else MediaType.MOVIE
+
+                        // 从详情页返回时通知想看列表刷新
+                        val previousEntry = navController.previousBackStackEntry
+                        TraktSearchScreen(
+                            initialQuery = query,
+                            type = mediaType,
+                            onBack = {
+                                previousEntry?.savedStateHandle?.set("watchlist_changed", true)
+                                navController.popBackStack()
+                            },
+                            onItemClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                val routeType = if (mediaType == MediaType.SHOW) "show" else "movie"
+                                navController.navigate(Routes.detailRoute(routeType, traktId, tmdbId, title, imdbId, traktRating))
+                            }
                         )
                     }
                 }

@@ -5,9 +5,11 @@ import android.net.Uri
 import android.graphics.Bitmap
 import android.os.Environment
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.performHapticClick
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -26,11 +28,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
@@ -59,10 +64,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.filled.StarHalf
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -154,7 +162,7 @@ fun DetailScreen(
     imdbId: String = "",
     traktRating: Double = 0.0,
     onBack: (changed: Boolean) -> Unit = {},
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> },
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onNavigateToLogin: () -> Unit = {},
@@ -269,6 +277,7 @@ fun DetailScreen(
                     item(key = "filter_section") {
                         FilterSection(
                             enabledSources = uiState.enabledSources,
+                            customSourceNames = uiState.customSourceNames,
                             enabledDiskTypes = uiState.enabledDiskTypes,
                             onToggleSource = { viewModel.toggleSource(it) },
                             onToggleDiskType = { viewModel.toggleDiskType(it) }
@@ -629,6 +638,7 @@ fun DetailScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
+                            context.performHapticClick()
                             val shareText = buildString {
                                 append(uiState.title)
                                 if (uiState.year != null) append(" (${uiState.year})")
@@ -702,6 +712,17 @@ fun DetailScreen(
                     }
                 )
             }
+
+            // 电视剧标记已看弹窗（季/集勾选）
+            if (uiState.showMarkWatchedDialog) {
+                MarkWatchedDialog(
+                    seasons = uiState.seasons,
+                    episodes = uiState.episodes,
+                    watchedEpisodeNumbers = uiState.watchedEpisodeNumbers,
+                    onDismiss = { viewModel.dismissMarkWatchedDialog() },
+                    onSubmit = { selectedIds -> viewModel.submitMarkWatched(selectedIds) }
+                )
+            }
         }
     }
 }
@@ -721,7 +742,7 @@ private fun DetailHeaderContent(
     onToggleWatchlist: () -> Unit,
     onRatingClick: (Int) -> Unit,
     onPosterClick: () -> Unit = {},
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
@@ -729,10 +750,11 @@ private fun DetailHeaderContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Max)
+                .defaultMinSize(minHeight = 200.dp)
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // 海报（宽度随高度等比例变化，海报比例 2:3）
+            // 海报（宽度随高度等比例变化，海报比例 2:3，Row最小高度保证占位符不跳动）
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -915,7 +937,10 @@ private fun DetailHeaderContent(
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Surface(
-                            onClick = if (isMarkingWatchlist) ({}) else onToggleWatchlist,
+                            onClick = if (isMarkingWatchlist) ({}) else ({
+                                context.performHapticClick()
+                                onToggleWatchlist()
+                            }),
                             enabled = !isMarkingWatchlist,
                             shape = RoundedCornerShape(16.dp),
                             border = if (!isMarkedWatchlist && !isMarkingWatchlist) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
@@ -929,7 +954,7 @@ private fun DetailHeaderContent(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
@@ -970,7 +995,10 @@ private fun DetailHeaderContent(
                         contentAlignment = Alignment.CenterStart
                     ) {
                         Surface(
-                            onClick = if (isMarkingWatched) ({}) else onToggleWatched,
+                            onClick = if (isMarkingWatched) ({}) else ({
+                                context.performHapticClick()
+                                onToggleWatched()
+                            }),
                             enabled = !isMarkingWatched,
                             shape = RoundedCornerShape(16.dp),
                             border = if (!isMarkedWatched && !isMarkingWatched) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
@@ -984,7 +1012,7 @@ private fun DetailHeaderContent(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
@@ -1133,7 +1161,7 @@ private fun RatingsRow(ratings: MultiRatings) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // 第一行：始终渲染，无数据时用透明占位保持高度
         Row(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
+            modifier = Modifier.fillMaxWidth().height(24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1149,7 +1177,7 @@ private fun RatingsRow(ratings: MultiRatings) {
         }
         // 第二行：始终渲染，无数据时用透明占位保持高度
         Row(
-            modifier = Modifier.fillMaxWidth().height(20.dp),
+            modifier = Modifier.fillMaxWidth().height(24.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1194,11 +1222,15 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
             }
             "RT" -> Text(
                 text = "🍅",
-                fontSize = 18.sp
+                fontSize = 18.sp,
+                //改为向上偏移1dp
+                modifier = Modifier.offset(y = -1.dp)
             )
             "MTC" -> Text(
                 text = "🎯",
-                fontSize = 18.sp
+                fontSize = 18.sp,
+                //改为向上偏移1dp
+                modifier = Modifier.offset(y = -1.dp)
             )
         }
 
@@ -1231,11 +1263,12 @@ private fun UserRatingBar(
     isRatingLoading: Boolean,
     onRatingClick: (Int) -> Unit
 ) {
+    val context = LocalContext.current
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
     Row(
-        modifier = Modifier.padding(top = 8.dp, bottom = 10.dp),
+        modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -1250,7 +1283,8 @@ private fun UserRatingBar(
                 text = "$userRating/10",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
-                color = starColor
+                color = starColor,
+                modifier = Modifier.width(38.dp)
             )
         }
         // 星标（紧跟在文字右边）
@@ -1260,22 +1294,44 @@ private fun UserRatingBar(
                 strokeWidth = 1.5.dp
             )
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(1.dp)) {
-                for (i in 1..10) {
-                    val isFilled = userRating != null && i <= userRating
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = null,
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                for (i in 1..5) {
+                    val fullValue = i * 2
+                    val halfValue = i * 2 - 1
+                    val starType = when {
+                        userRating != null && userRating >= fullValue -> "full"
+                        userRating != null && userRating >= halfValue -> "half"
+                        else -> "empty"
+                    }
+                    Box(
                         modifier = Modifier
-                            .size(16.dp)
+                            .size(22.dp)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null,
                                 enabled = !isRating,
-                                onClick = { onRatingClick(i) }
+                                onClick = {
+                                    context.performHapticClick()
+                                    onRatingClick(if (userRating == fullValue) halfValue else fullValue)
+                                }
                             ),
-                        tint = if (isFilled) starColor else emptyColor
-                    )
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = when (starType) {
+                                "full" -> Icons.Filled.Star
+                                "half" -> Icons.Filled.StarHalf
+                                else -> Icons.Filled.StarBorder
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                            tint = when (starType) {
+                                "full" -> starColor
+                                "half" -> starColor
+                                else -> emptyColor
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1289,7 +1345,7 @@ private fun CrewSection(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
     onShowAll: () -> Unit = {},
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
@@ -1325,47 +1381,58 @@ private fun CrewSection(
         ) {
             // 导演
             items(directors, key = { "director_${it.id}" }) { person ->
+                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_director_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                    onClick = { onPersonClick(person.id, person.name) }
+                    profileUrl = profileUrl,
+                    personId = person.id,
+                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
                 )
             }
             // 演员
             items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
+                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                    onClick = { onPersonClick(person.id, person.name) }
+                    profileUrl = profileUrl,
+                    personId = person.id,
+                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
                 )
             }
             // 编剧
             items(writers, key = { "writer_${it.id}" }) { person ->
+                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_writer_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                    onClick = { onPersonClick(person.id, person.name) }
+                    profileUrl = profileUrl,
+                    personId = person.id,
+                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
                 )
             }
             // 制片人
             items(producers, key = { "producer_${it.id}" }) { person ->
+                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_producer_tag),
-                    profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                    onClick = { onPersonClick(person.id, person.name) }
+                    profileUrl = profileUrl,
+                    personId = person.id,
+                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun CastCard(name: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
+private fun CastCard(name: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
     val context = LocalContext.current
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Column(
         modifier = Modifier
             .width(68.dp)
@@ -1380,15 +1447,29 @@ private fun CastCard(name: String, role: String, profileUrl: String?, onClick: (
                 .height(95.dp)
         ) {
             if (profileUrl != null) {
+                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .sharedElement(
+                                rememberSharedContentState(key = "person-avatar-$personId"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .fillMaxSize()
+                    }
+                } else {
+                    Modifier.fillMaxSize()
+                }
                 SubcomposeAsyncImage(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)
                             .data(profileUrl)
-                            .size(136)
+                            .size(240)
+                            .crossfade(true)
                             .build()
                     },
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
+                    modifier = imageModifier,
                     loading = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             CircularProgressIndicator(
@@ -1448,7 +1529,7 @@ private fun FullCastCrewSheet(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
     onDismiss: () -> Unit,
-    onPersonClick: (personId: Int, personName: String) -> Unit = { _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
@@ -1487,12 +1568,14 @@ private fun FullCastCrewSheet(
                 if (directors.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_director_tag)} (${directors.size})") }
                     items(directors, key = { "director_${it.id}" }) { person ->
+                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                            onClick = { onPersonClick(person.id, person.name) }
+                            profileUrl = profileUrl,
+                            personId = person.id,
+                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1500,12 +1583,14 @@ private fun FullCastCrewSheet(
                 if (cast.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_actor)} (${cast.size})") }
                     items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
+                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                            onClick = { onPersonClick(person.id, person.name) }
+                            profileUrl = profileUrl,
+                            personId = person.id,
+                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1513,12 +1598,14 @@ private fun FullCastCrewSheet(
                 if (writers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_writer_tag)} (${writers.size})") }
                     items(writers, key = { "writer_${it.id}" }) { person ->
+                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                            onClick = { onPersonClick(person.id, person.name) }
+                            profileUrl = profileUrl,
+                            personId = person.id,
+                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1526,12 +1613,14 @@ private fun FullCastCrewSheet(
                 if (producers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_producer_tag)} (${producers.size})") }
                     items(producers, key = { "producer_${it.id}" }) { person ->
+                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
                             role = person.job,
-                            profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w185$it" },
-                            onClick = { onPersonClick(person.id, person.name) }
+                            profileUrl = profileUrl,
+                            personId = person.id,
+                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1551,9 +1640,12 @@ private fun SectionHeader(title: String) {
     )
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, onClick: () -> Unit = {}) {
+private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
     val context = LocalContext.current
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1566,15 +1658,29 @@ private fun FullCastItem(name: String, originalName: String, role: String, profi
             modifier = Modifier.size(width = 72.dp, height = 100.dp)
         ) {
             if (profileUrl != null) {
+                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .sharedElement(
+                                rememberSharedContentState(key = "person-avatar-$personId"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .fillMaxSize()
+                    }
+                } else {
+                    Modifier.fillMaxSize()
+                }
                 SubcomposeAsyncImage(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)
                             .data(profileUrl)
-                            .size(144)
+                            .size(240)
+                            .crossfade(true)
                             .build()
                     },
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
+                    modifier = imageModifier,
                     loading = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -1651,10 +1757,12 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
 @Composable
 private fun FilterSection(
     enabledSources: Set<String>,
+    customSourceNames: Map<String, String>,
     enabledDiskTypes: Set<DiskType>,
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit
 ) {
+    val context = LocalContext.current
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
 
@@ -1681,11 +1789,12 @@ private fun FilterSection(
                     val label = when (source) {
                         "pansou" -> "PanSou"
                         "panhub" -> "PanHub"
-                        else -> "Zreso"
+                        "zreso" -> "Zreso"
+                        else -> customSourceNames[source] ?: source
                     }
                     FilterChip(
                         selected = source in enabledSources,
-                        onClick = { onToggleSource(source) },
+                        onClick = { context.performHapticClick(); onToggleSource(source) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -1726,7 +1835,7 @@ private fun FilterSection(
                     }
                     FilterChip(
                         selected = type in enabledDiskTypes,
-                        onClick = { onToggleDiskType(type) },
+                        onClick = { context.performHapticClick(); onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -1734,6 +1843,164 @@ private fun FilterSection(
             }
         }
     }
+}
+
+// ==================== 标记已看弹窗（电视剧季/集勾选） ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MarkWatchedDialog(
+    seasons: List<TraktSeason>,
+    episodes: Map<Int, List<TraktEpisode>>,
+    watchedEpisodeNumbers: Map<Int, Set<Int>>,
+    onDismiss: () -> Unit,
+    onSubmit: (List<Int>) -> Unit
+) {
+    // 已勾选的集：季号 -> 已勾选集号集合
+    val selectedEpisodes = remember {
+        val initial = mutableMapOf<Int, MutableSet<Int>>()
+        // 预填已看的集
+        watchedEpisodeNumbers.forEach { (season, eps) ->
+            initial[season] = eps.toMutableSet()
+        }
+        mutableStateOf(initial)
+    }
+    // 已展开的季
+    val expandedSeasons = remember { mutableStateOf(setOf<Int>()) }
+
+    val toggleSeasonExpand: (Int) -> Unit = { seasonNumber ->
+        expandedSeasons.value = if (seasonNumber in expandedSeasons.value) {
+            expandedSeasons.value - seasonNumber
+        } else {
+            expandedSeasons.value + seasonNumber
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.detail_mark_watched_title)) },
+        text = {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.heightIn(max = 400.dp)
+            ) {
+                items(seasons.size) { index ->
+                    val season = seasons[index]
+                    val isExpanded = season.number in expandedSeasons.value
+                    val seasonSelected = selectedEpisodes.value[season.number] ?: mutableSetOf()
+                    val allEpisodeNumbers = episodes[season.number]?.map { it.number } ?: emptyList()
+                    val allSelected = allEpisodeNumbers.isNotEmpty() && allEpisodeNumbers.all { it in seasonSelected }
+                    val someSelected = seasonSelected.isNotEmpty() && !allSelected
+
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { toggleSeasonExpand(season.number) }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = allSelected,
+                                onCheckedChange = { checked ->
+                                    val current = selectedEpisodes.value.toMutableMap()
+                                    val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
+                                    if (checked) {
+                                        // 勾选整季：添加该季所有集
+                                        episodes[season.number]?.forEach { ep ->
+                                            seasonSet.add(ep.number)
+                                        }
+                                    } else {
+                                        seasonSet.clear()
+                                    }
+                                    current[season.number] = seasonSet
+                                    selectedEpisodes.value = current
+                                },
+                                modifier = Modifier.size(32.dp)
+                            )
+                            Text(
+                                text = stringResource(R.string.detail_season, season.number),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { toggleSeasonExpand(season.number) }
+                            )
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clickable { toggleSeasonExpand(season.number) },
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        // 展开的集列表
+                        if (isExpanded) {
+                            val episodeList = episodes[season.number]
+                            if (episodeList == null) {
+                                Text(
+                                    text = stringResource(R.string.detail_loading_episodes),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
+                                )
+                            } else {
+                                episodeList.forEach { ep ->
+                                    val epSelected = ep.number in seasonSelected
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 32.dp, top = 2.dp, bottom = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Checkbox(
+                                            checked = epSelected,
+                                            onCheckedChange = { checked ->
+                                                val current = selectedEpisodes.value.toMutableMap()
+                                                val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
+                                                if (checked) seasonSet.add(ep.number) else seasonSet.remove(ep.number)
+                                                current[season.number] = seasonSet
+                                                selectedEpisodes.value = current
+                                            },
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.detail_episode, ep.number, ep.title),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                // 收集所有已勾选集的 trakt ID
+                val selectedIds = mutableListOf<Int>()
+                selectedEpisodes.value.forEach { (seasonNum, epNums) ->
+                    epNums.forEach { epNum ->
+                        episodes[seasonNum]?.find { it.number == epNum }?.ids?.trakt?.let {
+                            selectedIds.add(it)
+                        }
+                    }
+                }
+                onSubmit(selectedIds)
+            }) {
+                Text(stringResource(R.string.common_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
 }
 
 // ==================== 季/集信息 ====================
@@ -1748,6 +2015,7 @@ private fun SeasonsSection(
     onToggleSeason: (Int) -> Unit,
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
+    val context = LocalContext.current
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
     val specialSeasons = seasons.filter { it.number == 0 }
@@ -1780,7 +2048,7 @@ private fun SeasonsSection(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onToggleSeason(season.number) }
+                        .clickable { context.performHapticClick(); onToggleSeason(season.number) }
                         .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -1845,12 +2113,13 @@ private fun SeasonRow(
     onToggleSeason: (Int) -> Unit,
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
+    val context = LocalContext.current
     val isExpanded = season.number in expandedSeasons
     Column {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onToggleSeason(season.number) }
+                .clickable { context.performHapticClick(); onToggleSeason(season.number) }
                 .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1911,6 +2180,7 @@ private fun EpisodeRow(
     isToggling: Boolean,
     onToggleWatched: () -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1927,7 +2197,7 @@ private fun EpisodeRow(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onToggleWatched
+                    onClick = { context.performHapticClick(); onToggleWatched() }
                 )
         )
         if (isToggling) {
@@ -1944,7 +2214,7 @@ private fun EpisodeRow(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onToggleWatched
+                        onClick = { context.performHapticClick(); onToggleWatched() }
                     ),
                 tint = if (isWatched) Color(0xFF4CAF50)
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
@@ -1983,6 +2253,7 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
+    val context = LocalContext.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1996,7 +2267,7 @@ private fun EmptyState(onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = onRetry) {
+            OutlinedButton(onClick = { context.performHapticClick(); onRetry() }) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.detail_retry))

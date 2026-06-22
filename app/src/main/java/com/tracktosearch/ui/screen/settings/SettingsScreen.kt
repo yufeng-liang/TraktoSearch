@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +48,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -69,6 +72,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tracktosearch.BuildConfig
@@ -78,8 +82,20 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.ChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.util.performHapticClick
+import dev.chrisbanes.haze.HazeProgressive
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -146,20 +162,26 @@ fun SettingsScreen(
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
     val updateInfo by viewModel.updateInfo.collectAsState()
 
+    val settingsHazeState = remember { HazeState() }
+
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) }
-            )
-        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
-        LazyColumn(
-            modifier = modifier
+        Box(
+            modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(bottom = 80.dp)
+                .padding(padding)
+        ) {
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            LazyColumn(
+                modifier = modifier
+                    .fillMaxSize()
+                    .hazeSource(state = settingsHazeState),
+                contentPadding = PaddingValues(
+                    top = 56.dp + statusBarHeight,
+                    bottom = 80.dp
+                )
         ) {
             // 主题设置
             item { SettingsSectionHeader(stringResource(R.string.settings_appearance)) }
@@ -214,8 +236,8 @@ fun SettingsScreen(
             item {
                 SettingsItem(
                     icon = Icons.Default.Add,
-                    title = "添加自定义搜索源",
-                    subtitle = "支持 PanSou/Zreso 兼容源或自定义 JSONPath",
+                    title = stringResource(R.string.settings_add_custom_source),
+                    subtitle = stringResource(R.string.settings_add_custom_source_desc),
                     onClick = { showEditCustomSource = CustomSearchSource(
                         id = java.util.UUID.randomUUID().toString(),
                         name = "",
@@ -280,6 +302,15 @@ fun SettingsScreen(
             // 数据管理（仅登录用户可见，依赖 Trakt API）
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_data_management)) }
+                if (exportImportState.isExporting) {
+                    item {
+                        LinearProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                    }
+                }
                 item {
                     SettingsItem(
                         icon = Icons.Default.FileUpload,
@@ -287,7 +318,8 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.settings_export_json_desc),
                         onClick = {
                             if (!exportImportState.isExporting) {
-                                exportJsonLauncher.launch("trakt-export.json")
+                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                exportJsonLauncher.launch("trakt-export-$timestamp.json")
                             }
                         }
                     )
@@ -299,7 +331,8 @@ fun SettingsScreen(
                         subtitle = stringResource(R.string.settings_export_csv_desc),
                         onClick = {
                             if (!exportImportState.isExporting) {
-                                exportCsvLauncher.launch("trakt-export.csv")
+                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                exportCsvLauncher.launch("trakt-export-$timestamp.csv")
                             }
                         }
                     )
@@ -387,6 +420,32 @@ fun SettingsScreen(
                 item { SettingsSectionHeader(stringResource(R.string.settings_account)) }
                 item {
                     LogoutItem(onClick = { showLogoutDialog = true })
+                }
+            }
+        }
+            // Haze模糊渐变TopAppBar（含状态栏）
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = settingsHazeState,
+                        style = HazeMaterials.thin()
+                    ) {
+                        progressive = HazeProgressive.verticalGradient(
+                            startIntensity = 1f,
+                            endIntensity = 0f
+                        )
+                    }
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                Spacer(modifier = Modifier.statusBarsPadding())
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_title),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
         }
@@ -579,6 +638,7 @@ fun SearchSourceItem(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -592,7 +652,7 @@ fun SearchSourceItem(
         )
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = { context.performHapticClick(); onCheckedChange(it) }
         )
     }
 }
@@ -758,16 +818,17 @@ private fun LanguageOptionRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable { context.performHapticClick(); onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = onClick
+            onClick = { context.performHapticClick(); onClick() }
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
@@ -783,6 +844,7 @@ fun VersionItem(
     hasUpdate: Boolean,
     onCheckUpdate: () -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -820,7 +882,7 @@ fun VersionItem(
             )
         }
         // 按钮区域固定宽度，防止 loading 态高度变化
-        Box(modifier = Modifier.size(width = 100.dp, height = 36.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.widthIn(min = 80.dp, max = 120.dp).height(36.dp), contentAlignment = Alignment.Center) {
             if (isChecking) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
@@ -828,7 +890,7 @@ fun VersionItem(
                 )
             } else {
                 OutlinedButton(
-                    onClick = onCheckUpdate,
+                    onClick = { context.performHapticClick(); onCheckUpdate() },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     Text(stringResource(R.string.settings_check_update))
@@ -879,6 +941,7 @@ fun CacheItem(
 /** 退出登录项：文字"退出登录" + 右侧红色"登出"按钮 */
 @Composable
 fun LogoutItem(onClick: () -> Unit) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -897,7 +960,7 @@ fun LogoutItem(onClick: () -> Unit) {
             modifier = Modifier.weight(1f)
         )
         Button(
-            onClick = onClick,
+            onClick = { context.performHapticClick(); onClick() },
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
@@ -1070,6 +1133,7 @@ fun CustomSearchSourceItem(
     onDelete: () -> Unit,
     onTest: () -> Unit
 ) {
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1103,7 +1167,7 @@ fun CustomSearchSourceItem(
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
             }
-            Switch(checked = source.enabled, onCheckedChange = onToggle)
+            Switch(checked = source.enabled, onCheckedChange = { context.performHapticClick(); onToggle(it) })
         }
         // 测试结果
         testResult?.message?.let { msg ->
@@ -1129,6 +1193,7 @@ fun CustomSourceEditDialog(
     onSave: (CustomSearchSource) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(source.name) }
     var baseUrl by remember { mutableStateOf(source.baseUrl) }
     var apiPath by remember { mutableStateOf(source.apiPath) }
@@ -1229,11 +1294,11 @@ fun CustomSourceEditDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { parseMode = mode }
+                                .clickable { context.performHapticClick(); parseMode = mode }
                         ) {
                             RadioButton(
                                 selected = parseMode == mode,
-                                onClick = { parseMode = mode }
+                                onClick = { context.performHapticClick(); parseMode = mode }
                             )
                             Text(label, style = MaterialTheme.typography.bodySmall)
                         }
