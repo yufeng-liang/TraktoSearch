@@ -27,7 +27,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -134,6 +137,8 @@ private fun ScrollToTopButtonContent(
     onClick: () -> Unit,
     hazeState: HazeState?
 ) {
+    val view = LocalView.current
+    val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     if (hazeState != null) {
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%
         val hazeBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
@@ -158,7 +163,7 @@ private fun ScrollToTopButtonContent(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onClick
+                    onClick = onClickWithHaptic
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -171,7 +176,7 @@ private fun ScrollToTopButtonContent(
         }
     } else {
         FilledTonalIconButton(
-            onClick = onClick,
+            onClick = onClickWithHaptic,
             shape = CircleShape
         ) {
             Icon(

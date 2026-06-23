@@ -267,17 +267,17 @@ fun DetailScreen(
                     PrimaryTabRow(selectedTabIndex = selectedTab) {
                         Tab(
                             selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
+                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 0 },
                             text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", modifier = Modifier.animateContentSize()) }
                         )
                         Tab(
                             selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
+                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 1 },
                             text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", modifier = Modifier.animateContentSize()) }
                         )
                         Tab(
                             selected = selectedTab == 2,
-                            onClick = { selectedTab = 2 },
+                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 2 },
                             text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", modifier = Modifier.animateContentSize()) }
                         )
                     }
@@ -592,7 +592,7 @@ fun DetailScreen(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { onBack(uiState.watchlistChanged) }
+                        onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged) }
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -635,7 +635,6 @@ fun DetailScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
-                            view.performHaptic(HapticType.CLICK)
                             val shareText = buildString {
                                 append(uiState.title)
                                 if (uiState.year != null) append(" (${uiState.year})")
@@ -848,6 +847,18 @@ private fun DetailHeaderContent(
                         )
                     }
                 }
+                // 国家
+                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                    if (uiState.country.isNotEmpty()) {
+                        Text(
+                            text = uiState.country,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
                 // 上映日期
                 Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
                     if (!uiState.releaseDate.isEmpty()) {
@@ -968,7 +979,7 @@ private fun DetailHeaderContent(
                     ) {
                         Surface(
                             onClick = if (isMarkingWatchlist) ({}) else ({
-                                view.performHaptic(HapticType.HEAVY_CLICK)
+                                view.performHaptic(HapticType.TICK)
                                 onToggleWatchlist()
                             }),
                             enabled = !isMarkingWatchlist,
@@ -1026,7 +1037,7 @@ private fun DetailHeaderContent(
                     ) {
                         Surface(
                             onClick = if (isMarkingWatched) ({}) else ({
-                                view.performHaptic(HapticType.HEAVY_CLICK)
+                                view.performHaptic(HapticType.TICK)
                                 onToggleWatched()
                             }),
                             enabled = !isMarkingWatched,
@@ -2045,6 +2056,7 @@ private fun MarkWatchedDialog(
     onSubmit: (List<Int>) -> Unit,
     onLoadEpisodes: (Int) -> Unit
 ) {
+    val view = LocalView.current
     // 已勾选的集：季号 -> 已勾选集号集合
     val selectedEpisodes = remember {
         val initial = mutableMapOf<Int, MutableSet<Int>>()
@@ -2087,7 +2099,8 @@ private fun MarkWatchedDialog(
                     val isSpecial = season.number == 0
                     val isExpanded = season.number in expandedSeasons.value
                     val seasonSelected = selectedEpisodes.value[season.number] ?: mutableSetOf()
-                    val allEpisodeNumbers = episodes[season.number]?.map { it.number } ?: emptyList()
+                    val allEpisodeNumbers = episodes[season.number]?.map { it.number }
+                        ?: (1..season.episode_count).toList()
                     val allSelected = allEpisodeNumbers.isNotEmpty() && allEpisodeNumbers.all { it in seasonSelected }
                     val someSelected = seasonSelected.isNotEmpty() && !allSelected
                     val watchedCount = seasonSelected.size
@@ -2113,12 +2126,18 @@ private fun MarkWatchedDialog(
                                 Checkbox(
                                     checked = allSelected,
                                     onCheckedChange = { checked ->
+                                        view.performHaptic(HapticType.CLICK)
+                                        // 季未展开时 episodes 可能为 null，需要先加载
+                                        if (episodes[season.number] == null) {
+                                            onLoadEpisodes(season.number)
+                                        }
                                         val current = selectedEpisodes.value.toMutableMap()
                                         val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
                                         if (checked) {
-                                            episodes[season.number]?.forEach { ep ->
-                                                seasonSet.add(ep.number)
-                                            }
+                                            // 优先用已加载的 episodes，否则用 episode_count 生成
+                                            val epNumbers = episodes[season.number]?.map { it.number }
+                                                ?: (1..season.episode_count).toList()
+                                            epNumbers.forEach { seasonSet.add(it) }
                                         } else {
                                             seasonSet.clear()
                                         }
@@ -2185,6 +2204,7 @@ private fun MarkWatchedDialog(
                                             Checkbox(
                                                 checked = epSelected,
                                                 onCheckedChange = { checked ->
+                                                    view.performHaptic(HapticType.CLICK)
                                                     val current = selectedEpisodes.value.toMutableMap()
                                                     val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
                                                     if (checked) seasonSet.add(ep.number) else seasonSet.remove(ep.number)

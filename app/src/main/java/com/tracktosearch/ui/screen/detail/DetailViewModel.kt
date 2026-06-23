@@ -61,6 +61,7 @@ data class DetailUiState(
     val releaseDate: String = "",
     val overview: String = "",
     val genres: String = "",
+    val country: String = "",
     val posterUrl: String? = null,
     val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
@@ -154,6 +155,14 @@ class DetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
+    init {
+        // 尽早检查登录状态，避免 loadDetail 异步延迟导致 isLoggedIn 为 false
+        viewModelScope.launch {
+            isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+            _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+        }
+    }
+
     private var currentTraktId: Int = 0
     private var currentMediaType: MediaType = MediaType.MOVIE
     private var currentTitle: String = ""
@@ -232,12 +241,12 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> {
                             val e = tmdbRepository.enrichMovie(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country)
                         }
                         MediaType.SHOW -> {
                             val e = tmdbRepository.enrichTv(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country)
                         }
                     }
                 }.getOrNull()
@@ -255,6 +264,7 @@ class DetailViewModel @Inject constructor(
                     originalTitle = displayOriginalTitle,
                     overview = enrichment?.overview ?: "",
                     genres = enrichment?.genres ?: "",
+                    country = enrichment?.country ?: "",
                     posterUrl = enrichment?.posterUrl,
                     year = enrichment?.year ?: year,
                     releaseDate = enrichment?.releaseDate ?: "",
@@ -443,7 +453,7 @@ class DetailViewModel @Inject constructor(
     /** 获取已看剧集进度，转换为 季号 -> 已看集号集合 */
     private fun fetchWatchedProgress() {
         // 未登录跳过观看进度查询
-        if (!isLoggedIn) return
+        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) return
         viewModelScope.launch {
             val result = traktRepository.getShowWatchedProgress(currentTraktId)
             result.onSuccess { progress ->
@@ -540,7 +550,7 @@ class DetailViewModel @Inject constructor(
 
                 val filtered = enriched.filter { it.tmdbId > 0 }
 
-                if (isLoggedIn) {
+                if (tokenStorage.getCachedAccessToken() != null) {
                     // 已登录：批量检查想看/已看状态（同时检查当前影视，避免重复 API 调用）
                     val allIdsToCheck = filtered.map { it.traktId } + currentTraktId
                     val statusMap = traktRepository.batchCheckStatus(allIdsToCheck, currentMediaType)
@@ -580,7 +590,7 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchUserRating() {
         // 未登录跳过用户评分查询
-        if (!isLoggedIn) return
+        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRatingLoading = true)
             try {
@@ -685,7 +695,7 @@ class DetailViewModel @Inject constructor(
         if (current.togglingEpisode == Pair(seasonNumber, episodeNumber)) return
 
         // 未登录：弹出登录引导
-        if (!isLoggedIn) {
+        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
@@ -967,8 +977,8 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatched) return
 
-        // 未登录：弹出登录引导
-        if (!isLoggedIn) {
+        // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
+        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
@@ -1055,8 +1065,8 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatchlist) return
 
-        // 未登录：弹出登录引导
-        if (!isLoggedIn) {
+        // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
+        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
@@ -1107,7 +1117,8 @@ class DetailViewModel @Inject constructor(
         val year: Int?,
         val rating: Double,
         val runtime: Int? = null,
-        val releaseDate: String = ""
+        val releaseDate: String = "",
+        val country: String = ""
     )
 
     private fun saveToCache() {

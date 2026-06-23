@@ -155,7 +155,18 @@ class TraktRepository @Inject constructor(
         return try {
             val response = traktApiService.getWatchedShows()
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val shows = response.body() ?: emptyList()
+                android.util.Log.d("TraktRepo", "getWatchedShows: ${shows.size} shows")
+                shows.forEach { show ->
+                    val epCount = show.seasons.sumOf { season ->
+                        season.episodes.count { it.completed > 0 }
+                    }
+                    android.util.Log.d("TraktRepo", "  ${show.show.title}: ${show.seasons.size} seasons, $epCount completed episodes")
+                    show.seasons.forEach { season ->
+                        android.util.Log.d("TraktRepo", "    S${season.number}: ${season.episodes.size} eps, completed: ${season.episodes.map { it.completed }}")
+                    }
+                }
+                Result.success(shows)
             } else {
                 Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
             }

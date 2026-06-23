@@ -4,11 +4,11 @@
          让系统默认启动页就是蓝色渐变背景 + 居中图标，
          避免出现"先白屏/原图标 → 再切到自定义渐变"的两次启动页。 -->
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
-        <!-- 渐变背景（系统启动页会使用这张图） -->
+        <!-- 系统启动页背景：使用自定义 splash 的渐变起点色，避免切换闪烁 -->
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <!-- 启动页中央的图标（系统自动着色为 windowSplashScreenIconBackgroundColor） -->
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="windowSplashScreenIconBackgroundColor">@color/splash_icon_background</item>
+        <!-- 启动页中央图标：使用透明背景的云朵搜索图标，而不是带蓝色背景的 launcher 图标 -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash</item>
+        <item name="windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <!-- 启动完成后立即切换到的主题 -->
         <item name="postSplashScreenTheme">@style/Theme.TraktToSearch</item>
     </style>

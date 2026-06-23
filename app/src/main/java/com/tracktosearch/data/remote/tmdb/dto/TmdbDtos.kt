@@ -13,7 +13,8 @@ data class TmdbMovieDetail(
     val genres: List<TmdbGenre> = emptyList(),
     val release_date: String = "",
     val vote_average: Double = 0.0,
-    val runtime: Int? = null
+    val runtime: Int? = null,
+    val production_countries: List<TmdbProductionCountry> = emptyList()
 )
 
 @Serializable
@@ -26,7 +27,14 @@ data class TmdbTvDetail(
     val genres: List<TmdbGenre> = emptyList(),
     val first_air_date: String = "",
     val vote_average: Double = 0.0,
-    val episode_run_time: List<Int>? = null
+    val episode_run_time: List<Int>? = null,
+    val origin_country: List<String> = emptyList()
+)
+
+@Serializable
+data class TmdbProductionCountry(
+    val iso_3166_1: String = "",
+    val name: String = ""
 )
 
 @Serializable

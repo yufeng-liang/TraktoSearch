@@ -687,6 +687,7 @@ fun SwitchSettingsItem(
     enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -712,7 +713,7 @@ fun SwitchSettingsItem(
         Switch(
             checked = checked,
             enabled = enabled,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) }
         )
     }
 }
@@ -760,16 +761,17 @@ private fun ThemeOptionRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .clickable { view.performHaptic(HapticType.TICK); onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = onClick
+            onClick = { view.performHaptic(HapticType.TICK); onClick() }
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
@@ -1125,6 +1127,7 @@ private fun DiscoverSectionRow(
     dragHandleModifier: Modifier,
     isDragging: Boolean
 ) {
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1150,7 +1153,7 @@ private fun DiscoverSectionRow(
         )
         Switch(
             checked = visible,
-            onCheckedChange = onToggle
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) }
         )
     }
 }

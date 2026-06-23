@@ -101,11 +101,21 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 val totalWatched = movies.size + shows.size
-                val totalShowCount = watchedShows.size
                 val totalEpisodeCount = watchedShows.sumOf { show ->
                     show.seasons.sumOf { season ->
-                        season.episodes.count { it.completed }
+                        season.episodes.count { it.completed > 0 }
                     }
+                }
+
+                // 并行获取每部剧的观看进度，判断是否有整季看完
+                val showProgressResults = watchedShows.map { show ->
+                    async { traktRepository.getShowWatchedProgress(show.show.ids.trakt) }
+                }.awaitAll()
+
+                val totalShowCount = showProgressResults.count { result ->
+                    result.getOrNull()?.seasons?.any { season ->
+                        season.number > 0 && season.episodes.isNotEmpty() && season.episodes.all { it.completed }
+                    } ?: false
                 }
 
                 // 本月/本年统计

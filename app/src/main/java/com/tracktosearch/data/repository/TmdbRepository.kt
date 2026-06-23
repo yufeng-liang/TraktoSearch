@@ -5,6 +5,7 @@ import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.tmdb.dto.*
 import com.tracktosearch.data.util.TtlCache
 import kotlinx.coroutines.flow.first
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -79,7 +80,8 @@ class TmdbRepository @Inject constructor(
         val year: Int?,
         val rating: Double,
         val runtime: Int? = null,
-        val releaseDate: String = ""
+        val releaseDate: String = "",
+        val country: String = ""
     )
 
     data class TvEnrichment(
@@ -91,7 +93,8 @@ class TmdbRepository @Inject constructor(
         val year: Int?,
         val rating: Double,
         val episodeRunTime: Int? = null,
-        val releaseDate: String = ""
+        val releaseDate: String = "",
+        val country: String = ""
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -110,7 +113,8 @@ class TmdbRepository @Inject constructor(
                 year = cached.release_date?.take(4)?.toIntOrNull() ?: year,
                 rating = cached.vote_average,
                 runtime = cached.runtime,
-                releaseDate = cached.release_date ?: ""
+                releaseDate = cached.release_date ?: "",
+                country = cached.production_countries.joinToString(" · ") { it.name }
             )
         }
 
@@ -130,7 +134,8 @@ class TmdbRepository @Inject constructor(
                     year = detail.release_date?.take(4)?.toIntOrNull() ?: year,
                     rating = detail.vote_average,
                     runtime = detail.runtime,
-                    releaseDate = detail.release_date ?: ""
+                    releaseDate = detail.release_date ?: "",
+                    country = detail.production_countries.joinToString(" · ") { it.name }
                 )
             } else {
                 fallbackMovie(originalTitle, year)
@@ -156,7 +161,8 @@ class TmdbRepository @Inject constructor(
                 year = cached.first_air_date?.take(4)?.toIntOrNull() ?: year,
                 rating = cached.vote_average,
                 episodeRunTime = cached.episode_run_time?.firstOrNull(),
-                releaseDate = cached.first_air_date ?: ""
+                releaseDate = cached.first_air_date ?: "",
+                country = cached.origin_country.map { codeToCountryName(it) }.joinToString(" · ")
             )
         }
 
@@ -176,7 +182,8 @@ class TmdbRepository @Inject constructor(
                     year = detail.first_air_date?.take(4)?.toIntOrNull() ?: year,
                     rating = detail.vote_average,
                     episodeRunTime = detail.episode_run_time?.firstOrNull(),
-                    releaseDate = detail.first_air_date ?: ""
+                    releaseDate = detail.first_air_date ?: "",
+                    country = detail.origin_country.map { codeToCountryName(it) }.joinToString(" · ")
                 )
             } else {
                 fallbackTv(originalName, year)
@@ -321,6 +328,18 @@ class TmdbRepository @Inject constructor(
 
     fun buildProfileUrl(profilePath: String?): String? {
         return profilePath?.let { "$IMAGE_BASE_URL$it" }
+    }
+
+    /** 将 ISO 3166-1 alpha-2 国家代码转换为当前 Locale 的国家名称 */
+    @Suppress("DEPRECATION")
+    private fun codeToCountryName(code: String): String {
+        if (code.length != 2) return code
+        return try {
+            val locale = Locale("", code)
+            locale.displayCountry.ifEmpty { code }
+        } catch (_: Exception) {
+            code
+        }
     }
 
     // 通过标题搜索电影，返回第一个匹配结果

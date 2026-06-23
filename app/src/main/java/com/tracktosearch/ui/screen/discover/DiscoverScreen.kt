@@ -161,7 +161,6 @@ fun DiscoverScreen(
                                         category = category,
                                         resolvingItemId = uiState.resolvingItemId,
                                         onItemClick = { item ->
-                                            view.performHaptic(HapticType.CLICK)
                                             viewModel.resolveAndNavigate(item) { traktId, tmdbId, title, imdbId, traktRating ->
                                                 onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                             }
@@ -182,7 +181,6 @@ fun DiscoverScreen(
                                     error = uiState.popularError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
@@ -202,7 +200,6 @@ fun DiscoverScreen(
                                     error = uiState.upcomingError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
@@ -222,7 +219,6 @@ fun DiscoverScreen(
                                     error = uiState.recommendationsError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }

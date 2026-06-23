@@ -191,7 +191,7 @@ data class TraktWatchedSeason(
 @Serializable
 data class TraktWatchedEpisode(
     val number: Int = 0,
-    val completed: Boolean = false
+    val completed: Int = 0
 )
 
 @Serializable

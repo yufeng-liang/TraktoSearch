@@ -75,6 +75,7 @@ fun WatchlistScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val view = LocalView.current
     // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
     val openTraktExternal: () -> Unit = {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -204,14 +205,14 @@ fun WatchlistScreen(
                 ) {
                 SegmentedButton(
                     selected = selectedMode == 0,
-                    onClick = { selectedMode = 0 },
+                    onClick = { view.performHaptic(HapticType.TICK); selectedMode = 0 },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_mode_watchlist))
                 }
                 SegmentedButton(
                     selected = selectedMode == 1,
-                    onClick = { selectedMode = 1 },
+                    onClick = { view.performHaptic(HapticType.TICK); selectedMode = 1 },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_tab_history))
@@ -224,12 +225,12 @@ fun WatchlistScreen(
                 PrimaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
-                        onClick = { tabScope.launch { tabPagerState.animateScrollToPage(0) } },
+                        onClick = { view.performHaptic(HapticType.TICK); tabScope.launch { tabPagerState.animateScrollToPage(0) } },
                         text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
                     )
                     Tab(
                         selected = selectedTab == 1,
-                        onClick = { tabScope.launch { tabPagerState.animateScrollToPage(1) } },
+                        onClick = { view.performHaptic(HapticType.TICK); tabScope.launch { tabPagerState.animateScrollToPage(1) } },
                         text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
                     )
                 }
@@ -520,7 +521,7 @@ private fun MovieGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { view.performHaptic(HapticType.CLICK); onItemClick(item) },
+                    onClick = { onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)
@@ -564,7 +565,7 @@ private fun ShowGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { view.performHaptic(HapticType.CLICK); onItemClick(item) },
+                    onClick = { onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)

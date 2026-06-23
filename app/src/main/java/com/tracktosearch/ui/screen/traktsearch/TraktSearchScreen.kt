@@ -242,7 +242,6 @@ fun TraktSearchScreen(
                                     posterUrl = item.posterUrl,
                                     tmdbId = item.tmdbId,
                                     onClick = {
-                                        view.performHaptic(HapticType.CLICK)
                                         onItemClick(item.traktId, item.tmdbId, item.displayTitle, item.imdbId, item.traktRating)
                                     }
                                 )
