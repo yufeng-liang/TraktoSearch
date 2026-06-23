@@ -1,6 +1,9 @@
 package com.tracktosearch.ui.screen.main
 
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
+import androidx.compose.ui.platform.LocalView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -76,8 +80,8 @@ import kotlinx.coroutines.launch
 fun MainScreen(
     initialTab: Int = 0,
     isLoggedIn: Boolean,
-    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
     onOpenWebView: (url: String) -> Unit,
     onNavigateToLogin: () -> Unit,
@@ -101,6 +105,7 @@ fun MainScreen(
     // 双击返回退出
     var lastBackTime by remember { mutableLongStateOf(0L) }
     val context = LocalContext.current
+    val view = LocalView.current
     val pressBackAgainText = stringResource(R.string.press_back_again)
     BackHandler(enabled = true) {
         val now = System.currentTimeMillis()
@@ -164,12 +169,12 @@ fun MainScreen(
                         initialKeyword = "",
                         onSearchClick = onSearchClick,
                         onOpenWebView = onOpenWebView,
-                        onMovieClick = onMovieClick,
+                        onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                         modifier = Modifier.fillMaxSize()
                     )
                     1 -> DiscoverScreen(
-                        onMovieClick = onMovieClick,
-                        onShowClick = onShowClick,
+                        onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
+                        onShowClick = { traktId, tmdbId, title, imdbId, traktRating -> onShowClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                         onOpenWebView = onOpenWebView,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -262,6 +267,7 @@ fun MainScreen(
                             weight = 1f,
                             onClick = {
                                 if (selectedTab != index) {
+                                    view.performHaptic(HapticType.TICK)
                                     scope.launch { pagerState.scrollToPage(index) }
                                 }
                             }
@@ -306,6 +312,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                    else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(22.dp)
         )
+        Spacer(modifier = Modifier.height(0.dp))
         Text(
             text = stringResource(labelRes),
             fontSize = 10.sp,

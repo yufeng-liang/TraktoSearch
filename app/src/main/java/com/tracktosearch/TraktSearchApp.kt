@@ -8,6 +8,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
+import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.Dns
 import okhttp3.Interceptor
@@ -29,6 +30,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     override fun onCreate() {
         super.onCreate()
         CrashHandler.init(this)
+        JPushHelper.init(this)
     }
 
     override fun newImageLoader(): ImageLoader {

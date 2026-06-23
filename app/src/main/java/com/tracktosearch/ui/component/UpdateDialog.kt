@@ -180,16 +180,20 @@ fun UpdateDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
         title = { Text("发现新版本 v${updateInfo.latestVersion}") },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                ChangelogContent(
-                    text = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
-                )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 可滚动的更新日志区域
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 320.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    ChangelogContent(
+                        text = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
+                    )
+                }
 
+                // 下载进度区域（固定在滚动区域下方）
                 val state = downloadState
                 if (state !is DownloadState.Idle) {
                     Spacer(Modifier.height(12.dp))

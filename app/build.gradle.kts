@@ -7,6 +7,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    id("com.huawei.agconnect") apply false
 }
 
 android {
@@ -17,8 +18,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 36
-        versionCode = 25
-        versionName = "2.10.0"
+        versionCode = 26
+        versionName = "2.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,6 +38,19 @@ android {
         buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
         buildConfigField("String", "GITEE_RELEASE_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
+        buildConfigField("String", "JPUSH_APPKEY", "\"${properties.getProperty("jpush.appkey", "")}\"")
+
+        val appId = applicationId ?: "com.tracktosearch"
+        manifestPlaceholders["JPUSH_PKGNAME"] = appId
+        manifestPlaceholders["JPUSH_APPKEY"] = properties.getProperty("jpush.appkey", "")
+        manifestPlaceholders["JPUSH_CHANNEL"] = "developer-default"
+        manifestPlaceholders["XIAOMI_APPID"] = properties.getProperty("xiaomi.app.id", "")
+        manifestPlaceholders["XIAOMI_APPKEY"] = properties.getProperty("xiaomi.app.key", "")
+        manifestPlaceholders["OPPO_APPKEY"] = properties.getProperty("oppo.app.key", "")
+        manifestPlaceholders["OPPO_APPID"] = properties.getProperty("oppo.app.id", "")
+        manifestPlaceholders["OPPO_APPSECRET"] = properties.getProperty("oppo.app.secret", "")
+        manifestPlaceholders["VIVO_APPKEY"] = properties.getProperty("vivo.app.key", "")
+        manifestPlaceholders["VIVO_APPID"] = properties.getProperty("vivo.app.id", "")
     }
 
     signingConfigs {
@@ -153,4 +167,13 @@ dependencies {
     // Glance (Widget)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.reorderable)
+
+    // 极光推送
+    implementation("cn.jiguang.sdk:jpush:5.8.0")
+    // 厂商通道
+    //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
+    //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
+    //implementation("cn.jiguang.sdk.plugin:oppo:5.8.0")
+    //implementation("cn.jiguang.sdk.plugin:vivo:5.8.0")
 }

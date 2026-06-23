@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.activity.compose.BackHandler
@@ -22,8 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForwardIos
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
@@ -39,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
@@ -59,7 +62,8 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.util.performHapticClick
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -85,6 +89,7 @@ fun SearchScreen(
     val uiState by viewModel.uiState.collectAsState()
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
+    val view = LocalView.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val viewedItemStorage = remember {
@@ -220,14 +225,13 @@ fun SearchScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Spacer(modifier = Modifier.weight(1f))
-                    // 图标
-                    Icon(
-                        imageVector = Icons.Default.Search,
+                    // 装饰图标：白云+电影+放大镜+播放按钮
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_search_cloud),
                         contentDescription = null,
-                        modifier = Modifier.size(56.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        modifier = Modifier.size(140.dp)
                     )
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(12.dp))
                     // 搜索框
                     OutlinedTextField(
                         value = searchQuery,
@@ -271,7 +275,7 @@ fun SearchScreen(
                                         )
                                     }
                                     TextButton(onClick = {
-                                        context.performHapticClick()
+                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.search(searchQuery)
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
@@ -346,6 +350,7 @@ private fun SearchBarTop(
     onFocusChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -354,7 +359,7 @@ private fun SearchBarTop(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.search_back))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back))
             }
             Spacer(modifier = Modifier.width(4.dp))
         }
@@ -392,7 +397,7 @@ private fun SearchBarTop(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                        TextButton(onClick = { context.performHapticClick(); onSearch() }) {
+                        TextButton(onClick = { view.performHaptic(HapticType.CLICK); onSearch() }) {
                             Text(stringResource(R.string.search_button))
                         }
                     }
@@ -415,6 +420,7 @@ private fun SearchResultsContent(
     onItemClick: (ResourceItem) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
 
     val filteredResources = remember(resources, selectedDiskType, typeFilter) {
@@ -464,21 +470,21 @@ private fun SearchResultsContent(
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.ALL,
-                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.ALL) },
+                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
                                 label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.MOVIE,
-                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.MOVIE) },
+                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
                                 label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         item {
                             FilterChip(
                                 selected = typeFilter == ResourceType.SHOW,
-                                onClick = { context.performHapticClick(); onTypeFilterChange(ResourceType.SHOW) },
+                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
                                 label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
@@ -507,14 +513,14 @@ private fun SearchResultsContent(
                         item {
                             FilterChip(
                                 selected = selectedDiskType == null,
-                                onClick = { context.performHapticClick(); selectedDiskType = null },
+                                onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = null },
                                 label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
                             )
                         }
                         items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
                             FilterChip(
                                 selected = selectedDiskType == type,
-                                onClick = { context.performHapticClick(); selectedDiskType = type },
+                                onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = type },
                                 label = {
                                     val label = when (type) {
                                         DiskType.QUARK -> stringResource(R.string.disk_quark)
@@ -770,7 +776,7 @@ fun DoubanHotCategorySection(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = stringResource(R.string.search_view_all),
+                    text = stringResource(R.string.search_view_all_count, doubanCategoryTotal(category.id)),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -779,7 +785,7 @@ fun DoubanHotCategorySection(
 
         if (category.isLoading) {
             androidx.compose.foundation.lazy.LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 items(5) {
                     com.tracktosearch.ui.component.DoubanHotCardSkeleton()
@@ -807,7 +813,7 @@ fun DoubanHotCategorySection(
             }
         } else {
             androidx.compose.foundation.lazy.LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 items(category.items, key = { it.id ?: it.title }) { item ->
                     DoubanHotCard(
@@ -835,7 +841,7 @@ fun DoubanHotCategorySection(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.Default.ArrowForwardIos,
+                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
                                     contentDescription = "查看全部",
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -864,7 +870,7 @@ fun DoubanHotCard(
 
     Card(
         modifier = Modifier
-            .width(99.dp)
+            .width(105.dp)
             .clickable(enabled = !isResolving) { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
@@ -1138,4 +1144,9 @@ private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) 
     "douban-top250" -> stringResource(R.string.discover_douban_top250)
     "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
     else -> categoryId
+}
+
+private fun doubanCategoryTotal(categoryId: String): Int = when (categoryId) {
+    "douban-top250" -> 250
+    else -> 10
 }

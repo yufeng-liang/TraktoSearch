@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -40,8 +41,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
-import com.tracktosearch.ui.util.performHapticClick
-import dev.chrisbanes.haze.HazeProgressive
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -65,6 +66,7 @@ fun DiscoverScreen(
     val uiState by viewModel.uiState.collectAsState()
     val sectionConfigs by viewModel.sectionConfigs.collectAsState()
     val context = LocalContext.current
+    val view = LocalView.current
     var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
     var showPopularAll by remember { mutableStateOf(false) }
     var showUpcomingAll by remember { mutableStateOf(false) }
@@ -142,7 +144,7 @@ fun DiscoverScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 56.dp + statusBarHeight,
+                        top = 65.dp + statusBarHeight,
                         bottom = 80.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -159,11 +161,7 @@ fun DiscoverScreen(
                                         category = category,
                                         resolvingItemId = uiState.resolvingItemId,
                                         onItemClick = { item ->
-                                            context.performHapticClick()
-                                            val displayTitle = item.title
-                                                .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-                                                .replace(Regex("^#\\d+\\s*"), "")
-                                            copyToClipboard(context, displayTitle)
+                                            view.performHaptic(HapticType.CLICK)
                                             viewModel.resolveAndNavigate(item) { traktId, tmdbId, title, imdbId, traktRating ->
                                                 onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                             }
@@ -184,13 +182,13 @@ fun DiscoverScreen(
                                     error = uiState.popularError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        context.performHapticClick()
+                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbPopular() },
-                                    onViewAll = { context.performHapticClick(); showPopularAll = true }
+                                    onViewAll = { view.performHaptic(HapticType.TICK); showPopularAll = true }
                                 )
                             }
                         }
@@ -204,13 +202,13 @@ fun DiscoverScreen(
                                     error = uiState.upcomingError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        context.performHapticClick()
+                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbUpcoming() },
-                                    onViewAll = { context.performHapticClick(); showUpcomingAll = true }
+                                    onViewAll = { view.performHaptic(HapticType.TICK); showUpcomingAll = true }
                                 )
                             }
                         }
@@ -224,13 +222,13 @@ fun DiscoverScreen(
                                     error = uiState.recommendationsError,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     onItemClick = { movie ->
-                                        context.performHapticClick()
+                                        view.performHaptic(HapticType.CLICK)
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                                         }
                                     },
                                     onRetry = { viewModel.loadTraktRecommendations() },
-                                    onViewAll = { context.performHapticClick(); showRecommendationsAll = true }
+                                    onViewAll = { view.performHaptic(HapticType.TICK); showRecommendationsAll = true }
                                 )
                             }
                         }
@@ -245,12 +243,7 @@ fun DiscoverScreen(
                     .hazeEffect(
                         state = discoverHazeState,
                         style = HazeMaterials.thin()
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f
-                        )
-                    }
+                    )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -274,10 +267,6 @@ fun DiscoverScreen(
                 category = category,
                 resolvingItemId = uiState.resolvingItemId,
                 onItemClick = { item ->
-                    val displayTitle = item.title
-                        .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
-                        .replace(Regex("^#\\d+\\s*"), "")
-                    copyToClipboard(context, displayTitle)
                     viewModel.resolveAndNavigate(item) { traktId, tmdbId, title, imdbId, traktRating ->
                         onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                     }
@@ -385,7 +374,7 @@ private fun TmdbMovieSection(
         }
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
@@ -396,7 +385,7 @@ private fun TmdbMovieSection(
                 EmptyRow()
             }
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(movies, key = { it.id }) { movie ->
                         MovieCard(
                             title = movie.title,
@@ -453,7 +442,7 @@ private fun TraktRecommendationSection(
         }
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
@@ -464,7 +453,7 @@ private fun TraktRecommendationSection(
                 EmptyRow()
             }
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     items(movies, key = { "${it.ids.trakt}_${it.ids.tmdb}_${it.title}" }) { movie ->
                         MovieCard(
                             title = movie.title,
@@ -501,7 +490,7 @@ private fun MovieCard(
 
     Card(
         modifier = Modifier
-            .width(99.dp)
+            .width(105.dp)
             .clickable(enabled = !isResolving) { onClick() },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
@@ -644,12 +633,6 @@ private fun EmptyRow() {
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
     }
-}
-
-private fun copyToClipboard(context: android.content.Context, text: String) {
-    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("影片名", text))
-    context.showToast("已复制: $text")
 }
 
 /** TMDB 电影全部弹窗（分页加载） */

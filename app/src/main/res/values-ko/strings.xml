@@ -95,6 +95,7 @@
     <string name="settings_already_latest">최신 버전 v%1$s</string>
     <string name="settings_discover_sections">발견 섹션</string>
     <string name="settings_discover_sections_desc">발견 페이지 섹션 표시 및 정렬</string>
+    <string name="settings_drag_to_reorder">드래그하여 정렬</string>
     <string name="settings_logout_button">로그아웃</string>
 
     <!-- Data Management -->
@@ -404,4 +405,5 @@
     <string name="genre_biography">전기</string>
     <string name="genre_noir">필름 누아르</string>
     <string name="genre_game_show">게임 쇼</string>
+    <string name="genre_other">기타</string>
 </resources>

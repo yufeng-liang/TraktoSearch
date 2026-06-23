@@ -47,7 +47,7 @@ import javax.inject.Inject
 object Routes {
     const val LOGIN = "login"
     const val MAIN = "main"
-    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}"
+    const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
     const val SEARCH = "search/{keyword}"
     const val WEBVIEW = "webview/{url}/{title}"
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
@@ -59,10 +59,17 @@ object Routes {
         return "traktSearch/$type/$encodedQuery"
     }
 
-    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0): String {
+    fun detailRoute(type: String, traktId: Int, tmdbId: Int, title: String, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false): String {
         val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
         val encodedImdbId = java.net.URLEncoder.encode(imdbId, "UTF-8")
-        return "detail/$type/$traktId/$tmdbId/$encodedTitle/$encodedImdbId/$traktRating"
+        var route = "detail/$type/$traktId/$tmdbId/$encodedTitle/$encodedImdbId/$traktRating"
+        if (inWatchlist || isWatched) {
+            val params = mutableListOf<String>()
+            if (inWatchlist) params.add("inWatchlist=true")
+            if (isWatched) params.add("isWatched=true")
+            route += "?${params.joinToString("&")}"
+        }
+        return route
     }
 
     fun searchRoute(keyword: String): String {
@@ -188,11 +195,11 @@ fun AppNavigation(
                         MainScreen(
                             initialTab = mainInitialTab,
                             isLoggedIn = isLoggedIn,
-                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
-                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
                             onSearchClick = { keyword ->
                                 navController.navigate(Routes.searchRoute(keyword))
@@ -230,16 +237,20 @@ fun AppNavigation(
                         navArgument("tmdbId") { type = NavType.IntType },
                         navArgument("title") { type = NavType.StringType },
                         navArgument("imdbId") { type = NavType.StringType; defaultValue = "" },
-                        navArgument("traktRating") { type = NavType.FloatType; defaultValue = 0.0f }
+                        navArgument("traktRating") { type = NavType.FloatType; defaultValue = 0.0f },
+                        navArgument("inWatchlist") { type = NavType.BoolType; defaultValue = false },
+                        navArgument("isWatched") { type = NavType.BoolType; defaultValue = false }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val type = backStackEntry.arguments?.getString("type") ?: "movie"
                         val traktId = backStackEntry.arguments?.getInt("traktId") ?: 0
                         val tmdbId = backStackEntry.arguments?.getInt("tmdbId") ?: 0
-                        val title = backStackEntry.arguments?.getString("title") ?: ""
-                        val imdbId = backStackEntry.arguments?.getString("imdbId") ?: ""
+                        val title = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
+                        val imdbId = java.net.URLDecoder.decode(backStackEntry.arguments?.getString("imdbId") ?: "", "UTF-8")
                         val traktRating = backStackEntry.arguments?.getFloat("traktRating")?.toDouble() ?: 0.0
+                        val inWatchlist = backStackEntry.arguments?.getBoolean("inWatchlist") ?: false
+                        val isWatched = backStackEntry.arguments?.getBoolean("isWatched") ?: false
 
                         // 用于在标记已看/想看后通知上级列表页刷新
                         // 同时检查从子详情页（推荐跳转）传递回来的变更标记
@@ -258,6 +269,8 @@ fun AppNavigation(
                             mediaType = if (type == "show") MediaType.SHOW else MediaType.MOVIE,
                             imdbId = imdbId,
                             traktRating = traktRating,
+                            initialInWatchlist = inWatchlist,
+                            initialIsWatched = isWatched,
                             onBack = { changed -> goBack(changed) },
                             onPersonClick = { personId, personName, profileUrl ->
                                 navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))
@@ -376,13 +389,12 @@ fun AppNavigation(
                         )
                         val mediaType = if (typeStr == "show") MediaType.SHOW else MediaType.MOVIE
 
-                        // 从详情页返回时通知想看列表刷新
+                        // 从详情页返回时通知想看列表刷新（Trakt搜索页本身不修改想看列表，不需要触发刷新）
                         val previousEntry = navController.previousBackStackEntry
                         TraktSearchScreen(
                             initialQuery = query,
                             type = mediaType,
                             onBack = {
-                                previousEntry?.savedStateHandle?.set("watchlist_changed", true)
                                 navController.popBackStack()
                             },
                             onItemClick = { traktId, tmdbId, title, imdbId, traktRating ->

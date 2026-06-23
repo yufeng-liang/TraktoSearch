@@ -56,6 +56,7 @@ data class DetailUiState(
     val isSearching: Boolean = false,
     val title: String = "",
     val displayTitle: String = "",
+    val originalTitle: String = "",
     val year: Int? = null,
     val releaseDate: String = "",
     val overview: String = "",
@@ -128,6 +129,28 @@ class DetailViewModel @Inject constructor(
     private val tokenStorage: TokenStorage
 ) : ViewModel() {
 
+    companion object {
+        // 缓存最近查看的详情数据，避免从子页面返回后 ViewModel 被销毁导致重新加载
+        private const val CACHE_MAX_SIZE = 5
+        private val detailCache = object : LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedDetailData>): Boolean {
+                return size > CACHE_MAX_SIZE
+            }
+        }
+
+        /** 缓存的详情数据，用于从子页面返回后快速恢复 */
+        data class CachedDetailData(
+            val uiState: DetailUiState,
+            val allResources: List<ResourceItem>,
+            val currentKeyword: String,
+            val currentOriginalTitle: String,
+            val currentImdbId: String,
+            val currentTraktRating: Double,
+            val currentTmdbId: Int,
+            val currentMediaType: MediaType
+        )
+    }
+
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
 
@@ -148,9 +171,29 @@ class DetailViewModel @Inject constructor(
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
 
-    fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0) {
+    fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false) {
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
         if (currentTraktId == traktId && detailLoaded) return
+
+        // 尝试从静态缓存恢复
+        val cached = detailCache[traktId]
+        if (cached != null) {
+            currentTraktId = traktId
+            currentMediaType = cached.currentMediaType
+            currentTitle = cached.uiState.title
+            currentKeyword = cached.currentKeyword
+            currentOriginalTitle = cached.currentOriginalTitle
+            currentImdbId = cached.currentImdbId
+            currentTraktRating = cached.currentTraktRating
+            currentTmdbId = cached.currentTmdbId
+            detailLoaded = true
+            allResources = cached.allResources
+            _uiState.value = cached.uiState.copy(
+                isMarkedWatchlist = inWatchlist,
+                isMarkedWatched = isWatched
+            )
+            return
+        }
 
         currentTraktId = traktId
         currentMediaType = mediaType
@@ -167,7 +210,9 @@ class DetailViewModel @Inject constructor(
             isSearching = true,
             title = title.replace("+", " "),
             displayTitle = title.replace("+", " "),
-            year = year
+            year = year,
+            isMarkedWatchlist = inWatchlist,
+            isMarkedWatched = isWatched
         )
 
         viewModelScope.launch {
@@ -179,6 +224,7 @@ class DetailViewModel @Inject constructor(
             if (tmdbId <= 0) {
                 _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title.replace("+", " "))
                 detailLoaded = true
+                saveToCache()
                 startSearch()
             } else {
                 val enrichment: EnrichmentData? = runCatching {
@@ -199,9 +245,14 @@ class DetailViewModel @Inject constructor(
                 val chineseTitle = enrichment?.chineseTitle?.takeIf { it.isNotEmpty() } ?: title
                 currentKeyword = chineseTitle
                 currentOriginalTitle = enrichment?.originalTitle?.takeIf { it.isNotEmpty() && it != chineseTitle } ?: ""
+                val displayOriginalTitle = currentOriginalTitle.ifEmpty {
+                    // 如果 TMDB 没返回 originalTitle 或与中文标题相同，使用 Trakt 原始标题
+                    title.takeIf { it.isNotEmpty() && it != chineseTitle.replace("+", " ") } ?: ""
+                }
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     displayTitle = chineseTitle.replace("+", " "),
+                    originalTitle = displayOriginalTitle,
                     overview = enrichment?.overview ?: "",
                     genres = enrichment?.genres ?: "",
                     posterUrl = enrichment?.posterUrl,
@@ -210,6 +261,7 @@ class DetailViewModel @Inject constructor(
                     runtime = enrichment?.runtime
                 )
                 detailLoaded = true
+                saveToCache()
                 startSearch()
             }
 
@@ -613,6 +665,20 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /** 为标记已看弹窗加载指定季的集信息（不修改展开状态） */
+    fun loadEpisodesForMarkWatched(seasonNumber: Int) {
+        if (seasonNumber in _uiState.value.episodes) return
+
+        viewModelScope.launch {
+            val result = traktRepository.getSeasonEpisodes(currentTraktId, seasonNumber)
+            result.onSuccess { episodeList ->
+                val newEpisodes = _uiState.value.episodes.toMutableMap()
+                newEpisodes[seasonNumber] = episodeList
+                _uiState.value = _uiState.value.copy(episodes = newEpisodes)
+            }
+        }
+    }
+
     /** 切换某集已看/取消已看 */
     fun toggleEpisodeWatched(seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) {
         val current = _uiState.value
@@ -780,6 +846,7 @@ class DetailViewModel @Inject constructor(
             resources = filtered,
             viewedUrls = viewedUrls
         )
+        saveToCache()
     }
 
     /**
@@ -855,6 +922,7 @@ class DetailViewModel @Inject constructor(
                 searchAttempted = true,
                 resources = filtered
             )
+            saveToCache()
         }
     }
 
@@ -1041,6 +1109,20 @@ class DetailViewModel @Inject constructor(
         val runtime: Int? = null,
         val releaseDate: String = ""
     )
+
+    private fun saveToCache() {
+        if (currentTraktId <= 0) return
+        detailCache[currentTraktId] = CachedDetailData(
+            uiState = _uiState.value,
+            allResources = allResources,
+            currentKeyword = currentKeyword,
+            currentOriginalTitle = currentOriginalTitle,
+            currentImdbId = currentImdbId,
+            currentTraktRating = currentTraktRating,
+            currentTmdbId = currentTmdbId,
+            currentMediaType = currentMediaType
+        )
+    }
 }
 
 /** 将 TMDB Review 转换为统一的 TraktComment 格式 */

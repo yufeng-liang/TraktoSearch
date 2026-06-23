@@ -99,7 +99,7 @@ fun DoubanHotCardSkeleton(
     val brush = rememberShimmerBrush()
     val shape = RoundedCornerShape(10.dp)
 
-    Column(modifier = modifier.width(99.dp)) {
+    Column(modifier = modifier.width(105.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()

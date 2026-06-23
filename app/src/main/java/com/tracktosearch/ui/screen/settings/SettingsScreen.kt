@@ -23,22 +23,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
@@ -71,10 +71,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.os.Build
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
@@ -82,8 +84,8 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.ChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
-import com.tracktosearch.ui.util.performHapticClick
-import dev.chrisbanes.haze.HazeProgressive
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -91,6 +93,8 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import java.text.SimpleDateFormat
 import java.util.Locale
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -166,7 +170,12 @@ fun SettingsScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = {
+            SnackbarHost(
+                hostState = snackbarHostState,
+                modifier = Modifier.padding(bottom = 80.dp) // 避免被底部导航遮挡
+            )
+        }
     ) { padding ->
         Box(
             modifier = Modifier
@@ -179,7 +188,7 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .hazeSource(state = settingsHazeState),
                 contentPadding = PaddingValues(
-                    top = 56.dp + statusBarHeight,
+                    top = 65.dp + statusBarHeight,
                     bottom = 80.dp
                 )
         ) {
@@ -257,11 +266,28 @@ fun SettingsScreen(
                 item { SettingsSectionHeader(stringResource(R.string.settings_notification)) }
                 item {
                     val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    val context = LocalContext.current
+                    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+                        contract = ActivityResultContracts.RequestPermission()
+                    ) { granted ->
+                        if (!granted) {
+                            viewModel.setNotificationEnabled(false)
+                        }
+                    }
                     SwitchSettingsItem(
                         title = stringResource(R.string.settings_notification_enabled),
                         subtitle = stringResource(R.string.settings_notification_enabled_desc),
                         checked = notificationEnabled,
-                        onCheckedChange = { viewModel.setNotificationEnabled(it) }
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                                viewModel.setNotificationEnabled(true)
+                            } else {
+                                viewModel.setNotificationEnabled(false)
+                            }
+                        }
                     )
                 }
                 item {
@@ -430,12 +456,7 @@ fun SettingsScreen(
                     .hazeEffect(
                         state = settingsHazeState,
                         style = HazeMaterials.thin()
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f
-                        )
-                    }
+                    )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -624,7 +645,7 @@ fun SettingsItem(
         if (onClick != null) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.Default.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -639,6 +660,7 @@ fun SearchSourceItem(
     onCheckedChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -652,7 +674,7 @@ fun SearchSourceItem(
         )
         Switch(
             checked = checked,
-            onCheckedChange = { context.performHapticClick(); onCheckedChange(it) }
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) }
         )
     }
 }
@@ -819,16 +841,17 @@ private fun LanguageOptionRow(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { context.performHapticClick(); onClick() }
+            .clickable { view.performHaptic(HapticType.TICK); onClick() }
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         RadioButton(
             selected = selected,
-            onClick = { context.performHapticClick(); onClick() }
+            onClick = { view.performHaptic(HapticType.TICK); onClick() }
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(label)
@@ -845,6 +868,7 @@ fun VersionItem(
     onCheckUpdate: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -890,7 +914,7 @@ fun VersionItem(
                 )
             } else {
                 OutlinedButton(
-                    onClick = { context.performHapticClick(); onCheckUpdate() },
+                    onClick = { view.performHaptic(HapticType.CLICK); onCheckUpdate() },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
                     Text(stringResource(R.string.settings_check_update))
@@ -942,6 +966,7 @@ fun CacheItem(
 @Composable
 fun LogoutItem(onClick: () -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -949,7 +974,7 @@ fun LogoutItem(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Logout,
+            imageVector = Icons.AutoMirrored.Filled.Logout,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -960,7 +985,7 @@ fun LogoutItem(onClick: () -> Unit) {
             modifier = Modifier.weight(1f)
         )
         Button(
-            onClick = { context.performHapticClick(); onClick() },
+            onClick = { view.performHaptic(HapticType.HEAVY_CLICK); onClick() },
             colors = ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
@@ -1026,34 +1051,61 @@ fun ChangelogDialog(
     )
 }
 
-/** 发现页栏目设置对话框：显示/隐藏开关 + 上移/下移排序 */
+/** 发现页栏目设置对话框：显示/隐藏开关 + 拖动排序 */
 @Composable
 fun DiscoverSectionsDialog(
     viewModel: SettingsViewModel,
     onDismiss: () -> Unit
 ) {
     val sections by viewModel.discoverSections.collectAsState()
+    var reorderedSections by remember { mutableStateOf(sections) }
+
+    LaunchedEffect(sections) {
+        reorderedSections = sections
+    }
+
+    val lazyListState = rememberLazyListState()
+    val reorderableLazyListState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        reorderedSections = reorderedSections.toMutableList().apply {
+            add(to.index, removeAt(from.index))
+        }
+        viewModel.setSectionOrder(reorderedSections.map { it.id })
+        true
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_discover_sections)) },
+        title = {
+            Column {
+                Text(stringResource(R.string.settings_discover_sections))
+                Text(
+                    text = stringResource(R.string.settings_discover_sections_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+        },
         text = {
-            Column(
+            LazyColumn(
+                state = lazyListState,
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 500.dp)
-                    .verticalScroll(rememberScrollState())
             ) {
-                sections.forEachIndexed { index, section ->
-                    DiscoverSectionRow(
-                        name = getSectionDisplayName(section.id),
-                        visible = section.visible,
-                        isFirst = index == 0,
-                        isLast = index == sections.size - 1,
-                        onToggle = { viewModel.setSectionVisible(section.id, it) },
-                        onMoveUp = { viewModel.moveSectionUp(section.id) },
-                        onMoveDown = { viewModel.moveSectionDown(section.id) }
-                    )
+                items(reorderedSections, key = { it.id }) { section ->
+                    ReorderableItem(
+                        state = reorderableLazyListState,
+                        key = section.id
+                    ) { isDragging ->
+                        DiscoverSectionRow(
+                            name = getSectionDisplayName(section.id),
+                            visible = section.visible,
+                            onToggle = { viewModel.setSectionVisible(section.id, it) },
+                            dragHandleModifier = Modifier.draggableHandle(),
+                            isDragging = isDragging
+                        )
+                    }
                 }
             }
         },
@@ -1069,16 +1121,20 @@ fun DiscoverSectionsDialog(
 private fun DiscoverSectionRow(
     name: String,
     visible: Boolean,
-    isFirst: Boolean,
-    isLast: Boolean,
     onToggle: (Boolean) -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit
+    dragHandleModifier: Modifier,
+    isDragging: Boolean
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 8.dp)
+            .background(
+                color = if (isDragging) MaterialTheme.colorScheme.surfaceVariant
+                else MaterialTheme.colorScheme.surface,
+                shape = MaterialTheme.shapes.medium
+            )
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -1086,22 +1142,12 @@ private fun DiscoverSectionRow(
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = onMoveUp, enabled = !isFirst) {
-            Icon(
-                imageVector = Icons.Default.ArrowUpward,
-                contentDescription = null,
-                tint = if (!isFirst) MaterialTheme.colorScheme.onSurfaceVariant
-                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-            )
-        }
-        IconButton(onClick = onMoveDown, enabled = !isLast) {
-            Icon(
-                imageVector = Icons.Default.ArrowDownward,
-                contentDescription = null,
-                tint = if (!isLast) MaterialTheme.colorScheme.onSurfaceVariant
-                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-            )
-        }
+        Icon(
+            imageVector = Icons.Default.DragIndicator,
+            contentDescription = stringResource(R.string.settings_drag_to_reorder),
+            modifier = dragHandleModifier.padding(8.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Switch(
             checked = visible,
             onCheckedChange = onToggle
@@ -1134,6 +1180,7 @@ fun CustomSearchSourceItem(
     onTest: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1167,7 +1214,7 @@ fun CustomSearchSourceItem(
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
             }
-            Switch(checked = source.enabled, onCheckedChange = { context.performHapticClick(); onToggle(it) })
+            Switch(checked = source.enabled, onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) })
         }
         // 测试结果
         testResult?.message?.let { msg ->
@@ -1194,6 +1241,7 @@ fun CustomSourceEditDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     var name by remember { mutableStateOf(source.name) }
     var baseUrl by remember { mutableStateOf(source.baseUrl) }
     var apiPath by remember { mutableStateOf(source.apiPath) }
@@ -1294,11 +1342,11 @@ fun CustomSourceEditDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable { context.performHapticClick(); parseMode = mode }
+                                .clickable { view.performHaptic(HapticType.TICK); parseMode = mode }
                         ) {
                             RadioButton(
                                 selected = parseMode == mode,
-                                onClick = { context.performHapticClick(); parseMode = mode }
+                                onClick = { view.performHaptic(HapticType.TICK); parseMode = mode }
                             )
                             Text(label, style = MaterialTheme.typography.bodySmall)
                         }

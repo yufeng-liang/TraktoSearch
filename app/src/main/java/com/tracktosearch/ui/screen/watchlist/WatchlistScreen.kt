@@ -29,7 +29,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.buildAnnotatedString
@@ -40,16 +41,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
+
 import com.tracktosearch.R
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.util.performHapticClick
-import dev.chrisbanes.haze.HazeProgressive
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -64,8 +64,8 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun WatchlistScreen(
-    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
     onOpenWebView: (url: String) -> Unit,
     onStatisticsClick: () -> Unit,
@@ -86,18 +86,14 @@ fun WatchlistScreen(
         viewModel.loadShows()
     }
     // 从外置浏览器（如"去 Trakt 添加想看的"）返回时，自动刷新列表
-    val lifecycleOwner = LocalLifecycleOwner.current
     var hasResumedOnce by remember { mutableStateOf(false) }
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && hasResumedOnce) {
-                viewModel.refreshIfLoaded(silent = true)
-            } else if (event == Lifecycle.Event.ON_RESUME) {
-                hasResumedOnce = true
-            }
+    LifecycleResumeEffect(hasResumedOnce) {
+        if (hasResumedOnce) {
+            viewModel.refreshIfLoaded(silent = true)
+        } else {
+            hasResumedOnce = true
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        onPauseOrDispose { /* no-op */ }
     }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -169,7 +165,7 @@ fun WatchlistScreen(
             Column(
                 modifier = modifier
                     .fillMaxSize()
-                    .padding(top = 56.dp + statusBarHeight)
+                    .padding(top = 65.dp + statusBarHeight)
             ) {
 
                 // TMDB 不可用提示
@@ -202,10 +198,10 @@ fun WatchlistScreen(
 
             // 想看 / 已看 模式切换
             SingleChoiceSegmentedButtonRow(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 4.dp)
-            ) {
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp)
+                ) {
                 SegmentedButton(
                     selected = selectedMode == 0,
                     onClick = { selectedMode = 0 },
@@ -254,7 +250,7 @@ fun WatchlistScreen(
                                 totalItems = uiState.historyMovies.size,
                                 searchQuery = searchQuery,
                                 error = uiState.historyMoviesError,
-                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating, false, true) },
                                 onRetry = { viewModel.loadHistoryMovies(forceReload = true) },
                                 onOpenTrakt = null,
                                 onTraktSearch = null,
@@ -269,7 +265,7 @@ fun WatchlistScreen(
                                 totalItems = uiState.movies.size,
                                 searchQuery = searchQuery,
                                 error = uiState.moviesError,
-                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onItemClick = { onMovieClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating, true, false) },
                                 onRetry = { viewModel.loadMovies(forceReload = true) },
                                 onOpenTrakt = openTraktExternal,
                                 onTraktSearch = { query -> onTraktSearch("movie", query) },
@@ -285,7 +281,7 @@ fun WatchlistScreen(
                                 totalItems = uiState.historyShows.size,
                                 searchQuery = searchQuery,
                                 error = uiState.historyShowsError,
-                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating, false, true) },
                                 onRetry = { viewModel.loadHistoryShows(forceReload = true) },
                                 onOpenTrakt = null,
                                 onTraktSearch = null,
@@ -300,7 +296,7 @@ fun WatchlistScreen(
                                 totalItems = uiState.shows.size,
                                 searchQuery = searchQuery,
                                 error = uiState.showsError,
-                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating) },
+                                onItemClick = { onShowClick(it.traktId, it.tmdbId, it.title, it.imdbId, it.traktRating, true, false) },
                                 onRetry = { viewModel.loadShows(forceReload = true) },
                                 onOpenTrakt = openTraktExternal,
                                 onTraktSearch = { query -> onTraktSearch("show", query) },
@@ -318,12 +314,7 @@ fun WatchlistScreen(
                     .hazeEffect(
                         state = hazeState,
                         style = HazeMaterials.thin()
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f
-                        )
-                    }
+                    )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -510,6 +501,7 @@ private fun MovieGrid(
     hazeState: HazeState
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
@@ -528,7 +520,7 @@ private fun MovieGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { context.performHapticClick(); onItemClick(item) },
+                    onClick = { view.performHaptic(HapticType.CLICK); onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)
@@ -553,6 +545,7 @@ private fun ShowGrid(
     hazeState: HazeState
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
@@ -571,7 +564,7 @@ private fun ShowGrid(
                     genres = item.genres,
                     posterUrl = item.posterUrl,
                     tmdbId = item.tmdbId,
-                    onClick = { context.performHapticClick(); onItemClick(item) },
+                    onClick = { view.performHaptic(HapticType.CLICK); onItemClick(item) },
                     modifier = Modifier.animateItem(
                         fadeInSpec = tween(300),
                         placementSpec = tween(300)

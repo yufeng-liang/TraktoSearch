@@ -42,7 +42,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import dev.chrisbanes.haze.HazeProgressive
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -76,7 +75,7 @@ fun WebViewScreen(
         ) {
             // 占位：状态栏 + TopAppBar 高度，让 WebView 内容从下方开始
             // 但保留 source 覆盖状态栏区域，使标题栏模糊能包含状态栏
-            Spacer(modifier = Modifier.height(56.dp + statusBarHeight))
+            Spacer(modifier = Modifier.height(65.dp + statusBarHeight))
 
             // 加载进度条
             if (loadProgress < 1f) {
@@ -137,12 +136,7 @@ fun WebViewScreen(
                 .hazeEffect(
                     state = webViewHazeState,
                     style = HazeMaterials.thin()
-                ) {
-                    progressive = HazeProgressive.verticalGradient(
-                        startIntensity = 1f,
-                        endIntensity = 0f
-                    )
-                }
+                )
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())

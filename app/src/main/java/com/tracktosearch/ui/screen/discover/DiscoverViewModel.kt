@@ -22,8 +22,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @Immutable
@@ -73,12 +75,13 @@ class DiscoverViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
 
-    // 发现页栏目配置（显示/隐藏 + 排序）
-    private val defaultSectionConfigs = DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
-        DiscoverSectionConfig(id = id, visible = true, order = index)
-    }
+    // 发现页栏目配置（显示/隐藏 + 排序），同步读取已保存顺序作为初始值，避免首帧跳动
     val sectionConfigs: StateFlow<List<DiscoverSectionConfig>> = discoverSectionStorage.sectionConfigs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultSectionConfigs)
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            runBlocking { discoverSectionStorage.sectionConfigs.first() }
+        )
 
     companion object {
         private const val TTL_DOUBAN = 60 * 60 * 1000L // 豆瓣热榜 1 小时

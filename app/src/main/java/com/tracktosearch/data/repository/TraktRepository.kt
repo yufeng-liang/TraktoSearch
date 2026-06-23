@@ -577,11 +577,13 @@ class TraktRepository @Inject constructor(
     }
 
     /** Trakt 文本搜索（电影） */
-    suspend fun searchMovies(query: String, limit: Int = 20): Result<List<TraktSearchResult>> {
+    suspend fun searchMovies(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
         return try {
-            val response = traktApiService.searchMovies(query, limit)
+            val response = traktApiService.searchMovies(query, limit, page)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val items = response.body() ?: emptyList()
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
+                Result.success(Pair(items, totalCount))
             } else {
                 Result.failure(Exception("Failed to search movies: ${response.code()}"))
             }
@@ -591,11 +593,13 @@ class TraktRepository @Inject constructor(
     }
 
     /** Trakt 文本搜索（电视剧） */
-    suspend fun searchShows(query: String, limit: Int = 20): Result<List<TraktSearchResult>> {
+    suspend fun searchShows(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
         return try {
-            val response = traktApiService.searchShows(query, limit)
+            val response = traktApiService.searchShows(query, limit, page)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val items = response.body() ?: emptyList()
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
+                Result.success(Pair(items, totalCount))
             } else {
                 Result.failure(Exception("Failed to search shows: ${response.code()}"))
             }

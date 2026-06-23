@@ -95,6 +95,7 @@
     <string name="settings_already_latest">最新です v%1$s</string>
     <string name="settings_discover_sections">発見セクション</string>
     <string name="settings_discover_sections_desc">発見ページのセクション表示と並び順</string>
+    <string name="settings_drag_to_reorder">ドラッグで並び替え</string>
     <string name="settings_logout_button">ログアウト</string>
 
     <!-- Data Management -->
@@ -404,4 +405,5 @@
     <string name="genre_biography">伝記</string>
     <string name="genre_noir">フィルムノワール</string>
     <string name="genre_game_show">ゲーム番組</string>
+    <string name="genre_other">その他</string>
 </resources>

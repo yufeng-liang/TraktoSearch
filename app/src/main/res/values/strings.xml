@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
+    <string name="splash_slogan">Discover · Track · Search</string>
 
     <!-- Main Screen -->
     <string name="tab_search">Search</string>
@@ -63,6 +64,12 @@
     <string name="trakt_search_hint_shows">Search TV shows on Trakt</string>
     <string name="trakt_search_no_movies">No movies found on Trakt</string>
     <string name="trakt_search_no_shows">No TV shows found on Trakt</string>
+    <string name="trakt_search_result_count_movies">%d movies found</string>
+    <string name="trakt_search_result_count_shows">%d TV shows found</string>
+    <string name="trakt_search_tab_movies">Movies</string>
+    <string name="trakt_search_tab_shows">TV Shows</string>
+    <string name="trakt_search_tab_movies_count">Movies (%d)</string>
+    <string name="trakt_search_tab_shows_count">TV Shows (%d)</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">Back</string>
@@ -145,6 +152,9 @@
     <string name="detail_comments">Comments</string>
     <string name="detail_no_comments">No comments yet</string>
     <string name="detail_seasons">Seasons</string>
+    <string name="detail_seasons_count">(%1$d seasons)</string>
+    <string name="detail_seasons_show_all">Show all %1$d seasons</string>
+    <string name="detail_seasons_collapse">Collapse</string>
     <string name="detail_season">Season %1$d</string>
     <string name="detail_episode_count">%1$d episodes</string>
     <string name="detail_episode">E%1$d %2$s</string>
@@ -181,6 +191,11 @@
     <string name="detail_specials">Specials</string>
     <string name="detail_actor">Actor</string>
     <string name="detail_your_rating">Your Rating</string>
+    <string name="detail_rating_dialog_title">Rate</string>
+    <string name="detail_rating_confirm">Confirm</string>
+    <string name="detail_rating_cancel">Cancel</string>
+    <string name="detail_rating_no_rating">Not rated</string>
+    <string name="detail_rating_hint">Tap left/right of a star for half/full point. Tap again to clear.</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
@@ -226,6 +241,8 @@
     <string name="settings_already_latest">Already up to date v%1$s</string>
     <string name="settings_discover_sections">Discover Sections</string>
     <string name="settings_discover_sections_desc">Toggle visibility and reorder discover sections</string>
+    <string name="settings_discover_sections_hint">Drag to reorder, toggle to show/hide</string>
+    <string name="settings_drag_to_reorder">Drag to reorder</string>
     <string name="settings_logout_button">Logout</string>
 
     <!-- Data Management -->
@@ -294,6 +311,7 @@
     <string name="search_filter_movie">Movie</string>
     <string name="search_filter_show">TV Show</string>
     <string name="search_view_all">View all</string>
+    <string name="search_view_all_count">View all (%d)</string>
 
     <!-- Statistics -->
     <string name="statistics_pie_hint">Tap a slice to see details</string>
@@ -354,7 +372,7 @@
     <string name="discover_douban_weekly">Weekly Best</string>
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_us_box">US Box Office</string>
-    <string name="discover_view_all">All (%d) ></string>
+    <string name="discover_view_all">View all (%d)</string>
 
     <!-- Genre Names -->
     <string name="genre_action">Action</string>
@@ -388,4 +406,5 @@
     <string name="genre_biography">Biography</string>
     <string name="genre_noir">Film Noir</string>
     <string name="genre_game_show">Game Show</string>
+    <string name="genre_other">Other</string>
 </resources>

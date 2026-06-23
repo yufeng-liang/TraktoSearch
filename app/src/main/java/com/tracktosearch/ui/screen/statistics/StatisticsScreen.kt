@@ -47,8 +47,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tracktosearch.R
-import com.tracktosearch.ui.util.performHapticClick
-import dev.chrisbanes.haze.HazeProgressive
+import androidx.compose.ui.platform.LocalView
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -118,7 +119,7 @@ fun StatisticsScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 56.dp + statusBarHeight,
+                        top = 65.dp + statusBarHeight,
                         bottom = 16.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -181,12 +182,7 @@ fun StatisticsScreen(
                     .hazeEffect(
                         state = statsHazeState,
                         style = HazeMaterials.thin()
-                    ) {
-                        progressive = HazeProgressive.verticalGradient(
-                            startIntensity = 1f,
-                            endIntensity = 0f
-                        )
-                    }
+                    )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -461,6 +457,7 @@ private fun localizedGenreName(genre: String): String = when (genre) {
     "biography" -> stringResource(R.string.genre_biography)
     "film-noir", "film_noir", "noir" -> stringResource(R.string.genre_noir)
     "game-show", "game_show" -> stringResource(R.string.genre_game_show)
+    "other" -> stringResource(R.string.genre_other)
     else -> genre.replaceFirstChar { it.uppercase() }
 }
 
@@ -468,10 +465,18 @@ private fun localizedGenreName(genre: String): String = when (genre) {
 @Composable
 private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolean = true) {
     val context = LocalContext.current
+    val view = LocalView.current
     val totalCount = genreDistribution.values.sum()
     if (totalCount == 0) return
 
-    val entries = genreDistribution.entries.sortedByDescending { it.value }.take(10)
+    val sortedEntries = genreDistribution.entries.sortedByDescending { it.value }
+    val entries = if (sortedEntries.size > 10) {
+        val top9 = sortedEntries.take(9)
+        val otherCount = sortedEntries.drop(9).sumOf { it.value }
+        top9 + listOf(java.util.AbstractMap.SimpleEntry("other", otherCount))
+    } else {
+        sortedEntries
+    }
     val colors = listOf(
         Color(0xFF6750A4), Color(0xFF625B71), Color(0xFF7D5260), Color(0xFF2196F3),
         Color(0xFF4CAF50), Color(0xFFFF9800), Color(0xFF9C27B0), Color(0xFF00BCD4),
@@ -597,7 +602,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { context.performHapticClick(); selectedIndex = if (selectedIndex == index) -1 else index },
+                            .clickable { view.performHaptic(HapticType.CLICK); selectedIndex = if (selectedIndex == index) -1 else index },
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -707,6 +712,7 @@ private fun GenreRanking(genreDistribution: Map<String, Int>, isVisible: Boolean
 @Composable
 private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = true) {
     val context = LocalContext.current
+    val view = LocalView.current
     // 翻页偏移：0 = 最近13周，每次 -13 往前翻一页
     var weekOffset by remember { mutableStateOf(0) }
 
@@ -853,7 +859,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                             if (weekIdx in weeks.indices && dayIdx in 0 until 7) {
                                 val cell = weeks[weekIdx][dayIdx]
                                 if (!cell.isFuture) {
-                                    context.performHapticClick()
+                                    view.performHaptic(HapticType.CLICK)
                                     selectedCell = cell
                                 }
                             }

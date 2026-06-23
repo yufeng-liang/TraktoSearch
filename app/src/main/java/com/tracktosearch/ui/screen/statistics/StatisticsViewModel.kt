@@ -7,6 +7,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,19 +69,22 @@ class StatisticsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
         loadJob = viewModelScope.launch {
             try {
-                val movieResult = traktRepository.getAllMovieHistory()
-                val showResult = traktRepository.getAllShowHistory()
-                val watchedShowsResult = traktRepository.getWatchedShowsWithEpisodes()
+                // 三个 API 并行请求，耗时取决于最慢的那个
+                val movieDeferred = async { traktRepository.getAllMovieHistory() }
+                val showDeferred = async { traktRepository.getAllShowHistory() }
+                val watchedShowsDeferred = async { traktRepository.getWatchedShowsWithEpisodes() }
 
-                val movies = movieResult.getOrElse {
+                val results = awaitAll(movieDeferred, showDeferred, watchedShowsDeferred)
+
+                val movies = (results[0] as Result<List<TraktWatchlistMovieItem>>).getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
                     return@launch
                 }
-                val shows = showResult.getOrElse {
+                val shows = (results[1] as Result<List<TraktWatchlistShowItem>>).getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
                     return@launch
                 }
-                val watchedShows = watchedShowsResult.getOrElse {
+                val watchedShows = (results[2] as Result<List<com.tracktosearch.data.remote.trakt.dto.TraktWatchedShow>>).getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
                     return@launch
                 }

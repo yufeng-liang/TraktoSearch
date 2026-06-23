@@ -122,13 +122,15 @@ interface TraktApiService {
     @GET("search/movie")
     suspend fun searchMovies(
         @Query("query") query: String,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("page") page: Int = 1
     ): Response<List<TraktSearchResult>>
 
     @GET("search/show")
     suspend fun searchShows(
         @Query("query") query: String,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("page") page: Int = 1
     ): Response<List<TraktSearchResult>>
 
     @GET("recommendations/movies")

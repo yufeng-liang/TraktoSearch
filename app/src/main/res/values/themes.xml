@@ -5,4 +5,7 @@
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+
+    <!-- Android 12 以下的启动页主题：直接使用 App 主题，不显示系统 splash -->
+    <style name="Theme.App.Starting" parent="Theme.TraktToSearch" />
 </resources>

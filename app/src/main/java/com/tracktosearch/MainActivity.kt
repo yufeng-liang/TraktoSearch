@@ -8,9 +8,10 @@ import com.tracktosearch.ui.util.showToast
 import android.widget.Toast
 import android.app.AlertDialog
 import android.content.DialogInterface
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.SystemBarStyle
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
@@ -18,11 +19,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,9 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,10 +54,12 @@ import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.theme.TraktToSearchTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -66,6 +76,10 @@ object OAuthCallback {
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val MIN_SPLASH_DURATION_MS = 1500L
+    }
+
     @Inject
     lateinit var tokenStorage: TokenStorage
 
@@ -79,6 +93,12 @@ class MainActivity : AppCompatActivity() {
     lateinit var languageStorage: LanguageStorage
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashStartTime = System.currentTimeMillis()
+        // 安装 SplashScreen，处理系统默认启动页到自定义 splash 的平滑过渡
+        val splashScreen = installSplashScreen()
+        // 让系统 splash 保持显示直到自定义 splash 渲染完成，避免切换闪烁
+        var keepSplashOnScreen = true
+        splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -92,6 +112,11 @@ class MainActivity : AppCompatActivity() {
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
         }
 
         var isReady by mutableStateOf(false)
@@ -111,7 +136,15 @@ class MainActivity : AppCompatActivity() {
             val language = languageStorage.language.first()
             applyLanguage(language)
 
+            // 确保自定义 splash 最短显示时长，品牌展示充分
+            val elapsed = System.currentTimeMillis() - splashStartTime
+            if (elapsed < MIN_SPLASH_DURATION_MS) {
+                delay(MIN_SPLASH_DURATION_MS - elapsed)
+            }
+
             isReady = true
+            // 自定义 splash 已渲染完成，解除系统 splash 的保持状态
+            keepSplashOnScreen = false
         }
 
         handleIntent(intent)
@@ -141,45 +174,103 @@ class MainActivity : AppCompatActivity() {
                         }
                     )
                 } else {
-                    // 自定义开屏页
-                    val context = LocalContext.current
-                    val launcherBitmap = remember {
-                        android.graphics.BitmapFactory.decodeResource(
-                            context.resources, R.mipmap.ic_launcher
-                        )?.asImageBitmap()
-                    }
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
+                    // 自定义开屏页（方案A：渐变背景 + 居中品牌展示）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(Color(0xFF4B88E6), Color(0xFF6C63FF)),
+                                    start = Offset.Zero,
+                                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                                )
+                            )
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(bottom = 80.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Bottom
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            if (launcherBitmap != null) {
-                                Image(
-                                    bitmap = launcherBitmap,
-                                    contentDescription = "App Icon",
+                            // 半透明毛玻璃底衬
+                            Box(
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(Color.White.copy(alpha = 0.2f))
+                                    .then(
+                                        Modifier.background(
+                                            Color.White.copy(alpha = 0.1f),
+                                            RoundedCornerShape(22.dp)
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // 白色圆角方形图标
+                                Box(
                                     modifier = Modifier
-                                        .size(96.dp)
-                                        .clip(CircleShape),
-                                    contentScale = ContentScale.Crop
-                                )
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color.White),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    val context = LocalContext.current
+                                    val launcherBitmap = remember {
+                                        android.graphics.BitmapFactory.decodeResource(
+                                            context.resources, R.mipmap.ic_launcher
+                                        )?.asImageBitmap()
+                                    }
+                                    if (launcherBitmap != null) {
+                                        Image(
+                                            bitmap = launcherBitmap,
+                                            contentDescription = "App Icon",
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(RoundedCornerShape(10.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                }
                             }
-                            Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(20.dp))
                             Text(
-                                text = "v${getAppVersion(context)}",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "TraktToSearch",
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White,
+                                letterSpacing = 0.5.sp
                             )
-                            Spacer(modifier = Modifier.height(80.dp))
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(R.string.splash_slogan),
+                                fontSize = 13.sp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
                         }
+                        // 版本号在底部
+                        Text(
+                            text = "v${getAppVersion(LocalContext.current)}",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 32.dp)
+                        )
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        JPushHelper.onResume(this)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        JPushHelper.onPause(this)
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -5,7 +5,9 @@ import android.net.Uri
 import android.graphics.Bitmap
 import android.os.Environment
 import com.tracktosearch.ui.util.showToast
-import com.tracktosearch.ui.util.performHapticClick
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -77,6 +79,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -161,6 +164,8 @@ fun DetailScreen(
     year: Int? = null,
     imdbId: String = "",
     traktRating: Double = 0.0,
+    initialInWatchlist: Boolean = false,
+    initialIsWatched: Boolean = false,
     onBack: (changed: Boolean) -> Unit = {},
     onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
@@ -170,6 +175,7 @@ fun DetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val view = LocalView.current
 
     // 拦截系统返回手势/返回键，统一走 onBack 回调以传递 watchlistChanged 状态
     BackHandler(enabled = true) {
@@ -177,7 +183,7 @@ fun DetailScreen(
     }
 
     LaunchedEffect(traktId, tmdbId, title) {
-        viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating)
+        viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating, inWatchlist = initialInWatchlist, isWatched = initialIsWatched)
     }
 
     val listState = rememberLazyListState()
@@ -244,9 +250,15 @@ fun DetailScreen(
                         isMarkedWatchlist = uiState.isMarkedWatchlist,
                         isMarkingWatchlist = uiState.isMarkingWatchlist,
                         onToggleWatchlist = { viewModel.toggleWatchlist() },
-                        onRatingClick = { viewModel.setRating(it) },
+                        onRatingSelected = { rating ->
+                            if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating)
+                        },
                         onPosterClick = { showPosterFullscreen = true },
-                        onPersonClick = onPersonClick
+                        onPersonClick = onPersonClick,
+                        onToggleSeason = { viewModel.toggleSeason(it) },
+                        onToggleEpisodeWatched = { season, episode, traktId ->
+                            viewModel.toggleEpisodeWatched(season, episode, traktId)
+                        }
                     )
                 }
 
@@ -284,23 +296,8 @@ fun DetailScreen(
                         )
                     }
 
-                    // 季/集信息（仅电视剧）
-                    if (uiState.seasons.isNotEmpty()) {
-                        item(key = "seasons_section") {
-                            SeasonsSection(
-                                seasons = uiState.seasons,
-                                episodes = uiState.episodes,
-                                expandedSeasons = uiState.expandedSeasons,
-                                watchedEpisodeNumbers = uiState.watchedEpisodeNumbers,
-                                togglingEpisode = uiState.togglingEpisode,
-                                onToggleSeason = { viewModel.toggleSeason(it) },
-                                onToggleEpisodeWatched = { season, episode, traktId ->
-                                    viewModel.toggleEpisodeWatched(season, episode, traktId)
-                                }
-                            )
-                            HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                        }
-                    }
+                    // 季/集信息（仅电视剧）— 移到简介下方
+                    // 已移至 DetailHeaderContent 中
 
                     // 资源列表
                     val items = uiState.resources
@@ -638,7 +635,7 @@ fun DetailScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
-                            context.performHapticClick()
+                            view.performHaptic(HapticType.CLICK)
                             val shareText = buildString {
                                 append(uiState.title)
                                 if (uiState.year != null) append(" (${uiState.year})")
@@ -720,7 +717,8 @@ fun DetailScreen(
                     episodes = uiState.episodes,
                     watchedEpisodeNumbers = uiState.watchedEpisodeNumbers,
                     onDismiss = { viewModel.dismissMarkWatchedDialog() },
-                    onSubmit = { selectedIds -> viewModel.submitMarkWatched(selectedIds) }
+                    onSubmit = { selectedIds -> viewModel.submitMarkWatched(selectedIds) },
+                    onLoadEpisodes = { seasonNumber -> viewModel.loadEpisodesForMarkWatched(seasonNumber) }
                 )
             }
         }
@@ -740,21 +738,24 @@ private fun DetailHeaderContent(
     isMarkedWatchlist: Boolean,
     isMarkingWatchlist: Boolean,
     onToggleWatchlist: () -> Unit,
-    onRatingClick: (Int) -> Unit,
+    onRatingSelected: (Int?) -> Unit,
     onPosterClick: () -> Unit = {},
-    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
+    onToggleSeason: (Int) -> Unit = {},
+    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
+    var showRatingDialog by remember { mutableStateOf(false) }
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Max)
-                .defaultMinSize(minHeight = 200.dp)
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // 海报（宽度随高度等比例变化，海报比例 2:3，Row最小高度保证占位符不跳动）
+            // 海报（2:3 比例，高度跟随右侧固定信息区域，宽度按比例计算不跳变）
             Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -810,125 +811,154 @@ private fun DetailHeaderContent(
             Spacer(modifier = Modifier.width(12.dp))
 
             // 标题/类型/日期/评分/标记已看
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 // 标题
-                Text(
-                    text = uiState.displayTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Box(modifier = Modifier.height(28.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(
+                        text = uiState.displayTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                if (uiState.title != uiState.displayTitle) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.detail_original_title, uiState.title),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (uiState.genres.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = uiState.genres,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                // 上映日期（详细日期，放在标题下方）
-                if (!uiState.releaseDate.isEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    val dateText = if (uiState.releaseDate.length >= 10) {
-                        "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
-                    } else {
-                        uiState.releaseDate
+                // 原名
+                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                    if (uiState.originalTitle.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.detail_original_title, uiState.originalTitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        text = dateText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else if (uiState.year != null) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "${uiState.year}年",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                }
+                // 类型
+                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                    if (uiState.genres.isNotEmpty()) {
+                        Text(
+                            text = uiState.genres,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                // 上映日期
+                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                    if (!uiState.releaseDate.isEmpty()) {
+                        val dateText = if (uiState.releaseDate.length >= 10) {
+                            "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
+                        } else {
+                            uiState.releaseDate
+                        }
+                        Text(
+                            text = dateText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    } else if (uiState.year != null) {
+                        Text(
+                            text = "${uiState.year}年",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 // 时长
-                if (uiState.runtime != null && uiState.runtime!! > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    val hours = uiState.runtime!! / 60
-                    val minutes = uiState.runtime!! % 60
-                    val runtimeText = if (hours > 0) {
-                        stringResource(R.string.detail_runtime_hours, hours, minutes)
-                    } else {
-                        stringResource(R.string.detail_runtime_minutes, minutes)
+                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
+                    if (uiState.runtime != null && uiState.runtime!! > 0) {
+                        val hours = uiState.runtime!! / 60
+                        val minutes = uiState.runtime!! % 60
+                        val runtimeText = if (hours > 0) {
+                            stringResource(R.string.detail_runtime_hours, hours, minutes)
+                        } else {
+                            stringResource(R.string.detail_runtime_minutes, minutes)
+                        }
+                        Text(
+                            text = runtimeText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
-                    Text(
-                        text = runtimeText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                // 多平台评分（固定高度区域）
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(modifier = Modifier.height(54.dp)) {
+                    if (uiState.ratings != null) {
+                        RatingsRow(uiState.ratings)
+                    } else {
+                        // 骨架占位
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.weight(1f).height(20.dp)
+                                ) {}
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.weight(1f).height(20.dp)
+                                ) {}
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.weight(1f).height(20.dp)
+                                ) {}
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.weight(1f).height(20.dp)
+                                ) {}
+                            }
+                        }
+                    }
+                }
+                // 用户评分控件
+                Box(modifier = Modifier.height(42.dp)) {
+                    UserRatingBar(
+                        userRating = uiState.userRating,
+                        isRating = uiState.isRating,
+                        isRatingLoading = uiState.isRatingLoading,
+                        onClick = { showRatingDialog = true }
                     )
                 }
-                // 多平台评分（始终预留固定高度，避免加载前后按钮位置跳动）
-                Spacer(modifier = Modifier.height(10.dp))
-                if (uiState.ratings != null) {
-                    RatingsRow(uiState.ratings)
-                } else {
-                    // 骨架占位：两行评分高度
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                            ) {}
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                            ) {}
+                if (showRatingDialog) {
+                    RatingDialog(
+                        initialRating = uiState.userRating,
+                        isSubmitting = uiState.isRating,
+                        onDismiss = { showRatingDialog = false },
+                        onConfirm = { rating ->
+                            showRatingDialog = false
+                            view.performHaptic(HapticType.HEAVY_CLICK)
+                            onRatingSelected(rating)
                         }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                            ) {}
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(20.dp)
-                            ) {}
-                        }
-                    }
+                    )
                 }
-                // 用户评分控件（评分行下方、按钮上方）
-                UserRatingBar(
-                    userRating = uiState.userRating,
-                    isRating = uiState.isRating,
-                    isRatingLoading = uiState.isRatingLoading,
-                    onRatingClick = onRatingClick
-                )
-                // 标记已看按钮 + 想看按钮（已看按钮对齐 RT 评分起点）
+                // 标记已看按钮 + 想看按钮
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // 左半区：想看按钮
@@ -938,7 +968,7 @@ private fun DetailHeaderContent(
                     ) {
                         Surface(
                             onClick = if (isMarkingWatchlist) ({}) else ({
-                                context.performHapticClick()
+                                view.performHaptic(HapticType.HEAVY_CLICK)
                                 onToggleWatchlist()
                             }),
                             enabled = !isMarkingWatchlist,
@@ -996,7 +1026,7 @@ private fun DetailHeaderContent(
                     ) {
                         Surface(
                             onClick = if (isMarkingWatched) ({}) else ({
-                                context.performHapticClick()
+                                view.performHaptic(HapticType.HEAVY_CLICK)
                                 onToggleWatched()
                             }),
                             enabled = !isMarkingWatched,
@@ -1133,6 +1163,19 @@ private fun DetailHeaderContent(
                 ExpandableText(text = uiState.overview)
             }
         }
+
+        // 季/集信息（仅电视剧，放在简介下方）
+        if (uiState.seasons.isNotEmpty()) {
+            SeasonsSection(
+                seasons = uiState.seasons,
+                episodes = uiState.episodes,
+                expandedSeasons = uiState.expandedSeasons,
+                watchedEpisodeNumbers = uiState.watchedEpisodeNumbers,
+                togglingEpisode = uiState.togglingEpisode,
+                onToggleSeason = onToggleSeason,
+                onToggleEpisodeWatched = onToggleEpisodeWatched
+            )
+        }
     }
 }
 
@@ -1261,14 +1304,20 @@ private fun UserRatingBar(
     userRating: Int?,
     isRating: Boolean,
     isRatingLoading: Boolean,
-    onRatingClick: (Int) -> Unit
+    onClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
     Row(
-        modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
+        modifier = Modifier
+            .padding(top = 8.dp, bottom = 14.dp)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                enabled = !isRating && !isRatingLoading,
+                onClick = onClick
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -1303,39 +1352,192 @@ private fun UserRatingBar(
                         userRating != null && userRating >= halfValue -> "half"
                         else -> "empty"
                     }
-                    Box(
-                        modifier = Modifier
-                            .size(22.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                enabled = !isRating,
-                                onClick = {
-                                    context.performHapticClick()
-                                    onRatingClick(if (userRating == fullValue) halfValue else fullValue)
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = when (starType) {
-                                "full" -> Icons.Filled.Star
-                                "half" -> Icons.Filled.StarHalf
-                                else -> Icons.Filled.StarBorder
-                            },
-                            contentDescription = null,
-                            modifier = Modifier.size(22.dp),
-                            tint = when (starType) {
-                                "full" -> starColor
-                                "half" -> starColor
-                                else -> emptyColor
-                            }
-                        )
-                    }
+                    Icon(
+                        imageVector = when (starType) {
+                            "full" -> Icons.Filled.Star
+                            "half" -> Icons.Filled.StarHalf
+                            else -> Icons.Filled.StarBorder
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(22.dp),
+                        tint = when (starType) {
+                            "full" -> starColor
+                            "half" -> starColor
+                            else -> emptyColor
+                        }
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun RatingDialog(
+    initialRating: Int?,
+    isSubmitting: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (Int?) -> Unit
+) {
+    var selectedRating by remember(initialRating) { mutableIntStateOf(initialRating ?: 0) }
+    val starColor = Color(0xFFFFC107)
+    val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+
+    AlertDialog(
+        onDismissRequest = { if (!isSubmitting) onDismiss() },
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = RoundedCornerShape(24.dp),
+        title = null,
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 0.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                // 标题
+                Text(
+                    text = stringResource(R.string.detail_rating_dialog_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                // 大号评分数字
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = if (selectedRating > 0) "$selectedRating" else "-",
+                        style = MaterialTheme.typography.displaySmall.copy(
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "/10",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
+                // 5 颗星，每颗分左右两半
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (i in 1..5) {
+                        val fullValue = i * 2
+                        val halfValue = i * 2 - 1
+                        val starType = when {
+                            selectedRating >= fullValue -> "full"
+                            selectedRating >= halfValue -> "half"
+                            else -> "empty"
+                        }
+                        Box(
+                            modifier = Modifier.size(36.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = when (starType) {
+                                    "full" -> Icons.Filled.Star
+                                    "half" -> Icons.Filled.StarHalf
+                                    else -> Icons.Filled.StarBorder
+                                },
+                                contentDescription = null,
+                                modifier = Modifier.size(36.dp),
+                                tint = if (starType == "empty") emptyColor else starColor
+                            )
+                            Row(modifier = Modifier.fillMaxSize()) {
+                                // 左半边：半星，再次点击已选的半星取消评分
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = !isSubmitting,
+                                            onClick = {
+                                                selectedRating = if (selectedRating == halfValue) 0 else halfValue
+                                            }
+                                        )
+                                )
+                                // 右半边：整星，再次点击已选的整星取消评分
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxHeight()
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = !isSubmitting,
+                                            onClick = {
+                                                selectedRating = if (selectedRating == fullValue) 0 else fullValue
+                                            }
+                                        )
+                                )
+                            }
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                // 评分说明
+                Text(
+                    text = stringResource(R.string.detail_rating_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                // 圆角按钮行
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 取消按钮
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                            .clickable(enabled = !isSubmitting) { onDismiss() }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.detail_rating_cancel),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    // 确定按钮
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                            .clickable(enabled = !isSubmitting) { onConfirm(if (selectedRating > 0) selectedRating else null) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSubmitting) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Text(
+                                text = stringResource(R.string.detail_rating_confirm),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {}
+    )
 }
 
 // ==================== 演职员 ====================
@@ -1380,7 +1582,7 @@ private fun CrewSection(
             contentPadding = PaddingValues(end = 16.dp)
         ) {
             // 导演
-            items(directors, key = { "director_${it.id}" }) { person ->
+            itemsIndexed(directors, key = { index, person -> "director_${person.id}_$index" }) { _, person ->
                 val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
@@ -1391,7 +1593,7 @@ private fun CrewSection(
                 )
             }
             // 演员
-            items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
+            itemsIndexed(cast, key = { index, person -> "cast_${person.id}_${person.character}_$index" }) { _, person ->
                 val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
@@ -1402,7 +1604,7 @@ private fun CrewSection(
                 )
             }
             // 编剧
-            items(writers, key = { "writer_${it.id}" }) { person ->
+            itemsIndexed(writers, key = { index, person -> "writer_${person.id}_$index" }) { _, person ->
                 val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
@@ -1413,7 +1615,7 @@ private fun CrewSection(
                 )
             }
             // 制片人
-            items(producers, key = { "producer_${it.id}" }) { person ->
+            itemsIndexed(producers, key = { index, person -> "producer_${person.id}_$index" }) { _, person ->
                 val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                 CastCard(
                     name = person.name,
@@ -1567,7 +1769,7 @@ private fun FullCastCrewSheet(
                 // 导演
                 if (directors.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_director_tag)} (${directors.size})") }
-                    items(directors, key = { "director_${it.id}" }) { person ->
+                    itemsIndexed(directors, key = { index, person -> "director_${person.id}_$index" }) { _, person ->
                         val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
@@ -1582,7 +1784,7 @@ private fun FullCastCrewSheet(
                 // 演员
                 if (cast.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_actor)} (${cast.size})") }
-                    items(cast, key = { "cast_${it.id}_${it.character}" }) { person ->
+                    itemsIndexed(cast, key = { index, person -> "cast_${person.id}_${person.character}_$index" }) { _, person ->
                         val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
@@ -1597,7 +1799,7 @@ private fun FullCastCrewSheet(
                 // 编剧
                 if (writers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_writer_tag)} (${writers.size})") }
-                    items(writers, key = { "writer_${it.id}" }) { person ->
+                    itemsIndexed(writers, key = { index, person -> "writer_${person.id}_$index" }) { _, person ->
                         val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
@@ -1612,7 +1814,7 @@ private fun FullCastCrewSheet(
                 // 制片人
                 if (producers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_producer_tag)} (${producers.size})") }
-                    items(producers, key = { "producer_${it.id}" }) { person ->
+                    itemsIndexed(producers, key = { index, person -> "producer_${person.id}_$index" }) { _, person ->
                         val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                         FullCastItem(
                             name = person.name,
@@ -1640,12 +1842,9 @@ private fun SectionHeader(title: String) {
     )
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
     val context = LocalContext.current
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1658,18 +1857,6 @@ private fun FullCastItem(name: String, originalName: String, role: String, profi
             modifier = Modifier.size(width = 72.dp, height = 100.dp)
         ) {
             if (profileUrl != null) {
-                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier
-                            .sharedElement(
-                                rememberSharedContentState(key = "person-avatar-$personId"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                            .fillMaxSize()
-                    }
-                } else {
-                    Modifier.fillMaxSize()
-                }
                 SubcomposeAsyncImage(
                     model = remember(profileUrl) {
                         ImageRequest.Builder(context)
@@ -1680,7 +1867,7 @@ private fun FullCastItem(name: String, originalName: String, role: String, profi
                     },
                     contentDescription = name,
                     contentScale = ContentScale.Crop,
-                    modifier = imageModifier,
+                    modifier = Modifier.fillMaxSize(),
                     loading = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -1763,6 +1950,7 @@ private fun FilterSection(
     onToggleDiskType: (DiskType) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
 
@@ -1794,7 +1982,7 @@ private fun FilterSection(
                     }
                     FilterChip(
                         selected = source in enabledSources,
-                        onClick = { context.performHapticClick(); onToggleSource(source) },
+                        onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -1835,7 +2023,7 @@ private fun FilterSection(
                     }
                     FilterChip(
                         selected = type in enabledDiskTypes,
-                        onClick = { context.performHapticClick(); onToggleDiskType(type) },
+                        onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
                     )
@@ -1854,7 +2042,8 @@ private fun MarkWatchedDialog(
     episodes: Map<Int, List<TraktEpisode>>,
     watchedEpisodeNumbers: Map<Int, Set<Int>>,
     onDismiss: () -> Unit,
-    onSubmit: (List<Int>) -> Unit
+    onSubmit: (List<Int>) -> Unit,
+    onLoadEpisodes: (Int) -> Unit
 ) {
     // 已勾选的集：季号 -> 已勾选集号集合
     val selectedEpisodes = remember {
@@ -1869,10 +2058,15 @@ private fun MarkWatchedDialog(
     val expandedSeasons = remember { mutableStateOf(setOf<Int>()) }
 
     val toggleSeasonExpand: (Int) -> Unit = { seasonNumber ->
-        expandedSeasons.value = if (seasonNumber in expandedSeasons.value) {
-            expandedSeasons.value - seasonNumber
-        } else {
+        val isExpanding = seasonNumber !in expandedSeasons.value
+        expandedSeasons.value = if (isExpanding) {
+            // 展开时若未加载集信息，触发加载
+            if (seasonNumber !in episodes) {
+                onLoadEpisodes(seasonNumber)
+            }
             expandedSeasons.value + seasonNumber
+        } else {
+            expandedSeasons.value - seasonNumber
         }
     }
 
@@ -1880,97 +2074,131 @@ private fun MarkWatchedDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.detail_mark_watched_title)) },
         text = {
+            // 第0季（特别篇）放到最后
+            val sortedSeasons = remember(seasons) {
+                seasons.filter { it.number > 0 } + seasons.filter { it.number == 0 }
+            }
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.heightIn(max = 400.dp)
             ) {
-                items(seasons.size) { index ->
-                    val season = seasons[index]
+                items(sortedSeasons.size) { index ->
+                    val season = sortedSeasons[index]
+                    val isSpecial = season.number == 0
                     val isExpanded = season.number in expandedSeasons.value
                     val seasonSelected = selectedEpisodes.value[season.number] ?: mutableSetOf()
                     val allEpisodeNumbers = episodes[season.number]?.map { it.number } ?: emptyList()
                     val allSelected = allEpisodeNumbers.isNotEmpty() && allEpisodeNumbers.all { it in seasonSelected }
                     val someSelected = seasonSelected.isNotEmpty() && !allSelected
+                    val watchedCount = seasonSelected.size
+                    val totalCount = season.episode_count
 
-                    Column {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { toggleSeasonExpand(season.number) }
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = allSelected,
-                                onCheckedChange = { checked ->
-                                    val current = selectedEpisodes.value.toMutableMap()
-                                    val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
-                                    if (checked) {
-                                        // 勾选整季：添加该季所有集
-                                        episodes[season.number]?.forEach { ep ->
-                                            seasonSet.add(ep.number)
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { toggleSeasonExpand(season.number) },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                            // 季标题行
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = allSelected,
+                                    onCheckedChange = { checked ->
+                                        val current = selectedEpisodes.value.toMutableMap()
+                                        val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
+                                        if (checked) {
+                                            episodes[season.number]?.forEach { ep ->
+                                                seasonSet.add(ep.number)
+                                            }
+                                        } else {
+                                            seasonSet.clear()
                                         }
-                                    } else {
-                                        seasonSet.clear()
-                                    }
-                                    current[season.number] = seasonSet
-                                    selectedEpisodes.value = current
-                                },
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.detail_season, season.number),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { toggleSeasonExpand(season.number) }
-                            )
-                            Icon(
-                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .clickable { toggleSeasonExpand(season.number) },
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        // 展开的集列表
-                        if (isExpanded) {
-                            val episodeList = episodes[season.number]
-                            if (episodeList == null) {
-                                Text(
-                                    text = stringResource(R.string.detail_loading_episodes),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 40.dp, bottom = 4.dp)
+                                        current[season.number] = seasonSet
+                                        selectedEpisodes.value = current
+                                    },
+                                    modifier = Modifier.size(28.dp)
                                 )
-                            } else {
-                                episodeList.forEach { ep ->
-                                    val epSelected = ep.number in seasonSelected
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 32.dp, top = 2.dp, bottom = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Checkbox(
-                                            checked = epSelected,
-                                            onCheckedChange = { checked ->
-                                                val current = selectedEpisodes.value.toMutableMap()
-                                                val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
-                                                if (checked) seasonSet.add(ep.number) else seasonSet.remove(ep.number)
-                                                current[season.number] = seasonSet
-                                                selectedEpisodes.value = current
-                                            },
-                                            modifier = Modifier.size(28.dp)
-                                        )
-                                        Text(
-                                            text = stringResource(R.string.detail_episode, ep.number, ep.title),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            modifier = Modifier.weight(1f)
-                                        )
+                                SeasonBadge(season.number)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isSpecial) stringResource(R.string.detail_specials)
+                                    else {
+                                        val seasonLabel = stringResource(R.string.detail_season, season.number)
+                                        if (season.first_aired.isNotBlank()) "$seasonLabel (${season.first_aired.take(4)})"
+                                        else seasonLabel
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                // 已选/总数
+                                Text(
+                                    text = "$watchedCount/$totalCount",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            // 进度条
+                            if (totalCount > 0) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                WatchedProgressBar(watchedCount, totalCount)
+                            }
+
+                            // 展开的集列表
+                            if (isExpanded) {
+                                val episodeList = episodes[season.number]
+                                Spacer(modifier = Modifier.height(4.dp))
+                                if (episodeList == null) {
+                                    Text(
+                                        text = stringResource(R.string.detail_loading_episodes),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 36.dp, bottom = 4.dp)
+                                    )
+                                } else {
+                                    episodeList.forEach { ep ->
+                                        val epSelected = ep.number in seasonSelected
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(start = 28.dp, top = 2.dp, bottom = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Checkbox(
+                                                checked = epSelected,
+                                                onCheckedChange = { checked ->
+                                                    val current = selectedEpisodes.value.toMutableMap()
+                                                    val seasonSet = current[season.number]?.toMutableSet() ?: mutableSetOf()
+                                                    if (checked) seasonSet.add(ep.number) else seasonSet.remove(ep.number)
+                                                    current[season.number] = seasonSet
+                                                    selectedEpisodes.value = current
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.detail_episode, ep.number, ep.title),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -2005,6 +2233,47 @@ private fun MarkWatchedDialog(
 
 // ==================== 季/集信息 ====================
 
+/** 季号标签（S1/S2/SP） */
+@Composable
+private fun SeasonBadge(seasonNumber: Int) {
+    val (text, bgColor, textColor) = if (seasonNumber == 0) {
+        Triple("SP", Color(0xFFFFF3E0), Color(0xFFE65100))
+    } else {
+        Triple("S$seasonNumber", Color(0xFFE3F2FD), Color(0xFF1565C0))
+    }
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = bgColor
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = textColor,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+        )
+    }
+}
+
+/** 已看进度条 */
+@Composable
+private fun WatchedProgressBar(watchedCount: Int, totalCount: Int) {
+    val progress = if (totalCount > 0) watchedCount.toFloat() / totalCount else 0f
+    val barColor = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+    Column {
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp)),
+            color = barColor,
+            trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+    }
+}
+
 @Composable
 private fun SeasonsSection(
     seasons: List<TraktSeason>,
@@ -2016,158 +2285,157 @@ private fun SeasonsSection(
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
     val specialSeasons = seasons.filter { it.number == 0 }
+    val allSeasons = regularSeasons + specialSeasons
+    val totalSeasonCount = allSeasons.count { it.number == 0 || it.episode_count > 0 }
 
-    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Text(
-            text = stringResource(R.string.detail_seasons),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 4.dp)
-        )
+    // 默认显示前3季，点击展开全部
+    var showAllSeasons by rememberSaveable { mutableStateOf(false) }
+    val defaultShowCount = 3
+    val visibleSeasons = if (showAllSeasons || allSeasons.size <= defaultShowCount) {
+        allSeasons
+    } else {
+        allSeasons.take(defaultShowCount)
+    }
+    val hasMore = allSeasons.size > defaultShowCount
 
-        // 正常季（第1季、第2季...）
-        regularSeasons.forEach { season ->
-            SeasonRow(
-                season = season,
-                episodes = episodes,
-                expandedSeasons = expandedSeasons,
-                watchedEpisodeNumbers = watchedEpisodeNumbers,
-                togglingEpisode = togglingEpisode,
-                onToggleSeason = onToggleSeason,
-                onToggleEpisodeWatched = onToggleEpisodeWatched
+    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.detail_seasons),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
             )
-        }
-
-        // 特别篇（第0季）— 合并为一个条目展示
-        specialSeasons.forEach { season ->
-            val totalEpisodes = season.episode_count
-            if (totalEpisodes > 0) {
+            // 展开/折叠更多季（与标题同行）
+            if (hasMore) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { context.performHapticClick(); onToggleSeason(season.number) }
-                        .padding(vertical = 6.dp),
+                        .clip(RoundedCornerShape(6.dp))
+                        .clickable { view.performHaptic(HapticType.TICK); showAllSeasons = !showAllSeasons }
+                        .padding(vertical = 2.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(R.string.detail_specials),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
+                        text = if (showAllSeasons) stringResource(R.string.detail_seasons_collapse)
+                        else stringResource(R.string.detail_seasons_show_all, allSeasons.size),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Medium
                     )
-                    Text(
-                        text = stringResource(R.string.detail_episode_count, totalEpisodes),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Spacer(modifier = Modifier.width(2.dp))
                     Icon(
-                        imageVector = if (season.number in expandedSeasons) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (showAllSeasons) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                         contentDescription = null,
-                        modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
+            }
+        }
 
-                AnimatedVisibility(
-                    visible = season.number in expandedSeasons,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    val episodeList = episodes[season.number] ?: emptyList()
-                    Column(modifier = Modifier.padding(start = 16.dp)) {
-                        if (episodeList.isEmpty()) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp).padding(2.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            episodeList.forEach { ep ->
-                                EpisodeRow(
-                                    episode = ep,
-                                    seasonNumber = season.number,
-                                    isWatched = ep.number in (watchedEpisodeNumbers[season.number] ?: emptySet()),
-                                    isToggling = togglingEpisode == Pair(season.number, ep.number),
-                                    onToggleWatched = {
-                                        onToggleEpisodeWatched(season.number, ep.number, ep.ids.trakt)
-                                    }
+        // 正常季 + 特别篇，统一用卡片样式
+        visibleSeasons.forEach { season ->
+            val isSpecial = season.number == 0
+            if (isSpecial && season.episode_count == 0) return@forEach
+
+            val isExpanded = season.number in expandedSeasons
+            val watchedCount = (watchedEpisodeNumbers[season.number]?.size ?: 0)
+            val totalCount = season.episode_count
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { view.performHaptic(HapticType.CLICK); onToggleSeason(season.number) },
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                    // 季标题行
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SeasonBadge(season.number)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isSpecial) stringResource(R.string.detail_specials)
+                            else {
+                                val seasonLabel = stringResource(R.string.detail_season, season.number)
+                                if (season.first_aired.isNotBlank()) "$seasonLabel (${season.first_aired.take(4)})"
+                                else seasonLabel
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
+                        )
+                        // 已看/总数
+                        Text(
+                            text = "$watchedCount/$totalCount",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (watchedCount > 0) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // 进度条
+                    if (totalCount > 0) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        WatchedProgressBar(watchedCount, totalCount)
+                    }
+
+                    // 展开的集列表
+                    AnimatedVisibility(
+                        visible = isExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        val episodeList = episodes[season.number] ?: emptyList()
+                        Column(modifier = Modifier.padding(top = 6.dp)) {
+                            if (episodeList.isEmpty()) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp).padding(2.dp),
+                                    strokeWidth = 2.dp
                                 )
+                            } else {
+                                episodeList.forEach { ep ->
+                                    EpisodeRow(
+                                        episode = ep,
+                                        seasonNumber = season.number,
+                                        isWatched = ep.number in (watchedEpisodeNumbers[season.number] ?: emptySet()),
+                                        isToggling = togglingEpisode == Pair(season.number, ep.number),
+                                        onToggleWatched = {
+                                            onToggleEpisodeWatched(season.number, ep.number, ep.ids.trakt)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
         }
-    }
-}
 
-@Composable
-private fun SeasonRow(
-    season: TraktSeason,
-    episodes: Map<Int, List<TraktEpisode>>,
-    expandedSeasons: Set<Int>,
-    watchedEpisodeNumbers: Map<Int, Set<Int>>,
-    togglingEpisode: Pair<Int, Int>?,
-    onToggleSeason: (Int) -> Unit,
-    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
-) {
-    val context = LocalContext.current
-    val isExpanded = season.number in expandedSeasons
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { context.performHapticClick(); onToggleSeason(season.number) }
-                .padding(vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.detail_season, season.number),
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                text = stringResource(R.string.detail_episode_count, season.episode_count),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            val episodeList = episodes[season.number] ?: emptyList()
-            Column(modifier = Modifier.padding(start = 16.dp)) {
-                if (episodeList.isEmpty()) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp).padding(2.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    episodeList.forEach { ep ->
-                        EpisodeRow(
-                            episode = ep,
-                            seasonNumber = season.number,
-                            isWatched = ep.number in (watchedEpisodeNumbers[season.number] ?: emptySet()),
-                            isToggling = togglingEpisode == Pair(season.number, ep.number),
-                            onToggleWatched = {
-                                onToggleEpisodeWatched(season.number, ep.number, ep.ids.trakt)
-                            }
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -2181,10 +2449,13 @@ private fun EpisodeRow(
     onToggleWatched: () -> Unit
 ) {
     val context = LocalContext.current
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .clip(RoundedCornerShape(6.dp))
+            .clickable { view.performHaptic(HapticType.CLICK); onToggleWatched() }
+            .padding(vertical = 4.dp, horizontal = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -2192,13 +2463,7 @@ private fun EpisodeRow(
             style = MaterialTheme.typography.bodySmall,
             color = if (isWatched) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .weight(1f)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = { context.performHapticClick(); onToggleWatched() }
-                )
+            modifier = Modifier.weight(1f)
         )
         if (isToggling) {
             CircularProgressIndicator(
@@ -2209,13 +2474,7 @@ private fun EpisodeRow(
             Icon(
                 imageVector = Icons.Filled.CheckCircle,
                 contentDescription = if (isWatched) "已看" else "未看",
-                modifier = Modifier
-                    .size(18.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { context.performHapticClick(); onToggleWatched() }
-                    ),
+                modifier = Modifier.size(18.dp),
                 tint = if (isWatched) Color(0xFF4CAF50)
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
             )
@@ -2254,6 +2513,7 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
     val context = LocalContext.current
+    val view = LocalView.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -2267,7 +2527,7 @@ private fun EmptyState(onRetry: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(onClick = { context.performHapticClick(); onRetry() }) {
+            OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.detail_retry))

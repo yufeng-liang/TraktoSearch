@@ -111,10 +111,10 @@ fun PersonScreen(
             .padding(padding)
         ) {
             when {
-                uiState.isLoading -> {
+                uiState.isLoading && profileUrl.isNullOrBlank() -> {
                     PersonSkeletonContent()
                 }
-                uiState.error != null -> {
+                uiState.error != null && uiState.person == null -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -125,7 +125,7 @@ fun PersonScreen(
                         )
                     }
                 }
-                uiState.person != null -> {
+                else -> {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -136,14 +136,15 @@ fun PersonScreen(
                     ) {
                         item(key = "person_header") {
                             PersonHeaderContent(
-                                personId = uiState.person!!.id,
-                                name = uiState.person!!.name,
-                                profileUrl = profileUrl ?: uiState.person!!.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                birthday = uiState.person!!.birthday,
-                                deathday = uiState.person!!.deathday,
-                                placeOfBirth = uiState.person!!.place_of_birth,
-                                biography = uiState.person!!.biography,
-                                knownForDepartment = uiState.person!!.known_for_department
+                                personId = uiState.person?.id ?: personId,
+                                name = uiState.person?.name ?: personName,
+                                profileUrl = profileUrl ?: uiState.person?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                birthday = uiState.person?.birthday,
+                                deathday = uiState.person?.deathday,
+                                placeOfBirth = uiState.person?.place_of_birth,
+                                biography = uiState.person?.biography ?: "",
+                                knownForDepartment = uiState.person?.known_for_department ?: "",
+                                isLoading = uiState.isLoading
                             )
                         }
 
@@ -671,8 +672,10 @@ private fun PersonHeaderContent(
     deathday: String?,
     placeOfBirth: String?,
     biography: String,
-    knownForDepartment: String
+    knownForDepartment: String,
+    isLoading: Boolean = false
 ) {
+    val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -747,23 +750,50 @@ private fun PersonHeaderContent(
             }
 
             // 右侧信息
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                if (knownForDepartment.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (isLoading && name.isBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.7f)
+                            .height(24.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                } else {
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                if (isLoading && knownForDepartment.isBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                } else if (knownForDepartment.isNotEmpty()) {
                     Text(
                         text = knownForDepartment,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (birthday != null && birthday.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (isLoading && birthday.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                } else if (birthday != null && birthday.isNotEmpty()) {
                     val dateText = if (birthday.length >= 10) {
                         "${birthday.substring(0, 4)}-${birthday.substring(5, 7)}-${birthday.substring(8, 10)}"
                     } else birthday
@@ -780,8 +810,15 @@ private fun PersonHeaderContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                if (placeOfBirth != null && placeOfBirth.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (isLoading && placeOfBirth.isNullOrEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                } else if (placeOfBirth != null && placeOfBirth.isNotEmpty()) {
                     Text(
                         text = placeOfBirth,
                         style = MaterialTheme.typography.bodySmall,
@@ -794,15 +831,15 @@ private fun PersonHeaderContent(
         }
 
         // 简介
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.detail_overview_label),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(4.dp))
         if (biography.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.detail_overview_label),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = biography,
                 style = MaterialTheme.typography.bodyMedium,
@@ -816,15 +853,25 @@ private fun PersonHeaderContent(
                         indication = null
                     ) { showFullBio = !showFullBio }
             )
+        } else if (isLoading) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                repeat(3) { index ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(
+                                when (index) {
+                                    0 -> 1f
+                                    1 -> 0.9f
+                                    else -> 0.7f
+                                }
+                            )
+                            .height(16.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                }
+            }
         } else {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.detail_overview_label),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.person_no_biography),
                 style = MaterialTheme.typography.bodyMedium,

@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
+    <string name="splash_slogan">发现 · 追踪 · 搜索</string>
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>
@@ -63,6 +64,12 @@
     <string name="trakt_search_hint_shows">在 Trakt 上搜索电视剧</string>
     <string name="trakt_search_no_movies">在 Trakt 上未找到电影</string>
     <string name="trakt_search_no_shows">在 Trakt 上未找到电视剧</string>
+    <string name="trakt_search_result_count_movies">共 %d 部电影</string>
+    <string name="trakt_search_result_count_shows">共 %d 部电视剧</string>
+    <string name="trakt_search_tab_movies">电影</string>
+    <string name="trakt_search_tab_shows">电视剧</string>
+    <string name="trakt_search_tab_movies_count">电影 (%d)</string>
+    <string name="trakt_search_tab_shows_count">电视剧 (%d)</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">返回</string>
@@ -145,6 +152,9 @@
     <string name="detail_comments">评论</string>
     <string name="detail_no_comments">暂无评论</string>
     <string name="detail_seasons">季信息</string>
+    <string name="detail_seasons_count">(共%1$d季)</string>
+    <string name="detail_seasons_show_all">展开全部%1$d季</string>
+    <string name="detail_seasons_collapse">收起</string>
     <string name="detail_season">第 %1$d 季</string>
     <string name="detail_episode_count">%1$d 集</string>
     <string name="detail_episode">第%1$d集 %2$s</string>
@@ -181,6 +191,11 @@
     <string name="detail_specials">特别篇</string>
     <string name="detail_actor">演员</string>
     <string name="detail_your_rating">我的评分</string>
+    <string name="detail_rating_dialog_title">评分</string>
+    <string name="detail_rating_confirm">确定</string>
+    <string name="detail_rating_cancel">取消</string>
+    <string name="detail_rating_no_rating">未评分</string>
+    <string name="detail_rating_hint">点击星星左右两侧选择半星/整星，再次点击已选区域可取消评分</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
@@ -226,6 +241,8 @@
     <string name="settings_already_latest">已是最新版本 v%1$s</string>
     <string name="settings_discover_sections">发现页栏目</string>
     <string name="settings_discover_sections_desc">设置发现页各栏目的显示与排序</string>
+    <string name="settings_discover_sections_hint">拖动排序，开关控制显示/隐藏</string>
+    <string name="settings_drag_to_reorder">拖动排序</string>
     <string name="settings_logout_button">登出</string>
 
     <!-- 数据管理 -->
@@ -294,6 +311,7 @@
     <string name="search_filter_movie">电影</string>
     <string name="search_filter_show">电视剧</string>
     <string name="search_view_all">查看全部</string>
+    <string name="search_view_all_count">查看全部(%d)</string>
     <string name="error_no_data">暂无数据</string>
 
     <!-- Statistics -->
@@ -354,7 +372,7 @@
     <string name="discover_douban_weekly">口碑榜</string>
     <string name="discover_douban_top250">Top250</string>
     <string name="discover_douban_us_box">北美票房榜</string>
-    <string name="discover_view_all">全部(%d) ></string>
+    <string name="discover_view_all">查看全部(%d)</string>
 
     <!-- Genre Names -->
     <string name="genre_action">动作</string>
@@ -388,4 +406,5 @@
     <string name="genre_biography">传记</string>
     <string name="genre_noir">黑色电影</string>
     <string name="genre_game_show">游戏节目</string>
+    <string name="genre_other">其他</string>
 </resources>
