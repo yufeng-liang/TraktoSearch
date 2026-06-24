@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,11 +62,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,6 +89,7 @@ import com.tracktosearch.ui.component.ChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -95,6 +99,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -104,6 +109,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 fun SettingsScreen(
     onLogout: () -> Unit = {},
     isLoggedIn: Boolean = true,
+    onHelpClick: () -> Unit = {},
+    onRestartOnboarding: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -121,6 +128,7 @@ fun SettingsScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
+    var showDetailSectionsDialog by remember { mutableStateOf(false) }
     var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     val context = LocalContext.current
@@ -157,6 +165,12 @@ fun SettingsScreen(
         uri?.let { viewModel.importFromImdb(it) }
     }
 
+    val importJsonLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { viewModel.importFromJson(it) }
+    }
+
     val openUrl: (String) -> Unit = { url ->
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -167,6 +181,19 @@ fun SettingsScreen(
     val updateInfo by viewModel.updateInfo.collectAsState()
 
     val settingsHazeState = remember { HazeState() }
+    val settingsListState = rememberLazyListState()
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val settingsCoroutineScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        scrollToTopProvider.register {
+            settingsCoroutineScope.launch {
+                settingsListState.animateScrollToItem(0)
+            }
+        }
+        onDispose {
+            scrollToTopProvider.unregister()
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -184,6 +211,7 @@ fun SettingsScreen(
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             LazyColumn(
+                state = settingsListState,
                 modifier = modifier
                     .fillMaxSize()
                     .hazeSource(state = settingsHazeState),
@@ -325,6 +353,17 @@ fun SettingsScreen(
                 )
             }
 
+            // 详情页模块
+            item { SettingsSectionHeader(stringResource(R.string.settings_detail_sections)) }
+            item {
+                SettingsItem(
+                    icon = Icons.Default.Tune,
+                    title = stringResource(R.string.settings_detail_sections),
+                    subtitle = stringResource(R.string.settings_detail_sections_desc),
+                    onClick = { showDetailSectionsDialog = true }
+                )
+            }
+
             // 数据管理（仅登录用户可见，依赖 Trakt API）
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_data_management)) }
@@ -387,6 +426,39 @@ fun SettingsScreen(
                         }
                     )
                 }
+                item {
+                    SettingsItem(
+                        icon = Icons.Default.FileDownload,
+                        title = stringResource(R.string.settings_import_json),
+                        subtitle = stringResource(R.string.settings_import_json_desc),
+                        onClick = {
+                            if (!exportImportState.isImporting) {
+                                importJsonLauncher.launch("application/json")
+                            }
+                        }
+                    )
+                }
+                exportImportState.syncProgress?.let { progress ->
+                    if (exportImportState.isImporting) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = progress,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // 关于
@@ -416,18 +488,26 @@ fun SettingsScreen(
             }
             item {
                 SettingsItem(
-                    icon = Icons.Default.Code,
-                    title = stringResource(R.string.settings_source_github),
-                    subtitle = "yufeng-liang/TrackToSearch",
-                    onClick = { openUrl("https://github.com/yufeng-liang/TrackToSearch") }
+                    icon = Icons.Default.Info,
+                    title = stringResource(R.string.settings_help),
+                    subtitle = "",
+                    onClick = { onHelpClick() }
+                )
+            }
+            item {
+                SettingsItem(
+                    icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    title = stringResource(R.string.settings_restart_onboarding),
+                    subtitle = "",
+                    onClick = { onRestartOnboarding() }
                 )
             }
             item {
                 SettingsItem(
                     icon = Icons.Default.Code,
-                    title = stringResource(R.string.settings_source_gitee),
-                    subtitle = "yufeng-liang/TrackToSearch",
-                    onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch") }
+                    title = stringResource(R.string.settings_source_repo),
+                    subtitle = "yufeng-liang/TrackToSearch-release",
+                    onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") }
                 )
             }
 
@@ -458,6 +538,7 @@ fun SettingsScreen(
                         style = HazeMaterials.thin()
                     )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -546,6 +627,13 @@ fun SettingsScreen(
         DiscoverSectionsDialog(
             viewModel = viewModel,
             onDismiss = { showDiscoverSectionsDialog = false }
+        )
+    }
+
+    if (showDetailSectionsDialog) {
+        DetailSectionsDialog(
+            viewModel = viewModel,
+            onDismiss = { showDetailSectionsDialog = false }
         )
     }
 
@@ -1167,7 +1255,75 @@ private fun getSectionDisplayName(id: String): String {
         "douban-us-box" -> "北美票房榜"
         "tmdb-popular" -> "热门电影"
         "tmdb-upcoming" -> "即将上映"
-        "trakt-recommendations" -> "为你推荐"
+        "trakt-trending-movies" -> "Trakt 热门电影"
+        "trakt-trending-shows" -> "Trakt 热门剧集"
+        "trakt-anticipated" -> "Trakt 最受期待"
+        "trakt-recommendations" -> "为你推荐电影"
+        "trakt-show-recommendations" -> "为你推荐剧集"
+        else -> id
+    }
+}
+
+/** 详情页模块设置对话框：仅显示/隐藏开关（无拖动排序） */
+@Composable
+fun DetailSectionsDialog(
+    viewModel: SettingsViewModel,
+    onDismiss: () -> Unit
+) {
+    val sections by viewModel.detailSections.collectAsState()
+    val view = LocalView.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(R.string.settings_detail_sections))
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+            ) {
+                sections.forEach { section ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = getDetailSectionDisplayName(section.id),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = section.visible,
+                            onCheckedChange = {
+                                view.performHaptic(HapticType.CLICK)
+                                viewModel.setDetailSectionVisible(section.id, it)
+                            }
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.ok))
+            }
+        }
+    )
+}
+
+/** 详情页模块 ID 转为显示名称 */
+private fun getDetailSectionDisplayName(id: String): String {
+    return when (id) {
+        "cast" -> "演职员"
+        "videos-images" -> "预告片与截图"
+        "overview" -> "简介"
+        "my-rating" -> "我的评分"
+        "comments" -> "评论"
+        "recommendations" -> "推荐"
         else -> id
     }
 }

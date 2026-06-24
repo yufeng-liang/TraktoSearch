@@ -82,6 +82,20 @@ interface TmdbApiService {
         @Query("page") page: Int = 1
     ): Response<TmdbSearchResponse>
 
+    @GET("search/person")
+    suspend fun searchPerson(
+        @Query("query") query: String,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbPersonSearchResponse>
+
+    @GET("search/multi")
+    suspend fun searchMulti(
+        @Query("query") query: String,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbMultiSearchResponse>
+
     @GET("movie/popular")
     suspend fun getPopularMovies(
         @Query("language") language: String = "zh-CN",
@@ -99,4 +113,33 @@ interface TmdbApiService {
         @Query("language") language: String = "zh-CN",
         @Query("page") page: Int = 1
     ): Response<TmdbSearchResponse>
+
+    @GET("movie/{movie_id}/videos")
+    suspend fun getMovieVideos(
+        @Path("movie_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbVideosResponse>
+
+    @GET("tv/{tv_id}/videos")
+    suspend fun getTvVideos(
+        @Path("tv_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbVideosResponse>
+
+    @GET("movie/{movie_id}/images")
+    suspend fun getMovieImages(
+        @Path("movie_id") id: Int,
+        @Query("include_image_language") language: String = "zh,null"
+    ): Response<TmdbImagesResponse>
+
+    @GET("tv/{tv_id}/images")
+    suspend fun getTvImages(
+        @Path("tv_id") id: Int,
+        @Query("include_image_language") language: String = "zh,null"
+    ): Response<TmdbImagesResponse>
+
+    @GET("person/{person_id}/images")
+    suspend fun getPersonImages(
+        @Path("person_id") id: Int
+    ): Response<TmdbPersonImagesResponse>
 }

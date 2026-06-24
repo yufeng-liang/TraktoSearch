@@ -170,7 +170,7 @@ dependencies {
     implementation(libs.reorderable)
 
     // 极光推送
-    implementation("cn.jiguang.sdk:jpush:5.8.0")
+    implementation("cn.jiguang.sdk:jpush:6.1.2")
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")

@@ -258,8 +258,8 @@
     <string name="settings_changelog">更新履歴</string>
     <string name="settings_account">アカウント</string>
     <string name="settings_logout_confirm">ログアウトしてもよろしいですか？</string>
-    <string name="settings_source_github">GitHub</string>
-    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_source_repo">ソースコード</string>
+    <string name="settings_help">ヘルプ＆ヒント</string>
     <string name="settings_licenses">オープンソースライセンス</string>
 
     <!-- Data Management (追加) -->
@@ -372,6 +372,12 @@
     <string name="discover_douban_top250">トップ250</string>
     <string name="discover_douban_us_box">全米興行収入</string>
     <string name="discover_view_all">すべて(%d) ></string>
+
+    <!-- Search Source Type -->
+    <string name="search_type_disk">クラウドリソース</string>
+    <string name="search_type_movie">映画</string>
+    <string name="search_type_show">ドラマ</string>
+    <string name="search_type_person">人物</string>
 
     <!-- Genre Names -->
     <string name="genre_action">アクション</string>

@@ -31,6 +31,7 @@ class TraktRepository @Inject constructor(
             val typeStr = when (type) {
                 MediaType.MOVIE -> "movie"
                 MediaType.SHOW -> "show"
+                MediaType.PERSON -> "person"
             }
             val response = traktApiService.searchByTmdb(tmdbId, typeStr)
             if (response.isSuccessful) {
@@ -218,6 +219,7 @@ class TraktRepository @Inject constructor(
             val response = when (type) {
                 MediaType.MOVIE -> traktApiService.getMovieComments(traktId.toString(), limit, page)
                 MediaType.SHOW -> traktApiService.getShowComments(traktId.toString(), limit, page)
+                MediaType.PERSON -> traktApiService.getMovieComments(traktId.toString(), limit, page) // PERSON fallback
             }
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
@@ -329,6 +331,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids)))
                 MediaType.SHOW -> TraktSyncRequest(shows = listOf(TraktSyncItem(ids)))
+                MediaType.PERSON -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids))) // fallback
             }
             val response = traktApiService.addToHistory(request)
             if (response.isSuccessful) {
@@ -349,6 +352,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids)))
                 MediaType.SHOW -> TraktSyncRequest(shows = listOf(TraktSyncItem(ids)))
+                MediaType.PERSON -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids))) // fallback
             }
             val response = traktApiService.removeFromHistory(request)
             if (response.isSuccessful) {
@@ -417,6 +421,7 @@ class TraktRepository @Inject constructor(
                         response.body()?.any { it.show.ids.trakt == traktId } ?: false
                     } else false
                 }
+                MediaType.PERSON -> false
             }
         } catch (e: Exception) {
             false
@@ -439,6 +444,7 @@ class TraktRepository @Inject constructor(
                         response.body()?.any { it.show.ids.trakt == traktId } ?: false
                     } else false
                 }
+                MediaType.PERSON -> false
             }
         } catch (e: Exception) {
             false
@@ -477,6 +483,7 @@ class TraktRepository @Inject constructor(
                         historyResp.body()?.forEach { watchedIds.add(it.show.ids.trakt) }
                     }
                 }
+                MediaType.PERSON -> { /* PERSON not applicable */ }
             }
 
             traktIds.associateWith { id ->
@@ -494,6 +501,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids)))
                 MediaType.SHOW -> TraktSyncRequest(shows = listOf(TraktSyncItem(ids)))
+                MediaType.PERSON -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids))) // fallback
             }
             val response = traktApiService.addToWatchlist(request)
             if (response.isSuccessful) {
@@ -513,6 +521,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids)))
                 MediaType.SHOW -> TraktSyncRequest(shows = listOf(TraktSyncItem(ids)))
+                MediaType.PERSON -> TraktSyncRequest(movies = listOf(TraktSyncItem(ids))) // fallback
             }
             val response = traktApiService.removeFromWatchlist(request)
             if (response.isSuccessful) {
@@ -533,6 +542,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> RatingRequest(movies = listOf(item))
                 MediaType.SHOW -> RatingRequest(shows = listOf(item))
+                MediaType.PERSON -> RatingRequest(movies = listOf(item)) // fallback
             }
             val response = traktApiService.addRating(request)
             if (response.isSuccessful) {
@@ -553,6 +563,7 @@ class TraktRepository @Inject constructor(
             val request = when (type) {
                 MediaType.MOVIE -> RatingRequest(movies = listOf(item))
                 MediaType.SHOW -> RatingRequest(shows = listOf(item))
+                MediaType.PERSON -> RatingRequest(movies = listOf(item)) // fallback
             }
             val response = traktApiService.removeRating(request)
             if (response.isSuccessful) {
@@ -571,6 +582,7 @@ class TraktRepository @Inject constructor(
             val typeStr = when (type) {
                 MediaType.MOVIE -> "movies"
                 MediaType.SHOW -> "shows"
+                MediaType.PERSON -> "movies" // fallback
             }
             val response = traktApiService.getRatings(typeStr)
             if (response.isSuccessful) {
@@ -579,6 +591,7 @@ class TraktRepository @Inject constructor(
                     when (type) {
                         MediaType.MOVIE -> item.movie?.ids?.trakt == traktId
                         MediaType.SHOW -> item.show?.ids?.trakt == traktId
+                        MediaType.PERSON -> item.movie?.ids?.trakt == traktId // fallback
                     }
                 }?.rating
             } else null
@@ -636,8 +649,132 @@ class TraktRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /** 搜索人物（通过名字），返回搜索结果列表 */
+    suspend fun searchPeople(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
+        return try {
+            val response = traktApiService.searchPeople(query, limit, page)
+            if (response.isSuccessful) {
+                val items = response.body() ?: emptyList()
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
+                Result.success(Pair(items, totalCount))
+            } else {
+                Result.failure(Exception("Failed to search people: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 获取人物详情（通过 slug 或 id） */
+    suspend fun getPersonSummary(personSlug: String): Result<TraktPersonDetail> {
+        return try {
+            val response = traktApiService.getPersonSummary(personSlug)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: TraktPersonDetail())
+            } else {
+                Result.failure(Exception("HTTP ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getTrendingMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingMovieResponse>, Int>> {
+        return try {
+            val response = traktApiService.getTrendingMovies(page = page, limit = limit)
+            if (response.isSuccessful) {
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getTrendingShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingShowResponse>, Int>> {
+        return try {
+            val response = traktApiService.getTrendingShows(page = page, limit = limit)
+            if (response.isSuccessful) {
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getAnticipatedMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedMovieResponse>, Int>> {
+        return try {
+            val response = traktApiService.getAnticipatedMovies(page = page, limit = limit)
+            if (response.isSuccessful) {
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getAnticipatedShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedShowResponse>, Int>> {
+        return try {
+            val response = traktApiService.getAnticipatedShows(page = page, limit = limit)
+            if (response.isSuccessful) {
+                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
+        return try {
+            val response = traktApiService.getShowRecommendations(limit = limit)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取影视的 Trakt 视频列表 */
+    suspend fun getVideos(traktId: String, mediaType: MediaType): Result<List<TraktVideo>> {
+        return try {
+            val response = when (mediaType) {
+                MediaType.MOVIE -> traktApiService.getMovieVideos(traktId)
+                MediaType.SHOW -> traktApiService.getShowVideos(traktId)
+                MediaType.PERSON -> return Result.success(emptyList())
+            }
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取影视的 Trakt 图片（fanart等） */
+    suspend fun getImages(traktId: String, mediaType: MediaType): Result<TraktImages> {
+        return try {
+            when (mediaType) {
+                MediaType.MOVIE -> {
+                    val response = traktApiService.getMovieWithImages(traktId)
+                    if (response.isSuccessful) {
+                        Result.success(response.body()?.images ?: TraktImages())
+                    } else Result.failure(Exception("HTTP ${response.code()}"))
+                }
+                MediaType.SHOW -> {
+                    val response = traktApiService.getShowWithImages(traktId)
+                    if (response.isSuccessful) {
+                        Result.success(response.body()?.images ?: TraktImages())
+                    } else Result.failure(Exception("HTTP ${response.code()}"))
+                }
+                MediaType.PERSON -> Result.success(TraktImages())
+            }
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取人物的 Trakt 图片 */
+    suspend fun getPersonImages(personSlug: String): Result<TraktImages> {
+        return try {
+            val response = traktApiService.getPersonWithImages(personSlug)
+            if (response.isSuccessful) {
+                Result.success(response.body()?.images ?: TraktImages())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
 }
 
 enum class MediaType {
-    MOVIE, SHOW
+    MOVIE, SHOW, PERSON
 }

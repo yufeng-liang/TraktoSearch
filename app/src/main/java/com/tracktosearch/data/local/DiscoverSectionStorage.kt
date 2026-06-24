@@ -35,7 +35,11 @@ class DiscoverSectionStorage @Inject constructor(
             "douban-us-box",
             "tmdb-popular",
             "tmdb-upcoming",
-            "trakt-recommendations"
+            "trakt-trending-movies",
+            "trakt-trending-shows",
+            "trakt-anticipated",
+            "trakt-recommendations",
+            "trakt-show-recommendations"
         )
 
         private val KEY_ORDER = stringPreferencesKey("section_order")

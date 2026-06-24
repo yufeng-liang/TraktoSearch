@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,8 @@ import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.theme.TraktToSearchTheme
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.ScrollToTopProvider
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -91,6 +94,9 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var languageStorage: LanguageStorage
+
+    // 全局 scrollToTop 提供者
+    private val scrollToTopProvider = ScrollToTopProvider()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashStartTime = System.currentTimeMillis()
@@ -150,9 +156,13 @@ class MainActivity : AppCompatActivity() {
         handleIntent(intent)
         checkCrashAndPrompt()
 
+        // 监听状态栏点击，触发 scrollToTop
+        setupStatusBarTapListener()
+
         setContent {
             val themeMode by themeStorage.themeMode.collectAsState(initial = "system")
             TraktToSearchTheme(themeMode = themeMode) {
+                CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
@@ -218,7 +228,7 @@ class MainActivity : AppCompatActivity() {
                                     val context = LocalContext.current
                                     val launcherBitmap = remember {
                                         android.graphics.BitmapFactory.decodeResource(
-                                            context.resources, R.mipmap.ic_launcher
+                                            context.resources, R.drawable.ic_search_cloud
                                         )?.asImageBitmap()
                                     }
                                     if (launcherBitmap != null) {
@@ -226,8 +236,8 @@ class MainActivity : AppCompatActivity() {
                                             bitmap = launcherBitmap,
                                             contentDescription = "App Icon",
                                             modifier = Modifier
-                                                .size(48.dp)
-                                                .clip(RoundedCornerShape(10.dp)),
+                                                .size(56.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
                                             contentScale = ContentScale.Crop
                                         )
                                     }
@@ -259,6 +269,7 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 }
+                } // CompositionLocalProvider
             }
         }
     }
@@ -266,6 +277,22 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         JPushHelper.onResume(this)
+    }
+
+    private var statusBarHeight: Int = 0
+
+    private fun setupStatusBarTapListener() {
+        statusBarHeight = resources.getIdentifier("status_bar_height", "dimen", "android")
+            .let { if (it > 0) resources.getDimensionPixelSize(it) else 0 }
+    }
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.action == android.view.MotionEvent.ACTION_UP && statusBarHeight > 0) {
+            if (event.rawY <= statusBarHeight) {
+                scrollToTopProvider.scrollToTop()
+            }
+        }
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onPause() {

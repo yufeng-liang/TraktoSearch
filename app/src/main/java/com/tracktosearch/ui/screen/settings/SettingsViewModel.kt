@@ -10,6 +10,8 @@ import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
+import com.tracktosearch.data.local.DetailSectionConfig
+import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.SearchSourceStorage
@@ -20,6 +22,7 @@ import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.repository.UpdateRepository
@@ -28,6 +31,7 @@ import com.tracktosearch.data.util.ExportItem
 import com.tracktosearch.data.util.ImportItem
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -44,7 +48,10 @@ data class ExportImportState(
     val isExporting: Boolean = false,
     val isImporting: Boolean = false,
     val message: String? = null,
-    val importedItems: List<ImportItem> = emptyList()
+    val importedItems: List<ImportItem> = emptyList(),
+    val syncProgress: String? = null,  // e.g. "正在同步 3/50..."
+    val syncSuccess: Int = 0,
+    val syncFailed: Int = 0
 )
 
 @HiltViewModel
@@ -58,6 +65,7 @@ class SettingsViewModel @Inject constructor(
     private val updateRepository: UpdateRepository,
     private val offlineCacheManager: OfflineCacheManager,
     private val discoverSectionStorage: DiscoverSectionStorage,
+    private val detailSectionStorage: DetailSectionStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService,
     @ApplicationContext private val context: Context
@@ -245,15 +253,50 @@ class SettingsViewModel @Inject constructor(
     fun importFromLetterboxd(uri: Uri) {
         viewModelScope.launch {
             _exportImportState.value = _exportImportState.value.copy(
-                isImporting = true, message = null
+                isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
             )
             try {
                 val csvContent = readUriContent(uri)
                 val items = DataExportImport.parseLetterboxdCsv(csvContent)
+                if (items.isEmpty()) {
+                    _exportImportState.value = _exportImportState.value.copy(
+                        isImporting = false,
+                        message = "Letterboxd CSV 中没有找到有效记录"
+                    )
+                    return@launch
+                }
+
+                var success = 0
+                var failed = 0
+                val total = items.size
+
+                items.forEachIndexed { index, item ->
+                    _exportImportState.value = _exportImportState.value.copy(
+                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                    )
+                    try {
+                        val searchResult = traktRepository.searchMovies(item.title, page = 1, limit = 1)
+                        val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.movie?.ids?.trakt
+                        if (traktId != null && traktId > 0) {
+                            traktRepository.markAsWatched(traktId, MediaType.MOVIE)
+                            success++
+                        } else {
+                            failed++
+                        }
+                    } catch (_: Exception) {
+                        failed++
+                    }
+                    // Rate limit: 500ms between requests
+                    if (index < total - 1) delay(500)
+                }
+
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
                     importedItems = items,
-                    message = "从 Letterboxd 导入 ${items.size} 条记录"
+                    syncProgress = null,
+                    syncSuccess = success,
+                    syncFailed = failed,
+                    message = "Letterboxd 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
@@ -267,15 +310,159 @@ class SettingsViewModel @Inject constructor(
     fun importFromImdb(uri: Uri) {
         viewModelScope.launch {
             _exportImportState.value = _exportImportState.value.copy(
-                isImporting = true, message = null
+                isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
             )
             try {
                 val csvContent = readUriContent(uri)
                 val items = DataExportImport.parseImdbCsv(csvContent)
+                if (items.isEmpty()) {
+                    _exportImportState.value = _exportImportState.value.copy(
+                        isImporting = false,
+                        message = "IMDb CSV 中没有找到有效记录"
+                    )
+                    return@launch
+                }
+
+                var success = 0
+                var failed = 0
+                val total = items.size
+
+                items.forEachIndexed { index, item ->
+                    _exportImportState.value = _exportImportState.value.copy(
+                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                    )
+                    try {
+                        val mediaType = when (item.mediaType) {
+                            "show" -> MediaType.SHOW
+                            "movie" -> MediaType.MOVIE
+                            else -> MediaType.MOVIE  // default to movie if unknown
+                        }
+                        val searchResult = when (mediaType) {
+                            MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
+                            MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
+                            MediaType.PERSON -> Result.failure(Exception("Person not supported"))
+                        }
+                        val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
+                            when (mediaType) {
+                                MediaType.MOVIE -> result.movie?.ids?.trakt
+                                MediaType.SHOW -> result.show?.ids?.trakt
+                                MediaType.PERSON -> null
+                            }
+                        }
+                        if (traktId != null && traktId > 0) {
+                            traktRepository.addToWatchlist(traktId, mediaType)
+                            success++
+                        } else {
+                            failed++
+                        }
+                    } catch (_: Exception) {
+                        failed++
+                    }
+                    // Rate limit: 500ms between requests
+                    if (index < total - 1) delay(500)
+                }
+
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
                     importedItems = items,
-                    message = "从 IMDb 导入 ${items.size} 条记录"
+                    syncProgress = null,
+                    syncSuccess = success,
+                    syncFailed = failed,
+                    message = "IMDb 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
+                )
+            } catch (e: Exception) {
+                _exportImportState.value = _exportImportState.value.copy(
+                    isImporting = false,
+                    message = "导入失败：${e.message ?: "未知错误"}"
+                )
+            }
+        }
+    }
+
+    fun importFromJson(uri: Uri) {
+        viewModelScope.launch {
+            _exportImportState.value = _exportImportState.value.copy(
+                isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
+            )
+            try {
+                val jsonContent = readUriContent(uri)
+                val exportData = DataExportImport.parseAppJson(jsonContent)
+
+                // Collect all items to process: watchlist first, then history
+                // markAsWatched auto-removes from watchlist, so add watchlist first
+                // Triple: (ExportItem, MediaType, isHistory)
+                val allItems = mutableListOf<Triple<ExportItem, MediaType, Boolean>>()
+                exportData.watchlistMovies.forEach { allItems.add(Triple(it, MediaType.MOVIE, false)) }
+                exportData.watchlistShows.forEach { allItems.add(Triple(it, MediaType.SHOW, false)) }
+                exportData.historyMovies.forEach { allItems.add(Triple(it, MediaType.MOVIE, true)) }
+                exportData.historyShows.forEach { allItems.add(Triple(it, MediaType.SHOW, true)) }
+
+                if (allItems.isEmpty()) {
+                    _exportImportState.value = _exportImportState.value.copy(
+                        isImporting = false,
+                        message = "JSON 文件中没有找到有效数据"
+                    )
+                    return@launch
+                }
+
+                var success = 0
+                var failed = 0
+                val total = allItems.size
+
+                allItems.forEachIndexed { index, (item, mediaType, isHistory) ->
+                    _exportImportState.value = _exportImportState.value.copy(
+                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                    )
+                    try {
+                        val traktId = if (item.tmdbId != null && item.tmdbId > 0) {
+                            // Use TMDB ID search for precise matching
+                            val searchResult = traktRepository.searchByTmdb(item.tmdbId, mediaType)
+                            searchResult.getOrNull()?.firstOrNull()?.let { result ->
+                                when (mediaType) {
+                                    MediaType.MOVIE -> result.movie?.ids?.trakt
+                                    MediaType.SHOW -> result.show?.ids?.trakt
+                                    MediaType.PERSON -> null
+                                }
+                            }
+                        } else {
+                            // Fallback to text search
+                            val searchResult = when (mediaType) {
+                                MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
+                                MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
+                                MediaType.PERSON -> Result.failure(Exception("Person not supported"))
+                            }
+                            searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
+                                when (mediaType) {
+                                    MediaType.MOVIE -> result.movie?.ids?.trakt
+                                    MediaType.SHOW -> result.show?.ids?.trakt
+                                    MediaType.PERSON -> null
+                                }
+                            }
+                        }
+
+                        if (traktId != null && traktId > 0) {
+                            if (isHistory) {
+                                traktRepository.markAsWatched(traktId, mediaType)
+                            } else {
+                                traktRepository.addToWatchlist(traktId, mediaType)
+                            }
+                            success++
+                        } else {
+                            failed++
+                        }
+                    } catch (_: Exception) {
+                        failed++
+                    }
+                    // Rate limit: 500ms between requests
+                    if (index < total - 1) delay(500)
+                }
+
+                _exportImportState.value = _exportImportState.value.copy(
+                    isImporting = false,
+                    syncProgress = null,
+                    syncSuccess = success,
+                    syncFailed = failed,
+                    message = "JSON 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
@@ -354,6 +541,19 @@ class SettingsViewModel @Inject constructor(
 
     fun setSectionOrder(orderedIds: List<String>) {
         viewModelScope.launch { discoverSectionStorage.setSectionOrder(orderedIds) }
+    }
+
+    // ========== 详情页模块设置 ==========
+
+    val detailSections: StateFlow<List<DetailSectionConfig>> = detailSectionStorage.sectionConfigs
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5000),
+            runBlocking { detailSectionStorage.sectionConfigs.first() }
+        )
+
+    fun setDetailSectionVisible(id: String, visible: Boolean) {
+        viewModelScope.launch { detailSectionStorage.setSectionVisible(id, visible) }
     }
 
     // ========== 更新日志 ==========

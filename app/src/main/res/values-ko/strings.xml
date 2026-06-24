@@ -258,8 +258,8 @@
     <string name="settings_changelog">업데이트 내역</string>
     <string name="settings_account">계정</string>
     <string name="settings_logout_confirm">로그아웃하시겠습니까?</string>
-    <string name="settings_source_github">GitHub</string>
-    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_source_repo">소스 코드</string>
+    <string name="settings_help">도움말 &amp; 팁</string>
     <string name="settings_licenses">오픈소스 라이선스</string>
 
     <!-- Data Management (추가) -->
@@ -372,6 +372,12 @@
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_us_box">미국 박스오피스</string>
     <string name="discover_view_all">전체(%d) ></string>
+
+    <!-- Search Source Type -->
+    <string name="search_type_disk">클라우드 리소스</string>
+    <string name="search_type_movie">영화</string>
+    <string name="search_type_show">드라마</string>
+    <string name="search_type_person">인물</string>
 
     <!-- Genre Names -->
     <string name="genre_action">액션</string>

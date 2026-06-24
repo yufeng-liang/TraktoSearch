@@ -4,9 +4,15 @@ import android.content.Intent
 import android.net.Uri
 import android.graphics.Bitmap
 import android.os.Environment
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.tracktosearch.ui.util.showToast
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.AnimatedVisibility
@@ -51,6 +57,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -70,6 +78,8 @@ import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.StarHalf
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -94,6 +104,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -119,6 +130,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -139,6 +151,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
+import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
@@ -147,6 +160,8 @@ import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.queryExistingFile
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -187,8 +202,23 @@ fun DetailScreen(
     }
 
     val listState = rememberLazyListState()
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val detailCoroutineScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        scrollToTopProvider.register {
+            detailCoroutineScope.launch {
+                listState.animateScrollToItem(0)
+            }
+        }
+        onDispose {
+            scrollToTopProvider.unregister()
+        }
+    }
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
+    var playingVideoKey by remember { mutableStateOf<String?>(null) }
+    var selectedBackdropIndex by remember { mutableIntStateOf(-1) }
+    var showAllVideos by remember { mutableStateOf(false) }
 
     // 评论翻译映射
     val translatedMap = remember(uiState.translatedComments) {
@@ -216,7 +246,7 @@ fun DetailScreen(
         if (shouldLoadMore) {
             if (selectedTab == 0 && displayedCount < uiState.resources.size) {
                 displayedCount = (displayedCount + 30).coerceAtMost(uiState.resources.size)
-            } else if (selectedTab == 1 && uiState.hasMoreComments && !uiState.isLoadingMoreComments) {
+            } else if (selectedTab == 1 && uiState.sectionVisible.comments && uiState.hasMoreComments && !uiState.isLoadingMoreComments) {
                 viewModel.loadMoreComments()
             }
         }
@@ -258,28 +288,43 @@ fun DetailScreen(
                         onToggleSeason = { viewModel.toggleSeason(it) },
                         onToggleEpisodeWatched = { season, episode, traktId ->
                             viewModel.toggleEpisodeWatched(season, episode, traktId)
-                        }
+                        },
+                        onVideoClick = { video -> playingVideoKey = video.key },
+                        onBackdropClick = { index -> selectedBackdropIndex = index },
+                        onShowAllVideos = { showAllVideos = true },
+                        sectionVisible = uiState.sectionVisible
                     )
                 }
 
                 // Tab 行（吸顶，共用同一个）
+                val showCommentsTab = uiState.sectionVisible.comments
+                val showRecommendationsTab = uiState.sectionVisible.recommendations
+                val tabCount = 1 + (if (showCommentsTab) 1 else 0) + (if (showRecommendationsTab) 1 else 0)
+                // 修正 selectedTab 范围
+                val effectiveTab = selectedTab.coerceAtMost(tabCount - 1)
+                if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
                     PrimaryTabRow(selectedTabIndex = selectedTab) {
                         Tab(
                             selected = selectedTab == 0,
-                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 0 },
+                            onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
                             text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", modifier = Modifier.animateContentSize()) }
                         )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 1 },
-                            text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", modifier = Modifier.animateContentSize()) }
-                        )
-                        Tab(
-                            selected = selectedTab == 2,
-                            onClick = { view.performHaptic(HapticType.TICK); selectedTab = 2 },
-                            text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", modifier = Modifier.animateContentSize()) }
-                        )
+                        if (showCommentsTab) {
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
+                                text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", modifier = Modifier.animateContentSize()) }
+                            )
+                        }
+                        if (showRecommendationsTab) {
+                            val recTabIndex = if (showCommentsTab) 2 else 1
+                            Tab(
+                                selected = selectedTab == recTabIndex,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
+                                text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", modifier = Modifier.animateContentSize()) }
+                            )
+                        }
                     }
                 }
 
@@ -365,7 +410,7 @@ fun DetailScreen(
                 }
 
                 // ===== 评论 Tab 内容 =====
-                if (selectedTab == 1) {
+                if (uiState.sectionVisible.comments && selectedTab == 1) {
                     val commentsToShow = uiState.comments
                     item(key = "comments_header") {
                         Row(
@@ -476,7 +521,7 @@ fun DetailScreen(
                 }
 
                 // ===== 推荐 Tab 内容 =====
-                if (selectedTab == 2) {
+                if (uiState.sectionVisible.recommendations && selectedTab == (if (uiState.sectionVisible.comments) 2 else 1)) {
                     val recommendations = uiState.recommendations
                     when {
                         uiState.isLoadingRecommendations -> {
@@ -687,6 +732,41 @@ fun DetailScreen(
                 )
             }
 
+            // YouTube 内置播放器
+            if (playingVideoKey != null) {
+                YouTubePlayerOverlay(
+                    videoKey = playingVideoKey!!,
+                    videoTitle = "",
+                    onDismiss = { playingVideoKey = null }
+                )
+            }
+
+            // 截图滑动查看
+            if (selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty()) {
+                BackdropPagerOverlay(
+                    backdrops = uiState.backdrops,
+                    initialIndex = selectedBackdropIndex,
+                    onDismiss = { selectedBackdropIndex = -1 }
+                )
+            }
+
+            // 全部预告片与截图弹窗
+            if (showAllVideos) {
+                FullVideosImagesSheet(
+                    videos = uiState.videos,
+                    backdrops = uiState.backdrops,
+                    onDismiss = { showAllVideos = false },
+                    onVideoClick = { video ->
+                        showAllVideos = false
+                        playingVideoKey = video.key
+                    },
+                    onBackdropClick = { index ->
+                        showAllVideos = false
+                        selectedBackdropIndex = index
+                    }
+                )
+            }
+
             // 未登录用户引导登录弹窗
             if (uiState.showLoginPrompt) {
                 AlertDialog(
@@ -741,7 +821,11 @@ private fun DetailHeaderContent(
     onPosterClick: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
     onToggleSeason: (Int) -> Unit = {},
-    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit = { _, _, _ -> }
+    onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit = { _, _, _ -> },
+    onVideoClick: (TmdbVideo) -> Unit = {},
+    onBackdropClick: (Int) -> Unit = {},
+    onShowAllVideos: () -> Unit = {},
+    sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -859,43 +943,29 @@ private fun DetailHeaderContent(
                         )
                     }
                 }
-                // 上映日期
+                // 上映日期 + 时长
                 Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    if (!uiState.releaseDate.isEmpty()) {
-                        val dateText = if (uiState.releaseDate.length >= 10) {
+                    val dateText = if (!uiState.releaseDate.isEmpty()) {
+                        if (uiState.releaseDate.length >= 10) {
                             "${uiState.releaseDate.substring(0, 4)}-${uiState.releaseDate.substring(5, 7)}-${uiState.releaseDate.substring(8, 10)}"
                         } else {
                             uiState.releaseDate
                         }
-                        Text(
-                            text = dateText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     } else if (uiState.year != null) {
-                        Text(
-                            text = "${uiState.year}年",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                // 时长
-                Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
-                    if (uiState.runtime != null && uiState.runtime!! > 0) {
+                        "${uiState.year}年"
+                    } else ""
+                    val runtimeText = if (uiState.runtime != null && uiState.runtime!! > 0) {
                         val hours = uiState.runtime!! / 60
                         val minutes = uiState.runtime!! % 60
-                        val runtimeText = if (hours > 0) {
-                            stringResource(R.string.detail_runtime_hours, hours, minutes)
+                        if (hours > 0) {
+                            " (${stringResource(R.string.detail_runtime_hours, hours, minutes)})"
                         } else {
-                            stringResource(R.string.detail_runtime_minutes, minutes)
+                            " (${stringResource(R.string.detail_runtime_minutes, minutes)})"
                         }
+                    } else ""
+                    if (dateText.isNotEmpty() || runtimeText.isNotEmpty()) {
                         Text(
-                            text = runtimeText,
+                            text = dateText + runtimeText,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
@@ -905,7 +975,7 @@ private fun DetailHeaderContent(
                 }
                 // 多平台评分（固定高度区域）
                 Spacer(modifier = Modifier.height(8.dp))
-                Box(modifier = Modifier.height(54.dp)) {
+                Box(modifier = Modifier.height(46.dp)) {
                     if (uiState.ratings != null) {
                         RatingsRow(uiState.ratings)
                     } else {
@@ -945,6 +1015,7 @@ private fun DetailHeaderContent(
                     }
                 }
                 // 用户评分控件
+                if (sectionVisible.myRating) {
                 Box(modifier = Modifier.height(42.dp)) {
                     UserRatingBar(
                         userRating = uiState.userRating,
@@ -964,6 +1035,7 @@ private fun DetailHeaderContent(
                             onRatingSelected(rating)
                         }
                     )
+                }
                 }
                 // 标记已看按钮 + 想看按钮
                 Row(
@@ -1093,6 +1165,7 @@ private fun DetailHeaderContent(
         }
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
+        if (sectionVisible.cast) {
         val hasCredits = uiState.cast.isNotEmpty() || uiState.crew.isNotEmpty()
         var showFullCast by remember { mutableStateOf(false) }
         Column(
@@ -1161,9 +1234,63 @@ private fun DetailHeaderContent(
                 )
             }
         }
+        } // end if (sectionVisible.cast)
+
+        // 预告片与截图横向滑动栏
+        if (sectionVisible.videosImages && (uiState.videos.isNotEmpty() || uiState.backdrops.isNotEmpty() || uiState.isLoadingVideosImages)) {
+            if (uiState.videos.isNotEmpty() || uiState.backdrops.isNotEmpty()) {
+                VideosAndImagesSection(
+                    videos = uiState.videos,
+                    backdrops = uiState.backdrops,
+                    onVideoClick = onVideoClick,
+                    onBackdropClick = onBackdropClick,
+                    onShowAll = onShowAllVideos
+                )
+            } else {
+                // 骨架屏占位，防止加载后内容跳变
+                Column(modifier = Modifier.padding(bottom = 12.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(100.dp)
+                                .height(18.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                        )
+                    }
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(horizontal = 0.dp)
+                    ) {
+                        items(3) {
+                            Box(
+                                modifier = Modifier
+                                    .width(240.dp)
+                                    .height(135.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // 简介标签 + 折叠/展开正文
-        if (uiState.overview.isNotEmpty()) {
+        if (sectionVisible.overview && uiState.overview.isNotEmpty()) {
             Column(modifier = Modifier.padding(bottom = 8.dp)) {
                 Text(
                     text = "${stringResource(R.string.detail_overview_label)}：",
@@ -1212,10 +1339,10 @@ private fun RatingsRow(ratings: MultiRatings) {
         row2.add(Triple("RT", Color(0xFFFF4444), ratings.rottenTomatoes))
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // 第一行：始终渲染，无数据时用透明占位保持高度
         Row(
-            modifier = Modifier.fillMaxWidth().height(24.dp),
+            modifier = Modifier.fillMaxWidth().height(20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1231,7 +1358,7 @@ private fun RatingsRow(ratings: MultiRatings) {
         }
         // 第二行：始终渲染，无数据时用透明占位保持高度
         Row(
-            modifier = Modifier.fillMaxWidth().height(24.dp),
+            modifier = Modifier.fillMaxWidth().height(20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1254,12 +1381,12 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         when (label) {
             "TMDB" -> Icon(
                 Icons.Filled.Star, contentDescription = null,
-                modifier = Modifier.size(18.dp), tint = color
+                modifier = Modifier.size(14.dp), tint = color
             )
             "IMDb" -> Surface(
                 shape = RoundedCornerShape(2.dp),
@@ -1268,22 +1395,20 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
                 Text(
                     text = label,
                     style = MaterialTheme.typography.titleSmall.copy(
-                        fontSize = 15.sp, fontWeight = FontWeight.Bold
+                        fontSize = 11.sp, fontWeight = FontWeight.Bold
                     ),
                     color = Color.Black,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    modifier = Modifier.padding(horizontal = 3.dp, vertical = 0.dp)
                 )
             }
             "RT" -> Text(
                 text = "🍅",
-                fontSize = 18.sp,
-                //改为向上偏移1dp
+                fontSize = 14.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
             "MTC" -> Text(
                 text = "🎯",
-                fontSize = 18.sp,
-                //改为向上偏移1dp
+                fontSize = 14.sp,
                 modifier = Modifier.offset(y = -1.dp)
             )
         }
@@ -1291,7 +1416,7 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
         if (label != "IMDb") {
             Text(
                 text = label,
-                style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -1299,7 +1424,7 @@ private fun RatingBadge(label: String, color: Color, value: String, modifier: Mo
 
         Text(
             text = value,
-            style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
+            style = MaterialTheme.typography.titleSmall.copy(fontSize = 12.sp),
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -1393,6 +1518,7 @@ private fun RatingDialog(
     var selectedRating by remember(initialRating) { mutableIntStateOf(initialRating ?: 0) }
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+    val ratingView = LocalView.current
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
@@ -1467,6 +1593,7 @@ private fun RatingDialog(
                                             indication = null,
                                             enabled = !isSubmitting,
                                             onClick = {
+                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == halfValue) 0 else halfValue
                                             }
                                         )
@@ -1481,6 +1608,7 @@ private fun RatingDialog(
                                             indication = null,
                                             enabled = !isSubmitting,
                                             onClick = {
+                                                ratingView.performHaptic(HapticType.TICK)
                                                 selectedRating = if (selectedRating == fullValue) 0 else fullValue
                                             }
                                         )
@@ -1581,7 +1709,7 @@ private fun CrewSection(
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = stringResource(R.string.detail_cast_all),
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable(onClick = onShowAll)
             )
@@ -2688,6 +2816,632 @@ private fun CommentItem(
     }
 }
 
+// ==================== 预告片与截图 ====================
+
+@Composable
+private fun VideosAndImagesSection(
+    videos: List<TmdbVideo>,
+    backdrops: List<String>,
+    onVideoClick: (TmdbVideo) -> Unit = {},
+    onBackdropClick: (Int) -> Unit = {},
+    onShowAll: () -> Unit = {}
+) {
+    val totalCount = videos.size + backdrops.size
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.detail_videos_section),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = stringResource(R.string.detail_videos_all, totalCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(onClick = onShowAll)
+            )
+        }
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 0.dp)
+        ) {
+            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { index, video ->
+                VideoCard(
+                    video = video,
+                    onClick = { onVideoClick(video) }
+                )
+            }
+            itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
+                BackdropCard(
+                    backdropUrl = backdropUrl,
+                    onClick = { onBackdropClick(index) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoCard(
+    video: TmdbVideo,
+    onClick: () -> Unit
+) {
+    val thumbnailUrl = "https://img.youtube.com/vi/${video.key}/hqdefault.jpg"
+    val typeLabel = when (video.type) {
+        "Trailer" -> stringResource(R.string.detail_video_trailer)
+        "Teaser" -> stringResource(R.string.detail_video_teaser)
+        "Clip" -> stringResource(R.string.detail_video_clip)
+        "Featurette" -> stringResource(R.string.detail_video_clip)
+        "Behind the Scenes" -> stringResource(R.string.detail_video_clip)
+        else -> video.type
+    }
+    Box(
+        modifier = Modifier
+            .width(240.dp)
+            .height(135.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = thumbnailUrl,
+            contentDescription = video.name,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        // 半透明渐变遮罩
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .align(Alignment.BottomCenter)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                    )
+                )
+        )
+        // 播放按钮
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .align(Alignment.Center)
+                .background(Color.White.copy(alpha = 0.85f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.PlayArrow,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        // 类型标签
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = Color.Black.copy(alpha = 0.6f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(6.dp)
+        ) {
+            Text(
+                text = typeLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+        }
+        // 视频标题
+        Text(
+            text = video.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 8.dp, end = 8.dp, bottom = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun BackdropCard(backdropUrl: String, onClick: () -> Unit = {}) {
+    Box(
+        modifier = Modifier
+            .width(240.dp)
+            .height(135.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = backdropUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+// ==================== 全部预告片与截图弹窗 ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FullVideosImagesSheet(
+    videos: List<TmdbVideo>,
+    backdrops: List<String>,
+    onDismiss: () -> Unit,
+    onVideoClick: (TmdbVideo) -> Unit = {},
+    onBackdropClick: (Int) -> Unit = {}
+) {
+    val hasVideos = videos.isNotEmpty()
+    val hasBackdrops = backdrops.isNotEmpty()
+    val tabCount = (if (hasVideos) 1 else 0) + (if (hasBackdrops) 1 else 0)
+    // 默认选中预告片Tab（如果有）
+    val initialPage = if (hasVideos) 0 else 0
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabCount })
+
+    // 同步 pager 和 tab
+    val selectedTabIndex = pagerState.currentPage
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_videos_all_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.detail_close))
+                }
+            }
+
+            // Tab 行
+            if (tabCount > 1) {
+                PrimaryTabRow(
+                    selectedTabIndex = selectedTabIndex,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (hasVideos) {
+                        Tab(
+                            selected = selectedTabIndex == 0,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            text = { Text(stringResource(R.string.detail_videos_trailers_section, videos.size)) }
+                        )
+                    }
+                    if (hasBackdrops) {
+                        val backdropTabIndex = if (hasVideos) 1 else 0
+                        Tab(
+                            selected = selectedTabIndex == backdropTabIndex,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(backdropTabIndex) } },
+                            text = { Text(stringResource(R.string.detail_videos_backdrops_section, backdrops.size)) }
+                        )
+                    }
+                }
+            }
+
+            // HorizontalPager 内容
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f),
+                userScrollEnabled = tabCount > 1
+            ) { page ->
+                // 计算当前 page 对应的内容
+                val showVideos = if (hasVideos) page == 0 else false
+                val showBackdrops = if (hasVideos) page == 1 else page == 0
+
+                when {
+                    showVideos -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
+                                FullVideoItem(
+                                    video = video,
+                                    onClick = { onVideoClick(video) }
+                                )
+                            }
+                        }
+                    }
+                    showBackdrops -> {
+                        LazyColumn(
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
+                                FullBackdropItem(
+                                    backdropUrl = backdropUrl,
+                                    onClick = { onBackdropClick(index) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullVideoItem(
+    video: TmdbVideo,
+    onClick: () -> Unit
+) {
+    val thumbnailUrl = "https://img.youtube.com/vi/${video.key}/hqdefault.jpg"
+    val typeLabel = when (video.type) {
+        "Trailer" -> stringResource(R.string.detail_video_trailer)
+        "Teaser" -> stringResource(R.string.detail_video_teaser)
+        "Clip" -> stringResource(R.string.detail_video_clip)
+        "Featurette" -> stringResource(R.string.detail_video_clip)
+        "Behind the Scenes" -> stringResource(R.string.detail_video_clip)
+        else -> video.type
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 缩略图
+        Box(
+            modifier = Modifier
+                .width(120.dp)
+                .height(68.dp)
+                .clip(RoundedCornerShape(6.dp))
+        ) {
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = video.name,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // 播放按钮
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .align(Alignment.Center)
+                    .background(Color.White.copy(alpha = 0.85f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.Black,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = video.name,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Text(
+                    text = typeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullBackdropItem(
+    backdropUrl: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+    ) {
+        AsyncImage(
+            model = backdropUrl,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+    Spacer(modifier = Modifier.height(6.dp))
+}
+
+// ==================== 预告片播放界面 ====================
+
+@Composable
+private fun YouTubePlayerOverlay(
+    videoKey: String,
+    videoTitle: String,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val thumbnailUrl = "https://img.youtube.com/vi/$videoKey/hqdefault.jpg"
+    val watchUrl = "https://www.youtube.com/watch?v=$videoKey"
+
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .statusBarsPadding()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onDismiss
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            // 缩略图 + 播放按钮
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.Black.copy(alpha = 0.3f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {} // 阻止穿透
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(thumbnailUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = videoTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    error = null,
+                    fallback = null
+                )
+                // 播放按钮
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
+                            context.startActivity(intent)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.PlayArrow,
+                        contentDescription = stringResource(R.string.detail_video_play),
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 视频标题
+            if (videoTitle.isNotEmpty()) {
+                Text(
+                    text = videoTitle,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 在浏览器中打开按钮
+            FilledTonalButton(onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
+                context.startActivity(intent)
+            }) {
+                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(stringResource(R.string.detail_video_open_browser))
+            }
+        }
+
+        // 关闭按钮
+        IconButton(
+            onClick = onDismiss,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+        ) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = stringResource(R.string.detail_close),
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+// ==================== 截图滑动查看 ====================
+
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+private fun BackdropPagerOverlay(
+    backdrops: List<String>,
+    initialIndex: Int,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { backdrops.size })
+    // 追踪每张截图的保存状态
+    val savedBackdrops = remember { mutableStateOf<Set<Int>>(emptySet()) }
+
+    // 检查当前截图是否已保存
+    LaunchedEffect(pagerState.currentPage) {
+        val index = pagerState.currentPage
+        if (index in savedBackdrops.value) return@LaunchedEffect
+        val url = backdrops.getOrNull(index) ?: return@LaunchedEffect
+        val fileName = "TrackToSearch_backdrop_${index}.jpg"
+        val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
+        val exists = queryExistingFile(context, fileName, relativePath) != null
+        if (exists) {
+            savedBackdrops.value = savedBackdrops.value + index
+        }
+    }
+
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .statusBarsPadding()
+    ) {
+        // 图片区域（可点击背景退出）
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val backdropUrl = backdrops[page].replace("/w780/", "/original/")
+                AsyncImage(
+                    model = remember(backdropUrl) {
+                        ImageRequest.Builder(context)
+                            .data(backdropUrl)
+                            .crossfade(true)
+                            .size(1920)
+                            .build()
+                    },
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {} // 阻止穿透到背景
+                        )
+                )
+            }
+        }
+
+        // 顶部按钮栏（关闭在左，保存在右）
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 关闭按钮（左侧）
+            IconButton(onClick = onDismiss) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = stringResource(R.string.detail_back),
+                        tint = Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+
+            // 保存按钮（右侧，已保存显示打勾）
+            val currentIndex = pagerState.currentPage
+            val isSaved = currentIndex in savedBackdrops.value
+            IconButton(onClick = {
+                if (isSaved) {
+                    context.showToast(context.getString(R.string.poster_already_saved))
+                    return@IconButton
+                }
+                val currentUrl = backdrops[currentIndex].replace("/w780/", "/original/")
+                val fileName = "TrackToSearch_backdrop_${currentIndex}.jpg"
+                savePosterToGallery(context, scope, currentUrl, fileName) {
+                    savedBackdrops.value = savedBackdrops.value + currentIndex
+                }
+            }) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color.Black.copy(alpha = 0.4f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        if (isSaved) Icons.Filled.Check else Icons.Default.Download,
+                        contentDescription = if (isSaved) "已保存" else "保存",
+                        tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        // 页码
+        Text(
+            text = "${pagerState.currentPage + 1}/${backdrops.size}",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+    }
+}
+
 // ==================== 工具函数 ====================
 
 internal fun openResourceLink(context: android.content.Context, item: ResourceItem) {
@@ -2892,78 +3646,4 @@ private fun PosterFullscreenOverlay(
     }
 }
 
-private fun savePosterToGallery(context: android.content.Context, scope: CoroutineScope, posterUrl: String, title: String, onSaved: () -> Unit = {}) {
-    val imageLoader = context.imageLoader
-    scope.launch(Dispatchers.IO) {
-        try {
-            val result = imageLoader.execute(
-                ImageRequest.Builder(context)
-                    .data(posterUrl)
-                    .allowHardware(false)
-                    .build()
-            )
-            val bitmap = (result as? SuccessResult)?.drawable?.toBitmap()
-            if (bitmap != null) {
-                saveBitmapToGallery(context, scope, bitmap, title)
-                onSaved()
-            }
-        } catch (_: Exception) {
-            withContext(Dispatchers.Main) {
-                context.showToast("保存失败")
-            }
-        }
-    }
-}
-
-private fun saveBitmapToGallery(context: android.content.Context, scope: CoroutineScope, bitmap: Bitmap, title: String) {
-    val safeName = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_")
-    val filename = "TrackToSearch_${safeName}.jpg"
-    val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
-
-    // 检查是否已存在同名文件（防重复保存）
-    val existingUri = queryExistingFile(context, filename, relativePath)
-    if (existingUri != null) {
-        scope.launch(Dispatchers.Main) {
-            context.showToast("已存在: $filename")
-        }
-        return
-    }
-
-    val contentValues = android.content.ContentValues().apply {
-        put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, filename)
-        put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
-        put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, relativePath)
-    }
-    val uri = context.contentResolver.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-    if (uri != null) {
-        context.contentResolver.openOutputStream(uri)?.use { stream ->
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, stream)
-        }
-        scope.launch(Dispatchers.Main) {
-            context.showToast("已保存: $relativePath/$filename")
-        }
-    }
-}
-
-/** 查询 MediaStore 中是否已存在同名文件 */
-private fun queryExistingFile(context: android.content.Context, filename: String, relativePath: String): android.net.Uri? {
-    val selection = "${android.provider.MediaStore.Images.Media.DISPLAY_NAME} = ? AND ${android.provider.MediaStore.Images.Media.RELATIVE_PATH} = ?"
-    val selectionArgs = arrayOf(filename, relativePath)
-    val cursor = context.contentResolver.query(
-        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        arrayOf(android.provider.MediaStore.Images.Media._ID),
-        selection,
-        selectionArgs,
-        null
-    )
-    cursor?.use {
-        if (it.moveToFirst()) {
-            val id = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.Images.Media._ID))
-            return android.net.Uri.withAppendedPath(
-                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                id.toString()
-            )
-        }
-    }
-    return null
-}
+// savePosterToGallery, saveBitmapToGallery, queryExistingFile 已移至 com.tracktosearch.ui.component.GallerySaver

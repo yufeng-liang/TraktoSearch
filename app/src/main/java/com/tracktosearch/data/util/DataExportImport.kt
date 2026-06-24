@@ -27,7 +27,8 @@ data class ExportItem(
 data class ImportItem(
     val title: String,
     val watchedAt: String? = null,
-    val source: String
+    val source: String,
+    val mediaType: String? = null  // "movie" or "show", null means unknown
 )
 
 object DataExportImport {
@@ -121,6 +122,7 @@ object DataExportImport {
     /**
      * 解析 IMDb CSV 格式（想看列表导出）。
      * 表头示例: Position,Const,Created,Modified,Description,Title,URL,Title Type,...
+     * Title Type 值: movie, tvSeries, tvMiniSeries, short, tvMovie, video, etc.
      */
     fun parseImdbCsv(csvContent: String): List<ImportItem> {
         val rows = parseCsv(csvContent)
@@ -131,6 +133,7 @@ object DataExportImport {
 
         val titleIdx = header.indexOfFirst { it.equals("Title", ignoreCase = true) }
         val createdIdx = header.indexOfFirst { it.equals("Created", ignoreCase = true) }
+        val titleTypeIdx = header.indexOfFirst { it.equals("Title Type", ignoreCase = true) }
 
         if (titleIdx < 0) return emptyList()
 
@@ -141,12 +144,28 @@ object DataExportImport {
             val watchedAt = if (createdIdx >= 0 && createdIdx < row.size) {
                 row[createdIdx].trim().ifEmpty { null }
             } else null
+            val mediaType = if (titleTypeIdx >= 0 && titleTypeIdx < row.size) {
+                val titleType = row[titleTypeIdx].trim().lowercase()
+                when {
+                    titleType.contains("tvseries") || titleType.contains("tvminiseries") -> "show"
+                    titleType.contains("movie") || titleType.contains("short") || titleType.contains("video") -> "movie"
+                    else -> null
+                }
+            } else null
             ImportItem(
                 title = title,
                 watchedAt = watchedAt,
-                source = "IMDb"
+                source = "IMDb",
+                mediaType = mediaType
             )
         }
+    }
+
+    /**
+     * 解析 App 导出的 JSON 格式，恢复为 ExportData。
+     */
+    fun parseAppJson(jsonContent: String): ExportData {
+        return json.decodeFromString<ExportData>(jsonContent)
     }
 
     /**

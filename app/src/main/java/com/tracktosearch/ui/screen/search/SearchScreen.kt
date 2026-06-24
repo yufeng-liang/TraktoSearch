@@ -29,9 +29,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,6 +65,7 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 import dagger.hilt.EntryPoint
@@ -75,6 +79,8 @@ interface ViewedStorageProvider {
     fun viewedItemStorage(): ViewedItemStorage
 }
 
+enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
@@ -83,6 +89,8 @@ fun SearchScreen(
     onSearchClick: ((String) -> Unit)? = null,
     onOpenWebView: (url: String) -> Unit = {},
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
+    searchSourceType: SearchSourceType = SearchSourceType.DISK,
+    onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
@@ -100,6 +108,7 @@ fun SearchScreen(
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    var showTypeDropdown by remember { mutableStateOf(false) }
 
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
@@ -156,7 +165,9 @@ fun SearchScreen(
                         onClear = { searchQuery = "" },
                         onBack = onBack,
                         focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it }
+                        onFocusChanged = { isSearchFocused = it },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange
                     )
                     // 搜索结果数
                     Text(
@@ -191,7 +202,9 @@ fun SearchScreen(
                         onClear = { searchQuery = "" },
                         onBack = onBack,
                         focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it }
+                        onFocusChanged = { isSearchFocused = it },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange
                     )
                     LoadingView(message = stringResource(R.string.search_loading))
                 }
@@ -210,7 +223,9 @@ fun SearchScreen(
                         onClear = { searchQuery = "" },
                         onBack = onBack,
                         focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it }
+                        onFocusChanged = { isSearchFocused = it },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange
                     )
                     EmptyView(message = stringResource(R.string.search_no_results))
                 }
@@ -248,7 +263,66 @@ fun SearchScreen(
                                 maxLines = 1
                             )
                         },
-                        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                        leadingIcon = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                                if (onSearchSourceTypeChange != null) {
+                                    Box {
+                                        TextButton(
+                                            onClick = { showTypeDropdown = true },
+                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(32.dp)
+                                        ) {
+                                            Text(
+                                                text = stringResource(
+                                                    when (searchSourceType) {
+                                                        SearchSourceType.DISK -> R.string.search_type_disk
+                                                        SearchSourceType.MOVIE -> R.string.search_type_movie
+                                                        SearchSourceType.SHOW -> R.string.search_type_show
+                                                        SearchSourceType.PERSON -> R.string.search_type_person
+                                                    }
+                                                ),
+                                                fontSize = 12.sp,
+                                                maxLines = 1
+                                            )
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        }
+                                        DropdownMenu(
+                                            expanded = showTypeDropdown,
+                                            onDismissRequest = { showTypeDropdown = false }
+                                        ) {
+                                            SearchSourceType.entries.forEach { type ->
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(stringResource(
+                                                                when (type) {
+                                                                    SearchSourceType.DISK -> R.string.search_type_disk
+                                                                    SearchSourceType.MOVIE -> R.string.search_type_movie
+                                                                    SearchSourceType.SHOW -> R.string.search_type_show
+                                                                    SearchSourceType.PERSON -> R.string.search_type_person
+                                                                }
+                                                            ))
+                                                            if (type == searchSourceType) {
+                                                                Spacer(modifier = Modifier.width(8.dp))
+                                                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                            }
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        showTypeDropdown = false
+                                                        if (type != searchSourceType) {
+                                                            onSearchSourceTypeChange?.invoke(type)
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(24.dp),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -347,10 +421,13 @@ private fun SearchBarTop(
     onClear: () -> Unit,
     onBack: (() -> Unit)?,
     focusRequester: FocusRequester,
-    onFocusChanged: (Boolean) -> Unit
+    onFocusChanged: (Boolean) -> Unit,
+    searchSourceType: SearchSourceType = SearchSourceType.DISK,
+    onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    var showTypeDropdown by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -379,7 +456,66 @@ private fun SearchBarTop(
                     overflow = TextOverflow.Visible
                 )
             },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            leadingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                    if (onSearchSourceTypeChange != null) {
+                        Box {
+                            TextButton(
+                                onClick = { showTypeDropdown = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        when (searchSourceType) {
+                                            SearchSourceType.DISK -> R.string.search_type_disk
+                                            SearchSourceType.MOVIE -> R.string.search_type_movie
+                                            SearchSourceType.SHOW -> R.string.search_type_show
+                                            SearchSourceType.PERSON -> R.string.search_type_person
+                                        }
+                                    ),
+                                    fontSize = 12.sp,
+                                    maxLines = 1
+                                )
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                            DropdownMenu(
+                                expanded = showTypeDropdown,
+                                onDismissRequest = { showTypeDropdown = false }
+                            ) {
+                                SearchSourceType.entries.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(stringResource(
+                                                    when (type) {
+                                                        SearchSourceType.DISK -> R.string.search_type_disk
+                                                        SearchSourceType.MOVIE -> R.string.search_type_movie
+                                                        SearchSourceType.SHOW -> R.string.search_type_show
+                                                        SearchSourceType.PERSON -> R.string.search_type_person
+                                                    }
+                                                ))
+                                                if (type == searchSourceType) {
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            showTypeDropdown = false
+                                            if (type != searchSourceType) {
+                                                onSearchSourceTypeChange?.invoke(type)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             singleLine = true,
             shape = RoundedCornerShape(24.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -442,6 +578,18 @@ private fun SearchResultsContent(
     }
 
     val listState = rememberLazyListState()
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val coroutineScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        scrollToTopProvider.register {
+            coroutineScope.launch {
+                listState.animateScrollToItem(0)
+            }
+        }
+        onDispose {
+            scrollToTopProvider.unregister()
+        }
+    }
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,

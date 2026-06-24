@@ -7,6 +7,7 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.trakt.dto.TraktCommentUser
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
+import com.tracktosearch.data.remote.trakt.dto.TraktImages
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
@@ -17,8 +18,10 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
+import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -101,6 +104,10 @@ data class DetailUiState(
     // 演职员
     val cast: List<TmdbCast> = emptyList(),
     val crew: List<TmdbCrew> = emptyList(),
+    // 预告片与截图
+    val videos: List<TmdbVideo> = emptyList(),
+    val backdrops: List<String> = emptyList(),
+    val isLoadingVideosImages: Boolean = false,
     // 列表是否变更（标记已看后变为 true，上级页面用于决定是否刷新）
     val watchlistChanged: Boolean = false,
     // 相关推荐
@@ -116,7 +123,18 @@ data class DetailUiState(
     val isLoggedIn: Boolean = true,
     val showLoginPrompt: Boolean = false,
     // 电视剧标记已看弹窗
-    val showMarkWatchedDialog: Boolean = false
+    val showMarkWatchedDialog: Boolean = false,
+    // 详情页模块可见性设置
+    val sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
+)
+
+data class DetailSectionVisibility(
+    val cast: Boolean = true,
+    val videosImages: Boolean = true,
+    val overview: Boolean = true,
+    val myRating: Boolean = true,
+    val comments: Boolean = true,
+    val recommendations: Boolean = true
 )
 
 @HiltViewModel
@@ -127,7 +145,8 @@ class DetailViewModel @Inject constructor(
     private val ratingsRepository: RatingsRepository,
     private val viewedItemStorage: ViewedItemStorage,
     private val commentTranslator: CommentTranslator,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val detailSectionStorage: DetailSectionStorage
 ) : ViewModel() {
 
     companion object {
@@ -160,6 +179,20 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+        }
+        // 监听详情页模块可见性设置
+        viewModelScope.launch {
+            detailSectionStorage.sectionConfigs.collect { configs ->
+                val visibility = DetailSectionVisibility(
+                    cast = configs.find { it.id == "cast" }?.visible ?: true,
+                    videosImages = configs.find { it.id == "videos-images" }?.visible ?: true,
+                    overview = configs.find { it.id == "overview" }?.visible ?: true,
+                    myRating = configs.find { it.id == "my-rating" }?.visible ?: true,
+                    comments = configs.find { it.id == "comments" }?.visible ?: true,
+                    recommendations = configs.find { it.id == "recommendations" }?.visible ?: true
+                )
+                _uiState.value = _uiState.value.copy(sectionVisible = visibility)
+            }
         }
     }
 
@@ -221,7 +254,8 @@ class DetailViewModel @Inject constructor(
             displayTitle = title.replace("+", " "),
             year = year,
             isMarkedWatchlist = inWatchlist,
-            isMarkedWatched = isWatched
+            isMarkedWatched = isWatched,
+            isLoadingVideosImages = true
         )
 
         viewModelScope.launch {
@@ -248,6 +282,7 @@ class DetailViewModel @Inject constructor(
                             tmdbRating = e.rating
                             EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country)
                         }
+                        MediaType.PERSON -> null
                     }
                 }.getOrNull()
 
@@ -275,23 +310,29 @@ class DetailViewModel @Inject constructor(
                 startSearch()
             }
 
+            // 根据模块可见性设置，按需加载各模块数据
+            val visibility = _uiState.value.sectionVisible
+
             // 异步获取多平台评分
-            fetchRatingsAsync(tmdbRating)
+            if (visibility.myRating) fetchRatingsAsync(tmdbRating)
 
             // 异步获取评论
-            fetchComments()
+            if (visibility.comments) fetchComments()
 
-            // 异步获取季/集信息（仅电视剧）
+            // 异步获取季/集信息（仅电视剧，属于核心功能不受模块设置影响）
             fetchSeasons()
 
             // 异步获取演职员
-            fetchCredits()
+            if (visibility.cast) fetchCredits()
+
+            // 异步获取预告片与截图
+            if (visibility.videosImages) fetchVideosAndImages()
 
             // 异步获取相关推荐（内部合并检查当前影视+推荐项的想看/已看状态）
-            fetchRecommendations()
+            if (visibility.recommendations) fetchRecommendations()
 
             // 异步获取用户评分
-            fetchUserRating()
+            if (visibility.myRating) fetchUserRating()
         }
     }
 
@@ -496,6 +537,94 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    private fun fetchVideosAndImages() {
+        if (currentTmdbId <= 0) return
+        _uiState.value = _uiState.value.copy(isLoadingVideosImages = true)
+        viewModelScope.launch {
+            try {
+                val videosDeferred = async {
+                    when (currentMediaType) {
+                        MediaType.MOVIE -> tmdbRepository.getMovieVideos(currentTmdbId)
+                        MediaType.SHOW -> tmdbRepository.getTvVideos(currentTmdbId)
+                        MediaType.PERSON -> emptyList()
+                    }
+                }
+                val imagesDeferred = async {
+                    when (currentMediaType) {
+                        MediaType.MOVIE -> tmdbRepository.getMovieImages(currentTmdbId)
+                        MediaType.SHOW -> tmdbRepository.getTvImages(currentTmdbId)
+                        MediaType.PERSON -> emptyList()
+                    }
+                }
+                // Trakt 数据源（补充）
+                val traktVideosDeferred = async {
+                    if (currentTraktId > 0) {
+                        traktRepository.getVideos(currentTraktId.toString(), currentMediaType)
+                            .getOrDefault(emptyList())
+                    } else emptyList()
+                }
+                val traktImagesDeferred = async {
+                    if (currentTraktId > 0) {
+                        traktRepository.getImages(currentTraktId.toString(), currentMediaType)
+                            .getOrDefault(TraktImages())
+                    } else TraktImages()
+                }
+
+                val videos = videosDeferred.await()
+                val images = imagesDeferred.await()
+                val traktVideos = traktVideosDeferred.await()
+                val traktImagesData = traktImagesDeferred.await()
+
+                // 排序：official Trailer 优先，然后非 official Trailer，然后 Teaser，然后其他
+                val sortedVideos = videos
+                    .filter { it.site == "YouTube" && it.key.isNotEmpty() }
+                    .sortedWith(compareByDescending<TmdbVideo> { it.type == "Trailer" && it.official }
+                        .thenByDescending { it.type == "Trailer" }
+                        .thenByDescending { it.type == "Teaser" && it.official }
+                        .thenByDescending { it.type == "Teaser" }
+                        .thenByDescending { it.size })
+
+                // 合并 Trakt 视频（去重，补充 TMDB 没有的）
+                val existingYoutubeUrls = sortedVideos.map { "https://www.youtube.com/watch?v=${it.key}" }.toSet()
+                val traktExtraVideos = traktVideos
+                    .filter { it.site.equals("youtube", ignoreCase = true) && it.url.isNotEmpty() }
+                    .filter { it.url !in existingYoutubeUrls }
+                    .map { video ->
+                        // 从 YouTube URL 提取 video key
+                        val key = video.url.substringAfter("v=").substringBefore("&").substringBefore("#")
+                        TmdbVideo(
+                            id = "trakt_${key}",
+                            key = key,
+                            name = video.title,
+                            site = "YouTube",
+                            type = video.type.replaceFirstChar { it.uppercase() },
+                            official = video.official,
+                            size = video.size
+                        )
+                    }
+                val allVideos = sortedVideos + traktExtraVideos
+
+                // 合并截图：TMDB backdrops + Trakt fanart（去重）
+                val backdropUrls = images
+                    .map { "https://image.tmdb.org/t/p/w780${it.file_path}" }
+                    .toMutableList()
+                val traktFanartUrls = traktImagesData.fanart
+                    .map { if (it.startsWith("http")) it else "https://$it" }
+                    .filter { url -> backdropUrls.none { it.contains(url.substringAfterLast("/").substringBefore(".")) } }
+                backdropUrls.addAll(traktFanartUrls)
+
+                _uiState.value = _uiState.value.copy(
+                    videos = allVideos,
+                    backdrops = backdropUrls.take(20),
+                    isLoadingVideosImages = false
+                )
+            } catch (_: Exception) {
+                // 加载失败不影响页面正常显示
+                _uiState.value = _uiState.value.copy(isLoadingVideosImages = false)
+            }
+        }
+    }
+
     private fun fetchRecommendations() {
         if (currentTraktId <= 0) return
         viewModelScope.launch {
@@ -546,6 +675,7 @@ class DetailViewModel @Inject constructor(
                             }
                         }.awaitAll()
                     }
+                    MediaType.PERSON -> emptyList()
                 }
 
                 val filtered = enriched.filter { it.tmdbId > 0 }

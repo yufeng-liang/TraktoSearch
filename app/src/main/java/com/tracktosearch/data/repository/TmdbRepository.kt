@@ -99,6 +99,7 @@ class TmdbRepository @Inject constructor(
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
         val key = tmdbId.toString()
+        val tmdbLang = getTmdbLanguage()
         val cached = movieDetailCache.get(key)
         if (cached != null) {
             val chineseTitle = movieTitleCache.getOrPut(key) {
@@ -114,7 +115,7 @@ class TmdbRepository @Inject constructor(
                 rating = cached.vote_average,
                 runtime = cached.runtime,
                 releaseDate = cached.release_date ?: "",
-                country = cached.production_countries.joinToString(" · ") { it.name }
+                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, getTmdbLanguage()) }.joinToString(" · ")
             )
         }
 
@@ -135,7 +136,7 @@ class TmdbRepository @Inject constructor(
                     rating = detail.vote_average,
                     runtime = detail.runtime,
                     releaseDate = detail.release_date ?: "",
-                    country = detail.production_countries.joinToString(" · ") { it.name }
+                    country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · ")
                 )
             } else {
                 fallbackMovie(originalTitle, year)
@@ -147,6 +148,7 @@ class TmdbRepository @Inject constructor(
 
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
         val key = tmdbId.toString()
+        val tmdbLang = getTmdbLanguage()
         val cached = tvDetailCache.get(key)
         if (cached != null) {
             val chineseTitle = tvTitleCache.getOrPut(key) {
@@ -162,12 +164,12 @@ class TmdbRepository @Inject constructor(
                 rating = cached.vote_average,
                 episodeRunTime = cached.episode_run_time?.firstOrNull(),
                 releaseDate = cached.first_air_date ?: "",
-                country = cached.origin_country.map { codeToCountryName(it) }.joinToString(" · ")
+                country = cached.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · ")
             )
         }
 
         return try {
-            val response = tmdbApiService.getTvDetail(tmdbId, language = getTmdbLanguage())
+            val response = tmdbApiService.getTvDetail(tmdbId, language = tmdbLang)
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackTv(originalName, year)
                 tvDetailCache.put(key, detail)
@@ -183,7 +185,7 @@ class TmdbRepository @Inject constructor(
                     rating = detail.vote_average,
                     episodeRunTime = detail.episode_run_time?.firstOrNull(),
                     releaseDate = detail.first_air_date ?: "",
-                    country = detail.origin_country.map { codeToCountryName(it) }.joinToString(" · ")
+                    country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · ")
                 )
             } else {
                 fallbackTv(originalName, year)
@@ -252,6 +254,7 @@ class TmdbRepository @Inject constructor(
             val response = when (mediaType) {
                 MediaType.MOVIE -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage())
                 MediaType.SHOW -> tmdbApiService.getCredits(tmdbId, language = getTmdbLanguage())
+                MediaType.PERSON -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage()) // fallback
             }
             if (response.isSuccessful) {
                 response.body()?.also { creditsCache.put(key, it) }
@@ -268,6 +271,7 @@ class TmdbRepository @Inject constructor(
             val response = when (mediaType) {
                 MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
                 MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
+                MediaType.PERSON -> tmdbApiService.getMovieReviews(tmdbId, page) // fallback
             }
             if (response.isSuccessful) {
                 response.body()?.also { reviewsCache.put(key, it) }
@@ -330,13 +334,19 @@ class TmdbRepository @Inject constructor(
         return profilePath?.let { "$IMAGE_BASE_URL$it" }
     }
 
-    /** 将 ISO 3166-1 alpha-2 国家代码转换为当前 Locale 的国家名称 */
+    /** 将 ISO 3166-1 alpha-2 国家代码转换为当前应用语言的国家名称 */
     @Suppress("DEPRECATION")
-    private fun codeToCountryName(code: String): String {
+    private fun codeToCountryName(code: String, tmdbLang: String): String {
         if (code.length != 2) return code
         return try {
-            val locale = Locale("", code)
-            locale.displayCountry.ifEmpty { code }
+            val lang = when {
+                tmdbLang.startsWith("zh") -> Locale.SIMPLIFIED_CHINESE
+                tmdbLang.startsWith("en") -> Locale.ENGLISH
+                tmdbLang.startsWith("ja") -> Locale.JAPANESE
+                tmdbLang.startsWith("ko") -> Locale.KOREAN
+                else -> Locale.SIMPLIFIED_CHINESE
+            }
+            Locale(lang.language, code).displayCountry.ifEmpty { code }
         } catch (_: Exception) {
             code
         }
@@ -353,6 +363,28 @@ class TmdbRepository @Inject constructor(
                     searchMovieCache.put(key, it)
                 }
             } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** 搜索人物（TMDB，支持中文名搜索） */
+    suspend fun searchPerson(query: String): List<TmdbPersonSearchResult> {
+        return try {
+            val response = tmdbApiService.searchPerson(query = query, language = getTmdbLanguage())
+            if (response.isSuccessful) {
+                response.body()?.results ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** 多类型搜索（TMDB，同时搜索电影和剧集，支持中文名） */
+    suspend fun searchMulti(query: String): TmdbMultiSearchResponse? {
+        return try {
+            val response = tmdbApiService.searchMulti(query = query, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body() else null
         } catch (_: Exception) {
             null
         }
@@ -447,5 +479,49 @@ class TmdbRepository @Inject constructor(
         } catch (_: Exception) {
             null
         }
+    }
+
+    suspend fun getMovieVideos(id: Int): List<TmdbVideo> {
+        return try {
+            val lang = getTmdbLanguage()
+            val response = tmdbApiService.getMovieVideos(id, lang)
+            if (response.isSuccessful) response.body()?.results ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getTvVideos(id: Int): List<TmdbVideo> {
+        return try {
+            val lang = getTmdbLanguage()
+            val response = tmdbApiService.getTvVideos(id, lang)
+            if (response.isSuccessful) response.body()?.results ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getMovieImages(id: Int): List<TmdbImage> {
+        return try {
+            val response = tmdbApiService.getMovieImages(id, "zh,null")
+            if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    suspend fun getTvImages(id: Int): List<TmdbImage> {
+        return try {
+            val response = tmdbApiService.getTvImages(id, "zh,null")
+            if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** 获取人物图片（TMDB profiles） */
+    suspend fun getPersonImages(personId: Int): List<String> {
+        return try {
+            val response = tmdbApiService.getPersonImages(personId)
+            if (response.isSuccessful) {
+                response.body()?.profiles?.map { "https://image.tmdb.org/t/p/h632${it.file_path}" } ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) { emptyList() }
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -33,11 +34,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -49,7 +54,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,16 +77,26 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.component.queryExistingFile
+import android.os.Environment
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+
+private data class AgeInfo(val age: Int, val isDeceased: Boolean)
 
 @Composable
 fun PersonScreen(
@@ -92,6 +109,7 @@ fun PersonScreen(
     viewModel: PersonViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     BackHandler(enabled = true) { onBack() }
 
@@ -104,6 +122,8 @@ fun PersonScreen(
     // 全部作品展开状态
     var showAllMovies by remember { mutableStateOf(false) }
     var showAllTvShows by remember { mutableStateOf(false) }
+    var showAllPersonImages by remember { mutableStateOf(false) }
+    var selectedPersonImageIndex by remember { mutableIntStateOf(-1) }
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
@@ -139,13 +159,87 @@ fun PersonScreen(
                                 personId = uiState.person?.id ?: personId,
                                 name = uiState.person?.name ?: personName,
                                 profileUrl = profileUrl ?: uiState.person?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                birthday = uiState.person?.birthday,
-                                deathday = uiState.person?.deathday,
+                                birthday = uiState.person?.birthday ?: uiState.traktPerson?.birthday,
+                                deathday = uiState.person?.deathday ?: uiState.traktPerson?.death,
                                 placeOfBirth = uiState.person?.place_of_birth,
                                 biography = uiState.person?.biography ?: "",
-                                knownForDepartment = uiState.person?.known_for_department ?: "",
+                                knownForDepartment = uiState.person?.known_for_department ?: uiState.traktPerson?.known_for_department ?: "",
+                                gender = uiState.person?.gender,
+                                traktGender = uiState.traktPerson?.gender ?: "",
+                                traktBiography = uiState.traktPerson?.biography ?: "",
+                                traktHomepage = uiState.traktPerson?.homepage,
                                 isLoading = uiState.isLoading
                             )
+                        }
+
+                        // 人物图片横向滑动栏
+                        if (uiState.personImages.isNotEmpty() || uiState.isLoadingPersonImages) {
+                            item(key = "person_images_section") {
+                                Column(modifier = Modifier.padding(top = 16.dp)) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.person_images),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        if (uiState.personImages.isNotEmpty()) {
+                                            Text(
+                                                text = stringResource(R.string.person_all_count, uiState.personImages.size),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.clickable { showAllPersonImages = true }
+                                            )
+                                        }
+                                    }
+                                    if (uiState.personImages.isEmpty() && uiState.isLoadingPersonImages) {
+                                        // 骨架屏
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            items(5) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(110.dp)
+                                                        .height(165.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                                )
+                                            }
+                                        }
+                                    } else if (uiState.personImages.isNotEmpty()) {
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            itemsIndexed(uiState.personImages, key = { index, url -> "person_img_$index" }) { index, url ->
+                                                SubcomposeAsyncImage(
+                                                    model = remember(url) {
+                                                        ImageRequest.Builder(context)
+                                                            .data(url)
+                                                            .size(300)
+                                                            .crossfade(true)
+                                                            .build()
+                                                    },
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier
+                                                        .width(110.dp)
+                                                        .height(165.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clickable { selectedPersonImageIndex = index }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
 
                         if (uiState.movieCredits.isNotEmpty()) {
@@ -164,18 +258,12 @@ fun PersonScreen(
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable { showAllMovies = true }
-                                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.person_all),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
+                                        Text(
+                                            text = stringResource(R.string.person_all_count, uiState.movieCredits.size),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable { showAllMovies = true }
+                                        )
                                     }
                                     LazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -219,18 +307,12 @@ fun PersonScreen(
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable { showAllTvShows = true }
-                                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = stringResource(R.string.person_all),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
+                                        Text(
+                                            text = stringResource(R.string.person_all_count, uiState.tvCredits.size),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable { showAllTvShows = true }
+                                        )
                                     }
                                     LazyRow(
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -332,6 +414,27 @@ fun PersonScreen(
                             onShowClick = onShowClick,
                             viewModel = viewModel,
                             onDismiss = { showAllTvShows = false }
+                        )
+                    }
+
+                    // 人物图片大图查看
+                    if (selectedPersonImageIndex >= 0 && uiState.personImages.isNotEmpty()) {
+                        PersonImagePagerOverlay(
+                            images = uiState.personImages,
+                            initialIndex = selectedPersonImageIndex,
+                            onDismiss = { selectedPersonImageIndex = -1 }
+                        )
+                    }
+
+                    // 全部人物图片弹窗
+                    if (showAllPersonImages && uiState.personImages.isNotEmpty()) {
+                        AllPersonImagesSheet(
+                            images = uiState.personImages,
+                            onImageClick = { index ->
+                                showAllPersonImages = false
+                                selectedPersonImageIndex = index
+                            },
+                            onDismiss = { showAllPersonImages = false }
                         )
                     }
                 }
@@ -673,6 +776,10 @@ private fun PersonHeaderContent(
     placeOfBirth: String?,
     biography: String,
     knownForDepartment: String,
+    gender: Int? = null,
+    traktGender: String = "",
+    traktBiography: String = "",
+    traktHomepage: String? = null,
     isLoading: Boolean = false
 ) {
     val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -680,6 +787,57 @@ private fun PersonHeaderContent(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     var showFullBio by remember { mutableStateOf(false) }
+
+    // 计算年龄数值
+    val ageInfo = remember(birthday, deathday) {
+        if (birthday != null && birthday.length >= 4) {
+            try {
+                val birthYear = birthday.substring(0, 4).toInt()
+                val birthMonth = if (birthday.length >= 7) birthday.substring(5, 7).toInt() else 1
+                val birthDay = if (birthday.length >= 10) birthday.substring(8, 10).toInt() else 1
+
+                if (deathday != null && deathday.length >= 4) {
+                    val deathYear = deathday.substring(0, 4).toInt()
+                    val deathMonth = if (deathday.length >= 7) deathday.substring(5, 7).toInt() else 12
+                    val deathDay = if (deathday.length >= 10) deathday.substring(8, 10).toInt() else 31
+                    val age = if (deathMonth > birthMonth || (deathMonth == birthMonth && deathDay >= birthDay)) {
+                        deathYear - birthYear
+                    } else {
+                        deathYear - birthYear - 1
+                    }
+                    AgeInfo(age, isDeceased = true)
+                } else {
+                    val now = java.util.Calendar.getInstance()
+                    val age = if (now.get(java.util.Calendar.MONTH) + 1 > birthMonth ||
+                        (now.get(java.util.Calendar.MONTH) + 1 == birthMonth && now.get(java.util.Calendar.DAY_OF_MONTH) >= birthDay)) {
+                        now.get(java.util.Calendar.YEAR) - birthYear
+                    } else {
+                        now.get(java.util.Calendar.YEAR) - birthYear - 1
+                    }
+                    AgeInfo(age, isDeceased = false)
+                }
+            } catch (_: Exception) { null }
+        } else null
+    }
+
+    // 年龄文本
+    val ageText = if (ageInfo != null) {
+        if (ageInfo.isDeceased) stringResource(R.string.person_age_deceased, ageInfo.age)
+        else "${ageInfo.age}${stringResource(R.string.person_age)}"
+    } else null
+
+    // 性别文本：优先用 Trakt（更详细），降级用 TMDB
+    val genderText = when {
+        traktGender.equals("male", ignoreCase = true) -> stringResource(R.string.person_gender_male)
+        traktGender.equals("female", ignoreCase = true) -> stringResource(R.string.person_gender_female)
+        traktGender.equals("non_binary", ignoreCase = true) -> stringResource(R.string.person_gender_non_binary)
+        gender == 2 -> stringResource(R.string.person_gender_male)
+        gender == 1 -> stringResource(R.string.person_gender_female)
+        else -> null
+    }
+
+    // biography 优先用 TMDB（跟随语言），如果为空则用 Trakt 的
+    val displayBiography = if (biography.isNotEmpty()) biography else traktBiography
 
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 48.dp)) {
         Row(
@@ -785,6 +943,14 @@ private fun PersonHeaderContent(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
+                // 性别显示
+                if (genderText != null) {
+                    Text(
+                        text = genderText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
                 if (isLoading && birthday.isNullOrEmpty()) {
                     Box(
                         modifier = Modifier
@@ -804,8 +970,10 @@ private fun PersonHeaderContent(
                     } else {
                         dateText
                     }
+                    // 日期 + 年龄
+                    val displayText = if (ageText != null) "$lifeText · $ageText" else lifeText
                     Text(
-                        text = lifeText,
+                        text = displayText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -839,9 +1007,9 @@ private fun PersonHeaderContent(
             color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(4.dp))
-        if (biography.isNotEmpty()) {
+        if (displayBiography.isNotEmpty()) {
             Text(
-                text = biography,
+                text = displayBiography,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = if (showFullBio) Int.MAX_VALUE else 4,
@@ -876,6 +1044,28 @@ private fun PersonHeaderContent(
                 text = stringResource(R.string.person_no_biography),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        // 主页链接
+        if (!traktHomepage.isNullOrEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = traktHomepage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(traktHomepage))
+                            context.startActivity(intent)
+                        } catch (_: Exception) { }
+                    }
             )
         }
     }
@@ -995,6 +1185,205 @@ private fun CreditCard(
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+        }
+    }
+}
+
+// ==================== 人物图片大图滑动查看 ====================
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PersonImagePagerOverlay(
+    images: List<String>,
+    initialIndex: Int,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { images.size })
+    // 追踪每张图片的保存状态
+    val savedImages = remember { mutableStateOf<Set<Int>>(emptySet()) }
+
+    // 检查当前图片是否已保存
+    LaunchedEffect(pagerState.currentPage) {
+        val index = pagerState.currentPage
+        if (index in savedImages.value) return@LaunchedEffect
+        val url = images.getOrNull(index) ?: return@LaunchedEffect
+        val fileName = "TrackToSearch_person_${index}.webp"
+        val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
+        val exists = queryExistingFile(context, fileName, relativePath) != null
+        if (exists) {
+            savedImages.value = savedImages.value + index
+        }
+    }
+
+    BackHandler(onBack = onDismiss)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.92f))
+            .statusBarsPadding()
+    ) {
+        // 图片区域（可点击背景退出）
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onDismiss
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                val imageUrl = images[page]
+                AsyncImage(
+                    model = remember(imageUrl) {
+                        ImageRequest.Builder(context)
+                            .data(imageUrl)
+                            .crossfade(true)
+                            .size(1920)
+                            .build()
+                    },
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {} // 阻止穿透到背景
+                        )
+                )
+            }
+        }
+
+        // 顶部按钮栏（关闭在左，保存在右）
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // 关闭按钮（左侧）
+            IconButton(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.detail_close),
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // 保存按钮（右侧）
+            val currentIndex = pagerState.currentPage
+            val isSaved = currentIndex in savedImages.value
+            IconButton(
+                onClick = {
+                    if (isSaved) {
+                        context.showToast(context.getString(R.string.poster_already_saved))
+                        return@IconButton
+                    }
+                    val currentUrl = images[currentIndex]
+                    val fileName = "TrackToSearch_person_${currentIndex}.webp"
+                    savePosterToGallery(context, scope, currentUrl, fileName) {
+                        savedImages.value = savedImages.value + currentIndex
+                    }
+                },
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+            ) {
+                Icon(
+                    if (isSaved) Icons.Filled.Check else Icons.Default.Download,
+                    contentDescription = if (isSaved) "已保存" else "保存",
+                    tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // 页码
+        Text(
+            text = "${pagerState.currentPage + 1}/${images.size}",
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+                .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+        )
+    }
+}
+
+// ==================== 全部人物图片弹窗 ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AllPersonImagesSheet(
+    images: List<String>,
+    onImageClick: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.person_images),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.detail_close))
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxHeight(0.85f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(images, key = { index, _ -> "person_img_all_$index" }) { index, url ->
+                    SubcomposeAsyncImage(
+                        model = remember(url) {
+                            ImageRequest.Builder(context)
+                                .data(url)
+                                .size(400)
+                                .crossfade(true)
+                                .build()
+                        },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(2f / 3f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .clickable { onImageClick(index) }
+                    )
+                }
+            }
         }
     }
 }

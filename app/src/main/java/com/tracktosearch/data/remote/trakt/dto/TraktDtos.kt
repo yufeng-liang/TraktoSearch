@@ -30,7 +30,9 @@ data class TraktShow(
     val year: Int = 0,
     val ids: TraktIds = TraktIds(),
     val rating: Double = 0.0,
-    val genres: List<String> = emptyList()
+    val genres: List<String> = emptyList(),
+    @kotlinx.serialization.SerialName("poster_path")
+    val posterPath: String? = null
 )
 
 @Serializable
@@ -218,5 +220,107 @@ data class TraktSearchResult(
     val type: String = "",
     val score: Double = 0.0,
     val movie: TraktMovie? = null,
-    val show: TraktShow? = null
+    val show: TraktShow? = null,
+    val person: TraktPerson? = null
+)
+
+@Serializable
+data class TraktPerson(
+    val name: String = "",
+    val ids: TraktIds = TraktIds()
+)
+
+@Serializable
+data class TraktPersonDetail(
+    val name: String = "",
+    val ids: TraktIds = TraktIds(),
+    val gender: String = "",
+    val known_for_department: String = "",
+    val biography: String = "",
+    val birthday: String? = null,
+    val death: String? = null,
+    val homepage: String? = null,
+    val headshot: String? = null
+)
+
+// ==================== Trakt 视频 DTO ====================
+
+@Serializable
+data class TraktVideo(
+    val title: String = "",
+    val url: String = "",
+    val site: String = "",
+    val type: String = "",
+    val size: Int = 0,
+    val official: Boolean = false,
+    val published_at: String? = null,
+    val country: String? = null,
+    val language: String? = null
+)
+
+// ==================== Trakt 图片 DTO ====================
+
+@Serializable
+data class TraktImages(
+    val fanart: List<String> = emptyList(),
+    val poster: List<String> = emptyList(),
+    val logo: List<String> = emptyList(),
+    val clearart: List<String> = emptyList(),
+    val banner: List<String> = emptyList(),
+    val thumb: List<String> = emptyList(),
+    val headshot: List<String> = emptyList()
+)
+
+@Serializable
+data class TraktMovieWithImages(
+    val title: String = "",
+    val year: Int? = null,
+    val ids: TraktIds = TraktIds(),
+    val images: TraktImages = TraktImages()
+)
+
+@Serializable
+data class TraktShowWithImages(
+    val title: String = "",
+    val year: Int? = null,
+    val ids: TraktIds = TraktIds(),
+    val images: TraktImages = TraktImages()
+)
+
+@Serializable
+data class TraktPersonWithImages(
+    val name: String = "",
+    val ids: TraktIds = TraktIds(),
+    val images: TraktImages = TraktImages()
+)
+
+// ==================== 发现页热门/期待 DTO ====================
+
+@Serializable
+data class TraktTrendingMovieResponse(
+    val watchers: Int = 0,
+    val movie: TraktMovie = TraktMovie()
+)
+
+@Serializable
+data class TraktTrendingShowResponse(
+    val watchers: Int = 0,
+    val show: TraktShow = TraktShow()
+)
+
+@Serializable
+data class TraktAnticipatedMovieResponse(
+    val list_count: Int = 0,
+    val movie: TraktMovie = TraktMovie()
+)
+
+@Serializable
+data class TraktAnticipatedShowResponse(
+    val list_count: Int = 0,
+    val show: TraktShow = TraktShow()
+)
+
+@Serializable
+data class TraktRecommendationShowResponse(
+    val show: TraktShow = TraktShow()
 )

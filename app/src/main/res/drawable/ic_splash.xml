@@ -1,11 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="192dp"
-        android:height="192dp"
-        android:gravity="center">
-        <bitmap
-            android:src="@drawable/ic_search_cloud"
-            android:gravity="center" />
-    </item>
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+    <!-- 白色单色图标，Android 12+ 系统启动页居中显示并自动按图标背景色着色 -->
+    <!-- 中心镂空圆（放大镜外圈） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M96,96m-40,0a40,40 0,1 0,80 0a40,40 0,1 0,-80 0zM96,96m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0z"
+        android:fillType="evenOdd"/>
+    <!-- 放大镜手柄 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M126,126l24,24l-12,12l-24,-24z"/>
+</vector>

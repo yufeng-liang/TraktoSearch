@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -50,6 +51,7 @@ import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -122,6 +124,21 @@ fun WatchlistScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
+    val movieGridState = rememberLazyGridState()
+    val showGridState = rememberLazyGridState()
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val gridCoroutineScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        scrollToTopProvider.register {
+            val currentGridState = if (tabPagerState.currentPage == 0) movieGridState else showGridState
+            gridCoroutineScope.launch {
+                currentGridState.animateScrollToItem(0)
+            }
+        }
+        onDispose {
+            scrollToTopProvider.unregister()
+        }
+    }
     val currentTheme by viewModel.themeMode.collectAsState()
 
     // 根据搜索关键词过滤当前 Tab 的列表
@@ -205,14 +222,14 @@ fun WatchlistScreen(
                 ) {
                 SegmentedButton(
                     selected = selectedMode == 0,
-                    onClick = { view.performHaptic(HapticType.TICK); selectedMode = 0 },
+                    onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 0 },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_mode_watchlist))
                 }
                 SegmentedButton(
                     selected = selectedMode == 1,
-                    onClick = { view.performHaptic(HapticType.TICK); selectedMode = 1 },
+                    onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 1 },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
                 ) {
                     Text(stringResource(R.string.watchlist_tab_history))
@@ -225,12 +242,12 @@ fun WatchlistScreen(
                 PrimaryTabRow(selectedTabIndex = selectedTab) {
                     Tab(
                         selected = selectedTab == 0,
-                        onClick = { view.performHaptic(HapticType.TICK); tabScope.launch { tabPagerState.animateScrollToPage(0) } },
+                        onClick = { view.performHaptic(HapticType.CLICK); tabScope.launch { tabPagerState.animateScrollToPage(0) } },
                         text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
                     )
                     Tab(
                         selected = selectedTab == 1,
-                        onClick = { view.performHaptic(HapticType.TICK); tabScope.launch { tabPagerState.animateScrollToPage(1) } },
+                        onClick = { view.performHaptic(HapticType.CLICK); tabScope.launch { tabPagerState.animateScrollToPage(1) } },
                         text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
                     )
                 }
@@ -256,7 +273,8 @@ fun WatchlistScreen(
                                 onOpenTrakt = null,
                                 onTraktSearch = null,
                                 emptyListText = stringResource(R.string.history_empty_movies),
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                gridState = movieGridState
                             )
                         } else {
                             MovieTabContent(
@@ -271,7 +289,8 @@ fun WatchlistScreen(
                                 onOpenTrakt = openTraktExternal,
                                 onTraktSearch = { query -> onTraktSearch("movie", query) },
                                 emptyListText = stringResource(R.string.watchlist_empty_movies),
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                gridState = movieGridState
                             )
                         }
                         1 -> if (selectedMode == 1) {
@@ -287,7 +306,8 @@ fun WatchlistScreen(
                                 onOpenTrakt = null,
                                 onTraktSearch = null,
                                 emptyListText = stringResource(R.string.history_empty_shows),
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                gridState = showGridState
                             )
                         } else {
                             ShowTabContent(
@@ -302,7 +322,8 @@ fun WatchlistScreen(
                                 onOpenTrakt = openTraktExternal,
                                 onTraktSearch = { query -> onTraktSearch("show", query) },
                                 emptyListText = stringResource(R.string.watchlist_empty_shows),
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                gridState = showGridState
                             )
                         }
                     }
@@ -347,6 +368,13 @@ fun WatchlistScreen(
                     keyboardActions = KeyboardActions(
                         onSearch = {
                             focusManager.clearFocus()
+                            // 搜索无结果时，自动跳转 Trakt 搜索（仅想看列表模式）
+                            if (searchQuery.isNotBlank() && selectedMode == 0) {
+                                val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
+                                if (noResults) {
+                                    onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                }
+                            }
                         }
                     ),
                     trailingIcon = {
@@ -390,7 +418,8 @@ private fun MovieTabContent(
     onOpenTrakt: (() -> Unit)?,
     onTraktSearch: ((String) -> Unit)?,
     emptyListText: String,
-    hazeState: HazeState
+    hazeState: HazeState,
+    gridState: LazyGridState
 ) {
     when {
         error != null && items.isEmpty() -> {
@@ -423,7 +452,7 @@ private fun MovieTabContent(
             )
         }
         else -> {
-            MovieGrid(items = items, onItemClick = onItemClick, hazeState = hazeState)
+            MovieGrid(items = items, onItemClick = onItemClick, hazeState = hazeState, gridState = gridState)
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -449,7 +478,8 @@ private fun ShowTabContent(
     onOpenTrakt: (() -> Unit)?,
     onTraktSearch: ((String) -> Unit)?,
     emptyListText: String,
-    hazeState: HazeState
+    hazeState: HazeState,
+    gridState: LazyGridState
 ) {
     when {
         error != null && items.isEmpty() -> {
@@ -482,7 +512,7 @@ private fun ShowTabContent(
             )
         }
         else -> {
-            ShowGrid(items = items, onItemClick = onItemClick, hazeState = hazeState)
+            ShowGrid(items = items, onItemClick = onItemClick, hazeState = hazeState, gridState = gridState)
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -499,11 +529,11 @@ private fun ShowTabContent(
 private fun MovieGrid(
     items: List<MovieUiItem>,
     onItemClick: (MovieUiItem) -> Unit,
-    hazeState: HazeState
+    hazeState: HazeState,
+    gridState: LazyGridState
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             state = gridState,
@@ -533,7 +563,7 @@ private fun MovieGrid(
             gridState = gridState,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp),
+                .padding(bottom = 96.dp, end = 16.dp),
             hazeState = hazeState
         )
     }
@@ -543,11 +573,11 @@ private fun MovieGrid(
 private fun ShowGrid(
     items: List<ShowUiItem>,
     onItemClick: (ShowUiItem) -> Unit,
-    hazeState: HazeState
+    hazeState: HazeState,
+    gridState: LazyGridState
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    val gridState = rememberLazyGridState()
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyVerticalGrid(
             state = gridState,

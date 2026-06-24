@@ -7,11 +7,18 @@ import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DiscoverSectionStorage
+import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -23,8 +30,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
@@ -34,12 +45,18 @@ data class DiscoverUiState(
     val tmdbPopularMovies: List<TmdbSearchResult> = emptyList(),
     val tmdbUpcomingMovies: List<TmdbSearchResult> = emptyList(),
     val traktRecommendations: List<TraktMovie> = emptyList(),
+    val traktTrendingMovies: List<TraktTrendingMovieResponse> = emptyList(),
+    val traktTrendingShows: List<TraktTrendingShowResponse> = emptyList(),
+    val traktAnticipatedMovies: List<TraktAnticipatedMovieResponse> = emptyList(),
+    val traktAnticipatedShows: List<TraktAnticipatedShowResponse> = emptyList(),
+    val traktShowRecommendations: List<TraktRecommendationShowResponse> = emptyList(),
     val popularTotal: Int = 0,
     val upcomingTotal: Int = 0,
     val recommendationsTotal: Int = 0,
     val isLoadingPopular: Boolean = false,
     val isLoadingUpcoming: Boolean = false,
     val isLoadingRecommendations: Boolean = false,
+    val isLoadingTrakt: Boolean = false,
     val popularError: String? = null,
     val upcomingError: String? = null,
     val recommendationsError: String? = null,
@@ -69,7 +86,8 @@ class DiscoverViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
-    private val discoverSectionStorage: DiscoverSectionStorage
+    private val discoverSectionStorage: DiscoverSectionStorage,
+    private val tokenStorage: TokenStorage
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
@@ -98,10 +116,25 @@ class DiscoverViewModel @Inject constructor(
     private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
 
     init {
-        loadDoubanHot()
-        loadTmdbPopular()
-        loadTmdbUpcoming()
-        loadTraktRecommendations()
+        loadVisibleSections()
+    }
+
+    /** 根据栏目可见性设置，按需加载各栏目数据 */
+    private fun loadVisibleSections() {
+        val configs = sectionConfigs.value
+        val visibleIds = configs.filter { it.visible }.map { it.id }.toSet()
+
+        // 豆瓣热榜：任一豆瓣栏目可见则加载
+        if (DOUBAN_CATEGORIES.any { it in visibleIds }) loadDoubanHot()
+        // TMDB 热门电影
+        if ("tmdb-popular" in visibleIds) loadTmdbPopular()
+        // TMDB 即将上映
+        if ("tmdb-upcoming" in visibleIds) loadTmdbUpcoming()
+        // Trakt 推荐电影
+        if ("trakt-recommendations" in visibleIds) loadTraktRecommendations()
+        // Trakt 数据（趋势/期待/剧集推荐）
+        val traktSectionIds = listOf("trakt-trending-movies", "trakt-trending-shows", "trakt-anticipated", "trakt-show-recommendations")
+        if (traktSectionIds.any { it in visibleIds }) loadTraktData()
     }
 
     fun loadDoubanHot() {
@@ -299,6 +332,116 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    fun loadTraktData() {
+        _uiState.value = _uiState.value.copy(isLoadingTrakt = true)
+        viewModelScope.launch {
+            try {
+                val isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+                val deferredTrendingMovies = async { traktRepository.getTrendingMovies(limit = 10) }
+                val deferredTrendingShows = async { traktRepository.getTrendingShows(limit = 10) }
+                val deferredAnticipatedMovies = async { traktRepository.getAnticipatedMovies(limit = 10) }
+                val deferredAnticipatedShows = async { traktRepository.getAnticipatedShows(limit = 10) }
+                val deferredShowRecs = if (isLoggedIn) {
+                    async { traktRepository.getShowRecommendations(limit = 10) }
+                } else null
+
+                val trendingMoviesResult = deferredTrendingMovies.await()
+                val trendingShowsResult = deferredTrendingShows.await()
+                val anticipatedMoviesResult = deferredAnticipatedMovies.await()
+                val anticipatedShowsResult = deferredAnticipatedShows.await()
+                val showRecsResult = deferredShowRecs?.await()
+
+                // 增强 Trakt 电影数据（海报+本地化标题）— 并行增强
+                val enhancedTrendingMovies = trendingMoviesResult.getOrNull()?.first?.let { items ->
+                    coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
+                } ?: emptyList()
+                val enhancedAnticipatedMovies = anticipatedMoviesResult.getOrNull()?.first?.let { items ->
+                    coroutineScope { items.map { async { it.copy(movie = enhanceTraktMovie(it.movie)) } }.awaitAll() }
+                } ?: emptyList()
+
+                // 增强 Trakt 剧集数据（海报+本地化标题）— 并行增强
+                val enhancedTrendingShows = trendingShowsResult.getOrNull()?.first?.let { items ->
+                    coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
+                } ?: emptyList()
+                val enhancedAnticipatedShows = anticipatedShowsResult.getOrNull()?.first?.let { items ->
+                    coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
+                } ?: emptyList()
+                val enhancedShowRecs = showRecsResult?.getOrNull()?.let { items ->
+                    if (items.isNotEmpty()) {
+                        val enhanced = coroutineScope { items.map { async { it.copy(show = enhanceTraktShow(it.show)) } }.awaitAll() }
+                        // 过滤掉没有海报的项，若全部失败则降级为热门剧集
+                        val withPosters = enhanced.filter { !it.show.posterPath.isNullOrEmpty() }
+                        if (withPosters.isNotEmpty()) withPosters else enhancedTrendingShows.map { trending ->
+                            com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(show = trending.show)
+                        }
+                    } else {
+                        // 已登录但推荐列表为空时，降级为热门剧集
+                        enhancedTrendingShows.map { trending ->
+                            com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
+                                show = trending.show
+                            )
+                        }
+                    }
+                } ?: (if (!isLoggedIn) {
+                    // 未登录时用热门剧集作为推荐降级
+                    enhancedTrendingShows.map { trending ->
+                        com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
+                            show = trending.show
+                        )
+                    }
+                } else {
+                    // 已登录但请求失败时，也降级为热门剧集
+                    enhancedTrendingShows.map { trending ->
+                        com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
+                            show = trending.show
+                        )
+                    }
+                })
+
+                _uiState.value = _uiState.value.copy(
+                    traktTrendingMovies = enhancedTrendingMovies,
+                    traktTrendingShows = enhancedTrendingShows,
+                    traktAnticipatedMovies = enhancedAnticipatedMovies,
+                    traktAnticipatedShows = enhancedAnticipatedShows,
+                    traktShowRecommendations = enhancedShowRecs,
+                    isLoadingTrakt = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
+            }
+        }
+    }
+
+    /** 增强 TraktMovie 数据（通过 TMDB 获取海报和本地化标题） */
+    private suspend fun enhanceTraktMovie(movie: TraktMovie): TraktMovie {
+        val tmdbId = movie.ids.tmdb
+        if (tmdbId <= 0) return movie
+        return try {
+            val detail = tmdbRepository.getMovieDetail(tmdbId)
+            if (detail != null) {
+                movie.copy(
+                    title = detail.title.ifBlank { movie.title },
+                    year = detail.release_date.take(4).toIntOrNull() ?: movie.year,
+                    posterPath = detail.poster_path
+                )
+            } else movie
+        } catch (_: Exception) { movie }
+    }
+
+    /** 增强 TraktShow 数据（通过 TMDB 获取海报和本地化标题） */
+    private suspend fun enhanceTraktShow(show: TraktShow): TraktShow {
+        val tmdbId = show.ids.tmdb
+        if (tmdbId <= 0) return show
+        return try {
+            val enrichment = tmdbRepository.enrichTv(tmdbId, show.title, show.year)
+            show.copy(
+                title = enrichment.chineseTitle.ifBlank { show.title },
+                year = enrichment.year ?: show.year,
+                posterPath = enrichment.posterUrl
+            )
+        } catch (_: Exception) { show }
+    }
+
     /** 通过 TMDB 获取本地化标题和海报路径 */
     private suspend fun enhanceWithTmdbData(movies: List<TraktMovie>): List<TraktMovie> {
         return movies.map { movie ->
@@ -394,11 +537,36 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /** Trakt 剧集卡片点击：通过 TMDB ID 转换为 Trakt ID 后跳转 */
+    fun navigateTraktShow(
+        show: TraktShow,
+        onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit
+    ) {
+        val tmdbId = show.ids.tmdb
+        if (tmdbId > 0) {
+            viewModelScope.launch {
+                _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
+                try {
+                    val traktResult = traktRepository.searchByTmdb(tmdbId, MediaType.SHOW)
+                    traktResult.onSuccess { searchResults ->
+                        val first = searchResults.firstOrNull()
+                        val traktId = first?.show?.ids?.trakt
+                        val imdbId = first?.show?.ids?.imdb ?: ""
+                        if (traktId != null && traktId > 0) {
+                            onNavigate(traktId, tmdbId, show.title, imdbId, show.rating)
+                        }
+                    }
+                } catch (_: Exception) {
+                    // 忽略
+                } finally {
+                    _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
+                }
+            }
+        }
+    }
+
     fun retryAll() {
-        loadDoubanHot()
-        loadTmdbPopular()
-        loadTmdbUpcoming()
-        loadTraktRecommendations()
+        loadVisibleSections()
     }
 
     // 豆瓣热榜卡片点击：通过 TMDB 搜索标题，再转换为 Trakt ID 后跳转详情页

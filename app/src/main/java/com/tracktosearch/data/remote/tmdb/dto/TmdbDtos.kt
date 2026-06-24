@@ -117,7 +117,8 @@ data class TmdbPerson(
     val biography: String = "",
     val place_of_birth: String? = null,
     val profile_path: String? = null,
-    val known_for_department: String = ""
+    val known_for_department: String = "",
+    val gender: Int? = null
 )
 
 @Serializable
@@ -159,10 +160,86 @@ data class TmdbSearchResponse(
 )
 
 @Serializable
+data class TmdbMultiSearchResponse(
+    val page: Int = 1,
+    val results: List<TmdbMultiSearchResult> = emptyList(),
+    val total_pages: Int = 0,
+    val total_results: Int = 0
+)
+
+@Serializable
 data class TmdbSearchResult(
     val id: Int = 0,
     val title: String = "",
     val overview: String = "",
     val poster_path: String? = null,
     val release_date: String = ""
+)
+
+@Serializable
+data class TmdbMultiSearchResult(
+    val id: Int = 0,
+    val title: String? = null,
+    val name: String? = null,
+    val overview: String = "",
+    val poster_path: String? = null,
+    val release_date: String? = null,
+    val first_air_date: String? = null,
+    val media_type: String = "",
+    val vote_average: Double = 0.0
+)
+
+@Serializable
+data class TmdbPersonSearchResponse(
+    val page: Int = 1,
+    val results: List<TmdbPersonSearchResult> = emptyList(),
+    val total_pages: Int = 0,
+    val total_results: Int = 0
+)
+
+@Serializable
+data class TmdbPersonSearchResult(
+    val id: Int = 0,
+    val name: String = "",
+    val original_name: String = "",
+    val profile_path: String? = null,
+    val known_for_department: String = "",
+    val gender: Int = 0,
+    val popularity: Double = 0.0,
+    val known_for: List<TmdbSearchResult> = emptyList()
+)
+
+@Serializable
+data class TmdbVideosResponse(
+    val results: List<TmdbVideo> = emptyList()
+)
+
+@Serializable
+data class TmdbVideo(
+    val id: String = "",
+    val key: String = "",
+    val name: String = "",
+    val site: String = "",
+    val type: String = "",
+    val official: Boolean = false,
+    val size: Int = 0
+)
+
+@Serializable
+data class TmdbImagesResponse(
+    val backdrops: List<TmdbImage> = emptyList()
+)
+
+@Serializable
+data class TmdbPersonImagesResponse(
+    val id: Int = 0,
+    val profiles: List<TmdbImage> = emptyList()
+)
+
+@Serializable
+data class TmdbImage(
+    val file_path: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val iso_639_1: String? = null
 )

@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPerson
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
+import com.tracktosearch.data.remote.trakt.dto.TraktImages
+import com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -26,7 +28,10 @@ data class PersonUiState(
     val isLoadingMoreMovies: Boolean = false,
     val isLoadingMoreTvShows: Boolean = false,
     val error: String? = null,
-    val resolvingTmdbId: Int? = null
+    val resolvingTmdbId: Int? = null,
+    val traktPerson: TraktPersonDetail? = null,
+    val personImages: List<String> = emptyList(), // 人物图片URL列表（headshot + fanart等）
+    val isLoadingPersonImages: Boolean = false
 )
 
 @HiltViewModel
@@ -73,10 +78,78 @@ class PersonViewModel @Inject constructor(
                         hasMoreMovies = movieCreditsPageResult.hasMore,
                         hasMoreTvShows = tvCreditsPageResult.hasMore
                     )
+                    // 异步加载 Trakt 人物数据（静默失败）
+                    loadTraktPerson(person.name)
                 }
                 loaded = true
             } catch (_: Exception) {
                 _uiState.value = PersonUiState(error = "Failed to load person data")
+            }
+        }
+    }
+
+    private fun loadTraktPerson(personName: String) {
+        // 提前设置图片加载状态，避免图片栏目出现时导致下方内容跳变
+        _uiState.value = _uiState.value.copy(isLoadingPersonImages = true)
+        viewModelScope.launch {
+            try {
+                val searchResult = traktRepository.searchPeople(personName, limit = 5)
+                searchResult.onSuccess { (results, _) ->
+                    val personResult = results.firstOrNull { it.person != null }
+                    val slug = personResult?.person?.ids?.slug
+                    if (!slug.isNullOrEmpty()) {
+                        val detailResult = traktRepository.getPersonSummary(slug)
+                        detailResult.onSuccess { detail ->
+                            _uiState.value = _uiState.value.copy(traktPerson = detail)
+                        }
+                        // 获取 Trakt 人物图片
+                        val imagesResult = traktRepository.getPersonImages(slug)
+                        imagesResult.onSuccess { images ->
+                            val imageUrls = mutableListOf<String>()
+                            images.headshot.forEach { url ->
+                                val fullUrl = if (url.startsWith("http")) url else "https://$url"
+                                imageUrls.add(fullUrl)
+                            }
+                            images.fanart.forEach { url ->
+                                val fullUrl = if (url.startsWith("http")) url else "https://$url"
+                                imageUrls.add(fullUrl)
+                            }
+                            images.poster.forEach { url ->
+                                val fullUrl = if (url.startsWith("http")) url else "https://$url"
+                                imageUrls.add(fullUrl)
+                            }
+                            if (imageUrls.isNotEmpty()) {
+                                _uiState.value = _uiState.value.copy(personImages = imageUrls)
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                // 静默失败，不影响页面正常显示
+            }
+            // 额外获取 TMDB 人物图片并合并
+            loadTmdbPersonImages()
+        }
+    }
+
+    private fun loadTmdbPersonImages() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingPersonImages = true)
+            try {
+                val tmdbImages = tmdbRepository.getPersonImages(currentPersonId)
+                if (tmdbImages.isNotEmpty()) {
+                    val existing = _uiState.value.personImages.toMutableList()
+                    val existingSet = existing.toSet()
+                    tmdbImages.forEach { url ->
+                        if (url !in existingSet) {
+                            existing.add(url)
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(personImages = existing)
+                }
+            } catch (_: Exception) {
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoadingPersonImages = false)
             }
         }
     }

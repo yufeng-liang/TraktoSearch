@@ -138,4 +138,75 @@ interface TraktApiService {
         @Query("limit") limit: Int = 10,
         @Query("extended") extended: String = "full"
     ): Response<List<TraktMovie>>
+
+    @GET("people/{id}")
+    suspend fun getPersonSummary(
+        @Path("id") id: String,
+        @Query("extended") extended: String = "full"
+    ): Response<TraktPersonDetail>
+
+    @GET("search/person")
+    suspend fun searchPeople(
+        @Query("query") query: String,
+        @Query("limit") limit: Int = 10,
+        @Query("page") page: Int = 1
+    ): Response<List<TraktSearchResult>>
+
+    @GET("movies/trending")
+    suspend fun getTrendingMovies(
+        @Query("extended") extended: String = "full",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10
+    ): Response<List<TraktTrendingMovieResponse>>
+
+    @GET("shows/trending")
+    suspend fun getTrendingShows(
+        @Query("extended") extended: String = "full",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10
+    ): Response<List<TraktTrendingShowResponse>>
+
+    @GET("movies/anticipated")
+    suspend fun getAnticipatedMovies(
+        @Query("extended") extended: String = "full",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10
+    ): Response<List<TraktAnticipatedMovieResponse>>
+
+    @GET("shows/anticipated")
+    suspend fun getAnticipatedShows(
+        @Query("extended") extended: String = "full",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 10
+    ): Response<List<TraktAnticipatedShowResponse>>
+
+    @GET("recommendations/shows")
+    suspend fun getShowRecommendations(
+        @Query("limit") limit: Int = 10,
+        @Query("extended") extended: String = "full"
+    ): Response<List<TraktRecommendationShowResponse>>
+
+    @GET("movies/{id}/videos")
+    suspend fun getMovieVideos(@Path("id") id: String): Response<List<TraktVideo>>
+
+    @GET("shows/{id}/videos")
+    suspend fun getShowVideos(@Path("id") id: String): Response<List<TraktVideo>>
+
+    @GET("movies/{id}")
+    suspend fun getMovieWithImages(
+        @Path("id") id: String,
+        @Query("extended") extended: String = "full,images"
+    ): Response<TraktMovieWithImages>
+
+    @GET("shows/{id}")
+    suspend fun getShowWithImages(
+        @Path("id") id: String,
+        @Query("extended") extended: String = "full,images"
+    ): Response<TraktShowWithImages>
+
+    @GET("people/{id}")
+    suspend fun getPersonWithImages(
+        @Path("id") id: String,
+        @Query("extended") extended: String = "full,images"
+    ): Response<TraktPersonWithImages>
 }

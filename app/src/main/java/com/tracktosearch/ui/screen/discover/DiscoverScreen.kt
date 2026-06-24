@@ -10,15 +10,20 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,11 +43,18 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktShow
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.screen.settings.SettingsViewModel
+import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -71,6 +83,11 @@ fun DiscoverScreen(
     var showPopularAll by remember { mutableStateOf(false) }
     var showUpcomingAll by remember { mutableStateOf(false) }
     var showRecommendationsAll by remember { mutableStateOf(false) }
+    var showTrendingMoviesAll by remember { mutableStateOf(false) }
+    var showTrendingShowsAll by remember { mutableStateOf(false) }
+    var showAnticipatedAll by remember { mutableStateOf(false) }
+    var showShowRecsAll by remember { mutableStateOf(false) }
+    var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(showDoubanAllDialog) {
         val catId = showDoubanAllDialog ?: return@LaunchedEffect
@@ -99,6 +116,19 @@ fun DiscoverScreen(
         uiState.doubanHotCategories.filter { it.id in visibleDoubanIds }.all { it.error != null && it.items.isEmpty() }
 
     val discoverHazeState = remember { HazeState() }
+    val discoverListState = rememberLazyListState()
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val coroutineScope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        scrollToTopProvider.register {
+            coroutineScope.launch {
+                discoverListState.animateScrollToItem(0)
+            }
+        }
+        onDispose {
+            scrollToTopProvider.unregister()
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -138,6 +168,7 @@ fun DiscoverScreen(
             } else {
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 LazyColumn(
+                    state = discoverListState,
                     modifier = modifier
                         .fillMaxSize()
                         .hazeSource(state = discoverHazeState),
@@ -186,7 +217,7 @@ fun DiscoverScreen(
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbPopular() },
-                                    onViewAll = { view.performHaptic(HapticType.TICK); showPopularAll = true }
+                                    onViewAll = { showPopularAll = true }
                                 )
                             }
                         }
@@ -205,7 +236,7 @@ fun DiscoverScreen(
                                         }
                                     },
                                     onRetry = { viewModel.loadTmdbUpcoming() },
-                                    onViewAll = { view.performHaptic(HapticType.TICK); showUpcomingAll = true }
+                                    onViewAll = { showUpcomingAll = true }
                                 )
                             }
                         }
@@ -224,7 +255,81 @@ fun DiscoverScreen(
                                         }
                                     },
                                     onRetry = { viewModel.loadTraktRecommendations() },
-                                    onViewAll = { view.performHaptic(HapticType.TICK); showRecommendationsAll = true }
+                                    onViewAll = { showRecommendationsAll = true }
+                                )
+                            }
+                        }
+                        // Trakt 热门电影
+                        "trakt-trending-movies" -> {
+                            item(key = "trakt_trending_movies") {
+                                TraktTrendingMovieSection(
+                                    items = uiState.traktTrendingMovies,
+                                    isLoading = uiState.isLoadingTrakt,
+                                    resolvingItemId = uiState.resolvingTmdbId,
+                                    totalCount = uiState.traktTrendingMovies.size,
+                                    onItemClick = { movie ->
+                                        viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                                            onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                                        }
+                                    },
+                                    onViewAll = { showTrendingMoviesAll = true }
+                                )
+                            }
+                        }
+                        // Trakt 热门剧集
+                        "trakt-trending-shows" -> {
+                            item(key = "trakt_trending_shows") {
+                                TraktTrendingShowSection(
+                                    items = uiState.traktTrendingShows,
+                                    isLoading = uiState.isLoadingTrakt,
+                                    resolvingItemId = uiState.resolvingTmdbId,
+                                    totalCount = uiState.traktTrendingShows.size,
+                                    onItemClick = { show ->
+                                        viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                                            onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                                        }
+                                    },
+                                    onViewAll = { showTrendingShowsAll = true }
+                                )
+                            }
+                        }
+                        // Trakt 最受期待
+                        "trakt-anticipated" -> {
+                            item(key = "trakt_anticipated") {
+                                TraktAnticipatedSection(
+                                    anticipatedMovies = uiState.traktAnticipatedMovies,
+                                    anticipatedShows = uiState.traktAnticipatedShows,
+                                    isLoading = uiState.isLoadingTrakt,
+                                    resolvingItemId = uiState.resolvingTmdbId,
+                                    totalCount = uiState.traktAnticipatedMovies.size + uiState.traktAnticipatedShows.size,
+                                    onMovieClick = { movie ->
+                                        viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                                            onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                                        }
+                                    },
+                                    onShowClick = { show ->
+                                        viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                                            onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                                        }
+                                    },
+                                    onViewAll = { showAnticipatedAll = true }
+                                )
+                            }
+                        }
+                        // 为你推荐剧集
+                        "trakt-show-recommendations" -> {
+                            item(key = "trakt_show_recommendations") {
+                                TraktShowRecommendationSection(
+                                    items = uiState.traktShowRecommendations,
+                                    isLoading = uiState.isLoadingTrakt,
+                                    resolvingItemId = uiState.resolvingTmdbId,
+                                    totalCount = uiState.traktShowRecommendations.size,
+                                    onItemClick = { show ->
+                                        viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                                            onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                                        }
+                                    },
+                                    onViewAll = { showShowRecsAll = true }
                                 )
                             }
                         }
@@ -241,15 +346,29 @@ fun DiscoverScreen(
                         style = HazeMaterials.thin()
                     )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         text = stringResource(R.string.discover_title),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    IconButton(onClick = { showDiscoverSectionsDialog = true }) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = stringResource(R.string.settings_discover_sections),
+                            tint = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -328,6 +447,80 @@ fun DiscoverScreen(
             onDismiss = { showRecommendationsAll = false }
         )
     }
+
+    // Trakt 热门电影全部弹窗
+    if (showTrendingMoviesAll) {
+        TraktMovieAllSheet(
+            title = stringResource(R.string.discover_trakt_trending_movies),
+            items = uiState.traktTrendingMovies.map { it.movie },
+            isLoading = false,
+            hasMore = false,
+            currentPage = 1,
+            onItemClick = { movie ->
+                viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                    onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                }
+            },
+            onLoadMore = { },
+            onDismiss = { showTrendingMoviesAll = false }
+        )
+    }
+
+    // Trakt 热门剧集全部弹窗
+    if (showTrendingShowsAll) {
+        TraktShowAllSheet(
+            title = stringResource(R.string.discover_trakt_trending_shows),
+            items = uiState.traktTrendingShows.map { it.show },
+            onItemClick = { show ->
+                viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                }
+            },
+            onDismiss = { showTrendingShowsAll = false }
+        )
+    }
+
+    // Trakt 最受期待全部弹窗（电影+剧集混合）
+    if (showAnticipatedAll) {
+        TraktAnticipatedAllSheet(
+            anticipatedMovies = uiState.traktAnticipatedMovies,
+            anticipatedShows = uiState.traktAnticipatedShows,
+            onMovieClick = { movie ->
+                viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                    onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                }
+            },
+            onShowClick = { show ->
+                viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                }
+            },
+            onDismiss = { showAnticipatedAll = false }
+        )
+    }
+
+    // 为你推荐剧集全部弹窗
+    if (showShowRecsAll) {
+        TraktShowAllSheet(
+            title = stringResource(R.string.discover_trakt_recommendations_shows),
+            items = uiState.traktShowRecommendations.map { it.show },
+            onItemClick = { show ->
+                viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    onShowClick(traktId, tmdbId, title, imdbId, traktRating)
+                }
+            },
+            onDismiss = { showShowRecsAll = false }
+        )
+    }
+
+    // 自定义发现页栏目弹窗
+    if (showDiscoverSectionsDialog) {
+        val settingsViewModel = hiltViewModel<SettingsViewModel>()
+        DiscoverSectionsDialog(
+            viewModel = settingsViewModel,
+            onDismiss = { showDiscoverSectionsDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -382,7 +575,7 @@ private fun TmdbMovieSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    items(movies, key = { it.id }) { movie ->
+                    itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }) { _, movie ->
                         MovieCard(
                             title = movie.title,
                             posterPath = movie.poster_path,
@@ -450,7 +643,7 @@ private fun TraktRecommendationSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    items(movies, key = { "${it.ids.trakt}_${it.ids.tmdb}_${it.title}" }) { movie ->
+                    itemsIndexed(movies, key = { index, movie -> "trakt_movie_${index}_${movie.ids.trakt}_${movie.ids.tmdb}" }) { _, movie ->
                         MovieCard(
                             title = movie.title,
                             posterPath = movie.posterPath,
@@ -474,6 +667,7 @@ private fun MovieCard(
     posterPath: String?,
     year: String,
     rating: String?,
+    subtitle: String? = null,
     isResolving: Boolean,
     onClick: () -> Unit
 ) {
@@ -585,6 +779,15 @@ private fun MovieCard(
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -688,7 +891,7 @@ private fun TmdbAllSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(items, key = { it.id }) { movie ->
+                itemsIndexed(items, key = { index, movie -> "all_tmdb_${index}_${movie.id}" }) { _, movie ->
                     MovieCard(
                         title = movie.title,
                         posterPath = movie.poster_path,
@@ -771,7 +974,7 @@ private fun TraktMovieAllSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(items, key = { "${it.ids.trakt}_${it.ids.tmdb}_${it.title}" }) { movie ->
+                itemsIndexed(items, key = { index, movie -> "all_trakt_${index}_${movie.ids.trakt}" }) { _, movie ->
                     MovieCard(
                         title = movie.title,
                         posterPath = movie.posterPath,
@@ -799,6 +1002,131 @@ private fun TraktMovieAllSheet(
     }
 }
 
+/** Trakt 剧集全部弹窗（无分页，直接展示已加载数据） */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TraktShowAllSheet(
+    title: String,
+    items: List<TraktShow>,
+    onItemClick: (TraktShow) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val listState = rememberLazyGridState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_close))
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                state = listState,
+                modifier = Modifier.fillMaxHeight(0.8f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(items, key = { index, show -> "all_trakt_show_${index}_${show.ids.trakt}" }) { _, show ->
+                    MovieCard(
+                        title = show.title,
+                        posterPath = show.posterPath,
+                        year = if (show.year > 0) show.year.toString() else "",
+                        rating = if (show.rating > 0)
+                            String.format("%.1f", show.rating) else null,
+                        isResolving = false,
+                        onClick = { onItemClick(show) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Trakt 最受期待全部弹窗（电影+剧集混合，无分页） */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TraktAnticipatedAllSheet(
+    anticipatedMovies: List<TraktAnticipatedMovieResponse>,
+    anticipatedShows: List<TraktAnticipatedShowResponse>,
+    onMovieClick: (TraktMovie) -> Unit,
+    onShowClick: (TraktShow) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val listState = rememberLazyGridState()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.discover_trakt_anticipated),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_close))
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                state = listState,
+                modifier = Modifier.fillMaxHeight(0.8f),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 先展示电影，再展示剧集
+                itemsIndexed(anticipatedMovies, key = { index, item -> "all_anticip_m_${index}_${item.movie.ids.trakt}" }) { _, item ->
+                    MovieCard(
+                        title = item.movie.title,
+                        posterPath = item.movie.posterPath,
+                        year = if (item.movie.year > 0) item.movie.year.toString() else "",
+                        rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
+                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                        isResolving = false,
+                        onClick = { onMovieClick(item.movie) }
+                    )
+                }
+                itemsIndexed(anticipatedShows, key = { index, item -> "all_anticip_s_${index}_${item.show.ids.trakt}" }) { _, item ->
+                    MovieCard(
+                        title = item.show.title,
+                        posterPath = item.show.posterPath,
+                        year = if (item.show.year > 0) item.show.year.toString() else "",
+                        rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                        isResolving = false,
+                        onClick = { onShowClick(item.show) }
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) {
     "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
@@ -806,4 +1134,280 @@ private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) 
     "douban-top250" -> stringResource(R.string.discover_douban_top250)
     "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
     else -> categoryId
+}
+
+/** Trakt 热门电影栏目 */
+@Composable
+private fun TraktTrendingMovieSection(
+    items: List<TraktTrendingMovieResponse>,
+    isLoading: Boolean,
+    resolvingItemId: Int?,
+    totalCount: Int,
+    onItemClick: (TraktMovie) -> Unit,
+    onViewAll: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.discover_trakt_trending_movies),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            if (totalCount > 0) {
+                Row(
+                    modifier = Modifier
+                        .clickable { onViewAll() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.discover_view_all, totalCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        when {
+            isLoading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(5) { DoubanHotCardSkeleton() }
+                }
+            }
+            items.isEmpty() -> EmptyRow()
+            else -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    itemsIndexed(items, key = { index, item -> "trending_movie_${index}_${item.movie.ids.trakt}" }) { _, item ->
+                        MovieCard(
+                            title = item.movie.title,
+                            posterPath = item.movie.posterPath,
+                            year = if (item.movie.year > 0) item.movie.year.toString() else "",
+                            rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
+                            subtitle = stringResource(R.string.discover_watchers, item.watchers),
+                            isResolving = resolvingItemId == item.movie.ids.tmdb,
+                            onClick = { onItemClick(item.movie) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Trakt 热门剧集栏目 */
+@Composable
+private fun TraktTrendingShowSection(
+    items: List<TraktTrendingShowResponse>,
+    isLoading: Boolean,
+    resolvingItemId: Int?,
+    totalCount: Int,
+    onItemClick: (TraktShow) -> Unit,
+    onViewAll: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.discover_trakt_trending_shows),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            if (totalCount > 0) {
+                Row(
+                    modifier = Modifier
+                        .clickable { onViewAll() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.discover_view_all, totalCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        when {
+            isLoading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(5) { DoubanHotCardSkeleton() }
+                }
+            }
+            items.isEmpty() -> EmptyRow()
+            else -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }) { _, item ->
+                        MovieCard(
+                            title = item.show.title,
+                            posterPath = item.show.posterPath,
+                            year = if (item.show.year > 0) item.show.year.toString() else "",
+                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                            subtitle = stringResource(R.string.discover_watchers, item.watchers),
+                            isResolving = resolvingItemId == item.show.ids.tmdb,
+                            onClick = { onItemClick(item.show) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Trakt 最受期待栏目（电影+剧集混合） */
+@Composable
+private fun TraktAnticipatedSection(
+    anticipatedMovies: List<TraktAnticipatedMovieResponse>,
+    anticipatedShows: List<TraktAnticipatedShowResponse>,
+    isLoading: Boolean,
+    resolvingItemId: Int?,
+    totalCount: Int,
+    onMovieClick: (TraktMovie) -> Unit,
+    onShowClick: (TraktShow) -> Unit,
+    onViewAll: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.discover_trakt_anticipated),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            if (totalCount > 0) {
+                Row(
+                    modifier = Modifier
+                        .clickable { onViewAll() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.discover_view_all, totalCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        when {
+            isLoading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(5) { DoubanHotCardSkeleton() }
+                }
+            }
+            anticipatedMovies.isEmpty() && anticipatedShows.isEmpty() -> EmptyRow()
+            else -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    // 先展示电影，再展示剧集
+                    itemsIndexed(anticipatedMovies, key = { index, item -> "anticip_m_${index}_${item.movie.ids.trakt}" }) { _, item ->
+                        MovieCard(
+                            title = item.movie.title,
+                            posterPath = item.movie.posterPath,
+                            year = if (item.movie.year > 0) item.movie.year.toString() else "",
+                            rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
+                            subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                            isResolving = resolvingItemId == item.movie.ids.tmdb,
+                            onClick = { onMovieClick(item.movie) }
+                        )
+                    }
+                    itemsIndexed(anticipatedShows, key = { index, item -> "anticip_s_${index}_${item.show.ids.trakt}" }) { _, item ->
+                        MovieCard(
+                            title = item.show.title,
+                            posterPath = item.show.posterPath,
+                            year = if (item.show.year > 0) item.show.year.toString() else "",
+                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                            subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                            isResolving = resolvingItemId == item.show.ids.tmdb,
+                            onClick = { onShowClick(item.show) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 为你推荐剧集栏目（仅登录用户可见） */
+@Composable
+private fun TraktShowRecommendationSection(
+    items: List<TraktRecommendationShowResponse>,
+    isLoading: Boolean,
+    resolvingItemId: Int?,
+    totalCount: Int,
+    onItemClick: (TraktShow) -> Unit,
+    onViewAll: () -> Unit
+) {
+    if (items.isEmpty() && !isLoading) return // 未登录时无数据不显示
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.discover_trakt_recommendations_shows),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            if (totalCount > 0) {
+                Row(
+                    modifier = Modifier
+                        .clickable { onViewAll() }
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.discover_view_all, totalCount),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        when {
+            isLoading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(5) { DoubanHotCardSkeleton() }
+                }
+            }
+            items.isEmpty() -> EmptyRow()
+            else -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }) { _, item ->
+                        MovieCard(
+                            title = item.show.title,
+                            posterPath = item.show.posterPath,
+                            year = if (item.show.year > 0) item.show.year.toString() else "",
+                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                            isResolving = resolvingItemId == item.show.ids.tmdb,
+                            onClick = { onItemClick(item.show) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 通用栏目标题 */
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+        modifier = Modifier.padding(bottom = 8.dp)
+    )
 }

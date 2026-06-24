@@ -13,7 +13,7 @@
     <string name="discover_title">Discover</string>
     <string name="discover_popular">Popular</string>
     <string name="discover_upcoming">Upcoming</string>
-    <string name="discover_recommended">Recommended</string>
+    <string name="discover_recommended">Recommended Movies</string>
 
     <!-- Search Screen -->
     <string name="search_title">Search Resources</string>
@@ -70,6 +70,10 @@
     <string name="trakt_search_tab_shows">TV Shows</string>
     <string name="trakt_search_tab_movies_count">Movies (%d)</string>
     <string name="trakt_search_tab_shows_count">TV Shows (%d)</string>
+    <string name="trakt_search_tab_persons">Person</string>
+    <string name="trakt_search_tab_persons_count">Person (%d)</string>
+    <string name="trakt_search_hint_persons">Search people on Trakt</string>
+    <string name="trakt_search_no_persons">No people found on Trakt</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">Back</string>
@@ -196,14 +200,34 @@
     <string name="detail_rating_cancel">Cancel</string>
     <string name="detail_rating_no_rating">Not rated</string>
     <string name="detail_rating_hint">Tap left/right of a star for half/full point. Tap again to clear.</string>
+    <string name="detail_videos_section">Videos &amp; Images</string>
+    <string name="detail_videos_all">All (%1$d)</string>
+    <string name="detail_videos_all_title">Videos &amp; Images</string>
+    <string name="detail_videos_trailers_section">Trailers (%1$d)</string>
+    <string name="detail_videos_backdrops_section">Images (%1$d)</string>
+    <string name="detail_video_trailer">Trailer</string>
+    <string name="detail_video_teaser">Teaser</string>
+    <string name="detail_video_clip">Clip</string>
+    <string name="detail_video_load_error">Failed to load video. YouTube may be unavailable in your region.</string>
+    <string name="detail_video_open_browser">Open in Browser</string>
+    <string name="detail_video_play">Play</string>
+    <string name="detail_video_retry">Retry</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
     <string name="person_tv_credits">TV Credits</string>
     <string name="person_all">All ></string>
+    <string name="person_all_count">All (%d) ></string>
+    <string name="person_images">Photos</string>
+    <string name="poster_already_saved">Already saved</string>
     <string name="person_load_more">Load more</string>
     <string name="detail_close">Close</string>
     <string name="person_no_biography">No biography available</string>
+    <string name="person_age"> years old</string>
+    <string name="person_age_deceased">Died at age %1$d</string>
+    <string name="person_gender_male">Male</string>
+    <string name="person_gender_female">Female</string>
+    <string name="person_gender_non_binary">Non-binary</string>
 
     <!-- Theme -->
     <string name="settings_theme">Theme</string>
@@ -232,8 +256,112 @@
     <string name="settings_changelog">Changelog</string>
     <string name="settings_account">Account</string>
     <string name="settings_logout_confirm">Are you sure you want to log out?</string>
-    <string name="settings_source_github">GitHub</string>
-    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_source_repo">Source Code</string>
+    <string name="settings_help">Help &amp; Tips</string>
+    <string name="help_title">Help &amp; Tips</string>
+    <string name="help_search">Search</string>
+    <string name="help_watchlist">Watchlist &amp; Watched</string>
+    <string name="help_statistics">Watch Statistics</string>
+    <string name="help_notification">Notifications</string>
+    <string name="help_data">Data Management</string>
+    <string name="help_detail">Detail Page</string>
+    <string name="help_tips">More Tips</string>
+    <string name="help_search_b1">Enter a movie or show name to search for cloud drive resources</string>
+    <string name="help_search_b2">Supports Quark, Baidu, Aliyun, Xunlei, UC, 115 cloud drives and magnet links</string>
+    <string name="help_search_b3">Tap the cloud drive icon to open in the corresponding app</string>
+    <string name="help_search_b4">Tap search history for quick search, tap the close button to delete</string>
+    <string name="help_person_search">Person Search: A new \"People\" tab on the search page supports searching for actors/directors and other people. Tap to view person details, filmography, and images</string>
+    <string name="help_watchlist_b1">Tap the want-to-watch / watched button on the detail page</string>
+    <string name="help_watchlist_b2">Manage your lists on the \"Me\" tab</string>
+    <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
+    <string name="help_watchlist_b4">TV show count: requires watching all episodes of a full season</string>
+    <string name="help_statistics_b1">Access statistics from the top-right of \"Me\" page</string>
+    <string name="help_statistics_b2">View movie/show counts and heatmap visualization</string>
+    <string name="help_statistics_b3">Episode count is total episodes you marked as watched</string>
+    <string name="help_statistics_b4">Heatmap shows daily viewing activity</string>
+    <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
+    <string name="help_notification_b2">Notification permission required on Android 13+</string>
+    <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
+    <string name="help_notification_b4">Toggle auto-disables if permission denied</string>
+    <string name="help_data_export_title">Export</string>
+    <string name="help_data_export_b1">Export as JSON (full data, suitable for backup/migration)</string>
+    <string name="help_data_export_b2">Export as CSV (compatible with Excel / other platforms)</string>
+    <string name="help_data_export_b3">JSON export includes watchlist and history; CSV export only includes watchlist</string>
+    <string name="help_data_import_title">Import</string>
+    <string name="help_data_import_b1">Import watched history from Letterboxd CSV, auto-syncs to Trakt history</string>
+    <string name="help_data_import_b2">Import watchlist from IMDb CSV, auto-syncs to Trakt watchlist</string>
+    <string name="help_data_import_b3">Restore backup from app JSON export, syncs watchlist and history to Trakt</string>
+    <string name="help_data_import_sources">Import Sources</string>
+    <string name="help_import_src_letterboxd">Letterboxd</string>
+    <string name="help_import_src_letterboxd_how">Log in to Letterboxd → Settings → Data → Export to download CSV</string>
+    <string name="help_import_src_letterboxd_effect">Search by title and sync to Trakt watched history</string>
+    <string name="help_import_src_imdb">IMDb</string>
+    <string name="help_import_src_imdb_how">Log in to IMDb → Your Watchlist → Menu → Export to download CSV</string>
+    <string name="help_import_src_imdb_effect">Search by title and sync to Trakt watchlist</string>
+    <string name="help_import_src_appjson">App JSON</string>
+    <string name="help_import_src_appjson_how">Settings → Export JSON, save locally then use for restore</string>
+    <string name="help_import_src_appjson_effect">Match by TMDB ID, restore watchlist + history to Trakt</string>
+    <string name="help_custom_source">Custom Search Sources</string>
+    <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
+    <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
+    <string name="help_custom_source_b3">Enable/disable with toggle, drag to reorder</string>
+    <string name="help_custom_source_params">Parameter Reference</string>
+    <string name="help_cs_table_param">Param</string>
+    <string name="help_cs_table_desc">Description</string>
+    <string name="help_cs_table_example">Example</string>
+    <string name="help_cs_param_name">Source name (custom)</string>
+    <string name="help_cs_param_baseUrl">API base URL</string>
+    <string name="help_cs_param_apiPath">API request path</string>
+    <string name="help_cs_param_keyword">Search keyword param name</string>
+    <string name="help_cs_param_cloudTypes">Cloud type param name (optional)</string>
+    <string name="help_cs_param_cloudTypesVal">Cloud type values, comma-separated</string>
+    <string name="help_cs_param_src">Source param name (optional)</string>
+    <string name="help_cs_param_srcVal">Source param value</string>
+    <string name="help_cs_param_parseMode">Parse mode</string>
+    <string name="help_cs_param_listPath">JSONPath: result list path</string>
+    <string name="help_cs_param_namePath">JSONPath: name field path</string>
+    <string name="help_cs_param_urlPath">JSONPath: URL field path</string>
+    <string name="help_cs_param_diskTypePath">JSONPath: disk type field path (optional)</string>
+    <string name="help_cs_param_datePath">JSONPath: date field path (optional)</string>
+    <string name="help_custom_source_parse_title">Parse Mode Reference</string>
+    <string name="help_custom_source_parse_b1">pansou_template: compatible with PanSou API response format. This format places the resource list under the data field, with each resource containing title, url, type, etc.</string>
+    <string name="help_custom_source_parse_b2">zreso_template: compatible with ZReso API response format. This format places the resource list under the data.list field, with possibly different field names.</string>
+    <string name="help_custom_source_parse_b3">custom: custom mode, requires JSONPath expressions (e.g. $.data.results) to parse JSON response yourself.</string>
+    <string name="help_custom_source_parse_pansou_example">pansou_template format example:\n{\n  "data": [\n    {\n      "title": "Movie Name",\n      "url": "https://pan.quark.cn/xxx",\n      "type": "quark",\n      "datetime": "2024-01-01"\n    }\n  ]\n}</string>
+    <string name="help_custom_source_parse_zreso_example">zreso_template format example:\n{\n  "data": {\n    "list": [\n      {\n        "name": "Movie Name",\n        "url": "https://pan.baidu.cn/xxx",\n        "cloud_type": "baidu"\n      }\n    ]\n  }\n}</string>
+    <string name="help_custom_source_example_title">Custom Mode Example</string>
+    <string name="help_custom_source_example">If API returns JSON:\n{"data": {"results": [{"title": "Movie Name", "url": "https://...", "type": "quark"}]}}\n\nConfig:\n  parseMode = custom\n  listPath = $.data.results\n  namePath = $.title\n  urlPath = $.url\n  diskTypePath = $.type</string>
+    <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
+    <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
+    <string name="help_tips_b1">Tap status bar to quickly scroll to top</string>
+    <string name="help_tips_b2">Rating supports half-star selection (tap left/right side), tap again to cancel</string>
+    <string name="help_tips_b3">Expand all seasons in TV show detail page to view progress</string>
+    <string name="help_tips_b4">Customize discover page sections in Settings</string>
+    <string name="help_tips_b5">Tap poster on detail page for fullscreen view, tap again to save to gallery</string>
+    <string name="help_tips_b6">Already-saved posters won\'t save again on re-tap</string>
+    <string name="help_tips_b7">Tap cast avatar on detail page to view that actor\'s works</string>
+    <string name="help_tips_b8">Person page supports horizontal swipe to view multiple images, tap for fullscreen and save</string>
+    <string name="help_tips_b9">Online search supports Chinese name search (powered by TMDB), auto-populates related movies/shows when searching for a person</string>
+    <string name="help_tips_b10">Quickly customize discover page sections from the toolbar icon</string>
+    <string name="settings_restart_onboarding">Tutorial</string>
+    <string name="settings_restart_onboarding_desc">Re-run the app feature tour</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_done">Got it</string>
+    <string name="onboarding_step1_title">Search</string>
+    <string name="onboarding_step1_desc">Search for movies and shows across multiple cloud drive sources</string>
+    <string name="onboarding_step2_title">Discover</string>
+    <string name="onboarding_step2_desc">Browse trending lists from Douban and TMDB</string>
+    <string name="onboarding_step3_title">My List</string>
+    <string name="onboarding_step3_desc">Manage your watchlist and watched history after logging in</string>
+    <string name="onboarding_step4_title">Settings</string>
+    <string name="onboarding_step4_desc">Customize theme, language, search sources, and more</string>
+    <string name="onboarding_step5_title">Statistics</string>
+    <string name="onboarding_step5_desc">View watch data and heatmap from the top-right of \"Me\" page. TV show count requires a full season completed</string>
+    <string name="onboarding_step6_title">Detail Page</string>
+    <string name="onboarding_step6_desc">Tap poster for fullscreen view and save to gallery; tap cast avatar for actor\'s works; rating supports half-star</string>
+    <string name="onboarding_step7_title">More Tips</string>
+    <string name="onboarding_step7_desc">Tap status bar to scroll to top; customize discover sections in Settings; tap close button to delete search history</string>
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>
@@ -242,6 +370,8 @@
     <string name="settings_discover_sections">Discover Sections</string>
     <string name="settings_discover_sections_desc">Toggle visibility and reorder discover sections</string>
     <string name="settings_discover_sections_hint">Drag to reorder, toggle to show/hide</string>
+    <string name="settings_detail_sections">Detail Sections</string>
+    <string name="settings_detail_sections_desc">Toggle visibility of detail page sections</string>
     <string name="settings_drag_to_reorder">Drag to reorder</string>
     <string name="settings_logout_button">Logout</string>
 
@@ -252,9 +382,11 @@
     <string name="settings_export_csv">Export as CSV</string>
     <string name="settings_export_csv_desc">Export watchlist as CSV</string>
     <string name="settings_import_letterboxd">Import from Letterboxd</string>
-    <string name="settings_import_letterboxd_desc">Import watchlist from Letterboxd CSV</string>
+    <string name="settings_import_letterboxd_desc">Import watched history from Letterboxd CSV</string>
     <string name="settings_import_imdb">Import from IMDb</string>
     <string name="settings_import_imdb_desc">Import watchlist from IMDb CSV</string>
+    <string name="settings_import_json">Import from JSON</string>
+    <string name="settings_import_json_desc">Restore backup from app exported JSON</string>
 
     <!-- Notification -->
     <string name="settings_notification">Notifications</string>
@@ -373,6 +505,18 @@
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_us_box">US Box Office</string>
     <string name="discover_view_all">View all (%d)</string>
+    <string name="discover_trakt_trending_movies">Trakt Trending Movies</string>
+    <string name="discover_trakt_trending_shows">Trakt Trending Shows</string>
+    <string name="discover_trakt_anticipated">Trakt Most Anticipated</string>
+    <string name="discover_trakt_recommendations_shows">Recommended Shows for You</string>
+    <string name="discover_watchers">%1$d watchers</string>
+    <string name="discover_list_count">%1$d lists</string>
+
+    <!-- Search Source Type -->
+    <string name="search_type_disk">Cloud Resources</string>
+    <string name="search_type_movie">Movies</string>
+    <string name="search_type_show">TV Shows</string>
+    <string name="search_type_person">Person</string>
 
     <!-- Genre Names -->
     <string name="genre_action">Action</string>

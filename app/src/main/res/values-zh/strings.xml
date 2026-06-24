@@ -13,7 +13,7 @@
     <string name="discover_title">发现</string>
     <string name="discover_popular">热门电影</string>
     <string name="discover_upcoming">即将上映</string>
-    <string name="discover_recommended">为你推荐</string>
+    <string name="discover_recommended">为你推荐电影</string>
 
     <!-- Search Screen -->
     <string name="search_title">搜索资源</string>
@@ -70,6 +70,10 @@
     <string name="trakt_search_tab_shows">电视剧</string>
     <string name="trakt_search_tab_movies_count">电影 (%d)</string>
     <string name="trakt_search_tab_shows_count">电视剧 (%d)</string>
+    <string name="trakt_search_tab_persons">人物</string>
+    <string name="trakt_search_tab_persons_count">人物 (%d)</string>
+    <string name="trakt_search_hint_persons">在 Trakt 上搜索人物</string>
+    <string name="trakt_search_no_persons">在 Trakt 上未找到人物</string>
 
     <!-- Detail Screen -->
     <string name="detail_back">返回</string>
@@ -196,14 +200,34 @@
     <string name="detail_rating_cancel">取消</string>
     <string name="detail_rating_no_rating">未评分</string>
     <string name="detail_rating_hint">点击星星左右两侧选择半星/整星，再次点击已选区域可取消评分</string>
+    <string name="detail_videos_section">预告片与截图</string>
+    <string name="detail_videos_all">全部(%1$d)</string>
+    <string name="detail_videos_all_title">预告片与截图</string>
+    <string name="detail_videos_trailers_section">预告片 (%1$d)</string>
+    <string name="detail_videos_backdrops_section">截图 (%1$d)</string>
+    <string name="detail_video_trailer">预告片</string>
+    <string name="detail_video_teaser">先导预告</string>
+    <string name="detail_video_clip">片段</string>
+    <string name="detail_video_load_error">视频加载失败，YouTube 在当前地区可能无法访问</string>
+    <string name="detail_video_open_browser">在浏览器中打开</string>
+    <string name="detail_video_play">播放</string>
+    <string name="detail_video_retry">重试</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
     <string name="person_tv_credits">参演电视剧</string>
     <string name="person_all">全部 ></string>
+    <string name="person_all_count">全部(%d) ></string>
+    <string name="person_images">图片</string>
+    <string name="poster_already_saved">已保存</string>
     <string name="person_load_more">加载更多</string>
     <string name="detail_close">关闭</string>
     <string name="person_no_biography">暂无简介</string>
+    <string name="person_age">岁</string>
+    <string name="person_age_deceased">享年 %1$d 岁</string>
+    <string name="person_gender_male">男</string>
+    <string name="person_gender_female">女</string>
+    <string name="person_gender_non_binary">非二元</string>
 
     <!-- Theme -->
     <string name="settings_theme">主题模式</string>
@@ -232,8 +256,112 @@
     <string name="settings_changelog">更新日志</string>
     <string name="settings_account">账户</string>
     <string name="settings_logout_confirm">确定要退出登录吗？</string>
-    <string name="settings_source_github">GitHub</string>
-    <string name="settings_source_gitee">Gitee</string>
+    <string name="settings_source_repo">源代码仓库</string>
+    <string name="settings_help">帮助与说明</string>
+    <string name="help_title">帮助与说明</string>
+    <string name="help_search">搜索功能</string>
+    <string name="help_watchlist">想看与已看</string>
+    <string name="help_statistics">观看统计</string>
+    <string name="help_notification">通知提醒</string>
+    <string name="help_data">数据管理</string>
+    <string name="help_detail">详情页</string>
+    <string name="help_tips">更多技巧</string>
+    <string name="help_search_b1">输入影视名称关键词即可搜索网盘资源</string>
+    <string name="help_search_b2">支持夸克、百度、阿里云盘、迅雷、UC、115等网盘及磁力链接</string>
+    <string name="help_search_b3">点击网盘图标可直接跳转对应App打开资源</string>
+    <string name="help_search_b4">点击搜索历史可快速搜索，点击右侧按钮可删除记录</string>
+    <string name="help_person_search">人物搜索：搜索页新增「人物」Tab，支持搜索演员/导演等人物信息，点击可查看人物详情、参演作品和图片</string>
+    <string name="help_watchlist_b1">在详情页点击想看/已看按钮进行标记</string>
+    <string name="help_watchlist_b2">在"我的"页面查看和管理你的列表</string>
+    <string name="help_watchlist_b3">标记已看支持按季勾选集数，第0季特别篇放在最后</string>
+    <string name="help_watchlist_b4">电视剧部数统计：需看完某一整季全部集数才计入</string>
+    <string name="help_statistics_b1">在"我的"页面右上角进入观看统计</string>
+    <string name="help_statistics_b2">查看电影/电视剧数量和热力图</string>
+    <string name="help_statistics_b3">集数统计为用户标记看完的总集数</string>
+    <string name="help_statistics_b4">热力图展示每日观影活跃度</string>
+    <string name="help_notification_b1">开启通知后可自动提醒新上映和新季</string>
+    <string name="help_notification_b2">Android 13及以上需要授予通知权限</string>
+    <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>
+    <string name="help_notification_b4">权限被拒时开关会自动关闭</string>
+    <string name="help_data_export_title">数据导出</string>
+    <string name="help_data_export_b1">支持导出为 JSON 格式（包含完整数据，适合备份/迁移）</string>
+    <string name="help_data_export_b2">支持导出为 CSV 格式（兼容 Excel / 其他平台）</string>
+    <string name="help_data_export_b3">JSON 导出包含想看列表和已看历史，CSV 仅导出想看列表</string>
+    <string name="help_data_import_title">数据导入</string>
+    <string name="help_data_import_b1">从 Letterboxd 导出的 CSV 导入已看记录，会自动同步到 Trakt 已看历史</string>
+    <string name="help_data_import_b2">从 IMDb 导出的 CSV 导入想看列表，会自动同步到 Trakt 想看列表</string>
+    <string name="help_data_import_b3">从本 App 导出的 JSON 恢复备份，会同步想看和已看数据到 Trakt</string>
+    <string name="help_data_import_sources">导入来源对照</string>
+    <string name="help_import_src_letterboxd">Letterboxd</string>
+    <string name="help_import_src_letterboxd_how">登录 Letterboxd → Settings → Data → Export 下载 CSV</string>
+    <string name="help_import_src_letterboxd_effect">通过标题搜索匹配并同步到 Trakt 已看历史</string>
+    <string name="help_import_src_imdb">IMDb</string>
+    <string name="help_import_src_imdb_how">登录 IMDb → Your Watchlist → 右上角菜单 → Export 下载 CSV</string>
+    <string name="help_import_src_imdb_effect">通过标题搜索匹配并同步到 Trakt 想看列表</string>
+    <string name="help_import_src_appjson">本App JSON</string>
+    <string name="help_import_src_appjson_how">设置 → 导出 JSON，保存到本地后可用于恢复</string>
+    <string name="help_import_src_appjson_effect">通过 TMDB ID 精确匹配，恢复想看+已看数据到 Trakt</string>
+    <string name="help_custom_source">自定义搜索源</string>
+    <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
+    <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
+    <string name="help_custom_source_b3">添加后可开关启用/禁用，支持拖拽排序</string>
+    <string name="help_custom_source_params">参数说明</string>
+    <string name="help_cs_table_param">参数名</string>
+    <string name="help_cs_table_desc">说明</string>
+    <string name="help_cs_table_example">示例</string>
+    <string name="help_cs_param_name">搜索源名称（自定义）</string>
+    <string name="help_cs_param_baseUrl">API 基础地址</string>
+    <string name="help_cs_param_apiPath">API 请求路径</string>
+    <string name="help_cs_param_keyword">搜索关键词参数名</string>
+    <string name="help_cs_param_cloudTypes">网盘类型参数名（可选）</string>
+    <string name="help_cs_param_cloudTypesVal">网盘类型值，逗号分隔</string>
+    <string name="help_cs_param_src">来源参数名（可选）</string>
+    <string name="help_cs_param_srcVal">来源参数值</string>
+    <string name="help_cs_param_parseMode">解析模式</string>
+    <string name="help_cs_param_listPath">JSONPath：结果列表路径</string>
+    <string name="help_cs_param_namePath">JSONPath：名称字段路径</string>
+    <string name="help_cs_param_urlPath">JSONPath：链接字段路径</string>
+    <string name="help_cs_param_diskTypePath">JSONPath：网盘类型字段路径（可选）</string>
+    <string name="help_cs_param_datePath">JSONPath：日期字段路径（可选）</string>
+    <string name="help_custom_source_parse_title">解析模式说明</string>
+    <string name="help_custom_source_parse_b1">pansou_template：兼容盘搜搜 API 的返回格式。该格式将资源列表放在 data 字段下，每个资源包含 title、url、type 等字段。</string>
+    <string name="help_custom_source_parse_b2">zreso_template：兼容 ZReso API 的返回格式。该格式将资源列表放在 data.list 字段下，字段命名可能不同。</string>
+    <string name="help_custom_source_parse_b3">custom：自定义模式，需填写 JSONPath 表达式（如 $.data.results）自行解析 JSON 响应。</string>
+    <string name="help_custom_source_parse_pansou_example">pansou_template 格式示例：\n{\n  "data": [\n    {\n      "title": "电影名称",\n      "url": "https://pan.quark.cn/xxx",\n      "type": "quark",\n      "datetime": "2024-01-01"\n    }\n  ]\n}</string>
+    <string name="help_custom_source_parse_zreso_example">zreso_template 格式示例：\n{\n  "data": {\n    "list": [\n      {\n        "name": "电影名称",\n        "url": "https://pan.baidu.cn/xxx",\n        "cloud_type": "baidu"\n      }\n    ]\n  }\n}</string>
+    <string name="help_custom_source_example_title">自定义模式示例</string>
+    <string name="help_custom_source_example">假设 API 返回 JSON：\n{"data": {"results": [{"title": "电影名", "url": "https://...", "type": "quark"}]}}\n\n参数配置：\n  parseMode = custom\n  listPath = $.data.results\n  namePath = $.title\n  urlPath = $.url\n  diskTypePath = $.type</string>
+    <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
+    <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
+    <string name="help_tips_b1">点击状态栏可快速回到页面顶部</string>
+    <string name="help_tips_b2">评分支持半星选择（点击星星左右两侧），再次点击已选区域可取消评分</string>
+    <string name="help_tips_b3">电视剧详情页可展开全部季信息查看进度</string>
+    <string name="help_tips_b4">设置中可自定义发现页栏目显示和排序</string>
+    <string name="help_tips_b5">详情页点击海报可大图查看，再次点击保存到相册</string>
+    <string name="help_tips_b6">已保存的海报再次点击不会重复保存</string>
+    <string name="help_tips_b7">详情页演职员头像点击可查看该演员作品</string>
+    <string name="help_tips_b8">人物详情页可横向滑动查看多张图片，点击图片可全屏查看并保存到相册</string>
+    <string name="help_tips_b9">在线搜索支持中文人名搜索（基于 TMDB），搜索人物时自动填充相关影视作品</string>
+    <string name="help_tips_b10">发现页标题栏右侧可点击快速自定义栏目</string>
+    <string name="settings_restart_onboarding">新手引导</string>
+    <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>
+    <string name="onboarding_skip">跳过</string>
+    <string name="onboarding_next">下一步</string>
+    <string name="onboarding_done">知道了</string>
+    <string name="onboarding_step1_title">搜索</string>
+    <string name="onboarding_step1_desc">搜索影视资源，支持夸克、百度、阿里等多网盘源</string>
+    <string name="onboarding_step2_title">发现</string>
+    <string name="onboarding_step2_desc">浏览豆瓣、TMDB 热门榜单</string>
+    <string name="onboarding_step3_title">我的</string>
+    <string name="onboarding_step3_desc">登录后管理你的想看和已看列表</string>
+    <string name="onboarding_step4_title">设置</string>
+    <string name="onboarding_step4_desc">自定义主题、语言、搜索源等</string>
+    <string name="onboarding_step5_title">观看统计</string>
+    <string name="onboarding_step5_desc">在"我的"页面右上角查看观影数据和热力图，电视剧部数需看完一整季才计入统计</string>
+    <string name="onboarding_step6_title">详情页操作</string>
+    <string name="onboarding_step6_desc">点击海报可大图查看并保存到相册；点击演职员头像可查看该演员的其他作品；评分支持半星选择</string>
+    <string name="onboarding_step7_title">更多小技巧</string>
+    <string name="onboarding_step7_desc">点击状态栏可快速回到页面顶部；设置中可自定义发现页栏目；搜索历史点击右侧按钮可删除</string>
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
@@ -242,6 +370,8 @@
     <string name="settings_discover_sections">发现页栏目</string>
     <string name="settings_discover_sections_desc">设置发现页各栏目的显示与排序</string>
     <string name="settings_discover_sections_hint">拖动排序，开关控制显示/隐藏</string>
+    <string name="settings_detail_sections">自定义详情页</string>
+    <string name="settings_detail_sections_desc">设置详情页各模块的显示与隐藏</string>
     <string name="settings_drag_to_reorder">拖动排序</string>
     <string name="settings_logout_button">登出</string>
 
@@ -252,9 +382,11 @@
     <string name="settings_export_csv">导出为 CSV</string>
     <string name="settings_export_csv_desc">导出想看列表为 CSV</string>
     <string name="settings_import_letterboxd">从 Letterboxd 导入</string>
-    <string name="settings_import_letterboxd_desc">从 Letterboxd CSV 导入想看</string>
+    <string name="settings_import_letterboxd_desc">从 Letterboxd CSV 导入已看记录</string>
     <string name="settings_import_imdb">从 IMDb 导入</string>
-    <string name="settings_import_imdb_desc">从 IMDb CSV 导入想看</string>
+    <string name="settings_import_imdb_desc">从 IMDb CSV 导入想看列表</string>
+    <string name="settings_import_json">从 JSON 导入</string>
+    <string name="settings_import_json_desc">从本 App 导出的 JSON 恢复备份数据</string>
 
     <!-- Notification -->
     <string name="settings_notification">通知提醒</string>
@@ -373,6 +505,18 @@
     <string name="discover_douban_top250">Top250</string>
     <string name="discover_douban_us_box">北美票房榜</string>
     <string name="discover_view_all">查看全部(%d)</string>
+    <string name="discover_trakt_trending_movies">Trakt 热门电影</string>
+    <string name="discover_trakt_trending_shows">Trakt 热门剧集</string>
+    <string name="discover_trakt_anticipated">Trakt 最受期待</string>
+    <string name="discover_trakt_recommendations_shows">为你推荐剧集</string>
+    <string name="discover_watchers">%1$d 人在看</string>
+    <string name="discover_list_count">%1$d 个列表</string>
+
+    <!-- Search Source Type -->
+    <string name="search_type_disk">网盘资源</string>
+    <string name="search_type_movie">电影</string>
+    <string name="search_type_show">电视剧</string>
+    <string name="search_type_person">人物</string>
 
     <!-- Genre Names -->
     <string name="genre_action">动作</string>

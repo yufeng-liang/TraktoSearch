@@ -12,11 +12,13 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.snapshotFlow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
@@ -25,16 +27,19 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
+import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -53,6 +58,7 @@ object Routes {
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
+    const val HELP = "help"
 
     fun traktSearchRoute(type: String, query: String): String {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
@@ -111,6 +117,8 @@ fun AppNavigation(
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 登录成功后默认进入"我的"页
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
@@ -218,11 +226,23 @@ fun AppNavigation(
                             onTraktSearch = { type, query ->
                                 navController.navigate(Routes.traktSearchRoute(type, query))
                             },
+                            onPersonClick = { tmdbId, name, profileUrl ->
+                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
+                            },
                             onLogout = {
                                 onLogout()
                                 currentStartDest = Routes.LOGIN
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(0) { inclusive = true }
+                                }
+                            },
+                            onHelpClick = {
+                                navController.navigate(Routes.HELP)
+                            },
+                            onRestartOnboarding = {
+                                // 重置引导标记，重新显示新手引导
+                                scope.launch {
+                                    OnboardingStorage(context).setCompleted(false)
                                 }
                             }
                         )
@@ -387,7 +407,11 @@ fun AppNavigation(
                         val query = java.net.URLDecoder.decode(
                             backStackEntry.arguments?.getString("query") ?: "", "UTF-8"
                         )
-                        val mediaType = if (typeStr == "show") MediaType.SHOW else MediaType.MOVIE
+                        val mediaType = when (typeStr) {
+                            "show" -> MediaType.SHOW
+                            "person" -> MediaType.PERSON
+                            else -> MediaType.MOVIE
+                        }
 
                         // 从详情页返回时通知想看列表刷新（Trakt搜索页本身不修改想看列表，不需要触发刷新）
                         val previousEntry = navController.previousBackStackEntry
@@ -397,10 +421,24 @@ fun AppNavigation(
                             onBack = {
                                 navController.popBackStack()
                             },
-                            onItemClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                val routeType = if (mediaType == MediaType.SHOW) "show" else "movie"
+                            onItemClick = { type, traktId, tmdbId, title, imdbId, traktRating ->
+                                val routeType = when (type) {
+                                    MediaType.SHOW -> "show"
+                                    else -> "movie"
+                                }
                                 navController.navigate(Routes.detailRoute(routeType, traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onPersonClick = { tmdbId, name, profileUrl ->
+                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
                             }
+                        )
+                    }
+                }
+
+                composable(Routes.HELP) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        HelpScreen(
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }

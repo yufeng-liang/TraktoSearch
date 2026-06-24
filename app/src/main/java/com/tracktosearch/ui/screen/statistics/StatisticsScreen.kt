@@ -50,6 +50,7 @@ import com.tracktosearch.R
 import androidx.compose.ui.platform.LocalView
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -65,6 +66,7 @@ import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -110,6 +112,18 @@ fun StatisticsScreen(
                 }
             } else {
                 val listState = rememberLazyListState()
+                val scrollToTopProvider = LocalScrollToTopProvider.current
+                val statsCoroutineScope = rememberCoroutineScope()
+                DisposableEffect(Unit) {
+                    scrollToTopProvider.register {
+                        statsCoroutineScope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    }
+                    onDispose {
+                        scrollToTopProvider.unregister()
+                    }
+                }
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 LazyColumn(
                     state = listState,
@@ -184,6 +198,7 @@ fun StatisticsScreen(
                         style = HazeMaterials.thin()
                     )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
                 Row(
@@ -525,6 +540,7 @@ private fun GenrePieChart(genreDistribution: Map<String, Int>, isVisible: Boolea
                                 for ((index, entry) in entries.withIndex()) {
                                     val sweep = 360f * entry.value.toFloat() / totalCount.toFloat()
                                     if (angle >= accumulated && angle < accumulated + sweep) {
+                                        view.performHaptic(HapticType.CLICK)
                                         selectedIndex = if (selectedIndex == index) -1 else index
                                         break
                                     }

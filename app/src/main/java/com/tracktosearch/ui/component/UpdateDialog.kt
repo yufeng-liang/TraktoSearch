@@ -95,25 +95,15 @@ fun ChangelogContent(text: String) {
                             color = MaterialTheme.colorScheme.onSurface
                         )
                     }
-                    // 列表项
+                    // 列表项 — 用原始 md 渲染（点与文字自然 baseline 对齐，不再垂直居中）
                     trimmed.startsWith("- ") || trimmed.startsWith("* ") || trimmed.startsWith("• ") -> {
-                        val itemText = trimmed.substring(2)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        val itemText = trimmed.removePrefix("• ").let { if (it == trimmed) it.removePrefix("- ").let { if (it == trimmed) it.removePrefix("* ") else it } else it }
+                        Text(
+                            text = "•  " + parseInlineMarkdown(itemText),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.padding(vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "•",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.padding(end = 8.dp)
-                            )
-                            Text(
-                                text = parseInlineMarkdown(itemText),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        )
                     }
                     // 普通段落
                     else -> {

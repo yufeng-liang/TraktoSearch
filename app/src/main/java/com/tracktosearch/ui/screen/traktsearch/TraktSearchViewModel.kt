@@ -27,7 +27,8 @@ data class TraktSearchUiItem(
     val genres: String = "",
     val posterUrl: String? = null,
     val imdbId: String = "",
-    val traktRating: Double = 0.0
+    val traktRating: Double = 0.0,
+    val knownForDepartment: String = ""
 )
 
 data class SearchTabState(
@@ -45,10 +46,15 @@ data class TraktSearchUiState(
     val query: String = "",
     val selectedTab: MediaType = MediaType.MOVIE,
     val movieState: SearchTabState = SearchTabState(),
-    val showState: SearchTabState = SearchTabState()
+    val showState: SearchTabState = SearchTabState(),
+    val personState: SearchTabState = SearchTabState()
 ) {
     val currentTabState: SearchTabState
-        get() = if (selectedTab == MediaType.MOVIE) movieState else showState
+        get() = when (selectedTab) {
+            MediaType.MOVIE -> movieState
+            MediaType.SHOW -> showState
+            MediaType.PERSON -> personState
+        }
 }
 
 @HiltViewModel
@@ -58,7 +64,11 @@ class TraktSearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val initialType = if (savedStateHandle.get<String>("type") == "show") MediaType.SHOW else MediaType.MOVIE
+    private val initialType = when (savedStateHandle.get<String>("type")) {
+        "show" -> MediaType.SHOW
+        "person" -> MediaType.PERSON
+        else -> MediaType.MOVIE
+    }
     private val initialQueryStr = savedStateHandle.get<String>("query") ?: ""
 
     private val _uiState = MutableStateFlow(TraktSearchUiState(selectedTab = initialType))
@@ -77,8 +87,11 @@ class TraktSearchViewModel @Inject constructor(
         if (current.selectedTab == type) return
         _uiState.value = current.copy(selectedTab = type)
         // 如果该 tab 还没搜索过，自动触发搜索
-        val tabState = current.currentTabState
-        val targetState = if (type == MediaType.MOVIE) current.movieState else current.showState
+        val targetState = when (type) {
+            MediaType.MOVIE -> current.movieState
+            MediaType.SHOW -> current.showState
+            MediaType.PERSON -> current.personState
+        }
         if (!targetState.hasSearched && current.query.isNotBlank()) {
             search(current.query, type)
         }
@@ -91,7 +104,7 @@ class TraktSearchViewModel @Inject constructor(
         // 更新 query 到状态中，确保 loadMore 等使用最新查询词
         _uiState.value = _uiState.value.copy(query = query)
 
-        val tabState = if (searchType == MediaType.MOVIE) _uiState.value.movieState else _uiState.value.showState
+        val tabState = _uiState.value.currentTabState
         if (tabState.isLoading) return
 
         viewModelScope.launch {
@@ -103,26 +116,142 @@ class TraktSearchViewModel @Inject constructor(
             val result = when (searchType) {
                 MediaType.MOVIE -> traktRepository.searchMovies(query, page = 1)
                 MediaType.SHOW -> traktRepository.searchShows(query, page = 1)
+                MediaType.PERSON -> traktRepository.searchPeople(query, page = 1)
             }
 
-            result.onSuccess { (searchResults, totalCount) ->
-                val uiItems = searchResults.map { item ->
-                    async { enrichSearchResult(item, searchType) }
-                }.awaitAll()
-                updateTabState(searchType, SearchTabState(
-                    results = uiItems,
-                    isLoading = false,
-                    totalCount = totalCount,
-                    currentPage = 1,
-                    hasMore = uiItems.size < totalCount,
-                    hasSearched = true
-                ))
-            }.onFailure { e ->
-                updateTabState(searchType, SearchTabState(
-                    isLoading = false,
-                    error = e.message ?: "搜索失败",
-                    hasSearched = true
-                ))
+            if (searchType == MediaType.PERSON) {
+                // 人物搜索：同时用 TMDB 搜索（支持中文名），合并去重
+                val tmdbResults = tmdbRepository.searchPerson(query)
+                result.onSuccess { (searchResults, totalCount) ->
+                    val traktItems = searchResults.map { item ->
+                        async { enrichSearchResult(item, searchType) }
+                    }.awaitAll()
+                    // 收集已有的 tmdbId
+                    val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
+                    // TMDB 独有的结果：通过 TMDB ID 反查 Trakt
+                    val tmdbOnlyItems = tmdbResults.filter { it.id !in existingTmdbIds }.map { person ->
+                        async {
+                            val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                            val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                            val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                            TraktSearchUiItem(
+                                traktId = traktPerson?.ids?.trakt ?: 0,
+                                tmdbId = person.id,
+                                title = person.original_name,
+                                displayTitle = person.name,
+                                posterUrl = profileUrl,
+                                knownForDepartment = person.known_for_department
+                            )
+                        }
+                    }.awaitAll()
+                    val merged = traktItems + tmdbOnlyItems
+                    val mergedTotal = totalCount + tmdbOnlyItems.size
+                    updateTabState(searchType, SearchTabState(
+                        results = merged,
+                        isLoading = false,
+                        totalCount = mergedTotal,
+                        currentPage = 1,
+                        hasMore = traktItems.size < totalCount,
+                        hasSearched = true
+                    ))
+                    // 同时用 TMDB 多类型搜索填充电影和剧集标签页
+                    val multiResult = tmdbRepository.searchMulti(query)
+                    if (multiResult != null) {
+                        val movieResults = multiResult.results.filter { it.media_type == "movie" }
+                        val tvResults = multiResult.results.filter { it.media_type == "tv" }
+                        if (movieResults.isNotEmpty()) {
+                            val movieItems = movieResults.map { r ->
+                                TraktSearchUiItem(
+                                    tmdbId = r.id,
+                                    title = r.name ?: r.title ?: "",
+                                    displayTitle = r.title ?: r.name ?: "",
+                                    posterUrl = r.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                    year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
+                                )
+                            }
+                            updateTabState(MediaType.MOVIE, SearchTabState(
+                                results = movieItems,
+                                isLoading = false,
+                                totalCount = movieItems.size,
+                                currentPage = 1,
+                                hasMore = false,
+                                hasSearched = true
+                            ))
+                        }
+                        if (tvResults.isNotEmpty()) {
+                            val tvItems = tvResults.map { r ->
+                                TraktSearchUiItem(
+                                    tmdbId = r.id,
+                                    title = r.name ?: r.title ?: "",
+                                    displayTitle = r.title ?: r.name ?: "",
+                                    posterUrl = r.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                    year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
+                                )
+                            }
+                            updateTabState(MediaType.SHOW, SearchTabState(
+                                results = tvItems,
+                                isLoading = false,
+                                totalCount = tvItems.size,
+                                currentPage = 1,
+                                hasMore = false,
+                                hasSearched = true
+                            ))
+                        }
+                    }
+                }.onFailure { e ->
+                    // Trakt 失败时仍可用 TMDB 结果
+                    if (tmdbResults.isNotEmpty()) {
+                        val tmdbItems = tmdbResults.map { person ->
+                            async {
+                                val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                                val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                TraktSearchUiItem(
+                                    traktId = traktPerson?.ids?.trakt ?: 0,
+                                    tmdbId = person.id,
+                                    title = person.original_name,
+                                    displayTitle = person.name,
+                                    posterUrl = profileUrl,
+                                    knownForDepartment = person.known_for_department
+                                )
+                            }
+                        }.awaitAll()
+                        updateTabState(searchType, SearchTabState(
+                            results = tmdbItems,
+                            isLoading = false,
+                            totalCount = tmdbResults.size,
+                            currentPage = 1,
+                            hasMore = false,
+                            hasSearched = true
+                        ))
+                    } else {
+                        updateTabState(searchType, SearchTabState(
+                            isLoading = false,
+                            error = e.message ?: "搜索失败",
+                            hasSearched = true
+                        ))
+                    }
+                }
+            } else {
+                result.onSuccess { (searchResults, totalCount) ->
+                    val uiItems = searchResults.map { item ->
+                        async { enrichSearchResult(item, searchType) }
+                    }.awaitAll()
+                    updateTabState(searchType, SearchTabState(
+                        results = uiItems,
+                        isLoading = false,
+                        totalCount = totalCount,
+                        currentPage = 1,
+                        hasMore = uiItems.size < totalCount,
+                        hasSearched = true
+                    ))
+                }.onFailure { e ->
+                    updateTabState(searchType, SearchTabState(
+                        isLoading = false,
+                        error = e.message ?: "搜索失败",
+                        hasSearched = true
+                    ))
+                }
             }
         }
     }
@@ -139,13 +268,14 @@ class TraktSearchViewModel @Inject constructor(
             val result = when (current.selectedTab) {
                 MediaType.MOVIE -> traktRepository.searchMovies(current.query, page = nextPage)
                 MediaType.SHOW -> traktRepository.searchShows(current.query, page = nextPage)
+                MediaType.PERSON -> traktRepository.searchPeople(current.query, page = nextPage)
             }
 
             result.onSuccess { (searchResults, totalCount) ->
                 val newItems = searchResults.map { item ->
                     async { enrichSearchResult(item, current.selectedTab) }
                 }.awaitAll()
-                val updatedState = current.currentTabState
+                val updatedState = _uiState.value.currentTabState
                 updateTabState(current.selectedTab, updatedState.copy(
                     results = updatedState.results + newItems,
                     isLoadingMore = false,
@@ -161,10 +291,10 @@ class TraktSearchViewModel @Inject constructor(
     }
 
     private fun updateTabState(type: MediaType, state: SearchTabState) {
-        _uiState.value = if (type == MediaType.MOVIE) {
-            _uiState.value.copy(movieState = state)
-        } else {
-            _uiState.value.copy(showState = state)
+        _uiState.value = when (type) {
+            MediaType.MOVIE -> _uiState.value.copy(movieState = state)
+            MediaType.SHOW -> _uiState.value.copy(showState = state)
+            MediaType.PERSON -> _uiState.value.copy(personState = state)
         }
     }
 
@@ -227,6 +357,20 @@ class TraktSearchViewModel @Inject constructor(
                         traktRating = show.rating
                     )
                 }
+            }
+            MediaType.PERSON -> {
+                val person = result.person ?: return TraktSearchUiItem()
+                val tmdbId = person.ids.tmdb
+                val tmdbPerson = if (tmdbId > 0) tmdbRepository.getPersonDetail(tmdbId) else null
+                val profileUrl = tmdbPerson?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                TraktSearchUiItem(
+                    traktId = person.ids.trakt,
+                    tmdbId = tmdbId,
+                    title = person.name,
+                    displayTitle = person.name,
+                    posterUrl = profileUrl,
+                    knownForDepartment = tmdbPerson?.known_for_department ?: ""
+                )
             }
         }
     }
