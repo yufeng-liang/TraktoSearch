@@ -359,7 +359,7 @@ fun WatchlistScreen(
                                     0 -> stringResource(R.string.watchlist_search_watchlist)
                                     else -> stringResource(R.string.watchlist_search_history)
                                 }
-                            } else stringResource(R.string.search_placeholder)
+                            } else stringResource(R.string.search_placeholder_watchlist)
                         )
                     },
                     singleLine = true,

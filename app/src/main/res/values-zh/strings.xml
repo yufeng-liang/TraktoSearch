@@ -19,6 +19,10 @@
     <string name="search_title">搜索资源</string>
     <string name="search_back">返回</string>
     <string name="search_placeholder">输入片名搜索网盘资源</string>
+    <string name="search_placeholder_movie">输入片名搜索电影</string>
+    <string name="search_placeholder_show">输入片名搜索电视剧</string>
+    <string name="search_placeholder_person">输入人名搜索人物</string>
+    <string name="search_placeholder_watchlist">搜索想看/已看列表或 Trakt 影视</string>
     <string name="search_button">搜索</string>
     <string name="search_loading">搜索中…</string>
     <string name="search_failed">搜索失败: %1$s</string>

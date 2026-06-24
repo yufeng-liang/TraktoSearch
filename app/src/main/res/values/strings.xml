@@ -19,6 +19,10 @@
     <string name="search_title">Search Resources</string>
     <string name="search_back">Back</string>
     <string name="search_placeholder">Enter movie title to search cloud resources</string>
+    <string name="search_placeholder_movie">Enter movie title to search movies</string>
+    <string name="search_placeholder_show">Enter show title to search TV shows</string>
+    <string name="search_placeholder_person">Enter name to search people</string>
+    <string name="search_placeholder_watchlist">Search watchlist or Trakt movies/shows</string>
     <string name="search_button">Search</string>
     <string name="search_loading">Searching…</string>
     <string name="search_failed">Search failed: %1$s</string>

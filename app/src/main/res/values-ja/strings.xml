@@ -18,6 +18,10 @@
     <string name="search_title">リソース検索</string>
     <string name="search_back">戻る</string>
     <string name="search_placeholder">映画タイトルを入力してクラウドリソースを検索</string>
+    <string name="search_placeholder_movie">映画タイトルを入力して映画を検索</string>
+    <string name="search_placeholder_show">番組タイトルを入力してテレビ番組を検索</string>
+    <string name="search_placeholder_person">名前を入力して人物を検索</string>
+    <string name="search_placeholder_watchlist">ウォッチリストまたはTrakt映画・番組を検索</string>
     <string name="search_button">検索</string>
     <string name="search_loading">検索中…</string>
     <string name="search_failed">検索失敗: %1$s</string>

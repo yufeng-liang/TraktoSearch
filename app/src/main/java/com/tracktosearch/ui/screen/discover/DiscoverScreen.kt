@@ -175,7 +175,7 @@ fun DiscoverScreen(
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
-                        top = 65.dp + statusBarHeight,
+                        top = 80.dp + statusBarHeight,
                         bottom = 80.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)

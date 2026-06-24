@@ -90,7 +90,6 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import javax.inject.Inject
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
@@ -112,6 +111,9 @@ fun MainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.DISK) }
+    var traktSearchQuery by rememberSaveable { mutableStateOf("") }
+    var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
+    var showTraktSearch by rememberSaveable { mutableStateOf(false) }
     val pagerState = rememberPagerState(initialPage = initialTab) { 4 }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -163,6 +165,7 @@ fun MainScreen(
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                if (pagerState.currentPage == 0) return androidx.compose.ui.geometry.Offset.Zero
                 val delta = available.y
                 if (delta < -10) {
                     isFabVisible = 0f
@@ -201,29 +204,18 @@ fun MainScreen(
                     .hazeSource(state = hazeState)
             ) { page ->
                 when (page) {
-                    0 -> when (searchSourceType) {
-                        SearchSourceType.DISK -> {
-                            SearchScreen(
-                                initialKeyword = "",
-                                onSearchClick = onSearchClick,
-                                onOpenWebView = onOpenWebView,
-                                onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
-                                searchSourceType = searchSourceType,
-                                onSearchSourceTypeChange = { searchSourceType = it },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                        SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON -> {
-                            val mediaType = when (searchSourceType) {
+                    0 -> {
+                        if (showTraktSearch) {
+                            val mediaType = when (traktSearchType) {
                                 SearchSourceType.MOVIE -> MediaType.MOVIE
                                 SearchSourceType.SHOW -> MediaType.SHOW
                                 SearchSourceType.PERSON -> MediaType.PERSON
                                 else -> MediaType.MOVIE
                             }
-                            key(searchSourceType) {
+                            key(traktSearchType, traktSearchQuery) {
                                 val viewModel: TraktSearchViewModel = hiltViewModel()
                                 BackHandler {
-                                    searchSourceType = SearchSourceType.DISK
+                                    showTraktSearch = false
                                 }
                                 Box(
                                     modifier = Modifier
@@ -231,9 +223,9 @@ fun MainScreen(
                                         .windowInsetsPadding(WindowInsets.statusBars)
                                 ) {
                                     TraktSearchScreen(
-                                        initialQuery = "",
+                                        initialQuery = traktSearchQuery,
                                         type = mediaType,
-                                        onBack = { searchSourceType = SearchSourceType.DISK },
+                                        onBack = { showTraktSearch = false },
                                         onItemClick = { type, traktId, tmdbId, title, imdbId, traktRating ->
                                             when (type) {
                                                 MediaType.MOVIE -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false)
@@ -249,6 +241,21 @@ fun MainScreen(
                                     )
                                 }
                             }
+                        } else {
+                            SearchScreen(
+                                initialKeyword = "",
+                                onSearchClick = onSearchClick,
+                                onTraktSearch = { type, query ->
+                                    traktSearchType = type
+                                    traktSearchQuery = query
+                                    showTraktSearch = true
+                                },
+                                onOpenWebView = onOpenWebView,
+                                onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
+                                searchSourceType = searchSourceType,
+                                onSearchSourceTypeChange = { searchSourceType = it },
+                                modifier = Modifier.fillMaxSize()
+                            )
                         }
                     }
                     1 -> DiscoverScreen(

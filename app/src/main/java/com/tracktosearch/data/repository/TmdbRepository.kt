@@ -524,4 +524,14 @@ class TmdbRepository @Inject constructor(
             } else emptyList()
         } catch (_: Exception) { emptyList() }
     }
+
+    /** 获取人物被标注的图片（TMDB tagged images） */
+    suspend fun getPersonTaggedImages(personId: Int): List<String> {
+        return try {
+            val response = tmdbApiService.getPersonTaggedImages(personId, page = 1)
+            if (response.isSuccessful) {
+                response.body()?.results?.map { "https://image.tmdb.org/t/p/w500${it.file_path}" } ?: emptyList()
+            } else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
 }

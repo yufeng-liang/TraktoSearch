@@ -237,6 +237,24 @@ data class TmdbPersonImagesResponse(
 )
 
 @Serializable
+data class TmdbPersonTaggedImagesResponse(
+    val id: Int = 0,
+    val page: Int = 0,
+    val results: List<TmdbTaggedImage> = emptyList(),
+    val total_pages: Int = 0,
+    val total_results: Int = 0
+)
+
+@Serializable
+data class TmdbTaggedImage(
+    val file_path: String = "",
+    val width: Int = 0,
+    val height: Int = 0,
+    val iso_639_1: String? = null,
+    val media_type: String = ""
+)
+
+@Serializable
 data class TmdbImage(
     val file_path: String = "",
     val width: Int = 0,

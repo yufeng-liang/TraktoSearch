@@ -127,52 +127,49 @@ fun TraktSearchScreen(
     Scaffold(
         contentWindowInsets = if (inlineMode) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
         topBar = {
-            TopAppBar(
-                title = {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester),
-                        placeholder = {
-                            Text(
-                                when (uiState.selectedTab) {
-                                    MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
-                                    MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
-                                    MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
-                                }
-                            )
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                if (searchQuery.isNotBlank()) {
-                                    viewModel.search(searchQuery)
-                                }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = {
+                        Text(
+                            when (uiState.selectedTab) {
+                                MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
+                                MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
+                                MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
                             }
-                        ),
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                if (searchQuery.isNotBlank()) {
-                                    viewModel.search(searchQuery)
-                                }
-                            }) {
-                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            if (searchQuery.isNotBlank()) {
+                                viewModel.search(searchQuery)
                             }
                         }
-                    )
-                },
-                navigationIcon = {
-                    if (!inlineMode) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back))
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            if (searchQuery.isNotBlank()) {
+                                viewModel.search(searchQuery)
+                            }
+                        }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -331,7 +328,7 @@ fun TraktSearchScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(tabState.results.size, key = { tabState.results[it].traktId }) { index ->
+                                items(tabState.results.size, key = { "${tabState.results[it].traktId}_$it" }) { index ->
                                     val item = tabState.results[index]
                                     PersonSearchCard(
                                         name = item.displayTitle,
@@ -368,7 +365,7 @@ fun TraktSearchScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
-                                items(tabState.results.size, key = { tabState.results[it].traktId }) { index ->
+                                items(tabState.results.size, key = { "${tabState.results[it].traktId}_$it" }) { index ->
                                     val item = tabState.results[index]
                                     MovieCard(
                                         title = item.displayTitle,

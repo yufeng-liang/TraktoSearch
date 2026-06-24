@@ -87,6 +87,7 @@ fun SearchScreen(
     initialKeyword: String = "",
     onBack: (() -> Unit)? = null,
     onSearchClick: ((String) -> Unit)? = null,
+    onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
     onOpenWebView: (url: String) -> Unit = {},
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
@@ -259,7 +260,14 @@ fun SearchScreen(
                             },
                         placeholder = {
                             Text(
-                                text = stringResource(R.string.search_placeholder),
+                                text = stringResource(
+                                    when (searchSourceType) {
+                                        SearchSourceType.MOVIE -> R.string.search_placeholder_movie
+                                        SearchSourceType.SHOW -> R.string.search_placeholder_show
+                                        SearchSourceType.PERSON -> R.string.search_placeholder_person
+                                        SearchSourceType.DISK -> R.string.search_placeholder
+                                    }
+                                ),
                                 maxLines = 1
                             )
                         },
@@ -329,9 +337,15 @@ fun SearchScreen(
                         keyboardActions = KeyboardActions(
                             onSearch = {
                                 if (searchQuery.isNotBlank()) {
-                                    viewModel.search(searchQuery)
-                                    focusManager.clearFocus()
-                                    keyboardController?.hide()
+                                    if (searchSourceType != SearchSourceType.DISK) {
+                                        onTraktSearch?.invoke(searchSourceType, searchQuery)
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    } else {
+                                        viewModel.search(searchQuery)
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    }
                                 }
                             }
                         ),
@@ -350,7 +364,11 @@ fun SearchScreen(
                                     }
                                     TextButton(onClick = {
                                         view.performHaptic(HapticType.CLICK)
-                                        viewModel.search(searchQuery)
+                                        if (searchSourceType != SearchSourceType.DISK) {
+                                            onTraktSearch?.invoke(searchSourceType, searchQuery)
+                                        } else {
+                                            viewModel.search(searchQuery)
+                                        }
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
                                     }) {
@@ -451,7 +469,14 @@ private fun SearchBarTop(
                 },
             placeholder = {
                 Text(
-                    text = stringResource(R.string.search_placeholder),
+                    text = stringResource(
+                        when (searchSourceType) {
+                            SearchSourceType.MOVIE -> R.string.search_placeholder_movie
+                            SearchSourceType.SHOW -> R.string.search_placeholder_show
+                            SearchSourceType.PERSON -> R.string.search_placeholder_person
+                            SearchSourceType.DISK -> R.string.search_placeholder
+                        }
+                    ),
                     maxLines = 1,
                     overflow = TextOverflow.Visible
                 )

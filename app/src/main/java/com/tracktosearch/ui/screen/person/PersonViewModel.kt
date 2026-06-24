@@ -147,6 +147,18 @@ class PersonViewModel @Inject constructor(
                     }
                     _uiState.value = _uiState.value.copy(personImages = existing)
                 }
+                // 获取人物被标注的图片（影视海报/剧照中含该人物的照片）
+                val taggedImages = tmdbRepository.getPersonTaggedImages(currentPersonId)
+                if (taggedImages.isNotEmpty()) {
+                    val existing = _uiState.value.personImages.toMutableList()
+                    val existingSet = existing.toSet()
+                    taggedImages.forEach { url ->
+                        if (url !in existingSet) {
+                            existing.add(url)
+                        }
+                    }
+                    _uiState.value = _uiState.value.copy(personImages = existing)
+                }
             } catch (_: Exception) {
             } finally {
                 _uiState.value = _uiState.value.copy(isLoadingPersonImages = false)

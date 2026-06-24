@@ -142,4 +142,10 @@ interface TmdbApiService {
     suspend fun getPersonImages(
         @Path("person_id") id: Int
     ): Response<TmdbPersonImagesResponse>
+
+    @GET("person/{person_id}/tagged_images")
+    suspend fun getPersonTaggedImages(
+        @Path("person_id") id: Int,
+        @Query("page") page: Int = 1
+    ): Response<TmdbPersonTaggedImagesResponse>
 }
