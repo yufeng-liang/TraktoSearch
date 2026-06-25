@@ -8,7 +8,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -118,39 +117,22 @@ fun SearchScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
-    // Animation state for search box position and width
-    val animatedYOffset = remember { Animatable(0f) }
+    // Animation state for search box width
     val animatedWidthFraction = remember { Animatable(0.75f) }
     val isActive = isSearchFocused || searchQuery.isNotEmpty()
 
     // Trigger animation when active state changes
     LaunchedEffect(isActive) {
         if (isActive) {
-            launch {
-                animatedYOffset.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                animatedWidthFraction.animateTo(
-                    targetValue = 1f,
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                )
-            }
+            animatedWidthFraction.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing)
+            )
         } else {
-            launch {
-                animatedYOffset.animateTo(
-                    targetValue = 280f,
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                )
-            }
-            launch {
-                animatedWidthFraction.animateTo(
-                    targetValue = 0.75f,
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                )
-            }
+            animatedWidthFraction.animateTo(
+                targetValue = 0.75f,
+                animationSpec = tween(300, easing = FastOutSlowInEasing)
+            )
         }
     }
 
@@ -193,17 +175,34 @@ fun SearchScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // Search box - animated position and width
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(0, animatedYOffset.value.roundToInt()) }
-                .align(Alignment.TopCenter)
+        // Main content area
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Spacer to push content down in default state
+            Spacer(modifier = Modifier.weight(1f))
+
+            // Decorative icon - only visible in default state
+            AnimatedVisibility(
+                visible = !isActive,
+                exit = fadeOut(animationSpec = tween(200))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_search_cloud),
+                    contentDescription = null,
+                    modifier = Modifier.size(182.dp)
+                )
+            }
+
+            // Spacer between icon and search box
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Search box - animated width
             Box(
                 modifier = Modifier
                     .fillMaxWidth(animatedWidthFraction.value)
-                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp)
             ) {
                 SearchBarTop(
                     searchQuery = searchQuery,
@@ -226,66 +225,42 @@ fun SearchScreen(
                     onSearchSourceTypeChange = onSearchSourceTypeChange
                 )
             }
-        }
 
-        // Decorative icon - only visible in default state, positioned above search box
-        AnimatedVisibility(
-            visible = !isActive,
-            exit = fadeOut(animationSpec = tween(200))
-        ) {
-            Box(
+            // Spacer between search box and content
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Content below search box
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset { IntOffset(0, (animatedYOffset.value - 220).roundToInt()) }
-                    .align(Alignment.TopCenter),
-                contentAlignment = Alignment.Center
+                    .weight(1f)
+                    .padding(horizontal = 24.dp)
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_search_cloud),
-                    contentDescription = null,
-                    modifier = Modifier.size(182.dp)
-                )
-            }
-        }
-
-        // Content below search box
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = 120.dp)
-        ) {
-            when {
-                uiState.resources.isNotEmpty() -> {
-                    Text(
-                        text = stringResource(R.string.search_results, uiState.resources.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-                    )
-                    SearchResultsContent(
-                        resources = uiState.resources,
-                        typeFilter = uiState.typeFilter,
-                        viewedUrls = viewedUrls,
-                        onTypeFilterChange = { viewModel.setTypeFilter(it) },
-                        onItemClick = { item ->
-                            openResourceLink(context, item)
-                            viewModel.markViewed(item.url)
-                        }
-                    )
-                }
-                uiState.isLoading -> {
-                    LoadingView(message = stringResource(R.string.search_loading))
-                }
-                uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
-                    EmptyView(message = stringResource(R.string.search_no_results))
-                }
-                else -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Spacer(modifier = Modifier.height(24.dp))
+                when {
+                    uiState.resources.isNotEmpty() -> {
+                        Text(
+                            text = stringResource(R.string.search_results, uiState.resources.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(start = 0.dp, top = 4.dp, bottom = 4.dp)
+                        )
+                        SearchResultsContent(
+                            resources = uiState.resources,
+                            typeFilter = uiState.typeFilter,
+                            viewedUrls = viewedUrls,
+                            onTypeFilterChange = { viewModel.setTypeFilter(it) },
+                            onItemClick = { item ->
+                                openResourceLink(context, item)
+                                viewModel.markViewed(item.url)
+                            }
+                        )
+                    }
+                    uiState.isLoading -> {
+                        LoadingView(message = stringResource(R.string.search_loading))
+                    }
+                    uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
+                        EmptyView(message = stringResource(R.string.search_no_results))
+                    }
+                    else -> {
                         if (searchQuery.isNotEmpty()) {
                             val suggestions = remember(searchQuery, uiState.searchHistory) {
                                 viewModel.getSuggestions(searchQuery)
