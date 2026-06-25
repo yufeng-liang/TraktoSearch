@@ -3,7 +3,12 @@ package com.tracktosearch.ui.screen.search
 import android.content.Intent
 import android.net.Uri
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -56,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
+import kotlin.math.roundToInt
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
@@ -112,6 +118,42 @@ fun SearchScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
+    // Animation state for search box position and width
+    val animatedYOffset = remember { Animatable(0f) }
+    val animatedWidthFraction = remember { Animatable(0.65f) }
+    val isActive = isSearchFocused || searchQuery.isNotEmpty()
+
+    // Trigger animation when active state changes
+    LaunchedEffect(isActive) {
+        if (isActive) {
+            launch {
+                animatedYOffset.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                )
+            }
+            launch {
+                animatedWidthFraction.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                )
+            }
+        } else {
+            launch {
+                animatedYOffset.animateTo(
+                    targetValue = 200f,
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                )
+            }
+            launch {
+                animatedWidthFraction.animateTo(
+                    targetValue = 0.65f,
+                    animationSpec = tween(300, easing = FastOutSlowInEasing)
+                )
+            }
+        }
+    }
+
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
         focusManager.clearFocus()
@@ -146,132 +188,151 @@ fun SearchScreen(
         }
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // 搜索框始终在顶部，消除布局跳动
-        SearchBarTop(
-            searchQuery = searchQuery,
-            onQueryChange = { searchQuery = it },
-            onSearch = {
-                if (searchSourceType != SearchSourceType.DISK) {
-                    viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                    onTraktSearch?.invoke(searchSourceType, searchQuery)
-                } else {
-                    viewModel.search(searchQuery)
-                }
-                focusManager.clearFocus()
-                keyboardController?.hide()
-            },
-            onClear = { searchQuery = "" },
-            onBack = onBack,
-            focusRequester = focusRequester,
-            onFocusChanged = { isSearchFocused = it },
-            searchSourceType = searchSourceType,
-            onSearchSourceTypeChange = onSearchSourceTypeChange
-        )
+        // Decorative icon - only visible in default state
+        AnimatedVisibility(
+            visible = !isActive,
+            exit = fadeOut(animationSpec = tween(200))
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_search_cloud),
+                    contentDescription = null,
+                    modifier = Modifier.size(182.dp)
+                )
+            }
+        }
 
-        // 根据状态显示不同内容
-        when {
-            // 搜索结果
-            uiState.resources.isNotEmpty() -> {
-                // 搜索结果数
-                Text(
-                    text = stringResource(R.string.search_results, uiState.resources.size),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-                )
-                // 搜索结果列表
-                SearchResultsContent(
-                    resources = uiState.resources,
-                    typeFilter = uiState.typeFilter,
-                    viewedUrls = viewedUrls,
-                    onTypeFilterChange = { viewModel.setTypeFilter(it) },
-                    onItemClick = { item ->
-                        openResourceLink(context, item)
-                        viewModel.markViewed(item.url)
-                    }
-                )
-            }
-            // 加载中
-            uiState.isLoading -> {
-                LoadingView(message = stringResource(R.string.search_loading))
-            }
-            // 搜索无结果
-            uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
-                EmptyView(message = stringResource(R.string.search_no_results))
-            }
-            // 默认页：装饰图标 + 搜索历史
-            else -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Spacer(modifier = Modifier.height(24.dp))
-                    // 装饰图标：白云+电影+放大镜+播放按钮
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_search_cloud),
-                        contentDescription = null,
-                        modifier = Modifier.size(140.dp)
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    // 搜索建议 / 搜索历史 + 热门搜索
-                    if (searchQuery.isNotEmpty()) {
-                        // 输入时显示自动补全建议
-                        val suggestions = remember(searchQuery, uiState.searchHistory) {
-                            viewModel.getSuggestions(searchQuery)
+        // Search box - animated position and width
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(0, animatedYOffset.value.roundToInt()) }
+                .align(Alignment.TopCenter)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedWidthFraction.value)
+                    .align(Alignment.Center)
+            ) {
+                SearchBarTop(
+                    searchQuery = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = {
+                        if (searchSourceType != SearchSourceType.DISK) {
+                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                            onTraktSearch?.invoke(searchSourceType, searchQuery)
+                        } else {
+                            viewModel.search(searchQuery)
                         }
-                        if (suggestions.isNotEmpty()) {
-                            SearchSuggestionsInline(
-                                suggestions = suggestions,
-                                onSuggestionClick = { item ->
-                                    searchQuery = item.keyword
-                                    viewModel.search(item.keyword)
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    },
+                    onClear = { searchQuery = "" },
+                    onBack = if (isActive) onBack else null,
+                    focusRequester = focusRequester,
+                    onFocusChanged = { isSearchFocused = it },
+                    searchSourceType = searchSourceType,
+                    onSearchSourceTypeChange = onSearchSourceTypeChange
+                )
+            }
+        }
+
+        // Content below search box
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 80.dp)
+        ) {
+            when {
+                uiState.resources.isNotEmpty() -> {
+                    Text(
+                        text = stringResource(R.string.search_results, uiState.resources.size),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
+                    )
+                    SearchResultsContent(
+                        resources = uiState.resources,
+                        typeFilter = uiState.typeFilter,
+                        viewedUrls = viewedUrls,
+                        onTypeFilterChange = { viewModel.setTypeFilter(it) },
+                        onItemClick = { item ->
+                            openResourceLink(context, item)
+                            viewModel.markViewed(item.url)
+                        }
+                    )
+                }
+                uiState.isLoading -> {
+                    LoadingView(message = stringResource(R.string.search_loading))
+                }
+                uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
+                    EmptyView(message = stringResource(R.string.search_no_results))
+                }
+                else -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        if (searchQuery.isNotEmpty()) {
+                            val suggestions = remember(searchQuery, uiState.searchHistory) {
+                                viewModel.getSuggestions(searchQuery)
+                            }
+                            if (suggestions.isNotEmpty()) {
+                                SearchSuggestionsInline(
+                                    suggestions = suggestions,
+                                    onSuggestionClick = { item ->
+                                        searchQuery = item.keyword
+                                        viewModel.search(item.keyword)
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    }
+                                )
+                            }
+                        } else {
+                            if (uiState.searchHistory.isNotEmpty()) {
+                                SearchHistoryInline(
+                                    history = uiState.searchHistory,
+                                    onHistoryClick = { item ->
+                                        searchQuery = item.keyword
+                                        if (item.type == "disk") {
+                                            viewModel.search(item.keyword)
+                                        } else {
+                                            val st = when (item.type) {
+                                                "movie" -> SearchSourceType.MOVIE
+                                                "show" -> SearchSourceType.SHOW
+                                                "person" -> SearchSourceType.PERSON
+                                                else -> SearchSourceType.DISK
+                                            }
+                                            onTraktSearch?.invoke(st, item.keyword)
+                                        }
+                                        focusManager.clearFocus()
+                                        keyboardController?.hide()
+                                    },
+                                    onHistoryDelete = { viewModel.removeHistory(it.keyword) },
+                                    onClearAll = { viewModel.clearHistory() }
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
+                            PopularSearchesSection(
+                                popularSearches = viewModel.popularSearches,
+                                onPopularClick = { keyword ->
+                                    searchQuery = keyword
+                                    viewModel.search(keyword)
                                     focusManager.clearFocus()
                                     keyboardController?.hide()
                                 }
                             )
                         }
-                    } else {
-                        // 搜索历史
-                        if (uiState.searchHistory.isNotEmpty()) {
-                            SearchHistoryInline(
-                                history = uiState.searchHistory,
-                                onHistoryClick = { item ->
-                                    searchQuery = item.keyword
-                                    if (item.type == "disk") {
-                                        viewModel.search(item.keyword)
-                                    } else {
-                                        val st = when (item.type) {
-                                            "movie" -> SearchSourceType.MOVIE
-                                            "show" -> SearchSourceType.SHOW
-                                            "person" -> SearchSourceType.PERSON
-                                            else -> SearchSourceType.DISK
-                                        }
-                                        onTraktSearch?.invoke(st, item.keyword)
-                                    }
-                                    focusManager.clearFocus()
-                                    keyboardController?.hide()
-                                },
-                                onHistoryDelete = { viewModel.removeHistory(it.keyword) },
-                                onClearAll = { viewModel.clearHistory() }
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                        }
-                        // 热门搜索
-                        PopularSearchesSection(
-                            popularSearches = viewModel.popularSearches,
-                            onPopularClick = { keyword ->
-                                searchQuery = keyword
-                                viewModel.search(keyword)
-                                focusManager.clearFocus()
-                                keyboardController?.hide()
-                            }
-                        )
                     }
                 }
             }
