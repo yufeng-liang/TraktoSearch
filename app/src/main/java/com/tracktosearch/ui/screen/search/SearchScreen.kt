@@ -156,7 +156,12 @@ fun SearchScreen(
             searchQuery = searchQuery,
             onQueryChange = { searchQuery = it },
             onSearch = {
-                viewModel.search(searchQuery)
+                if (searchSourceType != SearchSourceType.DISK) {
+                    viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                    onTraktSearch?.invoke(searchSourceType, searchQuery)
+                } else {
+                    viewModel.search(searchQuery)
+                }
                 focusManager.clearFocus()
                 keyboardController?.hide()
             },
@@ -290,6 +295,12 @@ private fun SearchBarTop(
     val context = LocalContext.current
     val view = LocalView.current
     var showTypeDropdown by remember { mutableStateOf(false) }
+    val typeColorMap = mapOf(
+        SearchSourceType.DISK to Color(0xFF4CAF50),
+        SearchSourceType.MOVIE to Color(0xFF2196F3),
+        SearchSourceType.SHOW to Color(0xFFFF9800),
+        SearchSourceType.PERSON to Color(0xFF9C27B0)
+    )
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -326,60 +337,65 @@ private fun SearchBarTop(
                 )
             },
             leadingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
-                    if (onSearchSourceTypeChange != null) {
-                        Box {
-                            TextButton(
-                                onClick = { showTypeDropdown = true },
-                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Text(
-                                    text = stringResource(
-                                        when (searchSourceType) {
-                                            SearchSourceType.DISK -> R.string.search_type_disk
-                                            SearchSourceType.MOVIE -> R.string.search_type_movie
-                                            SearchSourceType.SHOW -> R.string.search_type_show
-                                            SearchSourceType.PERSON -> R.string.search_type_person
-                                        }
-                                    ),
-                                    fontSize = 12.sp,
-                                    maxLines = 1
-                                )
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-                            }
-                            DropdownMenu(
-                                expanded = showTypeDropdown,
-                                onDismissRequest = { showTypeDropdown = false }
-                            ) {
-                                SearchSourceType.entries.forEach { type ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(stringResource(
+                if (onSearchSourceTypeChange != null) {
+                    Box {
+                        TextButton(
+                            onClick = { showTypeDropdown = true },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    when (searchSourceType) {
+                                        SearchSourceType.DISK -> R.string.search_type_disk
+                                        SearchSourceType.MOVIE -> R.string.search_type_movie
+                                        SearchSourceType.SHOW -> R.string.search_type_show
+                                        SearchSourceType.PERSON -> R.string.search_type_person
+                                    }
+                                ),
+                                fontSize = 15.sp,
+                                color = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50),
+                                maxLines = 1
+                            )
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showTypeDropdown,
+                            onDismissRequest = { showTypeDropdown = false }
+                        ) {
+                            SearchSourceType.entries.forEach { type ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                stringResource(
                                                     when (type) {
                                                         SearchSourceType.DISK -> R.string.search_type_disk
                                                         SearchSourceType.MOVIE -> R.string.search_type_movie
                                                         SearchSourceType.SHOW -> R.string.search_type_show
                                                         SearchSourceType.PERSON -> R.string.search_type_person
                                                     }
-                                                ))
-                                                if (type == searchSourceType) {
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                }
-                                            }
-                                        },
-                                        onClick = {
-                                            showTypeDropdown = false
-                                            if (type != searchSourceType) {
-                                                onSearchSourceTypeChange?.invoke(type)
+                                                ),
+                                                color = typeColorMap[type] ?: Color(0xFF4CAF50)
+                                            )
+                                            if (type == searchSourceType) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                             }
                                         }
-                                    )
-                                }
+                                    },
+                                    onClick = {
+                                        showTypeDropdown = false
+                                        if (type != searchSourceType) {
+                                            onSearchSourceTypeChange?.invoke(type)
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -390,8 +406,15 @@ private fun SearchBarTop(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
             trailingIcon = {
-                if (searchQuery.isNotEmpty()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (searchQuery.isEmpty()) {
+                        Icon(
+                            Icons.Default.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
                         IconButton(
                             onClick = onClear,
                             modifier = Modifier.size(36.dp)
@@ -588,9 +611,9 @@ private fun SearchHistoryInline(
     onClearAll: () -> Unit
 ) {
     val typeColorMap = mapOf(
-        "disk" to Color(0xFF9E9E9E),
+        "disk" to Color(0xFF4CAF50),
         "movie" to Color(0xFF2196F3),
-        "show" to Color(0xFF4CAF50),
+        "show" to Color(0xFFFF9800),
         "person" to Color(0xFF9C27B0)
     )
     val typeNameMap = mapOf(
@@ -637,15 +660,16 @@ private fun SearchHistoryInline(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(10.dp))
+                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = typeColorMap[item.type] ?: Color(0xFF9E9E9E),
+                    color = tagColor.copy(alpha = 0.15f),
                     modifier = Modifier.padding(end = 8.dp)
                 ) {
                     Text(
                         text = typeNameMap[item.type] ?: item.type,
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
+                        color = tagColor,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
