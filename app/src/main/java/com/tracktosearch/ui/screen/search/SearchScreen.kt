@@ -111,7 +111,6 @@ fun SearchScreen(
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    var showTypeDropdown by remember { mutableStateOf(false) }
 
     // 搜索历史展开时，返回手势收起搜索历史而不是退出页面
     BackHandler(enabled = isSearchFocused) {
@@ -147,240 +146,72 @@ fun SearchScreen(
         }
     }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
+        // 搜索框始终在顶部，消除布局跳动
+        SearchBarTop(
+            searchQuery = searchQuery,
+            onQueryChange = { searchQuery = it },
+            onSearch = {
+                viewModel.search(searchQuery)
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            },
+            onClear = { searchQuery = "" },
+            onBack = onBack,
+            focusRequester = focusRequester,
+            onFocusChanged = { isSearchFocused = it },
+            searchSourceType = searchSourceType,
+            onSearchSourceTypeChange = onSearchSourceTypeChange
+        )
+
+        // 根据状态显示不同内容
         when {
             // 搜索结果
             uiState.resources.isNotEmpty() -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    // 搜索框（顶部）
-                    SearchBarTop(
-                        searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearch = {
-                            viewModel.search(searchQuery)
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        },
-                        onClear = { searchQuery = "" },
-                        onBack = onBack,
-                        focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it },
-                        searchSourceType = searchSourceType,
-                        onSearchSourceTypeChange = onSearchSourceTypeChange
-                    )
-                    // 搜索结果数
-                    Text(
-                        text = stringResource(R.string.search_results, uiState.resources.size),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-                    )
-                    // 搜索结果列表
-                    SearchResultsContent(
-                        resources = uiState.resources,
-                        typeFilter = uiState.typeFilter,
-                        viewedUrls = viewedUrls,
-                        onTypeFilterChange = { viewModel.setTypeFilter(it) },
-                        onItemClick = { item ->
-                            openResourceLink(context, item)
-                            viewModel.markViewed(item.url)
-                        }
-                    )
-                }
+                // 搜索结果数
+                Text(
+                    text = stringResource(R.string.search_results, uiState.resources.size),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
+                )
+                // 搜索结果列表
+                SearchResultsContent(
+                    resources = uiState.resources,
+                    typeFilter = uiState.typeFilter,
+                    viewedUrls = viewedUrls,
+                    onTypeFilterChange = { viewModel.setTypeFilter(it) },
+                    onItemClick = { item ->
+                        openResourceLink(context, item)
+                        viewModel.markViewed(item.url)
+                    }
+                )
             }
             // 加载中
             uiState.isLoading -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    SearchBarTop(
-                        searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearch = {
-                            viewModel.search(searchQuery)
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        },
-                        onClear = { searchQuery = "" },
-                        onBack = onBack,
-                        focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it },
-                        searchSourceType = searchSourceType,
-                        onSearchSourceTypeChange = onSearchSourceTypeChange
-                    )
-                    LoadingView(message = stringResource(R.string.search_loading))
-                }
+                LoadingView(message = stringResource(R.string.search_loading))
             }
             // 搜索无结果
             uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    SearchBarTop(
-                        searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearch = {
-                            viewModel.search(searchQuery)
-                            focusManager.clearFocus()
-                            keyboardController?.hide()
-                        },
-                        onClear = { searchQuery = "" },
-                        onBack = onBack,
-                        focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it },
-                        searchSourceType = searchSourceType,
-                        onSearchSourceTypeChange = onSearchSourceTypeChange
-                    )
-                    EmptyView(message = stringResource(R.string.search_no_results))
-                }
+                EmptyView(message = stringResource(R.string.search_no_results))
             }
-            // 默认页：居中搜索框 + 搜索历史
+            // 默认页：装饰图标 + 搜索历史
             else -> {
-                // 搜索框居中布局（屏幕上方约 1/3 处）
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Spacer(modifier = Modifier.weight(1f))
+                    Spacer(modifier = Modifier.height(24.dp))
                     // 装饰图标：白云+电影+放大镜+播放按钮
                     Image(
                         painter = painterResource(id = R.drawable.ic_search_cloud),
                         contentDescription = null,
                         modifier = Modifier.size(140.dp)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    // 搜索框
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(focusRequester)
-                            .onFocusChanged { focusState ->
-                                isSearchFocused = focusState.isFocused
-                            },
-                        placeholder = {
-                            Text(
-                                text = stringResource(
-                                    when (searchSourceType) {
-                                        SearchSourceType.MOVIE -> R.string.search_placeholder_movie
-                                        SearchSourceType.SHOW -> R.string.search_placeholder_show
-                                        SearchSourceType.PERSON -> R.string.search_placeholder_person
-                                        SearchSourceType.DISK -> R.string.search_placeholder
-                                    }
-                                ),
-                                maxLines = 1
-                            )
-                        },
-                        leadingIcon = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp))
-                                if (onSearchSourceTypeChange != null) {
-                                    Box {
-                                        TextButton(
-                                            onClick = { showTypeDropdown = true },
-                                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                                            modifier = Modifier.height(32.dp)
-                                        ) {
-                                            Text(
-                                                text = stringResource(
-                                                    when (searchSourceType) {
-                                                        SearchSourceType.DISK -> R.string.search_type_disk
-                                                        SearchSourceType.MOVIE -> R.string.search_type_movie
-                                                        SearchSourceType.SHOW -> R.string.search_type_show
-                                                        SearchSourceType.PERSON -> R.string.search_type_person
-                                                    }
-                                                ),
-                                                fontSize = 12.sp,
-                                                maxLines = 1
-                                            )
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        }
-                                        DropdownMenu(
-                                            expanded = showTypeDropdown,
-                                            onDismissRequest = { showTypeDropdown = false }
-                                        ) {
-                                            SearchSourceType.entries.forEach { type ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Text(stringResource(
-                                                                when (type) {
-                                                                    SearchSourceType.DISK -> R.string.search_type_disk
-                                                                    SearchSourceType.MOVIE -> R.string.search_type_movie
-                                                                    SearchSourceType.SHOW -> R.string.search_type_show
-                                                                    SearchSourceType.PERSON -> R.string.search_type_person
-                                                                }
-                                                            ))
-                                                            if (type == searchSourceType) {
-                                                                Spacer(modifier = Modifier.width(8.dp))
-                                                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                            }
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        showTypeDropdown = false
-                                                        if (type != searchSourceType) {
-                                                            onSearchSourceTypeChange?.invoke(type)
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                if (searchQuery.isNotBlank()) {
-                                    if (searchSourceType != SearchSourceType.DISK) {
-                                        viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                                        onTraktSearch?.invoke(searchSourceType, searchQuery)
-                                        focusManager.clearFocus()
-                                        keyboardController?.hide()
-                                    } else {
-                                        viewModel.search(searchQuery)
-                                        focusManager.clearFocus()
-                                        keyboardController?.hide()
-                                    }
-                                }
-                            }
-                        ),
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { searchQuery = "" },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Close,
-                                            contentDescription = stringResource(R.string.search_clear_input),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                    TextButton(onClick = {
-                                        view.performHaptic(HapticType.CLICK)
-                                        if (searchSourceType != SearchSourceType.DISK) {
-                                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                                            onTraktSearch?.invoke(searchSourceType, searchQuery)
-                                        } else {
-                                            viewModel.search(searchQuery)
-                                        }
-                                        focusManager.clearFocus()
-                                        keyboardController?.hide()
-                                    }) {
-                                        Text(stringResource(R.string.search_button))
-                                    }
-                                }
-                            }
-                        }
                     )
                     Spacer(modifier = Modifier.height(24.dp))
                     // 搜索建议 / 搜索历史 + 热门搜索
@@ -437,7 +268,6 @@ fun SearchScreen(
                             }
                         )
                     }
-                    Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
