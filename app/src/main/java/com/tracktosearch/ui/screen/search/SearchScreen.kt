@@ -236,7 +236,7 @@ fun SearchScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset { IntOffset(0, (animatedYOffset.value - 120).roundToInt()) }
+                    .offset { IntOffset(0, (animatedYOffset.value - 160).roundToInt()) }
                     .align(Alignment.TopCenter),
                 contentAlignment = Alignment.Center
             ) {
@@ -252,7 +252,7 @@ fun SearchScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 80.dp)
+                .padding(top = 120.dp)
         ) {
             when {
                 uiState.resources.isNotEmpty() -> {
@@ -405,7 +405,7 @@ private fun SearchBarTop(
                     Box {
                         TextButton(
                             onClick = { showTypeDropdown = true },
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            contentPadding = PaddingValues(start = 8.dp, top = 0.dp, end = 4.dp, bottom = 0.dp),
                             modifier = Modifier.height(32.dp)
                         ) {
                             Text(
