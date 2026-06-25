@@ -29,6 +29,7 @@ import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.data.util.DataExportImport
 import com.tracktosearch.data.util.ExportItem
 import com.tracktosearch.data.util.ImportItem
+import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
@@ -36,14 +37,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 enum class ExportFormat { JSON, CSV }
 
+@Immutable
 data class ExportImportState(
     val isExporting: Boolean = false,
     val isImporting: Boolean = false,
@@ -78,22 +78,22 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LanguageStorage.LANGUAGE_SYSTEM)
 
     val pansouEnabled: StateFlow<Boolean> = searchSourceStorage.pansouEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { searchSourceStorage.pansouEnabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val panhubEnabled: StateFlow<Boolean> = searchSourceStorage.panhubEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { searchSourceStorage.panhubEnabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { searchSourceStorage.zresoEnabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val notificationEnabled: StateFlow<Boolean> = notificationStorage.enabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { notificationStorage.enabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val releaseReminderEnabled: StateFlow<Boolean> = notificationStorage.releaseReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { notificationStorage.releaseReminderEnabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val newSeasonReminderEnabled: StateFlow<Boolean> = notificationStorage.newSeasonReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), runBlocking { notificationStorage.newSeasonReminderEnabled.first() })
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
@@ -136,7 +136,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            runBlocking { customSearchSourceStorage.sources.first() }
+            emptyList()
         )
 
     fun addCustomSource(source: CustomSearchSource) {
@@ -532,7 +532,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            runBlocking { discoverSectionStorage.sectionConfigs.first() }
+            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
+                DiscoverSectionConfig(id = id, visible = true, order = index)
+            }
         )
 
     fun setSectionVisible(id: String, visible: Boolean) {
@@ -549,7 +551,9 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            runBlocking { detailSectionStorage.sectionConfigs.first() }
+            DetailSectionStorage.ALL_SECTION_IDS.map { id ->
+                DetailSectionConfig(id = id, visible = true)
+            }
         )
 
     fun setDetailSectionVisible(id: String, visible: Boolean) {

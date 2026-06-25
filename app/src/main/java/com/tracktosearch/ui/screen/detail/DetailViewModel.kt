@@ -24,6 +24,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -54,6 +55,7 @@ data class RecommendationItem(
     val isWatched: Boolean = false
 )
 
+@Immutable
 data class DetailUiState(
     val isLoading: Boolean = false,
     val isSearching: Boolean = false,
@@ -150,15 +152,32 @@ class DetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        // 缓存最近查看的详情数据，避免从子页面返回后 ViewModel 被销毁导致重新加载
         private const val CACHE_MAX_SIZE = 5
-        private val detailCache = object : LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
-            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedDetailData>): Boolean {
-                return size > CACHE_MAX_SIZE
+        @Volatile
+        private var detailCache = LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true)
+
+        private fun cachePut(key: Int, value: CachedDetailData) {
+            synchronized(detailCache) {
+                detailCache[key] = value
+                while (detailCache.size > CACHE_MAX_SIZE) {
+                    val eldest = detailCache.keys.first()
+                    detailCache.remove(eldest)
+                }
             }
         }
 
-        /** 缓存的详情数据，用于从子页面返回后快速恢复 */
+        private fun cacheGet(key: Int): CachedDetailData? {
+            synchronized(detailCache) {
+                return detailCache[key]
+            }
+        }
+
+        private fun cacheRemove(key: Int) {
+            synchronized(detailCache) {
+                detailCache.remove(key)
+            }
+        }
+
         data class CachedDetailData(
             val uiState: DetailUiState,
             val allResources: List<ResourceItem>,
@@ -218,7 +237,7 @@ class DetailViewModel @Inject constructor(
         if (currentTraktId == traktId && detailLoaded) return
 
         // 尝试从静态缓存恢复
-        val cached = detailCache[traktId]
+        val cached = cacheGet(traktId)
         if (cached != null) {
             currentTraktId = traktId
             currentMediaType = cached.currentMediaType
@@ -980,7 +999,7 @@ class DetailViewModel @Inject constructor(
         val filtered = resourceRepository.filterItems(
             allResources, state.enabledSources, state.enabledDiskTypes
         )
-        val viewedUrls = viewedItemStorage.getviewedUrls()
+        val viewedUrls = viewedItemStorage.getViewedUrls()
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
             resources = filtered,
@@ -1253,7 +1272,7 @@ class DetailViewModel @Inject constructor(
 
     private fun saveToCache() {
         if (currentTraktId <= 0) return
-        detailCache[currentTraktId] = CachedDetailData(
+        cachePut(currentTraktId, CachedDetailData(
             uiState = _uiState.value,
             allResources = allResources,
             currentKeyword = currentKeyword,
@@ -1262,7 +1281,7 @@ class DetailViewModel @Inject constructor(
             currentTraktRating = currentTraktRating,
             currentTmdbId = currentTmdbId,
             currentMediaType = currentMediaType
-        )
+        ))
     }
 }
 

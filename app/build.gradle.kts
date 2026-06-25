@@ -1,5 +1,11 @@
 import java.util.Properties
 
+val localProps = rootProject.file("local.properties")
+val properties = Properties()
+if (localProps.exists()) {
+    properties.load(localProps.inputStream())
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -22,13 +28,6 @@ android {
         versionName = "2.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // 从 local.properties 读取 API keys
-        val localProps = rootProject.file("local.properties")
-        val properties = Properties()
-        if (localProps.exists()) {
-            properties.load(localProps.inputStream())
-        }
 
         buildConfigField("String", "TRAKT_CLIENT_ID", "\"${properties.getProperty("trakt.client.id", "")}\"")
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"${properties.getProperty("trakt.client.secret", "")}\"")
@@ -58,11 +57,6 @@ android {
             // 使用默认 debug 签名
         }
         create("release") {
-            val localProps = rootProject.file("local.properties")
-            val properties = Properties()
-            if (localProps.exists()) {
-                properties.load(localProps.inputStream())
-            }
             storeFile = file(properties.getProperty("release.store.file", ""))
             storePassword = properties.getProperty("release.store.password", "")
             keyAlias = properties.getProperty("release.key.alias", "")

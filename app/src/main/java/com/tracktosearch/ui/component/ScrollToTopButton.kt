@@ -28,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.tracktosearch.R
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 import dev.chrisbanes.haze.HazeState
@@ -169,7 +171,7 @@ private fun ScrollToTopButtonContent(
         ) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
-                contentDescription = "返回顶部",
+                contentDescription = stringResource(R.string.scroll_to_top),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(32.dp)
             )
@@ -181,7 +183,7 @@ private fun ScrollToTopButtonContent(
         ) {
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
-                contentDescription = "返回顶部",
+                contentDescription = stringResource(R.string.scroll_to_top),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(32.dp)
             )

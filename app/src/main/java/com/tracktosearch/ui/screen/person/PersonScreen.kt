@@ -117,6 +117,12 @@ fun PersonScreen(
         viewModel.loadPerson(personId)
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { resId ->
+            context.showToast(context.getString(resId))
+        }
+    }
+
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
     // 全部作品展开状态
@@ -286,6 +292,23 @@ fun PersonScreen(
                                                 }
                                             )
                                         }
+                                        if (uiState.hasMoreMovies) {
+                                            item(key = "movie_load_more") {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(60.dp)
+                                                        .height(90.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (uiState.isLoadingMoreMovies) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                    } else {
+                                                        LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
+                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -334,6 +357,23 @@ fun PersonScreen(
                                                     )
                                                 }
                                             )
+                                        }
+                                        if (uiState.hasMoreTvShows) {
+                                            item(key = "tv_load_more") {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(60.dp)
+                                                        .height(90.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    if (uiState.isLoadingMoreTvShows) {
+                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                    } else {
+                                                        LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
+                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }

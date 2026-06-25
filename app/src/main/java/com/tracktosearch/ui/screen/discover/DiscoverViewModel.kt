@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.discover
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
@@ -25,9 +26,11 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -36,7 +39,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 @Immutable
@@ -93,12 +95,17 @@ class DiscoverViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
 
+    private val _toastEvent = MutableSharedFlow<Int>()
+    val toastEvent = _toastEvent.asSharedFlow()
+
     // 发现页栏目配置（显示/隐藏 + 排序），同步读取已保存顺序作为初始值，避免首帧跳动
     val sectionConfigs: StateFlow<List<DiscoverSectionConfig>> = discoverSectionStorage.sectionConfigs
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            runBlocking { discoverSectionStorage.sectionConfigs.first() }
+            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
+                DiscoverSectionConfig(id = id, visible = true, order = index)
+            }
         )
 
     companion object {
@@ -511,6 +518,8 @@ class DiscoverViewModel @Inject constructor(
                     val imdbId = first?.movie?.ids?.imdb ?: ""
                     if (traktId != null && traktId > 0) {
                         onNavigate(traktId, tmdbId, title, imdbId, 0.0)
+                    } else {
+                        _toastEvent.emit(R.string.card_resolve_not_found)
                     }
                 }
             } catch (_: Exception) {
@@ -598,6 +607,8 @@ class DiscoverViewModel @Inject constructor(
                     val imdbId = first?.movie?.ids?.imdb ?: ""
                     if (traktId != null && traktId > 0) {
                         onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0)
+                    } else {
+                        _toastEvent.emit(R.string.card_resolve_not_found)
                     }
                 }
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)

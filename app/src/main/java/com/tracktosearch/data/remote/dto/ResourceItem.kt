@@ -17,6 +17,17 @@ enum class ResourceType {
  * 根据资源名称推断影视类型（电影/电视剧）。
  * 无明确类型字段时，从标题中的关键词和季集信息推断。
  */
+private val SHOW_PATTERNS = listOf(
+    Regex("第\\s*\\d+\\s*季"),
+    Regex("第\\s*\\d+\\s*集"),
+    Regex("全\\s*\\d+\\s*集"),
+    Regex("\\d+\\s*[-~]\\s*\\d+\\s*季"),
+    Regex("s\\d{1,2}\\s*e\\d{1,2}"),
+    Regex("(?<![a-z])s\\d{1,2}\\b"),
+    Regex("(?<![a-z])e\\d{1,2}\\b"),
+    Regex("(?<![a-z])ep\\.?\\d")
+)
+
 fun inferResourceType(name: String): ResourceType {
     val n = name.lowercase()
     val isShow = n.contains("电视剧") ||
@@ -26,15 +37,8 @@ fun inferResourceType(name: String): ResourceType {
         n.contains("完结") ||
         n.contains("更新至") ||
         n.contains("全季") ||
-        Regex("第\\s*\\d+\\s*季").containsMatchIn(n) ||
-        Regex("第\\s*\\d+\\s*集").containsMatchIn(n) ||
-        Regex("全\\s*\\d+\\s*集").containsMatchIn(n) ||
-        Regex("\\d+\\s*[-~]\\s*\\d+\\s*季").containsMatchIn(n) ||
-        Regex("s\\d{1,2}\\s*e\\d{1,2}").containsMatchIn(n) ||
-        Regex("(?<![a-z])s\\d{1,2}\\b").containsMatchIn(n) ||
-        Regex("(?<![a-z])e\\d{1,2}\\b").containsMatchIn(n) ||
         n.contains("season") ||
-        Regex("(?<![a-z])ep\\.?\\d").containsMatchIn(n)
+        SHOW_PATTERNS.any { it.containsMatchIn(n) }
     return if (isShow) ResourceType.SHOW else ResourceType.MOVIE
 }
 

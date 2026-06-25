@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.person
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPerson
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
@@ -12,8 +13,10 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -42,6 +45,9 @@ class PersonViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(PersonUiState())
     val uiState: StateFlow<PersonUiState> = _uiState.asStateFlow()
+
+    private val _toastEvent = MutableSharedFlow<Int>()
+    val toastEvent = _toastEvent.asSharedFlow()
 
     private var currentPersonId: Int = 0
     private var loaded: Boolean = false
@@ -224,6 +230,8 @@ class PersonViewModel @Inject constructor(
                 val imdbId = if (isMovie) first?.movie?.ids?.imdb else first?.show?.ids?.imdb ?: ""
                 if (traktId != null && traktId > 0) {
                     onNavigate(traktId, tmdbId, title, imdbId ?: "", 0.0)
+                } else {
+                    _toastEvent.emit(R.string.card_resolve_not_found)
                 }
             }
             _uiState.value = _uiState.value.copy(resolvingTmdbId = null)

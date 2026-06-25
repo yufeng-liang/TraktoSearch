@@ -168,7 +168,7 @@ fun UpdateDialog(
 
     AlertDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
-        title = { Text("发现新版本 v${updateInfo.latestVersion}") },
+        title = { Text(stringResource(R.string.update_new_version, updateInfo.latestVersion)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 可滚动的更新日志区域
@@ -241,7 +241,7 @@ fun UpdateDialog(
                                 }
                             }
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("内置下载")
+                            Text(stringResource(R.string.update_download_builtin))
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = {
@@ -249,7 +249,7 @@ fun UpdateDialog(
                             context.startActivity(intent)
                             onDismiss()
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("浏览器下载")
+                            Text(stringResource(R.string.update_download_browser))
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
@@ -292,11 +292,11 @@ fun UpdateDialog(
                             context.startActivity(intent)
                             onDismiss()
                         }, modifier = Modifier.fillMaxWidth()) {
-                            Text("浏览器下载")
+                            Text(stringResource(R.string.update_download_browser))
                         }
                         Spacer(Modifier.height(4.dp))
                         OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                            Text("关闭")
+                            Text(stringResource(R.string.update_close))
                         }
                     }
                 }

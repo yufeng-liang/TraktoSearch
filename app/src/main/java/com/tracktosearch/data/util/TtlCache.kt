@@ -1,11 +1,13 @@
 package com.tracktosearch.data.util
 
+import java.util.concurrent.ConcurrentHashMap
+
 /**
- * 带过期时间的内存缓存
+ * 带过期时间的线程安全内存缓存
  * @param ttlMillis 缓存有效期，默认 10 分钟
  */
 class TtlCache<T>(private val ttlMillis: Long = 10 * 60 * 1000L) {
-    private val cache = mutableMapOf<String, Pair<T, Long>>()
+    private val cache = ConcurrentHashMap<String, Pair<T, Long>>()
 
     fun get(key: String): T? {
         val entry = cache[key] ?: return null

@@ -44,7 +44,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
 
 import com.tracktosearch.R
-import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.MovieCard
@@ -139,7 +138,6 @@ fun WatchlistScreen(
             scrollToTopProvider.unregister()
         }
     }
-    val currentTheme by viewModel.themeMode.collectAsState()
 
     // 根据搜索关键词过滤当前 Tab 的列表
     val filteredMovies = remember(uiState.movies, searchQuery) {
@@ -178,6 +176,7 @@ fun WatchlistScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .hazeSource(state = hazeState)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
             Column(
@@ -257,7 +256,6 @@ fun WatchlistScreen(
                     state = tabPagerState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .hazeSource(state = hazeState)
                 ) { page ->
                     when (page) {
                         0 -> if (selectedMode == 1) {
@@ -384,7 +382,7 @@ fun WatchlistScreen(
                             }) {
                                 Icon(
                                     Icons.Filled.Close,
-                                    contentDescription = "清除",
+                                    contentDescription = stringResource(R.string.content_desc_clear),
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
@@ -409,11 +407,11 @@ fun WatchlistScreen(
 private fun MovieTabContent(
     isLoading: Boolean,
     isLoaded: Boolean,
-    items: List<MovieUiItem>,
+    items: List<MediaUiItem>,
     totalItems: Int,
     searchQuery: String,
     error: String?,
-    onItemClick: (MovieUiItem) -> Unit,
+    onItemClick: (MediaUiItem) -> Unit,
     onRetry: () -> Unit,
     onOpenTrakt: (() -> Unit)?,
     onTraktSearch: ((String) -> Unit)?,
@@ -469,11 +467,11 @@ private fun MovieTabContent(
 private fun ShowTabContent(
     isLoading: Boolean,
     isLoaded: Boolean,
-    items: List<ShowUiItem>,
+    items: List<MediaUiItem>,
     totalItems: Int,
     searchQuery: String,
     error: String?,
-    onItemClick: (ShowUiItem) -> Unit,
+    onItemClick: (MediaUiItem) -> Unit,
     onRetry: () -> Unit,
     onOpenTrakt: (() -> Unit)?,
     onTraktSearch: ((String) -> Unit)?,
@@ -527,8 +525,8 @@ private fun ShowTabContent(
 
 @Composable
 private fun MovieGrid(
-    items: List<MovieUiItem>,
-    onItemClick: (MovieUiItem) -> Unit,
+    items: List<MediaUiItem>,
+    onItemClick: (MediaUiItem) -> Unit,
     hazeState: HazeState,
     gridState: LazyGridState
 ) {
@@ -538,7 +536,7 @@ private fun MovieGrid(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
@@ -571,8 +569,8 @@ private fun MovieGrid(
 
 @Composable
 private fun ShowGrid(
-    items: List<ShowUiItem>,
-    onItemClick: (ShowUiItem) -> Unit,
+    items: List<MediaUiItem>,
+    onItemClick: (MediaUiItem) -> Unit,
     hazeState: HazeState,
     gridState: LazyGridState
 ) {
@@ -582,7 +580,7 @@ private fun ShowGrid(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(8.dp),
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize()
@@ -690,64 +688,5 @@ private fun WatchlistEmptyState(
                 modifier = Modifier.clickable { onOpenTrakt() }
             )
         }
-    }
-}
-
-/** 主题选择对话框 */
-@Composable
-private fun ThemeSelectionDialog(
-    currentTheme: String,
-    onThemeSelected: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_theme)) },
-        text = {
-            Column {
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_system),
-                    selected = currentTheme == ThemeStorage.MODE_SYSTEM,
-                    onClick = { onThemeSelected(ThemeStorage.MODE_SYSTEM) }
-                )
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_dark),
-                    selected = currentTheme == ThemeStorage.MODE_DARK,
-                    onClick = { onThemeSelected(ThemeStorage.MODE_DARK) }
-                )
-                ThemeOptionRow(
-                    label = stringResource(R.string.theme_light),
-                    selected = currentTheme == ThemeStorage.MODE_LIGHT,
-                    onClick = { onThemeSelected(ThemeStorage.MODE_LIGHT) }
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
-    )
-}
-
-@Composable
-private fun ThemeOptionRow(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = onClick
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label)
     }
 }

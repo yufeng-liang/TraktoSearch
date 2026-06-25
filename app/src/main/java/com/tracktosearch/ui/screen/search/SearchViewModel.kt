@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.search
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
@@ -35,12 +36,13 @@ data class DoubanHotCategory(
     val total: Int = 0
 )
 
+@Immutable
 data class SearchUiState(
     val isLoading: Boolean = false,
     val keyword: String = "",
     val resources: List<ResourceItem> = emptyList(),
     val error: String? = null,
-    val searchHistory: List<String> = emptyList(),
+    val searchHistory: List<SearchHistoryItem> = emptyList(),
     val doubanHotCategories: List<DoubanHotCategory> = emptyList(),
     val typeFilter: ResourceType = ResourceType.ALL,
     val resolvingItemId: Int? = null
@@ -237,7 +239,7 @@ class SearchViewModel @Inject constructor(
 
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            searchHistoryStorage.add(keyword)
+            searchHistoryStorage.add(keyword, "disk")
             _uiState.value = _uiState.value.copy(
                 isLoading = true,
                 keyword = keyword,
@@ -278,12 +280,18 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    fun addTraktHistory(keyword: String, type: String) {
+        viewModelScope.launch {
+            searchHistoryStorage.add(keyword, type)
+        }
+    }
+
     // 根据输入文本过滤搜索历史，返回最多 5 条建议（以输入文本开头或包含输入文本）
-    fun getSuggestions(query: String): List<String> {
+    fun getSuggestions(query: String): List<SearchHistoryItem> {
         if (query.isBlank()) return emptyList()
         val trimmed = query.trim()
         return _uiState.value.searchHistory
-            .filter { it != trimmed && (it.startsWith(trimmed, ignoreCase = true) || it.contains(trimmed, ignoreCase = true)) }
+            .filter { it.keyword != trimmed && (it.keyword.startsWith(trimmed, ignoreCase = true) || it.keyword.contains(trimmed, ignoreCase = true)) }
             .take(5)
     }
 

@@ -52,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
@@ -60,6 +61,7 @@ import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.dto.ResourceType
 import com.tracktosearch.data.remote.dto.inferResourceType
+import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
@@ -95,7 +97,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
     val view = LocalView.current
@@ -338,6 +340,7 @@ fun SearchScreen(
                             onSearch = {
                                 if (searchQuery.isNotBlank()) {
                                     if (searchSourceType != SearchSourceType.DISK) {
+                                        viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                                         onTraktSearch?.invoke(searchSourceType, searchQuery)
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
@@ -365,6 +368,7 @@ fun SearchScreen(
                                     TextButton(onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         if (searchSourceType != SearchSourceType.DISK) {
+                                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                                             onTraktSearch?.invoke(searchSourceType, searchQuery)
                                         } else {
                                             viewModel.search(searchQuery)
@@ -388,9 +392,9 @@ fun SearchScreen(
                         if (suggestions.isNotEmpty()) {
                             SearchSuggestionsInline(
                                 suggestions = suggestions,
-                                onSuggestionClick = { keyword ->
-                                    searchQuery = keyword
-                                    viewModel.search(keyword)
+                                onSuggestionClick = { item ->
+                                    searchQuery = item.keyword
+                                    viewModel.search(item.keyword)
                                     focusManager.clearFocus()
                                     keyboardController?.hide()
                                 }
@@ -401,13 +405,23 @@ fun SearchScreen(
                         if (uiState.searchHistory.isNotEmpty()) {
                             SearchHistoryInline(
                                 history = uiState.searchHistory,
-                                onHistoryClick = { keyword ->
-                                    searchQuery = keyword
-                                    viewModel.search(keyword)
+                                onHistoryClick = { item ->
+                                    searchQuery = item.keyword
+                                    if (item.type == "disk") {
+                                        viewModel.search(item.keyword)
+                                    } else {
+                                        val st = when (item.type) {
+                                            "movie" -> SearchSourceType.MOVIE
+                                            "show" -> SearchSourceType.SHOW
+                                            "person" -> SearchSourceType.PERSON
+                                            else -> SearchSourceType.DISK
+                                        }
+                                        onTraktSearch?.invoke(st, item.keyword)
+                                    }
                                     focusManager.clearFocus()
                                     keyboardController?.hide()
                                 },
-                                onHistoryDelete = { viewModel.removeHistory(it) },
+                                onHistoryDelete = { viewModel.removeHistory(it.keyword) },
                                 onClearAll = { viewModel.clearHistory() }
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -618,7 +632,7 @@ private fun SearchResultsContent(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             // 影视类型筛选
@@ -738,11 +752,23 @@ private fun SearchResultsContent(
 
 @Composable
 private fun SearchHistoryInline(
-    history: List<String>,
-    onHistoryClick: (String) -> Unit,
-    onHistoryDelete: (String) -> Unit,
+    history: List<SearchHistoryItem>,
+    onHistoryClick: (SearchHistoryItem) -> Unit,
+    onHistoryDelete: (SearchHistoryItem) -> Unit,
     onClearAll: () -> Unit
 ) {
+    val typeColorMap = mapOf(
+        "disk" to Color(0xFF9E9E9E),
+        "movie" to Color(0xFF2196F3),
+        "show" to Color(0xFF4CAF50),
+        "person" to Color(0xFF9C27B0)
+    )
+    val typeNameMap = mapOf(
+        "disk" to stringResource(R.string.search_type_disk),
+        "movie" to stringResource(R.string.search_type_movie),
+        "show" to stringResource(R.string.search_type_show),
+        "person" to stringResource(R.string.search_type_person)
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -766,11 +792,11 @@ private fun SearchHistoryInline(
                 )
             }
         }
-        history.forEach { keyword ->
+        history.forEach { item ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onHistoryClick(keyword) }
+                    .clickable { onHistoryClick(item) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -781,14 +807,26 @@ private fun SearchHistoryInline(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = typeColorMap[item.type] ?: Color(0xFF9E9E9E),
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Text(
+                        text = typeNameMap[item.type] ?: item.type,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
                 Text(
-                    text = keyword,
+                    text = item.keyword,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 1
                 )
                 IconButton(
-                    onClick = { onHistoryDelete(keyword) },
+                    onClick = { onHistoryDelete(item) },
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
@@ -805,8 +843,8 @@ private fun SearchHistoryInline(
 
 @Composable
 private fun SearchSuggestionsInline(
-    suggestions: List<String>,
-    onSuggestionClick: (String) -> Unit
+    suggestions: List<SearchHistoryItem>,
+    onSuggestionClick: (SearchHistoryItem) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -818,11 +856,11 @@ private fun SearchSuggestionsInline(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        suggestions.forEach { keyword ->
+        suggestions.forEach { item ->
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onSuggestionClick(keyword) }
+                    .clickable { onSuggestionClick(item) }
                     .padding(vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -834,7 +872,7 @@ private fun SearchSuggestionsInline(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = keyword,
+                    text = item.keyword,
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 1
@@ -1015,7 +1053,7 @@ fun DoubanHotCategorySection(
                             ) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ArrowForwardIos,
-                                    contentDescription = "查看全部",
+                                    contentDescription = stringResource(R.string.content_desc_view_all),
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

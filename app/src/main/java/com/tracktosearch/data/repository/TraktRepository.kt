@@ -115,13 +115,14 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 获取全部电影观看历史（跨页拉取），用于统计 */
-    suspend fun getAllMovieHistory(): Result<List<TraktWatchlistMovieItem>> {
-        val allItems = mutableListOf<TraktWatchlistMovieItem>()
+    private suspend fun <T> fetchAllPages(
+        fetchPage: suspend (page: Int) -> Result<Pair<List<T>, Int>>
+    ): Result<List<T>> {
+        val allItems = mutableListOf<T>()
         var page = 1
         var totalPages = 1
         while (page <= totalPages) {
-            val result = getMovieHistory(page = page, limit = 200)
+            val result = fetchPage(page)
             result.onSuccess { (items, tp) ->
                 allItems.addAll(items)
                 totalPages = tp
@@ -133,22 +134,14 @@ class TraktRepository @Inject constructor(
         return Result.success(allItems)
     }
 
+    /** 获取全部电影观看历史（跨页拉取），用于统计 */
+    suspend fun getAllMovieHistory(): Result<List<TraktWatchlistMovieItem>> {
+        return fetchAllPages { page -> getMovieHistory(page = page, limit = 200) }
+    }
+
     /** 获取全部电视剧观看历史（跨页拉取），用于统计 */
     suspend fun getAllShowHistory(): Result<List<TraktWatchlistShowItem>> {
-        val allItems = mutableListOf<TraktWatchlistShowItem>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = getShowHistory(page = page, limit = 200)
-            result.onSuccess { (items, tp) ->
-                allItems.addAll(items)
-                totalPages = tp
-            }.onFailure { e ->
-                return Result.failure(e)
-            }
-            page++
-        }
-        return Result.success(allItems)
+        return fetchAllPages { page -> getShowHistory(page = page, limit = 200) }
     }
 
     /** 获取已看电视剧列表（含每部剧的已看集数），用于统计 */
@@ -178,38 +171,12 @@ class TraktRepository @Inject constructor(
 
     /** 获取全部电影想看列表（跨页拉取），用于通知检查 */
     suspend fun getAllMovieWatchlist(): Result<List<TraktWatchlistMovieItem>> {
-        val allItems = mutableListOf<TraktWatchlistMovieItem>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = getMovieWatchlist(page = page, limit = 200)
-            result.onSuccess { (items, tp) ->
-                allItems.addAll(items)
-                totalPages = tp
-            }.onFailure { e ->
-                return Result.failure(e)
-            }
-            page++
-        }
-        return Result.success(allItems)
+        return fetchAllPages { page -> getMovieWatchlist(page = page, limit = 200) }
     }
 
     /** 获取全部电视剧想看列表（跨页拉取），用于通知检查 */
     suspend fun getAllShowWatchlist(): Result<List<TraktWatchlistShowItem>> {
-        val allItems = mutableListOf<TraktWatchlistShowItem>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages) {
-            val result = getShowWatchlist(page = page, limit = 200)
-            result.onSuccess { (items, tp) ->
-                allItems.addAll(items)
-                totalPages = tp
-            }.onFailure { e ->
-                return Result.failure(e)
-            }
-            page++
-        }
-        return Result.success(allItems)
+        return fetchAllPages { page -> getShowWatchlist(page = page, limit = 200) }
     }
 
     suspend fun getComments(traktId: Int, type: MediaType, limit: Int = 5, page: Int = 1): Result<List<TraktComment>> {

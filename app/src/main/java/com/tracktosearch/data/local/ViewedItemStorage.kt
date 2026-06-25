@@ -30,7 +30,7 @@ class ViewedItemStorage @Inject constructor(
         prefs[KEY_VIEWED_URLS] ?: emptySet()
     }
 
-    suspend fun getviewedUrls(): Set<String> {
+    suspend fun getViewedUrls(): Set<String> {
         cachedUrls?.let { return it }
         val urls = context.viewedDataStore.data.map { it[KEY_VIEWED_URLS] ?: emptySet() }.first()
         cachedUrls = urls

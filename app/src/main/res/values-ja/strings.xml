@@ -22,6 +22,33 @@
     <string name="search_placeholder_show">番組タイトルを入力してテレビ番組を検索</string>
     <string name="search_placeholder_person">名前を入力して人物を検索</string>
     <string name="search_placeholder_watchlist">ウォッチリストまたはTrakt映画・番組を検索</string>
+    <string name="card_resolve_not_found">対応する結果が見つかりません。後でもう一度お試しください</string>
+    <string name="scroll_to_top">一番上にスクロール</string>
+    <string name="content_desc_clear">クリア</string>
+    <string name="content_desc_saved">保存済み</string>
+    <string name="content_desc_save">保存</string>
+    <string name="content_desc_view_all">すべて表示</string>
+    <string name="content_desc_back">戻る</string>
+    <string name="gallery_save_failed">保存に失敗しました</string>
+    <string name="gallery_already_exists">既に存在します: %1$s</string>
+    <string name="gallery_saved">保存しました: %1$s/%2$s</string>
+    <string name="gallery_saved_to_album">アルバムに保存しました</string>
+    <string name="magnet_copied">マグネットリンクをクリップボードにコピーしました</string>
+    <string name="cannot_open_link">このリンクを開けません</string>
+    <string name="install_success">インストール成功</string>
+    <string name="update_new_version">新しいバージョン v%1$s が利用可能です</string>
+    <string name="update_download_builtin">内蔵ダウンロード</string>
+    <string name="update_download_browser">ブラウザダウンロード</string>
+    <string name="update_close">閉じる</string>
+    <string name="install_failed">インストール失敗 (code=%1$d)</string>
+    <string name="help_col_source">ソース</string>
+    <string name="help_col_format">フォーマット</string>
+    <string name="help_col_how_to_get">取得方法</string>
+    <string name="help_col_import_effect">インポート効果</string>
+    <string name="notification_release_title">公開リマインダー：%1$s</string>
+    <string name="notification_release_text">%1$s に公開されました。チェックしてみましょう！</string>
+    <string name="notification_new_season_text">シーズン %1$d が %2$s に放送開始</string>
+    <string name="notification_new_season_title">新シーズン：%1$s</string>
     <string name="search_button">検索</string>
     <string name="search_loading">検索中…</string>
     <string name="search_failed">検索失敗: %1$s</string>
@@ -177,6 +204,7 @@
     <string name="resource_viewed">閲覧済み</string>
     <string name="resource_scan">スキャン</string>
     <string name="resource_invalid">無効</string>
+    <string name="resource_file_count">%1$dファイル</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -416,4 +444,8 @@
     <string name="genre_noir">フィルムノワール</string>
     <string name="genre_game_show">ゲーム番組</string>
     <string name="genre_other">その他</string>
+
+    <!-- Content Descriptions (Badge) -->
+    <string name="cd_watched_badge">視聴済み</string>
+    <string name="cd_watchlist_badge">ウォッチリスト</string>
 </resources>

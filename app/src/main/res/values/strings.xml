@@ -23,6 +23,33 @@
     <string name="search_placeholder_show">Enter show title to search TV shows</string>
     <string name="search_placeholder_person">Enter name to search people</string>
     <string name="search_placeholder_watchlist">Search watchlist or Trakt movies/shows</string>
+    <string name="card_resolve_not_found">No matching result found, please try again later</string>
+    <string name="scroll_to_top">Scroll to top</string>
+    <string name="content_desc_clear">Clear</string>
+    <string name="content_desc_saved">Saved</string>
+    <string name="content_desc_save">Save</string>
+    <string name="content_desc_view_all">View all</string>
+    <string name="content_desc_back">Back</string>
+    <string name="gallery_save_failed">Save failed</string>
+    <string name="gallery_already_exists">Already exists: %1$s</string>
+    <string name="gallery_saved">Saved: %1$s/%2$s</string>
+    <string name="gallery_saved_to_album">Saved to album</string>
+    <string name="magnet_copied">Magnet link copied to clipboard</string>
+    <string name="cannot_open_link">Cannot open this link</string>
+    <string name="install_success">Installation successful</string>
+    <string name="update_new_version">New version v%1$s available</string>
+    <string name="update_download_builtin">Built-in download</string>
+    <string name="update_download_browser">Browser download</string>
+    <string name="update_close">Close</string>
+    <string name="install_failed">Installation failed (code=%1$d)</string>
+    <string name="help_col_source">Source</string>
+    <string name="help_col_format">Format</string>
+    <string name="help_col_how_to_get">How to get</string>
+    <string name="help_col_import_effect">Import effect</string>
+    <string name="notification_release_title">Release alert: %1$s</string>
+    <string name="notification_release_text">Released on %1$s, go check it out!</string>
+    <string name="notification_new_season_text">Season %1$d premiered on %2$s</string>
+    <string name="notification_new_season_title">New season: %1$s</string>
     <string name="search_button">Search</string>
     <string name="search_loading">Searching…</string>
     <string name="search_failed">Search failed: %1$s</string>
@@ -116,6 +143,7 @@
     <string name="resource_viewed">Viewed</string>
     <string name="resource_scan">Scan</string>
     <string name="resource_invalid">Invalid</string>
+    <string name="resource_file_count">%1$d files</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -555,4 +583,8 @@
     <string name="genre_noir">Film Noir</string>
     <string name="genre_game_show">Game Show</string>
     <string name="genre_other">Other</string>
+
+    <!-- Content Descriptions (Badge) -->
+    <string name="cd_watched_badge">Watched</string>
+    <string name="cd_watchlist_badge">Want to Watch</string>
 </resources>

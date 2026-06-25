@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
@@ -75,10 +76,16 @@ fun DiscoverScreen(
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val sectionConfigs by viewModel.sectionConfigs.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val sectionConfigs by viewModel.sectionConfigs.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
+
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { resId ->
+            context.showToast(context.getString(resId))
+        }
+    }
     var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
     var showPopularAll by remember { mutableStateOf(false) }
     var showUpcomingAll by remember { mutableStateOf(false) }

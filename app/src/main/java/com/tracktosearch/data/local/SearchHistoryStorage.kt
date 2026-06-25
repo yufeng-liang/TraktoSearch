@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class SearchHistoryItem(val keyword: String, val type: String)
+
 private val Context.searchHistoryDataStore: DataStore<Preferences> by preferencesDataStore(name = "search_history")
 
 @Singleton
@@ -23,16 +25,25 @@ class SearchHistoryStorage @Inject constructor(
         const val MAX_HISTORY = 30
     }
 
-    val history: Flow<List<String>> = context.searchHistoryDataStore.data.map { prefs ->
-        (prefs[KEY_HISTORY] ?: emptySet()).toList()
+    val history: Flow<List<SearchHistoryItem>> = context.searchHistoryDataStore.data.map { prefs ->
+        (prefs[KEY_HISTORY] ?: emptySet()).map { raw ->
+            if (raw.contains("::")) {
+                val parts = raw.split("::", limit = 2)
+                SearchHistoryItem(keyword = parts[1], type = parts[0])
+            } else {
+                SearchHistoryItem(keyword = raw, type = "disk")
+            }
+        }
     }
 
-    suspend fun add(keyword: String) {
+    suspend fun add(keyword: String, type: String = "disk") {
         if (keyword.isBlank()) return
+        val encoded = "$type::$keyword"
         context.searchHistoryDataStore.edit { prefs ->
             val current = (prefs[KEY_HISTORY] ?: emptySet()).toMutableList()
+            current.removeAll { it.endsWith("::$keyword") && it.startsWith("$type::") }
             current.remove(keyword)
-            current.add(0, keyword)
+            current.add(0, encoded)
             if (current.size > MAX_HISTORY) {
                 prefs[KEY_HISTORY] = current.take(MAX_HISTORY).toSet()
             } else {
@@ -44,7 +55,7 @@ class SearchHistoryStorage @Inject constructor(
     suspend fun remove(keyword: String) {
         context.searchHistoryDataStore.edit { prefs ->
             val current = prefs[KEY_HISTORY] ?: emptySet()
-            prefs[KEY_HISTORY] = current - keyword
+            prefs[KEY_HISTORY] = current.filter { !it.endsWith("::$keyword") && it != keyword }.toSet()
         }
     }
 

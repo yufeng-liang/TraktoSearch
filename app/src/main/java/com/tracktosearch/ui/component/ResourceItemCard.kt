@@ -180,7 +180,7 @@ fun ResourceItemCard(
                         color = MaterialTheme.colorScheme.tertiaryContainer
                     ) {
                         Text(
-                            text = "${item.fileCount}文件",
+                            text = stringResource(R.string.resource_file_count, item.fileCount),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer,
                             modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)

@@ -1167,7 +1167,7 @@ private fun DetailHeaderContent(
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
         if (sectionVisible.cast) {
         val hasCredits = uiState.cast.isNotEmpty() || uiState.crew.isNotEmpty()
-        var showFullCast by remember { mutableStateOf(false) }
+        var showFullCast by rememberSaveable { mutableStateOf(false) }
         Column(
             modifier = Modifier.padding(bottom = 14.dp)
         ) {
@@ -3478,7 +3478,7 @@ internal fun openResourceLink(context: android.content.Context, item: ResourceIt
         val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
         val clip = android.content.ClipData.newPlainText("magnet", item.url)
         clipboard.setPrimaryClip(clip)
-        context.showToast("磁力链接已复制到剪贴板")
+        context.showToast(context.getString(R.string.magnet_copied))
         return
     }
 
@@ -3487,7 +3487,7 @@ internal fun openResourceLink(context: android.content.Context, item: ResourceIt
         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(item.url))
         context.startActivity(browserIntent)
     } catch (_: Exception) {
-        context.showToast("无法打开此链接")
+        context.showToast(context.getString(R.string.cannot_open_link))
     }
 }
 
@@ -3601,7 +3601,7 @@ private fun PosterFullscreenOverlay(
             // 保存按钮（已保存时显示勾选图标）
             IconButton(onClick = {
                 if (isSaved == true) {
-                    context.showToast("已保存到相册")
+                    context.showToast(context.getString(R.string.gallery_saved_to_album))
                 } else {
                     savePosterToGallery(context, scope, posterUrl, title) {
                         isSaved = true
@@ -3628,14 +3628,14 @@ private fun PosterFullscreenOverlay(
                     if (isSaved == true) {
                         Icon(
                             Icons.Filled.Check,
-                            contentDescription = "已保存",
+                            contentDescription = stringResource(R.string.content_desc_saved),
                             tint = Color(0xFF4CAF50), // 绿色
                             modifier = Modifier.size(22.dp)
                         )
                     } else {
                         Icon(
                             Icons.Default.Download,
-                            contentDescription = "保存",
+                            contentDescription = stringResource(R.string.content_desc_save),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )

@@ -3,10 +3,6 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
-import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
-import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
-import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.local.db.MediaItemEntity
@@ -16,15 +12,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @Immutable
-data class MovieUiItem(
+data class MediaUiItem(
     val traktId: Int,
     val tmdbId: Int,
     val title: String,
@@ -38,24 +32,11 @@ data class MovieUiItem(
 )
 
 @Immutable
-data class ShowUiItem(
-    val traktId: Int,
-    val tmdbId: Int,
-    val title: String,
-    val displayTitle: String,
-    val year: Int?,
-    val genres: String,
-    val posterUrl: String?,
-    val imdbId: String = "",
-    val traktRating: Double = 0.0,
-    val listedAt: String = ""
-)
-
 data class WatchlistUiState(
     val isLoadingMovies: Boolean = false,
     val isLoadingShows: Boolean = false,
-    val movies: List<MovieUiItem> = emptyList(),
-    val shows: List<ShowUiItem> = emptyList(),
+    val movies: List<MediaUiItem> = emptyList(),
+    val shows: List<MediaUiItem> = emptyList(),
     val moviesError: String? = null,
     val showsError: String? = null,
     val moviesLoaded: Boolean = false,
@@ -66,8 +47,8 @@ data class WatchlistUiState(
     val showPage: Int = 1,
     val tmdbUnavailable: Boolean = false,
     // 已看历史
-    val historyMovies: List<MovieUiItem> = emptyList(),
-    val historyShows: List<ShowUiItem> = emptyList(),
+    val historyMovies: List<MediaUiItem> = emptyList(),
+    val historyShows: List<MediaUiItem> = emptyList(),
     val isLoadingHistoryMovies: Boolean = false,
     val isLoadingHistoryShows: Boolean = false,
     val historyMoviesError: String? = null,
@@ -80,21 +61,11 @@ data class WatchlistUiState(
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
-    private val themeStorage: ThemeStorage,
     private val offlineCacheManager: OfflineCacheManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
-
-    val themeMode: StateFlow<String> = themeStorage.themeMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "system")
-
-    fun setThemeMode(mode: String) {
-        viewModelScope.launch {
-            themeStorage.setThemeMode(mode)
-        }
-    }
 
     private val maxRetries = 2
 
@@ -130,7 +101,12 @@ class WatchlistViewModel @Inject constructor(
                 // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
-                        val uiItem = enrichMovieItem(item.movie, item.listed_at)
+                        val uiItem = enrichMediaItem(
+                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
+                            title = item.movie.title, year = item.movie.year,
+                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
+                            listedAt = item.listed_at, isMovie = true
+                        )
                         // 非静默模式每完成一个就更新 UI；静默模式等整批完成后再一次性替换，避免闪烁
                         if (!silent) {
                             val currentMovies = _uiState.value.movies.toMutableList()
@@ -139,7 +115,10 @@ class WatchlistViewModel @Inject constructor(
                                 currentMovies[index] = uiItem
                             } else {
                                 // 补齐中间空位
-                                while (currentMovies.size < index) currentMovies.add(createPlaceholderMovie(items[currentMovies.size]))
+                                while (currentMovies.size < index) {
+                                    val p = items[currentMovies.size].movie
+                                    currentMovies.add(createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[currentMovies.size].listed_at))
+                                }
                                 currentMovies.add(uiItem)
                             }
                             _uiState.value = _uiState.value.copy(movies = currentMovies.toList())
@@ -168,7 +147,7 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                     moviesLoaded = true,
-                    movies = if (cached.isNotEmpty()) cached.map { it.toMovieUiItem() } else _uiState.value.movies,
+                    movies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.movies,
                     moviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
@@ -206,14 +185,22 @@ class WatchlistViewModel @Inject constructor(
                 }
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
-                        val uiItem = enrichShowItem(item.show, item.listed_at)
+                        val uiItem = enrichMediaItem(
+                            traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,
+                            title = item.show.title, year = item.show.year,
+                            imdbId = item.show.ids.imdb, rating = item.show.rating,
+                            listedAt = item.listed_at, isMovie = false
+                        )
                         // 非静默模式每完成一个就更新 UI；静默模式等整批完成后再一次性替换，避免闪烁
                         if (!silent) {
                             val currentShows = _uiState.value.shows.toMutableList()
                             if (index < currentShows.size) {
                                 currentShows[index] = uiItem
                             } else {
-                                while (currentShows.size < index) currentShows.add(createPlaceholderShow(items[currentShows.size]))
+                                while (currentShows.size < index) {
+                                    val s = items[currentShows.size].show
+                                    currentShows.add(createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[currentShows.size].listed_at))
+                                }
                                 currentShows.add(uiItem)
                             }
                             _uiState.value = _uiState.value.copy(shows = currentShows.toList())
@@ -242,7 +229,7 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                     showsLoaded = true,
-                    shows = if (cached.isNotEmpty()) cached.map { it.toShowUiItem() } else _uiState.value.shows,
+                    shows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.shows,
                     showsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
@@ -267,7 +254,14 @@ class WatchlistViewModel @Inject constructor(
                 // 历史记录可能包含同一部电影的多次观看，按 traktId 去重
                 val dedupedItems = items.distinctBy { it.movie.ids.trakt }
                 val deferredItems = dedupedItems.map { item ->
-                    async { enrichMovieItem(item.movie, item.listed_at) }
+                    async {
+                        enrichMediaItem(
+                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
+                            title = item.movie.title, year = item.movie.year,
+                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
+                            listedAt = item.listed_at, isMovie = true
+                        )
+                    }
                 }
                 val uiItems = deferredItems.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
@@ -286,7 +280,7 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingHistoryMovies = false,
                     historyMoviesLoaded = true,
-                    historyMovies = if (cached.isNotEmpty()) cached.map { it.toMovieUiItem() } else _uiState.value.historyMovies,
+                    historyMovies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyMovies,
                     historyMoviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
@@ -310,7 +304,14 @@ class WatchlistViewModel @Inject constructor(
                 }
                 val dedupedItems = items.distinctBy { it.show.ids.trakt }
                 val deferredItems = dedupedItems.map { item ->
-                    async { enrichShowItem(item.show, item.listed_at) }
+                    async {
+                        enrichMediaItem(
+                            traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,
+                            title = item.show.title, year = item.show.year,
+                            imdbId = item.show.ids.imdb, rating = item.show.rating,
+                            listedAt = item.listed_at, isMovie = false
+                        )
+                    }
                 }
                 val uiItems = deferredItems.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
@@ -329,100 +330,53 @@ class WatchlistViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     isLoadingHistoryShows = false,
                     historyShowsLoaded = true,
-                    historyShows = if (cached.isNotEmpty()) cached.map { it.toShowUiItem() } else _uiState.value.historyShows,
+                    historyShows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyShows,
                     historyShowsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
                 )
             }
         }
     }
 
-    private suspend fun enrichMovieItem(movie: com.tracktosearch.data.remote.trakt.dto.TraktMovie, listedAt: String = ""): MovieUiItem {
-        if (movie.ids.tmdb <= 0) {
-            return MovieUiItem(
-                traktId = movie.ids.trakt,
-                tmdbId = 0,
-                title = movie.title,
-                displayTitle = movie.title,
-                year = movie.year,
-                genres = "",
-                posterUrl = null,
-                imdbId = movie.ids.imdb,
-                traktRating = movie.rating,
-                listedAt = listedAt
+    private suspend fun enrichMediaItem(
+        traktId: Int, tmdbId: Int, title: String, year: Int?,
+        imdbId: String, rating: Double, listedAt: String, isMovie: Boolean
+    ): MediaUiItem {
+        if (tmdbId <= 0) {
+            return MediaUiItem(
+                traktId = traktId, tmdbId = 0, title = title,
+                displayTitle = title, year = year, genres = "",
+                posterUrl = null, imdbId = imdbId,
+                traktRating = rating, listedAt = listedAt
             )
         }
-        val enrichment = tmdbRepository.enrichMovie(movie.ids.tmdb, movie.title, movie.year)
-        return MovieUiItem(
-            traktId = movie.ids.trakt,
-            tmdbId = movie.ids.tmdb,
-            title = movie.title,
-            displayTitle = enrichment.chineseTitle,
-            year = enrichment.year,
-            genres = enrichment.genres,
-            posterUrl = enrichment.posterUrl,
-            imdbId = movie.ids.imdb,
-            traktRating = movie.rating,
-            listedAt = listedAt
-        )
-    }
-
-    private suspend fun enrichShowItem(show: com.tracktosearch.data.remote.trakt.dto.TraktShow, listedAt: String = ""): ShowUiItem {
-        if (show.ids.tmdb <= 0) {
-            return ShowUiItem(
-                traktId = show.ids.trakt,
-                tmdbId = 0,
-                title = show.title,
-                displayTitle = show.title,
-                year = show.year,
-                genres = "",
-                posterUrl = null,
-                imdbId = show.ids.imdb,
-                traktRating = show.rating,
-                listedAt = listedAt
+        if (isMovie) {
+            val enrichment = tmdbRepository.enrichMovie(tmdbId, title, year)
+            return MediaUiItem(
+                traktId = traktId, tmdbId = tmdbId, title = title,
+                displayTitle = enrichment.chineseTitle, year = enrichment.year,
+                genres = enrichment.genres, posterUrl = enrichment.posterUrl,
+                imdbId = imdbId, traktRating = rating, listedAt = listedAt
+            )
+        } else {
+            val enrichment = tmdbRepository.enrichTv(tmdbId, title, year)
+            return MediaUiItem(
+                traktId = traktId, tmdbId = tmdbId, title = title,
+                displayTitle = enrichment.chineseTitle, year = enrichment.year,
+                genres = enrichment.genres, posterUrl = enrichment.posterUrl,
+                imdbId = imdbId, traktRating = rating, listedAt = listedAt
             )
         }
-        val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, show.year)
-        return ShowUiItem(
-            traktId = show.ids.trakt,
-            tmdbId = show.ids.tmdb,
-            title = show.title,
-            displayTitle = enrichment.chineseTitle,
-            year = enrichment.year,
-            genres = enrichment.genres,
-            posterUrl = enrichment.posterUrl,
-            imdbId = show.ids.imdb,
-            traktRating = show.rating,
-            listedAt = listedAt
-        )
     }
 
-    private fun createPlaceholderMovie(item: TraktWatchlistMovieItem): MovieUiItem {
-        return MovieUiItem(
-            traktId = item.movie.ids.trakt,
-            tmdbId = item.movie.ids.tmdb,
-            title = item.movie.title,
-            displayTitle = item.movie.title,
-            year = item.movie.year,
-            genres = "",
-            posterUrl = null,
-            imdbId = item.movie.ids.imdb,
-            traktRating = item.movie.rating,
-            listedAt = item.listed_at
-        )
-    }
-
-    private fun createPlaceholderShow(item: TraktWatchlistShowItem): ShowUiItem {
-        return ShowUiItem(
-            traktId = item.show.ids.trakt,
-            tmdbId = item.show.ids.tmdb,
-            title = item.show.title,
-            displayTitle = item.show.title,
-            year = item.show.year,
-            genres = "",
-            posterUrl = null,
-            imdbId = item.show.ids.imdb,
-            traktRating = item.show.rating,
-            listedAt = item.listed_at
+    private fun createPlaceholder(
+        traktId: Int, tmdbId: Int, title: String, year: Int?,
+        imdbId: String, rating: Double, listedAt: String
+    ): MediaUiItem {
+        return MediaUiItem(
+            traktId = traktId, tmdbId = tmdbId, title = title,
+            displayTitle = title, year = year, genres = "",
+            posterUrl = null, imdbId = imdbId,
+            traktRating = rating, listedAt = listedAt
         )
     }
 
@@ -463,7 +417,16 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingMovies = true)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
             result.onSuccess { (items, totalPages) ->
-                val uiItems = items.map { item -> async { enrichMovieItem(item.movie) } }.awaitAll()
+                val uiItems = items.map { item ->
+                    async {
+                        enrichMediaItem(
+                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
+                            title = item.movie.title, year = item.movie.year,
+                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
+                            listedAt = item.listed_at, isMovie = true
+                        )
+                    }
+                }.awaitAll()
                 val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
@@ -499,7 +462,7 @@ private suspend fun <T> retryIO(times: Int, block: suspend () -> T): T {
 
 // ========== 离线缓存转换扩展 ==========
 
-private fun MovieUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
+private fun MediaUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
     traktId = traktId,
     tmdbId = tmdbId,
     type = type,
@@ -513,34 +476,7 @@ private fun MovieUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
     listedAt = listedAt
 )
 
-private fun ShowUiItem.toMediaItemEntity(type: String) = MediaItemEntity(
-    traktId = traktId,
-    tmdbId = tmdbId,
-    type = type,
-    title = title,
-    displayTitle = displayTitle,
-    year = year,
-    genres = genres,
-    posterUrl = posterUrl,
-    imdbId = imdbId,
-    traktRating = traktRating,
-    listedAt = listedAt
-)
-
-private fun MediaItemEntity.toMovieUiItem() = MovieUiItem(
-    traktId = traktId,
-    tmdbId = tmdbId,
-    title = title,
-    displayTitle = displayTitle,
-    year = year,
-    genres = genres,
-    posterUrl = posterUrl,
-    imdbId = imdbId,
-    traktRating = traktRating,
-    listedAt = listedAt
-)
-
-private fun MediaItemEntity.toShowUiItem() = ShowUiItem(
+private fun MediaItemEntity.toMediaUiItem() = MediaUiItem(
     traktId = traktId,
     tmdbId = tmdbId,
     title = title,

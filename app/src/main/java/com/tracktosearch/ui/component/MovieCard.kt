@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.res.stringResource
+import com.tracktosearch.R
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -111,7 +113,7 @@ fun MovieCard(
                                 tint = Color.White
                             )
                             Text(
-                                text = "已看过",
+                                text = stringResource(R.string.cd_watched_badge),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                 color = Color.White
                             )
@@ -123,7 +125,7 @@ fun MovieCard(
                                 tint = Color.White
                             )
                             Text(
-                                text = "已想看",
+                                text = stringResource(R.string.cd_watchlist_badge),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                 color = Color.White
                             )

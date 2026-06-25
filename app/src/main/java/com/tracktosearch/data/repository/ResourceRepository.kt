@@ -81,6 +81,8 @@ class ResourceRepository @Inject constructor(
             DiskType.XUNLEI, DiskType.UC, DiskType.ONEONEFIVE, DiskType.MAGNET
         )
         private const val CACHE_TTL_MS = 5 * 60 * 1000L
+        private val MULTI_SEASON_FULL = Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""")
+        private val MULTI_SEASON_SINGLE = Regex("""第\s*\d+\s*季""")
     }
 
     private data class KeywordCache(
@@ -168,12 +170,12 @@ class ResourceRepository @Inject constructor(
         val sourceList = mutableListOf<Pair<String, Deferred<List<ResourceItem>>>>()
         if (SOURCE_PANSOU in effectiveSources) {
             sourceList.add(SOURCE_PANSOU to async {
-                runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                runCatching { searchPanSource(panSouApiService, keyword, enabledDiskTypes, SOURCE_PANSOU) }.getOrDefault(emptyList())
             })
         }
         if (SOURCE_PANHUB in effectiveSources) {
             sourceList.add(SOURCE_PANHUB to async {
-                runCatching { searchPanHub(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                runCatching { searchPanSource(panHubApiService, keyword, enabledDiskTypes, SOURCE_PANHUB) }.getOrDefault(emptyList())
             })
         }
         if (SOURCE_ZRESO in effectiveSources) {
@@ -262,12 +264,12 @@ class ResourceRepository @Inject constructor(
 
             if (SOURCE_PANSOU in enabledSources) {
                 deferreds.add(async {
-                    runCatching { searchPanSou(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                    runCatching { searchPanSource(panSouApiService, keyword, enabledDiskTypes, SOURCE_PANSOU) }.getOrDefault(emptyList())
                 })
             }
             if (SOURCE_PANHUB in enabledSources) {
                 deferreds.add(async {
-                    runCatching { searchPanHub(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
+                    runCatching { searchPanSource(panHubApiService, keyword, enabledDiskTypes, SOURCE_PANHUB) }.getOrDefault(emptyList())
                 })
             }
             if (SOURCE_ZRESO in enabledSources) {
@@ -324,8 +326,8 @@ class ResourceRepository @Inject constructor(
     private fun multiSeasonScore(name: String): Int {
         val n = name.lowercase()
         return when {
-            Regex("""全\s*季|合集|1[-~]\d+\s*季|第\s*\d+\s*[-~]\s*\d+\s*季""").containsMatchIn(n) -> 2
-            Regex("""第\s*\d+\s*季""").containsMatchIn(n) -> 1
+            MULTI_SEASON_FULL.containsMatchIn(n) -> 2
+            MULTI_SEASON_SINGLE.containsMatchIn(n) -> 1
             else -> 0
         }
     }
@@ -374,10 +376,15 @@ class ResourceRepository @Inject constructor(
         DiskType.OTHER -> ""
     }
 
-    private suspend fun searchPanSou(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
+    private suspend fun searchPanSource(
+        apiService: PanSouApiService,
+        keyword: String,
+        enabledDiskTypes: Set<DiskType>,
+        sourceName: String
+    ): List<ResourceItem> {
         return try {
             val response = withTimeoutOrNull(8_000) {
-                panSouApiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
+                apiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
             } ?: return emptyList()
             if (response.code != 0) return emptyList()
             val data = response.data ?: return emptyList()
@@ -393,34 +400,7 @@ class ResourceRepository @Inject constructor(
                     fileDate = link.datetime,
                     fileCount = 1,
                     url = link.url,
-                    source = SOURCE_PANSOU
-                )
-            }
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    private suspend fun searchPanHub(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
-        return try {
-            val response = withTimeoutOrNull(8_000) {
-                panHubApiService.search(keyword = keyword, cloudTypes = cloudTypesForPanSou(enabledDiskTypes))
-            } ?: return emptyList()
-            if (response.code != 0) return emptyList()
-            val data = response.data ?: return emptyList()
-            val allLinks = data.merged_by_type.flatMap { (type, links) ->
-                links.map { link -> type to link }
-            }
-            allLinks.mapNotNull { (type, link) ->
-                val diskType = mapPanSouType(type) ?: return@mapNotNull null
-                ResourceItem(
-                    name = link.note.ifBlank { keyword },
-                    diskType = diskType,
-                    fileSize = "",
-                    fileDate = link.datetime,
-                    fileCount = 1,
-                    url = link.url,
-                    source = SOURCE_PANHUB
+                    source = sourceName
                 )
             }
         } catch (e: Exception) {
@@ -441,46 +421,37 @@ class ResourceRepository @Inject constructor(
 
     private suspend fun searchZreso(keyword: String, enabledDiskTypes: Set<DiskType>): List<ResourceItem> {
         return try {
-            val cloud = enabledDiskTypes.firstOrNull()?.let { diskTypeToZreso(it) } ?: ""
             val response = withTimeoutOrNull(8_000) {
-                zresoApiService.search(keyword = keyword, cloud = cloud)
+                zresoApiService.search(keyword = keyword, cloud = "")
             } ?: return emptyList()
-            response.data.results.mapNotNull { result ->
-                val link = result.links.firstOrNull() ?: return@mapNotNull null
-                val fullUrl = if (link.url.startsWith("http")) {
-                    link.url
-                } else {
-                    "https://zreso.cn${link.url}"
+            val allowedTypes = enabledDiskTypes.map { diskTypeToZreso(it) }.filter { it.isNotEmpty() }.toSet()
+            response.data.results.flatMap { result ->
+                result.links.mapNotNull { link ->
+                    val fullUrl = if (link.url.startsWith("http")) {
+                        link.url
+                    } else {
+                        "https://zreso.cn${link.url}"
+                    }
+                    val diskType = mapZresoType(link.type)
+                    val typeStr = diskTypeToZreso(diskType)
+                    if (allowedTypes.isNotEmpty() && typeStr !in allowedTypes) {
+                        return@mapNotNull null
+                    }
+                    ResourceItem(
+                        name = result.title,
+                        diskType = diskType,
+                        fileSize = "",
+                        fileDate = result.datetime.ifBlank { result.date },
+                        fileCount = result.links.size,
+                        status = result.status,
+                        url = fullUrl,
+                        source = SOURCE_ZRESO
+                    )
                 }
-                val diskType = mapZresoType(link.type)
-                if (cloud.isNotEmpty() && diskType != mapZresoTypeFirst(cloud)) {
-                    return@mapNotNull null
-                }
-                ResourceItem(
-                    name = result.title,
-                    diskType = diskType,
-                    fileSize = "",
-                    fileDate = result.datetime.ifBlank { result.date },
-                    fileCount = result.links.size,
-                    status = result.status,
-                    url = fullUrl,
-                    source = SOURCE_ZRESO
-                )
             }
         } catch (e: Exception) {
             emptyList()
         }
-    }
-
-    private fun mapZresoTypeFirst(cloud: String): DiskType? = when (cloud.lowercase()) {
-        "quark" -> DiskType.QUARK
-        "baidu" -> DiskType.BAIDU
-        "aliyun" -> DiskType.ALI
-        "xunlei" -> DiskType.XUNLEI
-        "uc" -> DiskType.UC
-        "115" -> DiskType.ONEONEFIVE
-        "magnet" -> DiskType.MAGNET
-        else -> null
     }
 
     private fun mapZresoType(type: String): DiskType = when (type.lowercase()) {
