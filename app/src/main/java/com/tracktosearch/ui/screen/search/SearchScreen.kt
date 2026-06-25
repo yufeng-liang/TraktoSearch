@@ -141,7 +141,7 @@ fun SearchScreen(
         } else {
             launch {
                 animatedYOffset.animateTo(
-                    targetValue = 180f,
+                    targetValue = 280f,
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 )
             }
@@ -236,7 +236,7 @@ fun SearchScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset { IntOffset(0, (animatedYOffset.value - 160).roundToInt()) }
+                    .offset { IntOffset(0, (animatedYOffset.value - 220).roundToInt()) }
                     .align(Alignment.TopCenter),
                 contentAlignment = Alignment.Center
             ) {
