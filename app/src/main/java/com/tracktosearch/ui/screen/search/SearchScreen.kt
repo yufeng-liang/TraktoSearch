@@ -120,7 +120,7 @@ fun SearchScreen(
 
     // Animation state for search box position and width
     val animatedYOffset = remember { Animatable(0f) }
-    val animatedWidthFraction = remember { Animatable(0.65f) }
+    val animatedWidthFraction = remember { Animatable(0.75f) }
     val isActive = isSearchFocused || searchQuery.isNotEmpty()
 
     // Trigger animation when active state changes
@@ -141,13 +141,13 @@ fun SearchScreen(
         } else {
             launch {
                 animatedYOffset.animateTo(
-                    targetValue = 200f,
+                    targetValue = 180f,
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 )
             }
             launch {
                 animatedWidthFraction.animateTo(
-                    targetValue = 0.65f,
+                    targetValue = 0.75f,
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 )
             }
@@ -193,23 +193,6 @@ fun SearchScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // Decorative icon - only visible in default state
-        AnimatedVisibility(
-            visible = !isActive,
-            exit = fadeOut(animationSpec = tween(200))
-        ) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_search_cloud),
-                    contentDescription = null,
-                    modifier = Modifier.size(182.dp)
-                )
-            }
-        }
-
         // Search box - animated position and width
         Box(
             modifier = Modifier
@@ -241,6 +224,26 @@ fun SearchScreen(
                     onFocusChanged = { isSearchFocused = it },
                     searchSourceType = searchSourceType,
                     onSearchSourceTypeChange = onSearchSourceTypeChange
+                )
+            }
+        }
+
+        // Decorative icon - only visible in default state, positioned above search box
+        AnimatedVisibility(
+            visible = !isActive,
+            exit = fadeOut(animationSpec = tween(200))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .offset { IntOffset(0, (animatedYOffset.value - 120).roundToInt()) }
+                    .align(Alignment.TopCenter),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_search_cloud),
+                    contentDescription = null,
+                    modifier = Modifier.size(182.dp)
                 )
             }
         }
@@ -357,10 +360,10 @@ private fun SearchBarTop(
     val view = LocalView.current
     var showTypeDropdown by remember { mutableStateOf(false) }
     val typeColorMap = mapOf(
-        SearchSourceType.DISK to Color(0xFF4CAF50),
-        SearchSourceType.MOVIE to Color(0xFF2196F3),
-        SearchSourceType.SHOW to Color(0xFFFF9800),
-        SearchSourceType.PERSON to Color(0xFF9C27B0)
+        SearchSourceType.DISK to Color(0xFF26A69A),    // Teal
+        SearchSourceType.MOVIE to Color(0xFF7986CB),   // Indigo
+        SearchSourceType.SHOW to Color(0xFFFFD54F),    // Amber
+        SearchSourceType.PERSON to Color(0xFFF48FB1)   // Rose
     )
     Row(
         modifier = Modifier
@@ -467,7 +470,10 @@ private fun SearchBarTop(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
             trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 4.dp)
+                ) {
                     if (searchQuery.isEmpty()) {
                         Icon(
                             Icons.Default.Search,
@@ -478,7 +484,7 @@ private fun SearchBarTop(
                     } else {
                         IconButton(
                             onClick = onClear,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 Icons.Default.Close,
@@ -486,7 +492,11 @@ private fun SearchBarTop(
                                 modifier = Modifier.size(18.dp)
                             )
                         }
-                        TextButton(onClick = { view.performHaptic(HapticType.CLICK); onSearch() }) {
+                        TextButton(
+                            onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
                             Text(stringResource(R.string.search_button))
                         }
                     }
@@ -672,10 +682,10 @@ private fun SearchHistoryInline(
     onClearAll: () -> Unit
 ) {
     val typeColorMap = mapOf(
-        "disk" to Color(0xFF4CAF50),
-        "movie" to Color(0xFF2196F3),
-        "show" to Color(0xFFFF9800),
-        "person" to Color(0xFF9C27B0)
+        "disk" to Color(0xFF26A69A),    // Teal
+        "movie" to Color(0xFF7986CB),   // Indigo
+        "show" to Color(0xFFFFD54F),    // Amber
+        "person" to Color(0xFFF48FB1)   // Rose
     )
     val typeNameMap = mapOf(
         "disk" to stringResource(R.string.search_type_disk),
