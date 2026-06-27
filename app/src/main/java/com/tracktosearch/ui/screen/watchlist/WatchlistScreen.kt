@@ -526,7 +526,7 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
     val brush = rememberShimmerBrush()
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(8.dp),
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 80.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
