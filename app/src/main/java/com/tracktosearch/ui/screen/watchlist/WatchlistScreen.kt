@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
@@ -53,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.EmptyView
+import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.performHaptic
@@ -521,16 +523,7 @@ fun WatchlistScreen(
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */
 @Composable
 private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "skeleton_alpha"
-    )
+    val brush = rememberShimmerBrush()
     LazyVerticalGrid(
         columns = GridCells.Fixed(3),
         contentPadding = PaddingValues(8.dp),
@@ -545,10 +538,8 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(2f / 3f)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            shape = RoundedCornerShape(8.dp)
-                        )
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(brush)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 // 标题条
@@ -556,10 +547,8 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth(0.8f)
                         .height(12.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            shape = RoundedCornerShape(4.dp)
-                        )
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 // 类型条
@@ -567,10 +556,8 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .fillMaxWidth(0.5f)
                         .height(10.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha),
-                            shape = RoundedCornerShape(4.dp)
-                        )
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
                 )
             }
         }
