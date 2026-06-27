@@ -216,7 +216,7 @@ fun WatchlistScreen(
                 contentPadding = PaddingValues(
                     start = 8.dp,
                     end = 8.dp,
-                    top = 180.dp + statusBarHeight,
+                    top = 150.dp + statusBarHeight,
                     bottom = if (isMultiSelectMode) 80.dp else 80.dp
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -513,7 +513,7 @@ fun WatchlistScreen(
                 WatchlistSkeletonGrid(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 180.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                        .padding(top = 150.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
                 )
             }
         }

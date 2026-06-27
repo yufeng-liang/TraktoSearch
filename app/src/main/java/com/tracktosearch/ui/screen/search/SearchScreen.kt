@@ -9,7 +9,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -230,14 +233,14 @@ fun SearchScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp）
-            Spacer(modifier = Modifier.height(254.dp))
+            Spacer(modifier = Modifier.height(180.dp))
 
             // Content below search box
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(horizontal = 24.dp)
+                    .padding(horizontal = 16.dp)
             ) {
                 when {
                     uiState.resources.isNotEmpty() -> {
@@ -250,7 +253,8 @@ fun SearchScreen(
                             onItemClick = { item ->
                                 openResourceLink(context, item)
                                 viewModel.markViewed(item.url)
-                            }
+                            },
+                            hazeState = hazeState
                         )
                     }
                     uiState.isLoading -> {
@@ -315,29 +319,16 @@ fun SearchScreen(
             }
         }
 
-        // Haze 模糊覆盖层（搜索框区域）
+        // Haze 模糊覆盖层（搜索框区域）— 固定高度防止遮挡下方内容
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .wrapContentHeight()
+                .heightIn(max = 260.dp)
                 .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
         ) {
-            // Spacer to push content down in default state
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                // Decorative icon - only visible in default state
-                if (!isActive) {
-                    CloudEasterEgg(
-                        themeManager = cloudThemeManager,
-                        modifier = Modifier
-                            .size(182.dp)
-                            .padding(top = 16.dp)
-                    )
-                }
-            }
+            // 云朵图标 — 带显隐动画
+            CloudIconWithAnimation(cloudThemeManager, isActive)
 
             // Spacer between icon and search box
             Spacer(modifier = Modifier.height(16.dp))
@@ -346,7 +337,7 @@ fun SearchScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 24.dp),
+                    .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -563,7 +554,8 @@ private fun SearchResultsContent(
     typeFilter: ResourceType,
     viewedUrls: Set<String>,
     onTypeFilterChange: (ResourceType) -> Unit,
-    onItemClick: (ResourceItem) -> Unit
+    onItemClick: (ResourceItem) -> Unit,
+    hazeState: HazeState? = null
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -726,7 +718,8 @@ private fun SearchResultsContent(
             listState = listState,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp)
+                .padding(bottom = 16.dp, end = 16.dp),
+            hazeState = hazeState
         )
     }
 }
@@ -1379,5 +1372,28 @@ private fun getLastKnownLocation(context: android.content.Context): Location? {
             ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
     } catch (_: SecurityException) {
         null
+    }
+}
+
+@Composable
+private fun CloudIconWithAnimation(cloudThemeManager: CloudThemeManager, isActive: Boolean) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = if (isActive) 0.dp else 182.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        AnimatedVisibility(
+            visible = !isActive,
+            enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
+        ) {
+            CloudEasterEgg(
+                themeManager = cloudThemeManager,
+                modifier = Modifier
+                    .size(182.dp)
+                    .padding(top = 16.dp)
+            )
+        }
     }
 }
