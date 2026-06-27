@@ -213,6 +213,7 @@ fun MainScreen(
                                 SearchSourceType.MOVIE -> MediaType.MOVIE
                                 SearchSourceType.SHOW -> MediaType.SHOW
                                 SearchSourceType.PERSON -> MediaType.PERSON
+                                SearchSourceType.DISK -> MediaType.DISK
                                 else -> MediaType.MOVIE
                             }
                             key(traktSearchType, traktSearchQuery) {
