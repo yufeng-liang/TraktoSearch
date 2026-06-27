@@ -128,6 +128,9 @@ dependencies {
     // Image
     implementation(libs.coil.compose)
 
+    // Lottie 动画
+    implementation("com.airbnb.android:lottie-compose:6.6.6")
+
     // HTML Parsing
     implementation(libs.jsoup)
 

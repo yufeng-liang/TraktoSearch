@@ -79,6 +79,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import android.os.Build
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
@@ -117,12 +118,19 @@ fun SettingsScreen(
     val currentTheme by viewModel.themeMode.collectAsState()
     val currentLanguage by viewModel.language.collectAsState()
     val pansouEnabled by viewModel.pansouEnabled.collectAsState()
+
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshCacheInfo()
+        onPauseOrDispose { }
+    }
     val panhubEnabled by viewModel.panhubEnabled.collectAsState()
     val zresoEnabled by viewModel.zresoEnabled.collectAsState()
     val exportImportState by viewModel.exportImportState.collectAsState()
     val customSources by viewModel.customSources.collectAsState()
     val testResults by viewModel.testResults.collectAsState()
+    val panHubConfig by viewModel.panHubConfig.collectAsState()
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showPanHubConfigDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
@@ -254,7 +262,11 @@ fun SettingsScreen(
             // 搜索源管理
             item { SettingsSectionHeader(stringResource(R.string.settings_search)) }
             item { SearchSourceItem("PanSou", pansouEnabled) { viewModel.setPansouEnabled(it) } }
-            item { SearchSourceItem("PanHub", panhubEnabled) { viewModel.setPanhubEnabled(it) } }
+            item { PanHubSettingsItem(
+                enabled = panhubEnabled,
+                onEnabledChange = { viewModel.setPanhubEnabled(it) },
+                onConfigClick = { showPanHubConfigDialog = true }
+            ) }
             item { SearchSourceItem("Zreso", zresoEnabled) { viewModel.setZresoEnabled(it) } }
 
             // 自定义搜索源
@@ -683,6 +695,18 @@ fun SettingsScreen(
             }
         )
     }
+
+    // PanHub 配置弹窗
+    if (showPanHubConfigDialog) {
+        PanHubConfigDialog(
+            config = panHubConfig,
+            onConcurrencyChange = { viewModel.setPanHubConcurrency(it) },
+            onTimeoutMsChange = { viewModel.setPanHubTimeoutMs(it) },
+            onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
+            onEnabledChannelsChange = { viewModel.setPanHubEnabledChannels(it) },
+            onDismiss = { showPanHubConfigDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -763,6 +787,56 @@ fun SearchSourceItem(
         Switch(
             checked = checked,
             onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) }
+        )
+    }
+}
+
+@Composable
+fun PanHubSettingsItem(
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
+    onConfigClick: () -> Unit
+) {
+    val view = LocalView.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "PanHub",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = {
+                    view.performHaptic(HapticType.CLICK)
+                    onConfigClick()
+                },
+                modifier = Modifier.size(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Tune,
+                    contentDescription = "配置",
+                    modifier = Modifier.size(20.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) }
+            )
+        }
+        Text(
+            text = "支持自定义插件、频道启用、并发数与超时设置",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 2.dp)
         )
     }
 }

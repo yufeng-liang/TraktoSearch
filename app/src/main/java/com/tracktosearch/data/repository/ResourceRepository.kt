@@ -2,10 +2,12 @@ package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
+import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import javax.inject.Named
@@ -29,6 +31,8 @@ import javax.inject.Singleton
 class ResourceRepository @Inject constructor(
     private val panSouApiService: PanSouApiService,
     @Named("panhub") private val panHubApiService: PanSouApiService,
+    private val panHubGranularApiService: PanHubApiService,
+    private val panHubConfigStorage: PanHubConfigStorage,
     private val zresoApiService: ZresoApiService,
     private val searchSourceStorage: SearchSourceStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
@@ -175,7 +179,7 @@ class ResourceRepository @Inject constructor(
         }
         if (SOURCE_PANHUB in effectiveSources) {
             sourceList.add(SOURCE_PANHUB to async {
-                runCatching { searchPanSource(panHubApiService, keyword, enabledDiskTypes, SOURCE_PANHUB) }.getOrDefault(emptyList())
+                runCatching { searchPanHubGranular(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
             })
         }
         if (SOURCE_ZRESO in effectiveSources) {
@@ -269,7 +273,7 @@ class ResourceRepository @Inject constructor(
             }
             if (SOURCE_PANHUB in enabledSources) {
                 deferreds.add(async {
-                    runCatching { searchPanSource(panHubApiService, keyword, enabledDiskTypes, SOURCE_PANHUB) }.getOrDefault(emptyList())
+                    runCatching { searchPanHubGranular(keyword, enabledDiskTypes) }.getOrDefault(emptyList())
                 })
             }
             if (SOURCE_ZRESO in enabledSources) {
@@ -293,6 +297,72 @@ class ResourceRepository @Inject constructor(
             // 等待所有选中源都返回，合并结果
             val allResults = deferreds.awaitAll()
             allResults.flatten().sortedWith(resourceComparator(isShow))
+        }
+    }
+
+    private suspend fun searchPanHubGranular(
+        keyword: String,
+        enabledDiskTypes: Set<DiskType>
+    ): List<ResourceItem> {
+        val config = panHubConfigStorage.config.first()
+        if (config.enabledPlugins.isEmpty() && config.enabledChannels.isEmpty()) return emptyList()
+        val ext = """{"__plugin_timeout_ms":${config.timeoutMs}}"""
+
+        val specs = mutableListOf<suspend () -> com.tracktosearch.data.remote.pansou.dto.PanSouResponse?>()
+
+        config.enabledPlugins.forEach { pluginId ->
+            specs.add {
+                panHubGranularApiService.search(
+                    keyword = keyword,
+                    res = "merged_by_type",
+                    src = "plugin",
+                    concurrency = config.concurrency,
+                    ext = ext,
+                    plugins = pluginId
+                )
+            }
+        }
+
+        config.enabledChannels.chunked(4).forEach { chunk ->
+            specs.add {
+                panHubGranularApiService.search(
+                    keyword = keyword,
+                    res = "merged_by_type",
+                    src = "tg",
+                    concurrency = config.concurrency,
+                    ext = ext,
+                    channels = chunk.joinToString(",")
+                )
+            }
+        }
+
+        return coroutineScope {
+            specs.chunked(config.concurrency).flatMap { batch ->
+                batch.map { spec ->
+                    async {
+                        runCatching {
+                            withTimeoutOrNull(config.timeoutMs.toLong()) {
+                                spec()
+                            }
+                        }.getOrNull()
+                    }
+                }.awaitAll()
+            }.flatMap { response ->
+                response?.data?.merged_by_type?.flatMap { (type, links) ->
+                    links.mapNotNull { link ->
+                        val diskType = mapPanSouType(type) ?: return@mapNotNull null
+                        ResourceItem(
+                            name = link.note.ifBlank { keyword },
+                            diskType = diskType,
+                            fileSize = "",
+                            fileDate = link.datetime,
+                            fileCount = 1,
+                            url = link.url,
+                            source = SOURCE_PANHUB
+                        )
+                    }
+                } ?: emptyList()
+            }.distinctBy { it.url }
         }
     }
 

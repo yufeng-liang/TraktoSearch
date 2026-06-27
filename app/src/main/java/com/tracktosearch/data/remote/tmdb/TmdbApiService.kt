@@ -148,4 +148,31 @@ interface TmdbApiService {
         @Path("person_id") id: Int,
         @Query("page") page: Int = 1
     ): Response<TmdbPersonTaggedImagesResponse>
+
+    @GET("movie/{movie_id}/similar")
+    suspend fun getSimilarMovies(
+        @Path("movie_id") id: Int,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
+    @GET("tv/{tv_id}/similar")
+    suspend fun getSimilarShows(
+        @Path("tv_id") id: Int,
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
+    @GET("collection/{collection_id}")
+    suspend fun getCollection(
+        @Path("collection_id") id: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbCollectionResponse>
+
+    @GET("tv/{tv_id}/season/{season_number}")
+    suspend fun getTvSeasonDetail(
+        @Path("tv_id") tvId: Int,
+        @Path("season_number") seasonNumber: Int,
+        @Query("language") language: String = "zh-CN"
+    ): Response<TmdbTvSeasonDetail>
 }

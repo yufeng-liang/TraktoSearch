@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.local.db.MediaItemEntity
@@ -408,6 +409,39 @@ class WatchlistViewModel @Inject constructor(
         if (state.historyMoviesLoaded || state.historyShowsLoaded) {
             loadHistoryMovies(forceReload = true)
             loadHistoryShows(forceReload = true)
+        }
+    }
+
+    /** 从想看列表批量移除 */
+    fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
+        viewModelScope.launch {
+            val isMovie = type == MediaType.MOVIE
+            val results = traktIds.map { id ->
+                async { traktRepository.removeFromWatchlist(id, type) }
+            }.awaitAll()
+            val allSuccess = results.all { it.isSuccess }
+            // 从 UI 状态中移除已删除项
+            _uiState.value = if (isMovie) {
+                _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
+            } else {
+                _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
+            }
+        }
+    }
+
+    /** 从已看历史批量移除 */
+    fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType) {
+        viewModelScope.launch {
+            val isMovie = type == MediaType.MOVIE
+            val results = traktIds.map { id ->
+                async { traktRepository.removeWatched(id, type) }
+            }.awaitAll()
+            val allSuccess = results.all { it.isSuccess }
+            _uiState.value = if (isMovie) {
+                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
+            } else {
+                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
+            }
         }
     }
 

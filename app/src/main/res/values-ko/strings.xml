@@ -169,6 +169,10 @@
     <string name="history_empty_movies">시청한 영화가 아직 없습니다</string>
     <string name="history_empty_shows">시청한 TV 프로그램이 아직 없습니다</string>
     <string name="watchlist_search_on_trakt">Trakt에서 검색</string>
+    <string name="watchlist_selected_count">%d개 선택됨</string>
+    <string name="watchlist_remove_watchlist">관심목록에서 삭제</string>
+    <string name="watchlist_remove_history">기록에서 삭제</string>
+    <string name="common_cancel">취소</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Trakt에서 영화 검색</string>
@@ -205,6 +209,7 @@
     <string name="resource_scan">스캔</string>
     <string name="resource_invalid">유효하지 않음</string>
     <string name="resource_file_count">%1$d개 파일</string>
+    <string name="detail_collection_title">시리즈: %s</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>

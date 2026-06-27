@@ -24,6 +24,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -389,8 +390,12 @@ fun DiscoverScreen(
                 category = category,
                 resolvingItemId = uiState.resolvingItemId,
                 onItemClick = { item ->
-                    viewModel.resolveAndNavigate(item) { traktId, tmdbId, title, imdbId, traktRating ->
-                        onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                    showDoubanAllDialog = null
+                    coroutineScope.launch {
+                        delay(300)
+                        viewModel.resolveAndNavigate(item) { traktId, tmdbId, title, imdbId, traktRating ->
+                            onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                        }
                     }
                 },
                 onLoadMore = {
@@ -410,8 +415,12 @@ fun DiscoverScreen(
             hasMore = uiState.popularAllHasMore,
             currentPage = uiState.popularAllPage,
             onItemClick = { movie ->
-                viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
-                    onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                showPopularAll = false
+                coroutineScope.launch {
+                    delay(300)
+                    viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
+                        onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                    }
                 }
             },
             onLoadMore = { viewModel.loadPopularAll(page = uiState.popularAllPage + 1) },

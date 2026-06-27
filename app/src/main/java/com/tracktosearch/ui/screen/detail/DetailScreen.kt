@@ -152,6 +152,7 @@ import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
@@ -191,6 +192,7 @@ fun DetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
+    var showRatingDialog by remember { mutableStateOf(false) }
 
     // 拦截系统返回手势/返回键，统一走 onBack 回调以传递 watchlistChanged 状态
     BackHandler(enabled = true) {
@@ -280,6 +282,11 @@ fun DetailScreen(
                         isMarkedWatchlist = uiState.isMarkedWatchlist,
                         isMarkingWatchlist = uiState.isMarkingWatchlist,
                         onToggleWatchlist = { viewModel.toggleWatchlist() },
+                        onShowRatingDialog = { showRatingDialog = true },
+                        onDismissRatingDialog = {
+                            showRatingDialog = false
+                            viewModel.dismissRatingDialog()
+                        },
                         onRatingSelected = { rating ->
                             if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating)
                         },
@@ -292,6 +299,9 @@ fun DetailScreen(
                         onVideoClick = { video -> playingVideoKey = video.key },
                         onBackdropClick = { index -> selectedBackdropIndex = index },
                         onShowAllVideos = { showAllVideos = true },
+                        onCollectionMovieClick = { movieTmdbId, movieTitle ->
+                            onMovieClick(0, movieTmdbId, movieTitle, "", 0.0)
+                        },
                         sectionVisible = uiState.sectionVisible
                     )
                 }
@@ -466,6 +476,20 @@ fun DetailScreen(
                                 Text(
                                     text = stringResource(R.string.detail_load_error),
                                     color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+
+                    if (!uiState.commentsError && commentsToShow.isEmpty()) {
+                        item(key = "comments_empty") {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.detail_no_comments),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -800,6 +824,24 @@ fun DetailScreen(
                     onLoadEpisodes = { seasonNumber -> viewModel.loadEpisodesForMarkWatched(seasonNumber) }
                 )
             }
+
+            // 评分弹窗（标记已看后自动弹出，或点击评分区域弹出）
+            if (showRatingDialog || uiState.showRatingDialog) {
+                RatingDialog(
+                    initialRating = uiState.userRating,
+                    isSubmitting = uiState.isRating,
+                    onDismiss = {
+                        showRatingDialog = false
+                        viewModel.dismissRatingDialog()
+                    },
+                    onConfirm = { rating ->
+                        showRatingDialog = false
+                        viewModel.dismissRatingDialog()
+                        view.performHaptic(HapticType.HEAVY_CLICK)
+                        if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating)
+                    }
+                )
+            }
         }
     }
 }
@@ -817,6 +859,8 @@ private fun DetailHeaderContent(
     isMarkedWatchlist: Boolean,
     isMarkingWatchlist: Boolean,
     onToggleWatchlist: () -> Unit,
+    onShowRatingDialog: () -> Unit = {},
+    onDismissRatingDialog: () -> Unit = {},
     onRatingSelected: (Int?) -> Unit,
     onPosterClick: () -> Unit = {},
     onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
@@ -825,11 +869,11 @@ private fun DetailHeaderContent(
     onVideoClick: (TmdbVideo) -> Unit = {},
     onBackdropClick: (Int) -> Unit = {},
     onShowAllVideos: () -> Unit = {},
+    onCollectionMovieClick: (tmdbId: Int, title: String) -> Unit = { _, _ -> },
     sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    var showRatingDialog by remember { mutableStateOf(false) }
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
@@ -1014,26 +1058,14 @@ private fun DetailHeaderContent(
                         }
                     }
                 }
-                // 用户评分控件
-                if (sectionVisible.myRating) {
+                // 用户评分控件（有评分时才显示）
+                if (uiState.userRating != null) {
                 Box(modifier = Modifier.height(42.dp)) {
                     UserRatingBar(
                         userRating = uiState.userRating,
                         isRating = uiState.isRating,
                         isRatingLoading = uiState.isRatingLoading,
-                        onClick = { showRatingDialog = true }
-                    )
-                }
-                if (showRatingDialog) {
-                    RatingDialog(
-                        initialRating = uiState.userRating,
-                        isSubmitting = uiState.isRating,
-                        onDismiss = { showRatingDialog = false },
-                        onConfirm = { rating ->
-                            showRatingDialog = false
-                            view.performHaptic(HapticType.HEAVY_CLICK)
-                            onRatingSelected(rating)
-                        }
+                        onClick = onShowRatingDialog
                     )
                 }
                 }
@@ -1300,6 +1332,16 @@ private fun DetailHeaderContent(
                 )
                 ExpandableText(text = uiState.overview)
             }
+        }
+
+        // 系列卡片（放在简介下方、季/集之前）
+        val collection = uiState.collectionInfo
+        if (collection != null && collection.parts.size > 1) {
+            CollectionSection(
+                collection = collection,
+                currentTmdbId = tmdbId,
+                onMovieClick = onCollectionMovieClick
+            )
         }
 
         // 季/集信息（仅电视剧，放在简介下方）
@@ -1876,6 +1918,16 @@ private fun FullCastCrewSheet(
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
 
+    // 延迟导航：先关闭弹窗，再延迟导航
+    var pendingPersonClick by remember { mutableStateOf<Triple<Int, String, String?>?>(null) }
+    LaunchedEffect(pendingPersonClick) {
+        pendingPersonClick?.let { (id, name, url) ->
+            kotlinx.coroutines.delay(300)
+            onPersonClick(id, name, url)
+            pendingPersonClick = null
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -1916,7 +1968,7 @@ private fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1931,7 +1983,7 @@ private fun FullCastCrewSheet(
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1946,7 +1998,7 @@ private fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -1961,7 +2013,7 @@ private fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
                         )
                     }
                 }
@@ -2630,6 +2682,79 @@ private fun EpisodeRow(
     }
 }
 
+// ==================== 系列卡片 ====================
+
+@Composable
+private fun CollectionSection(
+    collection: TmdbCollectionResponse,
+    currentTmdbId: Int,
+    onMovieClick: (tmdbId: Int, title: String) -> Unit
+) {
+    val context = LocalContext.current
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Text(
+            text = stringResource(R.string.detail_collection_title, collection.name),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 16.dp)
+        ) {
+            items(collection.parts, key = { it.id }) { part ->
+                val posterUrl = part.poster_path?.let { "https://image.tmdb.org/t/p/w200$it" }
+                val isCurrent = part.id == currentTmdbId
+                Column(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .clickable(enabled = !isCurrent) { onMovieClick(part.id, part.title) },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = if (isCurrent) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null,
+                        modifier = Modifier
+                            .width(80.dp)
+                            .height(110.dp)
+                    ) {
+                        if (posterUrl != null) {
+                            AsyncImage(
+                                model = posterUrl,
+                                contentDescription = part.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Icon(
+                                    Icons.Filled.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = part.title.ifEmpty { part.original_title },
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        color = if (isCurrent) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ==================== 搜索状态 ====================
 
 @Composable
@@ -2991,6 +3116,25 @@ private fun FullVideosImagesSheet(
     val selectedTabIndex = pagerState.currentPage
     val scope = rememberCoroutineScope()
 
+    // 延迟导航：先关闭弹窗，再执行操作
+    var pendingVideoKey by remember { mutableStateOf<String?>(null) }
+    var pendingBackdropIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(pendingVideoKey) {
+        pendingVideoKey?.let { key ->
+            kotlinx.coroutines.delay(300)
+            onVideoClick(TmdbVideo(key = key))
+            pendingVideoKey = null
+        }
+    }
+    LaunchedEffect(pendingBackdropIndex) {
+        if (pendingBackdropIndex >= 0) {
+            val idx = pendingBackdropIndex
+            pendingBackdropIndex = -1
+            kotlinx.coroutines.delay(300)
+            onBackdropClick(idx)
+        }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -3059,7 +3203,7 @@ private fun FullVideosImagesSheet(
                             itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
                                 FullVideoItem(
                                     video = video,
-                                    onClick = { onVideoClick(video) }
+                                    onClick = { onDismiss(); pendingVideoKey = video.key }
                                 )
                             }
                         }
@@ -3072,7 +3216,7 @@ private fun FullVideosImagesSheet(
                             itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
                                 FullBackdropItem(
                                     backdropUrl = backdropUrl,
-                                    onClick = { onBackdropClick(index) }
+                                    onClick = { onDismiss(); pendingBackdropIndex = index }
                                 )
                             }
                         }

@@ -89,6 +89,10 @@
     <string name="history_empty_movies">还没有已看的电影</string>
     <string name="history_empty_shows">还没有已看的电视剧</string>
     <string name="watchlist_search_on_trakt">在 Trakt 上搜索</string>
+    <string name="watchlist_selected_count">已选%d项</string>
+    <string name="watchlist_remove_watchlist">移除想看</string>
+    <string name="watchlist_remove_history">移除记录</string>
+    <string name="common_cancel">取消</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">在 Trakt 上搜索电影</string>
@@ -206,6 +210,7 @@
     <string name="detail_tab_comments">评论</string>
     <string name="detail_tab_recommendations">推荐</string>
     <string name="detail_no_recommendations">暂无推荐</string>
+    <string name="detail_collection_title">所属系列：%s</string>
     <string name="detail_load_error">加载失败，请重试</string>
     <string name="detail_recommendations_title">相关推荐</string>
     <string name="detail_translating">正在翻译…</string>

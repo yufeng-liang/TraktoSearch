@@ -14,6 +14,7 @@ import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.NotificationStorage
+import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
@@ -26,6 +27,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.repository.UpdateRepository
+import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.util.DataExportImport
 import com.tracktosearch.data.util.ExportItem
 import com.tracktosearch.data.util.ImportItem
@@ -68,6 +70,7 @@ class SettingsViewModel @Inject constructor(
     private val detailSectionStorage: DetailSectionStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService,
+    private val panHubConfigStorage: PanHubConfigStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -128,6 +131,27 @@ class SettingsViewModel @Inject constructor(
 
     fun setZresoEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setZresoEnabled(enabled) }
+    }
+
+    // ========== PanHub 配置 ==========
+
+    val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PanHubConfig())
+
+    fun setPanHubConcurrency(value: Int) {
+        viewModelScope.launch { panHubConfigStorage.setConcurrency(value) }
+    }
+
+    fun setPanHubTimeoutMs(value: Int) {
+        viewModelScope.launch { panHubConfigStorage.setTimeoutMs(value) }
+    }
+
+    fun setPanHubEnabledPlugins(pluginIds: Set<String>) {
+        viewModelScope.launch { panHubConfigStorage.setEnabledPlugins(pluginIds) }
+    }
+
+    fun setPanHubEnabledChannels(channelIds: Set<String>) {
+        viewModelScope.launch { panHubConfigStorage.setEnabledChannels(channelIds) }
     }
 
     // ========== 自定义搜索源 ==========

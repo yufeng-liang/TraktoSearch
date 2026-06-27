@@ -27,6 +27,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -140,6 +142,7 @@ private fun ScrollToTopButtonContent(
     hazeState: HazeState?
 ) {
     val view = LocalView.current
+    val arrowTint = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color(0xFF424242) else Color.White
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     if (hazeState != null) {
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%
@@ -172,7 +175,7 @@ private fun ScrollToTopButtonContent(
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = arrowTint,
                 modifier = Modifier.size(32.dp)
             )
         }
@@ -184,7 +187,7 @@ private fun ScrollToTopButtonContent(
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = arrowTint,
                 modifier = Modifier.size(32.dp)
             )
         }

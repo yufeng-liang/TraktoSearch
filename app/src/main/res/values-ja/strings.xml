@@ -169,6 +169,10 @@
     <string name="history_empty_movies">視聴した映画はまだありません</string>
     <string name="history_empty_shows">視聴したテレビ番組はまだありません</string>
     <string name="watchlist_search_on_trakt">Traktで検索</string>
+    <string name="watchlist_selected_count">%d件選択中</string>
+    <string name="watchlist_remove_watchlist">ウォッチリストから削除</string>
+    <string name="watchlist_remove_history">履歴から削除</string>
+    <string name="common_cancel">キャンセル</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Traktで映画を検索</string>
@@ -205,6 +209,7 @@
     <string name="resource_scan">スキャン</string>
     <string name="resource_invalid">無効</string>
     <string name="resource_file_count">%1$dファイル</string>
+    <string name="detail_collection_title">コレクション：%s</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>

@@ -4,11 +4,13 @@ import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.omdb.OmdbApiService
+import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import com.tracktosearch.data.remote.weather.OpenMeteoApi
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import dagger.Module
 import dagger.Provides
@@ -208,11 +210,24 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun providePanHubGranularApiService(
+        @Named("panhub") okHttpClient: OkHttpClient
+    ): PanHubApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://panhub.shenzjd.com/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(PanHubApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
     fun provideDoubanHotApiService(
         @Named("panhub") okHttpClient: OkHttpClient
     ): DoubanHotApiService {
         return Retrofit.Builder()
-            .baseUrl("https://panhub.shenzjd.com/")
+            .baseUrl("https://panhubshenzjdcom-beta-indol.vercel.app/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -354,5 +369,24 @@ object NetworkModule {
             .callTimeout(20, TimeUnit.SECONDS)
             .retryOnConnectionFailure(true)
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideOpenMeteoApiService(
+        loggingInterceptor: HttpLoggingInterceptor
+    ): OpenMeteoApi {
+        val client = OkHttpClient.Builder()
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+        return Retrofit.Builder()
+            .baseUrl("https://api.open-meteo.com/v1/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(OpenMeteoApi::class.java)
     }
 }

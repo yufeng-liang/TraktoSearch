@@ -1,0 +1,55 @@
+<h2>新手引导流程设计</h2>
+<p class="subtitle">气泡式 Coach Marks 的引导步骤和展示方式</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:8px;font-family:system-ui;position:relative;min-height:200px">
+        <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#252540;border-radius:20px;padding:6px 20px;display:flex;gap:16px">
+          <span style="font-size:11px;color:#888">🔍</span>
+          <span style="font-size:11px;color:#888">🧭</span>
+          <span style="font-size:11px;color:#7c8aff;font-weight:bold">👤</span>
+          <span style="font-size:11px;color:#888">⚙️</span>
+        </div>
+        <div style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:#7c8aff;color:white;border-radius:12px;padding:12px 16px;max-width:260px;font-size:12px;box-shadow:0 4px 20px rgba(124,138,255,0.4)">
+          <div style="font-weight:bold;margin-bottom:4px">我的</div>
+          <div>登录后在这里管理你的想看和已看列表</div>
+          <div style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%) rotate(45deg);width:12px;height:12px;background:#7c8aff"></div>
+        </div>
+        <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:10px;color:#666">2/5 · 下一步 →</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 逐步引导</h3>
+      <p>首次进入主页后，依次高亮4个Tab + 搜索框，每步一个气泡，用户点击"下一步"推进。约5步完成。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="background:#1a1a2e;color:#e0e0e0;padding:16px;border-radius:8px;font-family:system-ui;position:relative;min-height:200px">
+        <div style="position:absolute;top:8px;left:50%;transform:translateX(-50%);background:#252540;border-radius:20px;padding:6px 20px;display:flex;gap:16px">
+          <span style="font-size:11px;color:#7c8aff;font-weight:bold">🔍</span>
+          <span style="font-size:11px;color:#888">🧭</span>
+          <span style="font-size:11px;color:#888">👤</span>
+          <span style="font-size:11px;color:#888">⚙️</span>
+        </div>
+        <div style="position:absolute;top:60px;left:16px;right:16px;background:rgba(0,0,0,0.7);border-radius:12px;padding:16px;font-size:12px">
+          <div style="font-weight:bold;color:#7c8aff;margin-bottom:8px">👋 欢迎使用 TraktToSearch</div>
+          <div style="color:#ccc;margin-bottom:4px">🔍 搜索 — 输入关键词搜索影视资源</div>
+          <div style="color:#ccc;margin-bottom:4px">🧭 发现 — 浏览豆瓣/TMDB热门榜单</div>
+          <div style="color:#ccc;margin-bottom:4px">👤 我的 — 管理想看/已看列表</div>
+          <div style="color:#ccc;margin-bottom:8px">⚙️ 设置 — 主题、语言、搜索源等</div>
+          <div style="color:#888;font-size:11px">更多操作技巧请查看 设置 → 帮助</div>
+        </div>
+        <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%)">
+          <div style="background:#7c8aff;color:white;border-radius:20px;padding:8px 24px;font-size:12px">开始使用</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 一次性概览</h3>
+      <p>首次进入主页时弹出一个半屏卡片，列出4个Tab的核心功能，点击"开始使用"关闭。简洁快速，不打断。</p>
+    </div>
+  </div>
+</div>

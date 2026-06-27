@@ -1,8 +1,10 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -26,7 +28,7 @@ import coil.request.ImageRequest
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun MovieCard(
     title: String,
@@ -36,6 +38,7 @@ fun MovieCard(
     tmdbId: Int,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onLongClick: (() -> Unit)? = null,
     isInWatchlist: Boolean = false,
     isWatched: Boolean = false
 ) {
@@ -53,7 +56,13 @@ fun MovieCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant

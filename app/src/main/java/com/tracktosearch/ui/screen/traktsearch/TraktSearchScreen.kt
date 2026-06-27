@@ -45,10 +45,16 @@ import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalView
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun TraktSearchScreen(
     initialQuery: String,
@@ -64,6 +70,7 @@ fun TraktSearchScreen(
     val view = LocalView.current
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
+    val hazeState = remember { HazeState() }
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
 
@@ -124,59 +131,22 @@ fun TraktSearchScreen(
         }
     }
 
-    Scaffold(
-        contentWindowInsets = if (inlineMode) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
-        topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .focusRequester(focusRequester),
-                    placeholder = {
-                        Text(
-                            when (uiState.selectedTab) {
-                                MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
-                                MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
-                                MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
-                            }
-                        )
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(24.dp),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            if (searchQuery.isNotBlank()) {
-                                viewModel.search(searchQuery)
-                            }
-                        }
-                    ),
-                    trailingIcon = {
-                        IconButton(onClick = {
-                            if (searchQuery.isNotBlank()) {
-                                viewModel.search(searchQuery)
-                            }
-                        }) {
-                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
-                        }
-                    }
-                )
-            }
-        }
-    ) { paddingValues ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (!inlineMode) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier
+            )
+    ) {
+        // Main content area (hazeSource)
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .hazeSource(state = hazeState)
         ) {
+            // 顶部留空给搜索框 + Tab 覆盖层
+            Spacer(modifier = Modifier.height(72.dp))
+
             // 电影/电视剧/人物 Tab
             val selectedTabIndex = when (uiState.selectedTab) {
                 MediaType.MOVIE -> 0
@@ -396,6 +366,52 @@ fun TraktSearchScreen(
                     }
                 }
             }
+        }
+
+        // Haze 模糊覆盖层（搜索框区域）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .hazeEffect(state = hazeState, style = HazeMaterials.thin())
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .focusRequester(focusRequester),
+                placeholder = {
+                    Text(
+                        when (uiState.selectedTab) {
+                            MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
+                            MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
+                            MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
+                        }
+                    )
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        if (searchQuery.isNotBlank()) {
+                            viewModel.search(searchQuery)
+                        }
+                    }
+                ),
+                trailingIcon = {
+                    IconButton(onClick = {
+                        if (searchQuery.isNotBlank()) {
+                            viewModel.search(searchQuery)
+                        }
+                    }) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                    }
+                }
+            )
         }
     }
 }

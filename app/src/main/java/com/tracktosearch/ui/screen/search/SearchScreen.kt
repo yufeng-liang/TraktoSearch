@@ -1,16 +1,24 @@
 package com.tracktosearch.ui.screen.search
 
 import android.content.Intent
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -72,9 +80,17 @@ import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.CloudEasterEgg
+import com.tracktosearch.ui.component.CloudOverlay
+import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -86,9 +102,15 @@ interface ViewedStorageProvider {
     fun viewedItemStorage(): ViewedItemStorage
 }
 
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface CloudThemeProvider {
+    fun cloudThemeManager(): CloudThemeManager
+}
+
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SearchScreen(
     initialKeyword: String = "",
@@ -113,6 +135,29 @@ fun SearchScreen(
     }
     val viewedUrls by viewedItemStorage.viewedUrls.collectAsState(initial = emptySet())
 
+    // 白云彩蛋主题管理
+    val cloudThemeManager = remember {
+        EntryPointAccessors.fromApplication(context, CloudThemeProvider::class.java).cloudThemeManager()
+    }
+    // 定位权限申请
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val loc = if (granted) getLastKnownLocation(context) else null
+        cloudThemeManager.loadTheme(loc)
+    }
+    LaunchedEffect(Unit) {
+        val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasPermission) {
+            cloudThemeManager.loadTheme(getLastKnownLocation(context))
+        } else {
+            locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+        }
+    }
+    val easterEggRes by cloudThemeManager.easterEggRes.collectAsState()
+    val easterMessage by cloudThemeManager.easterMessage.collectAsState()
+
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -130,7 +175,7 @@ fun SearchScreen(
             )
         } else {
             animatedWidthFraction.animateTo(
-                targetValue = 0.75f,
+                targetValue = 0.88f,
                 animationSpec = tween(300, easing = FastOutSlowInEasing)
             )
         }
@@ -170,64 +215,22 @@ fun SearchScreen(
         }
     }
 
+    val hazeState = remember { HazeState() }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // Main content area
+        // Main content area (hazeSource)
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Spacer to push content down in default state
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Decorative icon - only visible in default state
-            AnimatedVisibility(
-                visible = !isActive,
-                exit = fadeOut(animationSpec = tween(200))
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_search_cloud),
-                    contentDescription = null,
-                    modifier = Modifier.size(182.dp)
-                )
-            }
-
-            // Spacer between icon and search box
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Search box - animated width
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animatedWidthFraction.value)
-                    .padding(horizontal = 24.dp)
-            ) {
-                SearchBarTop(
-                    searchQuery = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    onSearch = {
-                        if (searchSourceType != SearchSourceType.DISK) {
-                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                            onTraktSearch?.invoke(searchSourceType, searchQuery)
-                        } else {
-                            viewModel.search(searchQuery)
-                        }
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                    onClear = { searchQuery = "" },
-                    onBack = if (isActive) onBack else null,
-                    focusRequester = focusRequester,
-                    onFocusChanged = { isSearchFocused = it },
-                    searchSourceType = searchSourceType,
-                    onSearchSourceTypeChange = onSearchSourceTypeChange
-                )
-            }
-
-            // Spacer between search box and content
-            Spacer(modifier = Modifier.height(24.dp))
+            // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp）
+            Spacer(modifier = Modifier.height(254.dp))
 
             // Content below search box
             Column(
@@ -238,13 +241,9 @@ fun SearchScreen(
             ) {
                 when {
                     uiState.resources.isNotEmpty() -> {
-                        Text(
-                            text = stringResource(R.string.search_results, uiState.resources.size),
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(start = 0.dp, top = 4.dp, bottom = 4.dp)
-                        )
                         SearchResultsContent(
                             resources = uiState.resources,
+                            totalCount = uiState.resources.size,
                             typeFilter = uiState.typeFilter,
                             viewedUrls = viewedUrls,
                             onTypeFilterChange = { viewModel.setTypeFilter(it) },
@@ -315,6 +314,77 @@ fun SearchScreen(
                 }
             }
         }
+
+        // Haze 模糊覆盖层（搜索框区域）
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .hazeEffect(state = hazeState, style = HazeMaterials.thin())
+                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
+        ) {
+            // Spacer to push content down in default state
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                // Decorative icon - only visible in default state
+                if (!isActive) {
+                    CloudEasterEgg(
+                        themeManager = cloudThemeManager,
+                        modifier = Modifier
+                            .size(182.dp)
+                            .padding(top = 16.dp)
+                    )
+                }
+            }
+
+            // Spacer between icon and search box
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Search box - animated width
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(animatedWidthFraction.value)
+                ) {
+                    SearchBarTop(
+                        searchQuery = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {
+                            if (searchSourceType != SearchSourceType.DISK) {
+                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                                onTraktSearch?.invoke(searchSourceType, searchQuery)
+                            } else {
+                                viewModel.search(searchQuery)
+                            }
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        },
+                        onClear = { searchQuery = "" },
+                        onBack = if (isActive) onBack else null,
+                        focusRequester = focusRequester,
+                        onFocusChanged = { isSearchFocused = it },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange
+                    )
+                }
+            }
+
+            // Spacer between search box and content
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // 全屏彩蛋 Overlay
+        CloudOverlay(
+            easterEggRes = easterEggRes,
+            message = easterMessage,
+            onDismiss = { cloudThemeManager.onEasterDismissed() }
+        )
     }
 }
 
@@ -485,9 +555,11 @@ private fun SearchBarTop(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun SearchResultsContent(
     resources: List<ResourceItem>,
+    totalCount: Int,
     typeFilter: ResourceType,
     viewedUrls: Set<String>,
     onTypeFilterChange: (ResourceType) -> Unit,
@@ -534,93 +606,103 @@ private fun SearchResultsContent(
             contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 80.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            // 影视类型筛选
-            item {
-                Row(
+            stickyHeader {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .background(MaterialTheme.colorScheme.background)
                 ) {
+                    // 搜索结果标题
                     Text(
-                        text = stringResource(R.string.search_filter_type),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(64.dp)
+                        text = stringResource(R.string.search_results, totalCount),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
                     )
-                    LazyRow(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    // 影视类型筛选
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        item {
-                            FilterChip(
-                                selected = typeFilter == ResourceType.ALL,
-                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
-                                label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = typeFilter == ResourceType.MOVIE,
-                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
-                                label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = typeFilter == ResourceType.SHOW,
-                                onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
-                                label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            )
+                        Text(
+                            text = stringResource(R.string.search_filter_type),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(64.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = typeFilter == ResourceType.ALL,
+                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
+                                    label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = typeFilter == ResourceType.MOVIE,
+                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
+                                    label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                )
+                            }
+                            item {
+                                FilterChip(
+                                    selected = typeFilter == ResourceType.SHOW,
+                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
+                                    label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                )
+                            }
                         }
                     }
-                }
-            }
-            // 网盘类型筛选
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.search_filter_disk),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.width(64.dp)
-                    )
-                    LazyRow(
-                        modifier = Modifier.weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    // 网盘类型筛选
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        item {
-                            FilterChip(
-                                selected = selectedDiskType == null,
-                                onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = null },
-                                label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                            )
-                        }
-                        items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
-                            FilterChip(
-                                selected = selectedDiskType == type,
-                                onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = type },
-                                label = {
-                                    val label = when (type) {
-                                        DiskType.QUARK -> stringResource(R.string.disk_quark)
-                                        DiskType.BAIDU -> stringResource(R.string.disk_baidu)
-                                        DiskType.ALI -> stringResource(R.string.disk_ali)
-                                        DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
-                                        DiskType.UC -> stringResource(R.string.disk_uc)
-                                        DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
-                                        DiskType.MAGNET -> stringResource(R.string.disk_magnet)
-                                        DiskType.OTHER -> stringResource(R.string.disk_other)
+                        Text(
+                            text = stringResource(R.string.search_filter_disk),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.width(64.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            item {
+                                FilterChip(
+                                    selected = selectedDiskType == null,
+                                    onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = null },
+                                    label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                )
+                            }
+                            items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
+                                FilterChip(
+                                    selected = selectedDiskType == type,
+                                    onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = type },
+                                    label = {
+                                        val label = when (type) {
+                                            DiskType.QUARK -> stringResource(R.string.disk_quark)
+                                            DiskType.BAIDU -> stringResource(R.string.disk_baidu)
+                                            DiskType.ALI -> stringResource(R.string.disk_ali)
+                                            DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
+                                            DiskType.UC -> stringResource(R.string.disk_uc)
+                                            DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
+                                            DiskType.MAGNET -> stringResource(R.string.disk_magnet)
+                                            DiskType.OTHER -> stringResource(R.string.disk_other)
+                                        }
+                                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     }
-                                    Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -657,10 +739,10 @@ private fun SearchHistoryInline(
     onClearAll: () -> Unit
 ) {
     val typeColorMap = mapOf(
-        "disk" to Color(0xFF26A69A),    // Teal
-        "movie" to Color(0xFF7986CB),   // Indigo
-        "show" to Color(0xFFFFD54F),    // Amber
-        "person" to Color(0xFFF48FB1)   // Rose
+        "disk" to Color(0xFF26A69A),
+        "movie" to Color(0xFF7986CB),
+        "show" to Color(0xFFFFD54F),
+        "person" to Color(0xFFF48FB1)
     )
     val typeNameMap = mapOf(
         "disk" to stringResource(R.string.search_type_disk),
@@ -691,50 +773,77 @@ private fun SearchHistoryInline(
                 )
             }
         }
-        history.forEach { item ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onHistoryClick(item) }
-                    .padding(vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.History,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = tagColor.copy(alpha = 0.15f),
-                    modifier = Modifier.padding(end = 8.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 280.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            history.chunked(2).forEach { rowItems ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = typeNameMap[item.type] ?: item.type,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tagColor,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-                Text(
-                    text = item.keyword,
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1
-                )
-                IconButton(
-                    onClick = { onHistoryDelete(item) },
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = stringResource(R.string.search_history_delete),
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    rowItems.forEach { item ->
+                        val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable { onHistoryClick(item) },
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            tonalElevation = 0.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.History,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = tagColor.copy(alpha = 0.15f)
+                                ) {
+                                    Text(
+                                        text = typeNameMap[item.type] ?: item.type,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = tagColor,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                        maxLines = 1
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = item.keyword,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                IconButton(
+                                    onClick = { onHistoryDelete(item) },
+                                    modifier = Modifier.size(22.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = stringResource(R.string.search_history_delete),
+                                        modifier = Modifier.size(12.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (rowItems.size < 2) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
@@ -1260,4 +1369,15 @@ private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) 
 private fun doubanCategoryTotal(categoryId: String): Int = when (categoryId) {
     "douban-top250" -> 250
     else -> 10
+}
+
+private fun getLastKnownLocation(context: android.content.Context): Location? {
+    val lm = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? LocationManager ?: return null
+    return try {
+        // 优先网络定位（粗略），再 GPS
+        lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+            ?: lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+    } catch (_: SecurityException) {
+        null
+    }
 }

@@ -19,9 +19,11 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.DetailSectionStorage
+import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.util.CommentTranslator
 import android.util.Log
 import androidx.compose.runtime.Immutable
@@ -115,6 +117,8 @@ data class DetailUiState(
     // 相关推荐
     val recommendations: List<RecommendationItem> = emptyList(),
     val isLoadingRecommendations: Boolean = false,
+    // 系列信息
+    val collectionInfo: TmdbCollectionResponse? = null,
     // 各模块加载错误提示
     val ratingsError: Boolean = false,
     val commentsError: Boolean = false,
@@ -126,6 +130,8 @@ data class DetailUiState(
     val showLoginPrompt: Boolean = false,
     // 电视剧标记已看弹窗
     val showMarkWatchedDialog: Boolean = false,
+    // 电影标记已看后弹出评分弹窗
+    val showRatingDialog: Boolean = false,
     // 详情页模块可见性设置
     val sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
 )
@@ -148,7 +154,8 @@ class DetailViewModel @Inject constructor(
     private val viewedItemStorage: ViewedItemStorage,
     private val commentTranslator: CommentTranslator,
     private val tokenStorage: TokenStorage,
-    private val detailSectionStorage: DetailSectionStorage
+    private val detailSectionStorage: DetailSectionStorage,
+    private val languageStorage: LanguageStorage
 ) : ViewModel() {
 
     companion object {
@@ -223,6 +230,7 @@ class DetailViewModel @Inject constructor(
     private var currentImdbId: String = ""
     private var currentTraktRating: Double = 0.0
     private var currentTmdbId: Int = 0
+    private var currentCollectionId: Int = 0
     private var detailLoaded: Boolean = false
     private var searchJob: Job? = null
     private var ratingsJob: Job? = null
@@ -283,6 +291,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
 
             var tmdbRating = 0.0
+            var collectionId = 0
             if (tmdbId <= 0) {
                 _uiState.value = _uiState.value.copy(isLoading = false, displayTitle = title.replace("+", " "))
                 detailLoaded = true
@@ -294,6 +303,10 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> {
                             val e = tmdbRepository.enrichMovie(tmdbId, title, year)
                             tmdbRating = e.rating
+                            // 检测是否属于系列
+                            val movieDetail = tmdbRepository.getMovieDetail(tmdbId)
+                            collectionId = movieDetail?.belongs_to_collection?.id ?: 0
+                            currentCollectionId = collectionId
                             EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country)
                         }
                         MediaType.SHOW -> {
@@ -349,6 +362,9 @@ class DetailViewModel @Inject constructor(
 
             // 异步获取相关推荐（内部合并检查当前影视+推荐项的想看/已看状态）
             if (visibility.recommendations) fetchRecommendations()
+
+            // 异步获取系列信息（仅电影）
+            if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)
 
             // 异步获取用户评分
             if (visibility.myRating) fetchUserRating()
@@ -649,50 +665,102 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingRecommendations = true)
             try {
+                // 并行请求 Trakt related 和 TMDB similar
                 val enriched = when (currentMediaType) {
                     MediaType.MOVIE -> {
-                        val result = traktRepository.getRelatedMovies(currentTraktId)
-                        val movies = result.getOrDefault(emptyList())
-                        movies.map { movie ->
-                            async {
-                                val enrichment = tmdbRepository.enrichMovie(
-                                    movie.ids.tmdb, movie.title, movie.year.takeIf { it > 0 }
-                                )
-                                RecommendationItem(
-                                    traktId = movie.ids.trakt,
-                                    tmdbId = movie.ids.tmdb,
-                                    title = movie.title,
-                                    displayTitle = enrichment.chineseTitle,
-                                    year = enrichment.year,
-                                    genres = enrichment.genres,
-                                    posterUrl = enrichment.posterUrl,
-                                    imdbId = movie.ids.imdb,
-                                    traktRating = movie.rating
-                                )
-                            }
-                        }.awaitAll()
+                        val traktDeferred = async {
+                            val result = traktRepository.getRelatedMovies(currentTraktId)
+                            val movies = result.getOrDefault(emptyList())
+                            movies.map { movie ->
+                                async {
+                                    val enrichment = tmdbRepository.enrichMovie(
+                                        movie.ids.tmdb, movie.title, movie.year.takeIf { it > 0 }
+                                    )
+                                    RecommendationItem(
+                                        traktId = movie.ids.trakt,
+                                        tmdbId = movie.ids.tmdb,
+                                        title = movie.title,
+                                        displayTitle = enrichment.chineseTitle,
+                                        year = enrichment.year,
+                                        genres = enrichment.genres,
+                                        posterUrl = enrichment.posterUrl,
+                                        imdbId = movie.ids.imdb,
+                                        traktRating = movie.rating
+                                    )
+                                }
+                            }.awaitAll()
+                        }
+                        val tmdbDeferred = async {
+                            if (currentTmdbId > 0) {
+                                val similar = tmdbRepository.getSimilarMovies(currentTmdbId)
+                                similar.map { item ->
+                                    val enrichment = tmdbRepository.enrichMovie(
+                                        item.id, item.title, item.release_date.take(4).toIntOrNull()
+                                    )
+                                    RecommendationItem(
+                                        traktId = 0,
+                                        tmdbId = item.id,
+                                        title = item.title,
+                                        displayTitle = enrichment.chineseTitle,
+                                        year = enrichment.year,
+                                        genres = enrichment.genres,
+                                        posterUrl = enrichment.posterUrl
+                                    )
+                                }
+                            } else emptyList()
+                        }
+                        val traktItems = traktDeferred.await()
+                        val tmdbItems = tmdbDeferred.await()
+                        // 合并去重，TMDB 数据优先
+                        val seenTmdbIds = tmdbItems.map { it.tmdbId }.toSet()
+                        tmdbItems + traktItems.filter { it.tmdbId !in seenTmdbIds }
                     }
                     MediaType.SHOW -> {
-                        val result = traktRepository.getRelatedShows(currentTraktId)
-                        val shows = result.getOrDefault(emptyList())
-                        shows.map { show ->
-                            async {
-                                val enrichment = tmdbRepository.enrichTv(
-                                    show.ids.tmdb, show.title, show.year.takeIf { it > 0 }
-                                )
-                                RecommendationItem(
-                                    traktId = show.ids.trakt,
-                                    tmdbId = show.ids.tmdb,
-                                    title = show.title,
-                                    displayTitle = enrichment.chineseTitle,
-                                    year = enrichment.year,
-                                    genres = enrichment.genres,
-                                    posterUrl = enrichment.posterUrl,
-                                    imdbId = show.ids.imdb,
-                                    traktRating = show.rating
-                                )
-                            }
-                        }.awaitAll()
+                        val traktDeferred = async {
+                            val result = traktRepository.getRelatedShows(currentTraktId)
+                            val shows = result.getOrDefault(emptyList())
+                            shows.map { show ->
+                                async {
+                                    val enrichment = tmdbRepository.enrichTv(
+                                        show.ids.tmdb, show.title, show.year.takeIf { it > 0 }
+                                    )
+                                    RecommendationItem(
+                                        traktId = show.ids.trakt,
+                                        tmdbId = show.ids.tmdb,
+                                        title = show.title,
+                                        displayTitle = enrichment.chineseTitle,
+                                        year = enrichment.year,
+                                        genres = enrichment.genres,
+                                        posterUrl = enrichment.posterUrl,
+                                        imdbId = show.ids.imdb,
+                                        traktRating = show.rating
+                                    )
+                                }
+                            }.awaitAll()
+                        }
+                        val tmdbDeferred = async {
+                            if (currentTmdbId > 0) {
+                                val similar = tmdbRepository.getSimilarShows(currentTmdbId)
+                                similar.map { item ->
+                                    val enrichment = tmdbRepository.enrichTv(
+                                        item.id, item.title, item.release_date.take(4).toIntOrNull()
+                                    )
+                                    RecommendationItem(
+                                        traktId = 0,
+                                        tmdbId = item.id,
+                                        title = item.title,
+                                        displayTitle = enrichment.chineseTitle,
+                                        year = enrichment.year,
+                                        genres = enrichment.genres,
+                                        posterUrl = enrichment.posterUrl
+                                    )
+                                }
+                            } else emptyList()
+                        }
+                        val traktItems = traktDeferred.await()
+                        val tmdbItems = tmdbDeferred.await()
+                        val seenTmdbIds = tmdbItems.map { it.tmdbId }.toSet()
+                        tmdbItems + traktItems.filter { it.tmdbId !in seenTmdbIds }
                     }
                     MediaType.PERSON -> emptyList()
                 }
@@ -806,21 +874,21 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value.expandedSeasons
         val newExpanded = if (seasonNumber in current) current - seasonNumber else current + seasonNumber
 
-        // 如果展开且还没有加载该季的集信息，则加载
+        // 先立即更新展开状态（UI 先展开，显示加载指示器）
+        _uiState.value = _uiState.value.copy(expandedSeasons = newExpanded)
+
+        // 如果展开且还没有加载该季的集信息，则异步加载
         if (seasonNumber !in current && seasonNumber !in _uiState.value.episodes) {
             viewModelScope.launch {
                 val result = traktRepository.getSeasonEpisodes(currentTraktId, seasonNumber)
                 result.onSuccess { episodeList ->
+                    // 本地化集标题
+                    val localized = localizeEpisodeTitles(episodeList, seasonNumber)
                     val newEpisodes = _uiState.value.episodes.toMutableMap()
-                    newEpisodes[seasonNumber] = episodeList
-                    _uiState.value = _uiState.value.copy(
-                        expandedSeasons = newExpanded,
-                        episodes = newEpisodes
-                    )
+                    newEpisodes[seasonNumber] = localized
+                    _uiState.value = _uiState.value.copy(episodes = newEpisodes)
                 }
             }
-        } else {
-            _uiState.value = _uiState.value.copy(expandedSeasons = newExpanded)
         }
     }
 
@@ -831,8 +899,9 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val result = traktRepository.getSeasonEpisodes(currentTraktId, seasonNumber)
             result.onSuccess { episodeList ->
+                val localized = localizeEpisodeTitles(episodeList, seasonNumber)
                 val newEpisodes = _uiState.value.episodes.toMutableMap()
-                newEpisodes[seasonNumber] = episodeList
+                newEpisodes[seasonNumber] = localized
                 _uiState.value = _uiState.value.copy(episodes = newEpisodes)
             }
         }
@@ -1165,7 +1234,8 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isMarkedWatched = true,
                         isMarkedWatchlist = false,
-                        isMarkingWatched = false
+                        isMarkingWatched = false,
+                        showRatingDialog = true
                     )
                 }
                 .onFailure {
@@ -1180,6 +1250,11 @@ class DetailViewModel @Inject constructor(
     /** 关闭标记已看弹窗 */
     fun dismissMarkWatchedDialog() {
         _uiState.value = _uiState.value.copy(showMarkWatchedDialog = false)
+    }
+
+    /** 关闭评分弹窗 */
+    fun dismissRatingDialog() {
+        _uiState.value = _uiState.value.copy(showRatingDialog = false)
     }
 
     /** 提交勾选的季/集为已看 */
@@ -1269,6 +1344,37 @@ class DetailViewModel @Inject constructor(
         val releaseDate: String = "",
         val country: String = ""
     )
+
+    /** 获取系列信息 */
+    private fun fetchCollection(collectionId: Int) {
+        viewModelScope.launch {
+            val collection = tmdbRepository.getCollection(collectionId)
+            if (collection != null) {
+                _uiState.value = _uiState.value.copy(collectionInfo = collection)
+            }
+        }
+    }
+
+    /** 使用 TMDB 季详情 API 获取本地化集标题，替换 Trakt 的英文标题 */
+    private suspend fun localizeEpisodeTitles(
+        episodes: List<TraktEpisode>,
+        seasonNumber: Int
+    ): List<TraktEpisode> {
+        if (currentTmdbId <= 0) return episodes
+        // 中文环境下才需要本地化（TMDB 默认就是中文）
+        val lang = languageStorage.language.first()
+        if (lang == LanguageStorage.LANGUAGE_ENGLISH) return episodes
+
+        val seasonDetail = tmdbRepository.getTvSeasonDetail(currentTmdbId, seasonNumber)
+            ?: return episodes
+        val titleMap = seasonDetail.episodes.associate { it.episode_number to it.name }
+        return episodes.map { ep ->
+            val localTitle = titleMap[ep.number]
+            if (!localTitle.isNullOrEmpty() && localTitle != ep.title) {
+                ep.copy(title = localTitle)
+            } else ep
+        }
+    }
 
     private fun saveToCache() {
         if (currentTraktId <= 0) return

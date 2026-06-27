@@ -14,7 +14,8 @@ data class TmdbMovieDetail(
     val release_date: String = "",
     val vote_average: Double = 0.0,
     val runtime: Int? = null,
-    val production_countries: List<TmdbProductionCountry> = emptyList()
+    val production_countries: List<TmdbProductionCountry> = emptyList(),
+    val belongs_to_collection: TmdbBelongsToCollection? = null
 )
 
 @Serializable
@@ -35,6 +36,34 @@ data class TmdbTvDetail(
 data class TmdbProductionCountry(
     val iso_3166_1: String = "",
     val name: String = ""
+)
+
+@Serializable
+data class TmdbBelongsToCollection(
+    val id: Int = 0,
+    val name: String = "",
+    val poster_path: String? = null,
+    val backdrop_path: String? = null
+)
+
+@Serializable
+data class TmdbCollectionResponse(
+    val id: Int = 0,
+    val name: String = "",
+    val overview: String = "",
+    val poster_path: String? = null,
+    val backdrop_path: String? = null,
+    val parts: List<TmdbCollectionPart> = emptyList()
+)
+
+@Serializable
+data class TmdbCollectionPart(
+    val id: Int = 0,
+    val title: String = "",
+    val original_title: String = "",
+    val poster_path: String? = null,
+    val release_date: String = "",
+    val vote_average: Double = 0.0
 )
 
 @Serializable
@@ -207,6 +236,20 @@ data class TmdbPersonSearchResult(
     val gender: Int = 0,
     val popularity: Double = 0.0,
     val known_for: List<TmdbSearchResult> = emptyList()
+)
+
+@Serializable
+data class TmdbTvSeasonDetail(
+    val id: Int = 0,
+    val name: String = "",
+    val episodes: List<TmdbSeasonEpisode> = emptyList()
+)
+
+@Serializable
+data class TmdbSeasonEpisode(
+    val id: Int = 0,
+    val name: String = "",
+    val episode_number: Int = 0
 )
 
 @Serializable

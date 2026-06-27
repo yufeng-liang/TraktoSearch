@@ -534,4 +534,38 @@ class TmdbRepository @Inject constructor(
             } else emptyList()
         } catch (_: Exception) { emptyList() }
     }
+
+    /** 获取相似电影（TMDB） */
+    suspend fun getSimilarMovies(tmdbId: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getSimilarMovies(tmdbId, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body()?.results ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** 获取相似剧集（TMDB） */
+    suspend fun getSimilarShows(tmdbId: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getSimilarShows(tmdbId, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body()?.results ?: emptyList()
+            else emptyList()
+        } catch (_: Exception) { emptyList() }
+    }
+
+    /** 获取系列信息（TMDB） */
+    suspend fun getCollection(collectionId: Int): TmdbCollectionResponse? {
+        return try {
+            val response = tmdbApiService.getCollection(collectionId, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) { null }
+    }
+
+    /** 获取电视剧季详情（用于本地化集标题） */
+    suspend fun getTvSeasonDetail(tvId: Int, seasonNumber: Int): TmdbTvSeasonDetail? {
+        return try {
+            val response = tmdbApiService.getTvSeasonDetail(tvId, seasonNumber, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) { null }
+    }
 }

@@ -1,0 +1,53 @@
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=pansearch
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=qupansou
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=panta
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=hunhepan
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=jikepan
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=labi
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=thepiratebay
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=duoduo
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=xuexizhinan
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=plugin&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&plugins=nyaa
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=tgsearchers3%2Cyunpanxunlei%2Ctianyifc%2CBaiduCloudDisk
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=txtyzy%2Cpeccxinpd%2Cgotopan%2Cxingqiump4
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=yunpanqk%2CPanjClub%2Ckkxlzy%2CbaicaoZY
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=MCPH01%2Cshare_aliyun%2Cbdwpzhpd%2Cysxb48
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=jdjdn1111%2Cyggpan%2CMCPH086%2Czaihuayun
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=Q66Share%2CNewAliPan%2Cypquark%2COscar_4Kmovies
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=ucwpzy%2Calyp_TV%2Calyp_4K_Movies%2CshareAliyun
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=alyp_1%2Cdianyingshare%2CQuark_Movies%2CXiangxiuNBB
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=NewQuark%2Cydypzyfx%2Ckuakeyun%2Cucquark
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=xx123pan%2Cyingshifenxiang123%2Czyfb123%2Ctyypzhpd
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=tianyirigeng%2Ccloudtianyi%2Chdhhd21%2CLsp115
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=oneonefivewpfx%2CMaidanglaocom%2Cqixingzhenren%2Ctaoxgzy
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=tgsearchers115%2CChannel_Shares_115%2Ctyysypzypd%2Cvip115hot
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=wp123zy%2Cyunpan139%2Cyunpan189%2Cyunpanuc
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=yydf_hzl%2Calyp_Animation%2Calyp_JLP%2Cleoziyuan
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=AliyunDrive_Share_Channel%2Caliyunys%2CAliyun_4K_Movies%2Cyunpanpan
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=Quark_Share_Channel%2Cquarkshare%2Cbaiduyun%2CiAliyun
+https://panhub.shenzjd.com/api/search?kw=hhhhhh&res=merged_by_type&src=tg&conc=4&ext=%7B%22__plugin_timeout_ms%22%3A5000%7D&channels=quanziyuanshe
+
+响应：
+{
+    "code": 0,
+    "message": "success",
+    "data": {
+        "total": 2,
+        "merged_by_type": {
+            "quark": [
+                {
+                    "url": "https://pan.quark.cn/s/85b9ffd94572",
+                    "password": "",
+                    "note": "肖申克的救赎",
+                    "datetime": ""
+                },
+                {
+                    "url": "https://pan.quark.cn/s/697bc55d3469",
+                    "password": "",
+                    "note": "肖申克的救赎",
+                    "datetime": ""
+                }
+            ]
+        }
+    }
+}

@@ -89,6 +89,10 @@
     <string name="history_empty_movies">No watched movies yet</string>
     <string name="history_empty_shows">No watched TV shows yet</string>
     <string name="watchlist_search_on_trakt">Search on Trakt</string>
+    <string name="watchlist_selected_count">Selected %d</string>
+    <string name="watchlist_remove_watchlist">Remove from watchlist</string>
+    <string name="watchlist_remove_history">Remove from history</string>
+    <string name="common_cancel">Cancel</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Search movies on Trakt</string>
@@ -206,6 +210,7 @@
     <string name="detail_tab_comments">Comments</string>
     <string name="detail_tab_recommendations">Recommendations</string>
     <string name="detail_no_recommendations">No recommendations</string>
+    <string name="detail_collection_title">Collection: %s</string>
     <string name="detail_load_error">Failed to load. Please retry.</string>
     <string name="detail_recommendations_title">Related Recommendations</string>
     <string name="detail_translating">Translating…</string>
