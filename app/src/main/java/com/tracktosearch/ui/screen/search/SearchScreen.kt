@@ -349,10 +349,8 @@ fun SearchScreen(
                         onSearch = {
                             if (searchSourceType != SearchSourceType.DISK) {
                                 viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                                onTraktSearch?.invoke(searchSourceType, searchQuery)
-                            } else {
-                                viewModel.search(searchQuery)
                             }
+                            onTraktSearch?.invoke(searchSourceType, searchQuery)
                             focusManager.clearFocus()
                             keyboardController?.hide()
                         },

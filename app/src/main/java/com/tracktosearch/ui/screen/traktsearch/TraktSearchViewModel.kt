@@ -92,10 +92,13 @@ class TraktSearchViewModel @Inject constructor(
 
     fun initSearch(query: String, type: MediaType) {
         val current = _uiState.value
-        // 已经搜索过则不重新初始化（避免从详情页返回时用路由参数覆盖用户修改的搜索词）
-        if (current.currentTabState.hasSearched) return
+        if (current.currentTabState.hasSearched && current.selectedTab == type) return
         _uiState.value = TraktSearchUiState(query = query, selectedTab = type)
-        search(query, type)
+        if (type == MediaType.DISK) {
+            searchDiskInternal(query)
+        } else {
+            search(query, type)
+        }
     }
 
     fun switchTab(type: MediaType) {
