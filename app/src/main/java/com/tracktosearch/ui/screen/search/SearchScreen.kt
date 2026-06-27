@@ -285,17 +285,13 @@ fun SearchScreen(
                                     history = uiState.searchHistory,
                                     onHistoryClick = { item ->
                                         searchQuery = item.keyword
-                                        if (item.type == "disk") {
-                                            viewModel.search(item.keyword)
-                                        } else {
-                                            val st = when (item.type) {
-                                                "movie" -> SearchSourceType.MOVIE
-                                                "show" -> SearchSourceType.SHOW
-                                                "person" -> SearchSourceType.PERSON
-                                                else -> SearchSourceType.DISK
-                                            }
-                                            onTraktSearch?.invoke(st, item.keyword)
+                                        val st = when (item.type) {
+                                            "movie" -> SearchSourceType.MOVIE
+                                            "show" -> SearchSourceType.SHOW
+                                            "person" -> SearchSourceType.PERSON
+                                            else -> SearchSourceType.DISK
                                         }
+                                        onTraktSearch?.invoke(st, item.keyword)
                                         focusManager.clearFocus()
                                         keyboardController?.hide()
                                     },
