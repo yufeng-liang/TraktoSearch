@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -45,6 +46,11 @@ class DiscoverSectionStorage @Inject constructor(
 
         private val KEY_ORDER = stringPreferencesKey("section_order")
         private fun visibilityKey(id: String) = booleanPreferencesKey("visible_$id")
+    }
+
+    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
+    fun getCurrentConfigsSync(): List<DiscoverSectionConfig> = runBlocking {
+        sectionConfigs.first()
     }
 
     /** 获取所有栏目的配置列表（按排序顺序） */

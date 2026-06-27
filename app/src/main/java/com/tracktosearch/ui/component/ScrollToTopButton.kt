@@ -142,7 +142,7 @@ private fun ScrollToTopButtonContent(
     hazeState: HazeState?
 ) {
     val view = LocalView.current
-    val arrowTint = if (MaterialTheme.colorScheme.surface.luminance() > 0.5f) Color(0xFF424242) else Color.White
+    val arrowTint = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF616161) else Color.White
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     if (hazeState != null) {
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%

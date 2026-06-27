@@ -128,14 +128,12 @@ fun AppNavigation(
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
-    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsState(initial = 0)
-    // 登录成功后默认进入"我的"页，否则使用设置中的默认启动页
+    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsState(initial = defaultTabStorage.getCurrentValueSync())
+    // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
-    // 首次启动时应用默认启动页设置
+    // 监听默认启动页设置变化
     LaunchedEffect(storedDefaultTab) {
-        if (mainInitialTab == 0 && initialTab == 0) {
-            mainInitialTab = storedDefaultTab
-        }
+        mainInitialTab = storedDefaultTab
     }
     val scope = rememberCoroutineScope()
 

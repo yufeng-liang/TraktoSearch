@@ -110,7 +110,7 @@ fun MainScreen(
     onRestartOnboarding: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
-    var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.DISK) }
+    var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var traktSearchQuery by rememberSaveable { mutableStateOf("") }
     var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var showTraktSearch by rememberSaveable { mutableStateOf(false) }
@@ -222,9 +222,7 @@ fun MainScreen(
                                     showTraktSearch = false
                                 }
                                 Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .windowInsetsPadding(WindowInsets.statusBars)
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
                                     TraktSearchScreen(
                                         initialQuery = traktSearchQuery,

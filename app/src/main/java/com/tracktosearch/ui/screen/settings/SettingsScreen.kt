@@ -1,4 +1,4 @@
-package com.tracktosearch.ui.screen.settings
+﻿package com.tracktosearch.ui.screen.settings
 
 import android.content.Intent
 import android.net.Uri
@@ -1349,19 +1349,21 @@ private fun DiscoverSectionRow(
 }
 
 /** 栏目 ID 转为显示名称 */
+@Composable
 private fun getSectionDisplayName(id: String): String {
     return when (id) {
-        "douban-movie" -> "新片榜"
-        "douban-weekly" -> "口碑榜"
-        "douban-top250" -> "Top250"
-        "douban-us-box" -> "北美票房榜"
-        "tmdb-popular" -> "热门电影"
-        "tmdb-upcoming" -> "即将上映"
-        "trakt-trending-movies" -> "Trakt 热门电影"
-        "trakt-trending-shows" -> "Trakt 热门剧集"
-        "trakt-anticipated" -> "Trakt 最受期待"
-        "trakt-recommendations" -> "为你推荐电影"
-        "trakt-show-recommendations" -> "为你推荐剧集"
+        "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
+        "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
+        "douban-top250" -> stringResource(R.string.discover_douban_top250)
+        "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+        "tmdb-popular" -> stringResource(R.string.discover_trending)
+        "tmdb-upcoming" -> stringResource(R.string.discover_upcoming)
+        "trakt-trending-movies" -> stringResource(R.string.discover_trakt_trending_movies)
+        "trakt-trending-shows" -> stringResource(R.string.discover_trakt_trending_shows)
+        "trakt-anticipated" -> stringResource(R.string.discover_trakt_anticipated)
+        "trakt-recommendations" -> stringResource(R.string.discover_recommended)
+        "trakt-show-recommendations" -> stringResource(R.string.discover_trakt_recommendations_shows)
+        "trakt-lists" -> stringResource(R.string.discover_trending_lists)
         else -> id
     }
 }
@@ -1418,14 +1420,15 @@ fun DetailSectionsDialog(
 }
 
 /** 详情页模块 ID 转为显示名称 */
+@Composable
 private fun getDetailSectionDisplayName(id: String): String {
     return when (id) {
-        "cast" -> "演职员"
-        "videos-images" -> "预告片与截图"
-        "overview" -> "简介"
-        "my-rating" -> "我的评分"
-        "comments" -> "评论"
-        "recommendations" -> "推荐"
+        "cast" -> stringResource(R.string.detail_cast_crew)
+        "videos-images" -> stringResource(R.string.detail_videos_section)
+        "overview" -> stringResource(R.string.detail_overview_label)
+        "my-rating" -> stringResource(R.string.detail_your_rating)
+        "comments" -> stringResource(R.string.detail_comments)
+        "recommendations" -> stringResource(R.string.detail_recommendations_title)
         else -> id
     }
 }
@@ -1736,3 +1739,4 @@ private fun DefaultTabSelectionDialog(
         }
     )
 }
+

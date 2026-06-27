@@ -79,18 +79,28 @@ class TraktSearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val initialType = when (savedStateHandle.get<String>("type")) {
+    private val initialTypeFromNav = when (savedStateHandle.get<String>("type")) {
         "show" -> MediaType.SHOW
         "person" -> MediaType.PERSON
         "disk" -> MediaType.DISK
-        else -> MediaType.MOVIE
+        else -> null
     }
     private val initialQueryStr = savedStateHandle.get<String>("query") ?: ""
 
-    private val _uiState = MutableStateFlow(TraktSearchUiState(selectedTab = initialType))
+    // 初始类型：优先使用导航参数，否则使用默认值 MOVIE
+    private val _initialTab = initialTypeFromNav ?: MediaType.MOVIE
+    private val _uiState = MutableStateFlow(TraktSearchUiState(selectedTab = _initialTab))
     val uiState: StateFlow<TraktSearchUiState> = _uiState.asStateFlow()
 
+    /**
+     * 初始化搜索：从 Composable 传入正确的 type 和 query。
+     * inline 模式下 savedStateHandle 中没有 type，需要通过此方法同步正确的类型。
+     */
     fun initSearch(query: String, type: MediaType) {
+        // 同步 selectedTab 为传入的 type（修复 inline 模式下初始类型错误的问题）
+        if (_uiState.value.selectedTab != type) {
+            _uiState.value = _uiState.value.copy(selectedTab = type)
+        }
         val current = _uiState.value
         if (current.currentTabState.hasSearched && current.selectedTab == type) return
         _uiState.value = TraktSearchUiState(query = query, selectedTab = type)

@@ -248,28 +248,35 @@ class SearchViewModel @Inject constructor(
                 typeFilter = ResourceType.ALL
             )
 
-            // 10 分钟内相同关键词用缓存
-            val cached = searchResultCache.get(keyword.trim())
-            if (cached != null) {
+            try {
+                // 10 分钟内相同关键词用缓存
+                val cached = searchResultCache.get(keyword.trim())
+                if (cached != null) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        resources = cached
+                    )
+                    return@launch
+                }
+
+                resourceRepository.searchResourcesFlow(keyword = keyword)
+                    .collect { items ->
+                        if (items.isNotEmpty()) {
+                            searchResultCache.put(keyword.trim(), items)
+                            _uiState.value = _uiState.value.copy(
+                                isLoading = false,
+                                resources = items
+                            )
+                        }
+                    }
+                if (_uiState.value.resources.isEmpty()) {
+                    _uiState.value = _uiState.value.copy(isLoading = false)
+                }
+            } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    resources = cached
+                    error = e.message ?: "加载失败"
                 )
-                return@launch
-            }
-
-            resourceRepository.searchResourcesFlow(keyword = keyword)
-                .collect { items ->
-                    if (items.isNotEmpty()) {
-                        searchResultCache.put(keyword.trim(), items)
-                        _uiState.value = _uiState.value.copy(
-                            isLoading = false,
-                            resources = items
-                        )
-                    }
-                }
-            if (_uiState.value.resources.isEmpty()) {
-                _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
     }

@@ -80,6 +80,7 @@ import com.tracktosearch.data.remote.dto.inferResourceType
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.ui.component.EmptyView
+import com.tracktosearch.ui.component.ErrorStateView
 import com.tracktosearch.ui.component.LoadingView
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -89,11 +90,6 @@ import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -113,7 +109,7 @@ interface CloudThemeProvider {
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     initialKeyword: String = "",
@@ -132,7 +128,6 @@ fun SearchScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
     }
@@ -189,47 +184,26 @@ fun SearchScreen(
         focusManager.clearFocus()
     }
 
-    // 有搜索结果时，返回手势清空搜索
-    BackHandler(enabled = uiState.resources.isNotEmpty() || uiState.keyword.isNotEmpty()) {
-        searchQuery = ""
-        viewModel.clearResults()
-        focusManager.clearFocus()
-        keyboardController?.hide()
-    }
-
     var hadQuery by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(searchQuery) {
-        if (searchQuery.isEmpty() && hadQuery) {
-            viewModel.clearResults()
-        }
         hadQuery = searchQuery.isNotEmpty()
-    }
-
-    LaunchedEffect(Unit) {
-        if (searchQuery.isEmpty() && uiState.keyword.isNotEmpty()) {
-            searchQuery = uiState.keyword
-        }
     }
 
     LaunchedEffect(initialKeyword) {
         if (initialKeyword.isNotEmpty()) {
             searchQuery = initialKeyword
-            viewModel.search(initialKeyword)
         }
     }
-
-    val hazeState = remember { HazeState() }
 
     Box(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
-        // Main content area (hazeSource)
+        // Main content area
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState),
+                .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp + 缓冲）
@@ -243,26 +217,6 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp)
             ) {
                 when {
-                    uiState.resources.isNotEmpty() -> {
-                        SearchResultsContent(
-                            resources = uiState.resources,
-                            totalCount = uiState.resources.size,
-                            typeFilter = uiState.typeFilter,
-                            viewedUrls = viewedUrls,
-                            onTypeFilterChange = { viewModel.setTypeFilter(it) },
-                            onItemClick = { item ->
-                                openResourceLink(context, item)
-                                viewModel.markViewed(item.url)
-                            },
-                            hazeState = hazeState
-                        )
-                    }
-                    uiState.isLoading -> {
-                        LoadingView(message = stringResource(R.string.search_loading))
-                    }
-                    uiState.keyword.isNotEmpty() && uiState.resources.isEmpty() -> {
-                        EmptyView(message = stringResource(R.string.search_no_results))
-                    }
                     else -> {
                         if (searchQuery.isNotEmpty()) {
                             val suggestions = remember(searchQuery, uiState.searchHistory) {
@@ -273,9 +227,8 @@ fun SearchScreen(
                                     suggestions = suggestions,
                                     onSuggestionClick = { item ->
                                         searchQuery = item.keyword
-                                        viewModel.search(item.keyword)
+                                        onTraktSearch?.invoke(searchSourceType, item.keyword)
                                         focusManager.clearFocus()
-                                        keyboardController?.hide()
                                     }
                                 )
                             }
@@ -293,20 +246,19 @@ fun SearchScreen(
                                         }
                                         onTraktSearch?.invoke(st, item.keyword)
                                         focusManager.clearFocus()
-                                        keyboardController?.hide()
                                     },
                                     onHistoryDelete = { viewModel.removeHistory(it.keyword) },
                                     onClearAll = { viewModel.clearHistory() }
                                 )
-                                Spacer(modifier = Modifier.height(16.dp))
                             }
+                            Spacer(modifier = Modifier.height(16.dp))
                             PopularSearchesSection(
                                 popularSearches = viewModel.popularSearches,
                                 onPopularClick = { keyword ->
                                     searchQuery = keyword
-                                    viewModel.search(keyword)
+                                    // 热门搜索默认用网盘tab页搜索
+                                    onTraktSearch?.invoke(SearchSourceType.DISK, keyword)
                                     focusManager.clearFocus()
-                                    keyboardController?.hide()
                                 }
                             )
                         }
@@ -315,12 +267,11 @@ fun SearchScreen(
             }
         }
 
-        // Haze 模糊覆盖层（搜索框区域）— 固定高度防止遮挡下方内容
+        // 搜索框覆盖层
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 260.dp)
-                .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
         ) {
             // 云朵图标 — 带显隐动画
@@ -343,12 +294,9 @@ fun SearchScreen(
                         searchQuery = searchQuery,
                         onQueryChange = { searchQuery = it },
                         onSearch = {
-                            if (searchSourceType != SearchSourceType.DISK) {
-                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                            }
+                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                             onTraktSearch?.invoke(searchSourceType, searchQuery)
                             focusManager.clearFocus()
-                            keyboardController?.hide()
                         },
                         onClear = { searchQuery = "" },
                         onBack = if (isActive) onBack else null,
@@ -462,7 +410,8 @@ private fun SearchBarTop(
                             expanded = showTypeDropdown,
                             onDismissRequest = { showTypeDropdown = false }
                         ) {
-                            SearchSourceType.entries.forEach { type ->
+                            val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
+                            orderedTypes.forEach { type ->
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -537,184 +486,6 @@ private fun SearchBarTop(
         if (onBack != null) {
             Spacer(modifier = Modifier.width(44.dp))
         }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SearchResultsContent(
-    resources: List<ResourceItem>,
-    totalCount: Int,
-    typeFilter: ResourceType,
-    viewedUrls: Set<String>,
-    onTypeFilterChange: (ResourceType) -> Unit,
-    onItemClick: (ResourceItem) -> Unit,
-    hazeState: HazeState? = null
-) {
-    val context = LocalContext.current
-    val view = LocalView.current
-    var selectedDiskType by remember { mutableStateOf<DiskType?>(null) }
-
-    val filteredResources = remember(resources, selectedDiskType, typeFilter) {
-        resources
-            .let { rs ->
-                if (typeFilter != ResourceType.ALL) {
-                    rs.filter { inferResourceType(it.name) == typeFilter }
-                } else {
-                    rs
-                }
-            }
-            .let { rs ->
-                if (selectedDiskType != null) {
-                    rs.filter { it.diskType == selectedDiskType }
-                } else {
-                    rs
-                }
-            }
-    }
-
-    val listState = rememberLazyListState()
-    val scrollToTopProvider = LocalScrollToTopProvider.current
-    val coroutineScope = rememberCoroutineScope()
-    DisposableEffect(Unit) {
-        scrollToTopProvider.register {
-            coroutineScope.launch {
-                listState.animateScrollToItem(0)
-            }
-        }
-        onDispose {
-            scrollToTopProvider.unregister()
-        }
-    }
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 80.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            stickyHeader {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
-                ) {
-                    // 搜索结果标题
-                    Text(
-                        text = stringResource(R.string.search_results, totalCount),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 4.dp)
-                    )
-                    // 影视类型筛选
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.search_filter_type),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(64.dp)
-                        )
-                        LazyRow(
-                            modifier = Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            item {
-                                FilterChip(
-                                    selected = typeFilter == ResourceType.ALL,
-                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
-                                    label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                )
-                            }
-                            item {
-                                FilterChip(
-                                    selected = typeFilter == ResourceType.MOVIE,
-                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
-                                    label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                )
-                            }
-                            item {
-                                FilterChip(
-                                    selected = typeFilter == ResourceType.SHOW,
-                                    onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
-                                    label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                )
-                            }
-                        }
-                    }
-                    // 网盘类型筛选
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.search_filter_disk),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.width(64.dp)
-                        )
-                        LazyRow(
-                            modifier = Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            item {
-                                FilterChip(
-                                    selected = selectedDiskType == null,
-                                    onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = null },
-                                    label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                )
-                            }
-                            items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
-                                FilterChip(
-                                    selected = selectedDiskType == type,
-                                    onClick = { view.performHaptic(HapticType.TICK); selectedDiskType = type },
-                                    label = {
-                                        val label = when (type) {
-                                            DiskType.QUARK -> stringResource(R.string.disk_quark)
-                                            DiskType.BAIDU -> stringResource(R.string.disk_baidu)
-                                            DiskType.ALI -> stringResource(R.string.disk_ali)
-                                            DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
-                                            DiskType.UC -> stringResource(R.string.disk_uc)
-                                            DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
-                                            DiskType.MAGNET -> stringResource(R.string.disk_magnet)
-                                            DiskType.OTHER -> stringResource(R.string.disk_other)
-                                        }
-                                        Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
-                val isViewed = item.url in viewedUrls
-                ResourceItemCard(
-                    item = item,
-                    isViewed = isViewed,
-                    index = index,
-                    onClick = { onItemClick(item) },
-                    modifier = Modifier.animateItem(
-                        fadeInSpec = tween(300),
-                        placementSpec = tween(300)
-                    )
-                )
-            }
-        }
-        // 快速回顶按钮
-        ScrollToTopButton(
-            listState = listState,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 16.dp, end = 16.dp),
-            hazeState = hazeState
-        )
     }
 }
 
@@ -907,50 +678,6 @@ private fun PopularSearchesSection(
             }
         }
     }
-}
-
-private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
-    val url = item.url
-
-    val appPackages = when (item.diskType) {
-        DiskType.QUARK -> listOf("com.quark.clouddrive", "com.quark.browser")
-        DiskType.BAIDU -> listOf("com.baidu.netdisk")
-        DiskType.ALI -> listOf("com.alicloud.databox")
-        DiskType.XUNLEI -> listOf("com.xunlei.downloadprovider", "com.xunlei.browser")
-        DiskType.UC -> listOf("com.UCMobile")
-        DiskType.ONEONEFIVE -> listOf("com.crland.app")
-        DiskType.MAGNET, DiskType.OTHER -> emptyList()
-    }
-
-    for (pkg in appPackages) {
-        try {
-            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                setPackage(pkg)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            if (appIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(appIntent)
-                return
-            }
-        } catch (_: Exception) {}
-    }
-    try {
-        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(browserIntent)
-    } catch (_: Exception) {}
-}
-
-private fun diskTypeDisplayName(type: DiskType): String = when (type) {
-    DiskType.QUARK -> "Quark"
-    DiskType.BAIDU -> "Baidu"
-    DiskType.ALI -> "Ali"
-    DiskType.XUNLEI -> "Xunlei"
-    DiskType.UC -> "UC"
-    DiskType.ONEONEFIVE -> "115"
-    DiskType.MAGNET -> "Magnet"
-    DiskType.OTHER -> "Other"
 }
 
 // ========== 豆瓣热榜组件（供 DiscoverScreen 复用） ==========

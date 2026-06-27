@@ -8,7 +8,9 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +20,11 @@ private val Context.defaultTabDataStore: DataStore<Preferences> by preferencesDa
 class DefaultTabStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
+    fun getCurrentValueSync(): Int = runBlocking {
+        defaultTab.first()
+    }
+
     val defaultTab: Flow<Int> = context.defaultTabDataStore.data.map { prefs ->
         prefs[KEY_DEFAULT_TAB] ?: DEFAULT_TAB_SEARCH
     }

@@ -8,7 +8,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,6 +37,11 @@ class DetailSectionStorage @Inject constructor(
         )
 
         private fun visibilityKey(id: String) = booleanPreferencesKey("visible_$id")
+    }
+
+    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
+    fun getCurrentConfigsSync(): List<DetailSectionConfig> = runBlocking {
+        sectionConfigs.first()
     }
 
     /** 获取所有模块的配置列表 */

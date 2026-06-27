@@ -77,22 +77,22 @@ class SettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val themeMode: StateFlow<String> = themeStorage.themeMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStorage.MODE_SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), themeStorage.getCurrentValueSync())
 
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DefaultTabStorage.DEFAULT_TAB_SEARCH)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), defaultTabStorage.getCurrentValueSync())
 
     val language: StateFlow<String> = languageStorage.language
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LanguageStorage.LANGUAGE_SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), languageStorage.getCurrentValueSync())
 
     val pansouEnabled: StateFlow<Boolean> = searchSourceStorage.pansouEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), searchSourceStorage.getPansouEnabledSync())
 
     val panhubEnabled: StateFlow<Boolean> = searchSourceStorage.panhubEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), searchSourceStorage.getPanhubEnabledSync())
 
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), searchSourceStorage.getZresoEnabledSync())
 
     val notificationEnabled: StateFlow<Boolean> = notificationStorage.enabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -145,7 +145,7 @@ class SettingsViewModel @Inject constructor(
     // ========== PanHub 配置 ==========
 
     val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PanHubConfig())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), panHubConfigStorage.getCurrentConfigSync())
 
     fun setPanHubConcurrency(value: Int) {
         viewModelScope.launch { panHubConfigStorage.setConcurrency(value) }
@@ -570,9 +570,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
-                DiscoverSectionConfig(id = id, visible = true, order = index)
-            }
+            discoverSectionStorage.getCurrentConfigsSync()
         )
 
     fun setSectionVisible(id: String, visible: Boolean) {
@@ -589,9 +587,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            DetailSectionStorage.ALL_SECTION_IDS.map { id ->
-                DetailSectionConfig(id = id, visible = true)
-            }
+            detailSectionStorage.getCurrentConfigsSync()
         )
 
     fun setDetailSectionVisible(id: String, visible: Boolean) {

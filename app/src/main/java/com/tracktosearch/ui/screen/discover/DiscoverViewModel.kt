@@ -107,9 +107,7 @@ class DiscoverViewModel @Inject constructor(
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
-                DiscoverSectionConfig(id = id, visible = true, order = index)
-            }
+            discoverSectionStorage.getCurrentConfigsSync()
         )
 
     companion object {

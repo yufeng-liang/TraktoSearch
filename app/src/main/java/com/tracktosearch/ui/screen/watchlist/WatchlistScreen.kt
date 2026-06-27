@@ -3,11 +3,15 @@ package com.tracktosearch.ui.screen.watchlist
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,7 +23,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -281,18 +287,38 @@ fun WatchlistScreen(
                                 placementSpec = tween(300)
                             )
                         )
-                        // 多选模式下显示选中图标
+                        // 多选模式下显示选中遮罩 + 打勾图标
                         if (isMultiSelectMode) {
-                            Icon(
-                                imageVector = Icons.Filled.CheckCircle,
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                            // 选中时加半透明主色蒙版
+                            if (isSelected) {
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                                )
+                            }
+                            // 打勾图标：白色圆底衬托
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
-                                    .size(24.dp)
-                            )
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else Color.White.copy(alpha = 0.7f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.CheckCircle,
+                                    contentDescription = null,
+                                    tint = if (isSelected) Color.White
+                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -302,12 +328,12 @@ fun WatchlistScreen(
                 gridState = currentGridState,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = if (isMultiSelectMode) 72.dp else 16.dp, end = 16.dp),
+                    .padding(bottom = 100.dp, end = 16.dp),
                 hazeState = hazeState
             )
 
-            // Haze 模糊覆盖层 - 搜索框 + SegmentedButtonRow + PrimaryTabRow
-            Column(
+            // Haze 模糊覆盖层 - 搜索框 + SegmentedButtonRow + PrimaryTabRow 或 多选操作栏
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .hazeEffect(
@@ -316,171 +342,187 @@ fun WatchlistScreen(
                     )
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
             ) {
-                // 状态栏 Spacer - 点击回顶
-                Spacer(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .fillMaxWidth()
-                        .clickable {
-                            gridCoroutineScope.launch {
-                                currentGridState.animateScrollToItem(0)
-                            }
-                        }
-                )
-                // 搜索栏 Row - 防穿透
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(enabled = false, onClick = {}) // 防穿透
-                        .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 搜索框 + Tab 栏（非多选模式时显示）
+                AnimatedVisibility(
+                    visible = !isMultiSelectMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester),
-                        placeholder = {
-                            Text(
-                                if (searchQuery.isBlank()) {
-                                    when (selectedMode) {
-                                        0 -> stringResource(R.string.watchlist_search_watchlist)
-                                        else -> stringResource(R.string.watchlist_search_history)
-                                    }
-                                } else stringResource(R.string.search_placeholder_watchlist)
-                            )
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                focusManager.clearFocus()
-                                // 搜索无结果时，自动跳转 Trakt 搜索（仅想看列表模式）
-                                if (searchQuery.isNotBlank() && selectedMode == 0) {
-                                    val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
-                                    if (noResults) {
-                                        onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                    Column {
+                        // 状态栏 Spacer - 点击回顶
+                        Spacer(
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .fillMaxWidth()
+                                .clickable {
+                                    gridCoroutineScope.launch {
+                                        currentGridState.animateScrollToItem(0)
                                     }
                                 }
+                        )
+                        // 搜索栏 Row - 防穿透
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = false, onClick = {}) // 防穿透
+                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(focusRequester),
+                                placeholder = {
+                                    Text(
+                                        if (searchQuery.isBlank()) {
+                                            when (selectedMode) {
+                                                0 -> stringResource(R.string.watchlist_search_watchlist)
+                                                else -> stringResource(R.string.watchlist_search_history)
+                                            }
+                                        } else stringResource(R.string.search_placeholder_watchlist)
+                                    )
+                                },
+                                singleLine = true,
+                                shape = RoundedCornerShape(24.dp),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(
+                                    onSearch = {
+                                        focusManager.clearFocus()
+                                        // 搜索无结果时，自动跳转 Trakt 搜索（仅想看列表模式）
+                                        if (searchQuery.isNotBlank() && selectedMode == 0) {
+                                            val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
+                                            if (noResults) {
+                                                onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                            }
+                                        }
+                                    }
+                                ),
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = {
+                                            searchQuery = ""
+                                        }) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                                    }
+                                }
+                            )
+                            IconButton(onClick = onStatisticsClick) {
+                                Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.statistics_title))
                             }
-                        ),
-                        trailingIcon = {
-                            if (searchQuery.isNotEmpty()) {
-                                IconButton(onClick = {
-                                    searchQuery = ""
-                                }) {
+                            IconButton(onClick = { viewModel.refresh() }) {
+                                Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
+                            }
+                        }
+
+                        // 想看 / 已看 模式切换
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp)
+                        ) {
+                            SegmentedButton(
+                                selected = selectedMode == 0,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 0 },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                            ) {
+                                Text(stringResource(R.string.watchlist_mode_watchlist))
+                            }
+                            SegmentedButton(
+                                selected = selectedMode == 1,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 1 },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            ) {
+                                Text(stringResource(R.string.watchlist_tab_history))
+                            }
+                        }
+
+                        // 分类 Tab
+                        val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+                        val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent
+                        ) {
+                            Tab(
+                                selected = selectedTab == 0,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
+                                text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
+                            )
+                            Tab(
+                                selected = selectedTab == 1,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
+                                text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
+                            )
+                        }
+
+                        // TMDB 不可用提示 — 在 tab 栏下方
+                        if (uiState.tmdbUnavailable) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.errorContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Icon(
-                                        Icons.Filled.Close,
-                                        contentDescription = stringResource(R.string.content_desc_clear),
-                                        modifier = Modifier.size(20.dp)
+                                        Icons.Default.Warning,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = stringResource(R.string.watchlist_poster_error),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
                                     )
                                 }
-                            } else {
-                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
                             }
                         }
-                    )
-                    IconButton(onClick = onStatisticsClick) {
-                        Icon(Icons.Default.BarChart, contentDescription = stringResource(R.string.statistics_title))
-                    }
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
                     }
                 }
 
-                // 想看 / 已看 模式切换
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 0.dp)
+                // 多选操作栏（多选模式时显示）
+                AnimatedVisibility(
+                    visible = isMultiSelectMode,
+                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    SegmentedButton(
-                        selected = selectedMode == 0,
-                        onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 0 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                    ) {
-                        Text(stringResource(R.string.watchlist_mode_watchlist))
-                    }
-                    SegmentedButton(
-                        selected = selectedMode == 1,
-                        onClick = { view.performHaptic(HapticType.CLICK); selectedMode = 1 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                    ) {
-                        Text(stringResource(R.string.watchlist_tab_history))
-                    }
-                }
-
-                // 分类 Tab
-                val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
-                val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
-                PrimaryTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color.Transparent
-                ) {
-                    Tab(
-                        selected = selectedTab == 0,
-                        onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
-                        text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
-                    )
-                    Tab(
-                        selected = selectedTab == 1,
-                        onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
-                        text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
-                    )
-                }
-            }
-
-            // TMDB 不可用提示
-            if (uiState.tmdbUnavailable) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
-                    color = MaterialTheme.colorScheme.errorContainer
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(R.string.watchlist_poster_error),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                }
-            }
-
-            // 多选模式底部操作栏
-            if (isMultiSelectMode) {
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter),
-                    shadowElevation = 8.dp
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
+                    Column {
+                        // 状态栏 Spacer
+                        Spacer(modifier = Modifier.statusBarsPadding())
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = false, onClick = {}) // 防穿透
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            IconButton(onClick = { isMultiSelectMode = false }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.common_cancel)
+                                )
+                            }
+                            Text(
                             text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
-                            style = MaterialTheme.typography.titleSmall
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
                         Row {
                             Button(
@@ -532,6 +574,7 @@ fun WatchlistScreen(
                         .padding(top = 165.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
                 )
             }
+        }
         }
     }
 }

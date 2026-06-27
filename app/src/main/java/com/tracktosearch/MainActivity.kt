@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.GuestModeStorage
+import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
@@ -95,6 +96,9 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var languageStorage: LanguageStorage
 
+    @Inject
+    lateinit var defaultTabStorage: DefaultTabStorage
+
     // 全局 scrollToTop 提供者
     private val scrollToTopProvider = ScrollToTopProvider()
 
@@ -137,7 +141,12 @@ class MainActivity : AppCompatActivity() {
                 isGuest -> Routes.MAIN
                 else -> Routes.LOGIN
             }
-            initialTab = if (isValid) 2 else 0
+            // 已登录时读取用户设置的默认启动页，未登录时使用搜索页（0）
+            initialTab = if (isValid || isGuest) {
+                defaultTabStorage.getCurrentValueSync()
+            } else {
+                0
+            }
 
             val language = languageStorage.language.first()
             applyLanguage(language)
