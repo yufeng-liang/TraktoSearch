@@ -4,6 +4,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.dto.ResourceType
+import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.remote.trakt.dto.TraktSearchResult
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
@@ -42,18 +45,29 @@ data class SearchTabState(
     val hasMore: Boolean = false
 )
 
+data class DiskSearchState(
+    val resources: List<ResourceItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
+    val hasSearched: Boolean = false,
+    val typeFilter: ResourceType = ResourceType.ALL,
+    val diskTypeFilter: com.tracktosearch.data.remote.dto.DiskType? = null
+)
+
 data class TraktSearchUiState(
     val query: String = "",
     val selectedTab: MediaType = MediaType.MOVIE,
     val movieState: SearchTabState = SearchTabState(),
     val showState: SearchTabState = SearchTabState(),
-    val personState: SearchTabState = SearchTabState()
+    val personState: SearchTabState = SearchTabState(),
+    val diskState: DiskSearchState = DiskSearchState()
 ) {
     val currentTabState: SearchTabState
         get() = when (selectedTab) {
             MediaType.MOVIE -> movieState
             MediaType.SHOW -> showState
             MediaType.PERSON -> personState
+            MediaType.DISK -> SearchTabState()
         }
 }
 
@@ -61,12 +75,14 @@ data class TraktSearchUiState(
 class TraktSearchViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
+    private val resourceRepository: ResourceRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val initialType = when (savedStateHandle.get<String>("type")) {
         "show" -> MediaType.SHOW
         "person" -> MediaType.PERSON
+        "disk" -> MediaType.DISK
         else -> MediaType.MOVIE
     }
     private val initialQueryStr = savedStateHandle.get<String>("query") ?: ""
@@ -91,8 +107,13 @@ class TraktSearchViewModel @Inject constructor(
             MediaType.MOVIE -> current.movieState
             MediaType.SHOW -> current.showState
             MediaType.PERSON -> current.personState
+            MediaType.DISK -> null
         }
-        if (!targetState.hasSearched && current.query.isNotBlank()) {
+        if (type == MediaType.DISK) {
+            if (!current.diskState.hasSearched && current.query.isNotBlank()) {
+                searchDiskInternal(current.query)
+            }
+        } else if (targetState != null && !targetState.hasSearched && current.query.isNotBlank()) {
             search(current.query, type)
         }
     }
@@ -100,6 +121,12 @@ class TraktSearchViewModel @Inject constructor(
     fun search(query: String, type: MediaType? = null) {
         val searchType = type ?: _uiState.value.selectedTab
         if (query.isBlank()) return
+
+        // 网盘搜索走独立逻辑
+        if (searchType == MediaType.DISK) {
+            searchDiskInternal(query)
+            return
+        }
 
         // 更新 query 到状态中，确保 loadMore 等使用最新查询词
         _uiState.value = _uiState.value.copy(query = query)
@@ -117,6 +144,7 @@ class TraktSearchViewModel @Inject constructor(
                 MediaType.MOVIE -> traktRepository.searchMovies(query, page = 1)
                 MediaType.SHOW -> traktRepository.searchShows(query, page = 1)
                 MediaType.PERSON -> traktRepository.searchPeople(query, page = 1)
+                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
             }
 
             if (searchType == MediaType.PERSON) {
@@ -258,6 +286,8 @@ class TraktSearchViewModel @Inject constructor(
 
     fun loadMore() {
         val current = _uiState.value
+        // 网盘搜索不支持加载更多
+        if (current.selectedTab == MediaType.DISK) return
         val tabState = current.currentTabState
         if (tabState.isLoading || tabState.isLoadingMore || !tabState.hasMore) return
 
@@ -269,6 +299,7 @@ class TraktSearchViewModel @Inject constructor(
                 MediaType.MOVIE -> traktRepository.searchMovies(current.query, page = nextPage)
                 MediaType.SHOW -> traktRepository.searchShows(current.query, page = nextPage)
                 MediaType.PERSON -> traktRepository.searchPeople(current.query, page = nextPage)
+                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
             }
 
             result.onSuccess { (searchResults, totalCount) ->
@@ -295,6 +326,7 @@ class TraktSearchViewModel @Inject constructor(
             MediaType.MOVIE -> _uiState.value.copy(movieState = state)
             MediaType.SHOW -> _uiState.value.copy(showState = state)
             MediaType.PERSON -> _uiState.value.copy(personState = state)
+            MediaType.DISK -> _uiState.value
         }
     }
 
@@ -372,6 +404,51 @@ class TraktSearchViewModel @Inject constructor(
                     knownForDepartment = tmdbPerson?.known_for_department ?: ""
                 )
             }
+            MediaType.DISK -> TraktSearchUiItem()
         }
+    }
+
+    // 网盘搜索
+    fun searchDiskInternal(query: String) {
+        if (query.isBlank()) return
+        _uiState.value = _uiState.value.copy(query = query)
+
+        val diskState = _uiState.value.diskState
+        if (diskState.isLoading) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                diskState = diskState.copy(isLoading = true, hasSearched = true, error = null)
+            )
+
+            resourceRepository.searchResourcesFlow(keyword = query)
+                .collect { items ->
+                    if (items.isNotEmpty()) {
+                        _uiState.value = _uiState.value.copy(
+                            diskState = _uiState.value.diskState.copy(
+                                isLoading = false,
+                                resources = items
+                            )
+                        )
+                    }
+                }
+            if (_uiState.value.diskState.isLoading) {
+                _uiState.value = _uiState.value.copy(
+                    diskState = _uiState.value.diskState.copy(isLoading = false)
+                )
+            }
+        }
+    }
+
+    fun setDiskTypeFilter(filter: com.tracktosearch.data.remote.dto.DiskType?) {
+        _uiState.value = _uiState.value.copy(
+            diskState = _uiState.value.diskState.copy(diskTypeFilter = filter)
+        )
+    }
+
+    fun setDiskResourceTypeFilter(type: ResourceType) {
+        _uiState.value = _uiState.value.copy(
+            diskState = _uiState.value.diskState.copy(typeFilter = type)
+        )
     }
 }

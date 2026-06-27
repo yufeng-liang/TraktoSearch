@@ -161,6 +161,10 @@ fun MainScreen(
         animationSpec = tween(durationMillis = 200),
         label = "fabOffset"
     )
+    // 进入搜索结果页时重置底部导航为可见
+    LaunchedEffect(showTraktSearch) {
+        if (showTraktSearch) isFabVisible = 1f
+    }
 
     val nestedScrollConnection = remember {
         object : NestedScrollConnection {

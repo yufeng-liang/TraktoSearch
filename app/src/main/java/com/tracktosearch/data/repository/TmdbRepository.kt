@@ -256,6 +256,7 @@ class TmdbRepository @Inject constructor(
                 MediaType.MOVIE -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage())
                 MediaType.SHOW -> tmdbApiService.getCredits(tmdbId, language = getTmdbLanguage())
                 MediaType.PERSON -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage()) // fallback
+                MediaType.DISK -> return null
             }
             if (response.isSuccessful) {
                 response.body()?.also { creditsCache.put(key, it) }
@@ -273,6 +274,7 @@ class TmdbRepository @Inject constructor(
                 MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
                 MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
                 MediaType.PERSON -> tmdbApiService.getMovieReviews(tmdbId, page) // fallback
+                MediaType.DISK -> return null
             }
             if (response.isSuccessful) {
                 response.body()?.also { reviewsCache.put(key, it) }

@@ -232,8 +232,8 @@ fun SearchScreen(
                 .hazeSource(state = hazeState),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp）
-            Spacer(modifier = Modifier.height(180.dp))
+            // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp + 缓冲）
+            Spacer(modifier = Modifier.height(260.dp))
 
             // Content below search box
             Column(

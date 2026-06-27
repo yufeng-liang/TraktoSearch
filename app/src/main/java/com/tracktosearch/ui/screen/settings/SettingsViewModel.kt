@@ -365,12 +365,14 @@ class SettingsViewModel @Inject constructor(
                             MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
                             MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
                             MediaType.PERSON -> Result.failure(Exception("Person not supported"))
+                            MediaType.DISK -> Result.failure(Exception("DISK not supported"))
                         }
                         val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
                             when (mediaType) {
                                 MediaType.MOVIE -> result.movie?.ids?.trakt
                                 MediaType.SHOW -> result.show?.ids?.trakt
                                 MediaType.PERSON -> null
+                                MediaType.DISK -> null
                             }
                         }
                         if (traktId != null && traktId > 0) {
@@ -446,6 +448,7 @@ class SettingsViewModel @Inject constructor(
                                     MediaType.MOVIE -> result.movie?.ids?.trakt
                                     MediaType.SHOW -> result.show?.ids?.trakt
                                     MediaType.PERSON -> null
+                                    MediaType.DISK -> null
                                 }
                             }
                         } else {
@@ -454,12 +457,14 @@ class SettingsViewModel @Inject constructor(
                                 MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
                                 MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
                                 MediaType.PERSON -> Result.failure(Exception("Person not supported"))
+                                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
                             }
                             searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
                                 when (mediaType) {
                                     MediaType.MOVIE -> result.movie?.ids?.trakt
                                     MediaType.SHOW -> result.show?.ids?.trakt
                                     MediaType.PERSON -> null
+                                    MediaType.DISK -> null
                                 }
                             }
                         }

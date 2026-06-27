@@ -1,7 +1,14 @@
 package com.tracktosearch.ui.screen.traktsearch
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -38,23 +45,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.dto.ResourceType
+import com.tracktosearch.data.remote.dto.inferResourceType
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import androidx.compose.foundation.background
 import androidx.compose.ui.platform.LocalView
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TraktSearchScreen(
     initialQuery: String,
@@ -70,7 +76,6 @@ fun TraktSearchScreen(
     val view = LocalView.current
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
-    val hazeState = remember { HazeState() }
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
 
@@ -83,12 +88,14 @@ fun TraktSearchScreen(
         MediaType.MOVIE -> 0
         MediaType.SHOW -> 1
         MediaType.PERSON -> 2
+        MediaType.DISK -> 3
     }
-    val pagerState = rememberPagerState(initialPage = initialPage) { 3 }
+    val pagerState = rememberPagerState(initialPage = initialPage) { 4 }
 
     val movieGridState = rememberLazyGridState()
     val showGridState = rememberLazyGridState()
     val personGridState = rememberLazyGridState()
+    val diskListState = rememberLazyListState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val traktCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -96,10 +103,15 @@ fun TraktSearchScreen(
             val currentGridState = when (pagerState.currentPage) {
                 0 -> movieGridState
                 1 -> showGridState
-                else -> personGridState
+                2 -> personGridState
+                else -> null
             }
             traktCoroutineScope.launch {
-                currentGridState.animateScrollToItem(0)
+                if (currentGridState != null) {
+                    currentGridState.animateScrollToItem(0)
+                } else {
+                    diskListState.animateScrollToItem(0)
+                }
             }
         }
         onDispose {
@@ -112,7 +124,8 @@ fun TraktSearchScreen(
         val targetTab = when (pagerState.currentPage) {
             0 -> MediaType.MOVIE
             1 -> MediaType.SHOW
-            else -> MediaType.PERSON
+            2 -> MediaType.PERSON
+            else -> MediaType.DISK
         }
         if (uiState.selectedTab != targetTab) {
             viewModel.switchTab(targetTab)
@@ -125,33 +138,73 @@ fun TraktSearchScreen(
             MediaType.MOVIE -> 0
             MediaType.SHOW -> 1
             MediaType.PERSON -> 2
+            MediaType.DISK -> 3
         }
         if (pagerState.currentPage != targetPage) {
             pagerState.animateScrollToPage(targetPage)
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(
-                if (!inlineMode) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier
-            )
-    ) {
-        // Main content area (hazeSource)
+    Scaffold(
+        contentWindowInsets = if (inlineMode) WindowInsets(0) else ScaffoldDefaults.contentWindowInsets,
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = {
+                        Text(
+                            when (uiState.selectedTab) {
+                                MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
+                                MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
+                                MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
+                                MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
+                            }
+                        )
+                    },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            if (searchQuery.isNotBlank()) {
+                                viewModel.search(searchQuery)
+                            }
+                        }
+                    ),
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            if (searchQuery.isNotBlank()) {
+                                viewModel.search(searchQuery)
+                            }
+                        }) {
+                            Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                        }
+                    }
+                )
+            }
+        }
+    ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState)
+                .padding(paddingValues)
         ) {
-            // 顶部留空给搜索框 + Tab 覆盖层
-            Spacer(modifier = Modifier.height(72.dp))
-
-            // 电影/电视剧/人物 Tab
+            // 电影/电视剧/人物/网盘 Tab
             val selectedTabIndex = when (uiState.selectedTab) {
                 MediaType.MOVIE -> 0
                 MediaType.SHOW -> 1
                 MediaType.PERSON -> 2
+                MediaType.DISK -> 3
             }
             PrimaryTabRow(
                 selectedTabIndex = selectedTabIndex,
@@ -193,6 +246,18 @@ fun TraktSearchScreen(
                         }
                     }
                 )
+                Tab(
+                    selected = uiState.selectedTab == MediaType.DISK,
+                    onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.DISK) },
+                    text = {
+                        val count = uiState.diskState.resources.size
+                        if (count > 0 && uiState.diskState.hasSearched) {
+                            Text(stringResource(R.string.trakt_search_tab_disk_count, count))
+                        } else {
+                            Text(stringResource(R.string.trakt_search_tab_disk))
+                        }
+                    }
+                )
             }
 
             // 左右滑动切换 Tab 内容
@@ -203,12 +268,25 @@ fun TraktSearchScreen(
                 val pageType = when (page) {
                     0 -> MediaType.MOVIE
                     1 -> MediaType.SHOW
-                    else -> MediaType.PERSON
+                    2 -> MediaType.PERSON
+                    else -> MediaType.DISK
                 }
+
+                if (pageType == MediaType.DISK) {
+                    // 网盘搜索结果页面
+                    DiskSearchContent(
+                        diskState = uiState.diskState,
+                        onTypeFilterChange = { viewModel.setDiskResourceTypeFilter(it) },
+                        onDiskTypeFilterChange = { viewModel.setDiskTypeFilter(it) },
+                        onItemClick = { openResourceLink(context, it) },
+                        listState = diskListState
+                    )
+                } else {
                 val tabState = when (pageType) {
                     MediaType.MOVIE -> uiState.movieState
                     MediaType.SHOW -> uiState.showState
                     MediaType.PERSON -> uiState.personState
+                    MediaType.DISK -> SearchTabState()
                 }
 
                 when {
@@ -260,6 +338,7 @@ fun TraktSearchScreen(
                                     MediaType.MOVIE -> stringResource(R.string.trakt_search_no_movies)
                                     MediaType.SHOW -> stringResource(R.string.trakt_search_no_shows)
                                     MediaType.PERSON -> stringResource(R.string.trakt_search_no_persons)
+                                    MediaType.DISK -> stringResource(R.string.trakt_search_no_movies)
                                 },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -273,6 +352,7 @@ fun TraktSearchScreen(
                             MediaType.MOVIE -> movieGridState
                             MediaType.SHOW -> showGridState
                             MediaType.PERSON -> personGridState
+                            MediaType.DISK -> movieGridState
                         }
 
                         // 自动触发加载更多
@@ -365,55 +445,204 @@ fun TraktSearchScreen(
                         }
                     }
                 }
+            } // end if (pageType != DISK)
             }
         }
+    }
+}
 
-        // Haze 模糊覆盖层（搜索框区域）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .hazeEffect(state = hazeState, style = HazeMaterials.thin())
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-                placeholder = {
-                    Text(
-                        when (uiState.selectedTab) {
-                            MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
-                            MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
-                            MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DiskSearchContent(
+    diskState: com.tracktosearch.ui.screen.traktsearch.DiskSearchState,
+    onTypeFilterChange: (ResourceType) -> Unit,
+    onDiskTypeFilterChange: (DiskType?) -> Unit,
+    onItemClick: (ResourceItem) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState()
+) {
+    val view = LocalView.current
+
+    val filteredResources = remember(diskState.resources, diskState.diskTypeFilter, diskState.typeFilter) {
+        diskState.resources
+            .let { rs ->
+                if (diskState.typeFilter != ResourceType.ALL) {
+                    rs.filter { inferResourceType(it.name) == diskState.typeFilter }
+                } else rs
+            }
+            .let { rs ->
+                if (diskState.diskTypeFilter != null) {
+                    rs.filter { it.diskType == diskState.diskTypeFilter }
+                } else rs
+            }
+    }
+
+    when {
+        diskState.isLoading -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        }
+        diskState.error != null -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    EmptyView(message = diskState.error!!)
+                }
+            }
+        }
+        diskState.resources.isEmpty() && diskState.hasSearched -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.search_no_results),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 24.dp)
+                )
+            }
+        }
+        else -> {
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(start = 8.dp, top = 4.dp, end = 8.dp, bottom = 80.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                stickyHeader {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        // 影视类型筛选
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_filter_type),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(64.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = diskState.typeFilter == ResourceType.ALL,
+                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
+                                        label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = diskState.typeFilter == ResourceType.MOVIE,
+                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
+                                        label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    )
+                                }
+                                item {
+                                    FilterChip(
+                                        selected = diskState.typeFilter == ResourceType.SHOW,
+                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
+                                        label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    )
+                                }
+                            }
                         }
-                    )
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(24.dp),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        if (searchQuery.isNotBlank()) {
-                            viewModel.search(searchQuery)
+                        // 网盘类型筛选
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_filter_disk),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(64.dp)
+                            )
+                            LazyRow(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = diskState.diskTypeFilter == null,
+                                        onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(null) },
+                                        label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                    )
+                                }
+                                items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
+                                    FilterChip(
+                                        selected = diskState.diskTypeFilter == type,
+                                        onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(type) },
+                                        label = {
+                                            val label = when (type) {
+                                                DiskType.QUARK -> stringResource(R.string.disk_quark)
+                                                DiskType.BAIDU -> stringResource(R.string.disk_baidu)
+                                                DiskType.ALI -> stringResource(R.string.disk_ali)
+                                                DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
+                                                DiskType.UC -> stringResource(R.string.disk_uc)
+                                                DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
+                                                DiskType.MAGNET -> stringResource(R.string.disk_magnet)
+                                                DiskType.OTHER -> stringResource(R.string.disk_other)
+                                            }
+                                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    )
+                                }
+                            }
                         }
-                    }
-                ),
-                trailingIcon = {
-                    IconButton(onClick = {
-                        if (searchQuery.isNotBlank()) {
-                            viewModel.search(searchQuery)
-                        }
-                    }) {
-                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
                     }
                 }
-            )
+                itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
+                    ResourceItemCard(
+                        item = item,
+                        isViewed = false,
+                        index = index,
+                        onClick = { onItemClick(item) }
+                    )
+                }
+            }
         }
     }
+}
+
+private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
+    val url = item.url
+    val appPackages = when (item.diskType) {
+        DiskType.QUARK -> listOf("com.quark.clouddrive", "com.quark.browser")
+        DiskType.BAIDU -> listOf("com.baidu.netdisk")
+        DiskType.ALI -> listOf("com.alicloud.databox")
+        DiskType.XUNLEI -> listOf("com.xunlei.downloadprovider", "com.xunlei.browser")
+        DiskType.UC -> listOf("com.UCMobile")
+        DiskType.ONEONEFIVE -> listOf("com.crland.app")
+        DiskType.MAGNET, DiskType.OTHER -> emptyList()
+    }
+    for (pkg in appPackages) {
+        try {
+            val appIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                setPackage(pkg)
+                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            if (appIntent.resolveActivity(context.packageManager) != null) {
+                context.startActivity(appIntent)
+                return
+            }
+        } catch (_: Exception) {}
+    }
+    try {
+        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(browserIntent)
+    } catch (_: Exception) {}
 }
 
 @Composable

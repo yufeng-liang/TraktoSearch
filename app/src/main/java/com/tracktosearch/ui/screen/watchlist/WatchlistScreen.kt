@@ -513,7 +513,7 @@ fun WatchlistScreen(
                 WatchlistSkeletonGrid(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 173.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
+                        .padding(top = 165.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
                 )
             }
         }

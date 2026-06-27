@@ -315,6 +315,7 @@ class DetailViewModel @Inject constructor(
                             EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country)
                         }
                         MediaType.PERSON -> null
+                        MediaType.DISK -> null
                     }
                 }.getOrNull()
 
@@ -582,6 +583,7 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> tmdbRepository.getMovieVideos(currentTmdbId)
                         MediaType.SHOW -> tmdbRepository.getTvVideos(currentTmdbId)
                         MediaType.PERSON -> emptyList()
+                        MediaType.DISK -> emptyList()
                     }
                 }
                 val imagesDeferred = async {
@@ -589,6 +591,7 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> tmdbRepository.getMovieImages(currentTmdbId)
                         MediaType.SHOW -> tmdbRepository.getTvImages(currentTmdbId)
                         MediaType.PERSON -> emptyList()
+                        MediaType.DISK -> emptyList()
                     }
                 }
                 // Trakt 数据源（补充）
@@ -763,6 +766,7 @@ class DetailViewModel @Inject constructor(
                         tmdbItems + traktItems.filter { it.tmdbId !in seenTmdbIds }
                     }
                     MediaType.PERSON -> emptyList()
+                    MediaType.DISK -> emptyList()
                 }
 
                 val filtered = enriched.filter { it.tmdbId > 0 }

@@ -362,3 +362,18 @@ data class TraktListIds(
 data class TraktListUser(
     val username: String = ""
 )
+
+@Serializable
+data class TraktUserStatsResponse(
+    val movies: TraktStatsDetail = TraktStatsDetail(),
+    val shows: TraktStatsDetail = TraktStatsDetail(),
+    val episodes: TraktStatsDetail = TraktStatsDetail()
+)
+
+@Serializable
+data class TraktStatsDetail(
+    val watched: Int = 0,
+    val collected: Int = 0,
+    val ratings: Int = 0,
+    val minutes: Int = 0
+)

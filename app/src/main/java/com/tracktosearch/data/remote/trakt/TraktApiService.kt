@@ -192,6 +192,19 @@ interface TraktApiService {
         @Query("page") page: Int = 1
     ): Response<List<TraktTrendingListResponse>>
 
+    // 用户统计
+    @GET("users/{id}/stats")
+    suspend fun getUserStats(
+        @Path("id") userId: String = "me"
+    ): Response<TraktUserStatsResponse>
+
+    // 全量评分
+    @GET("sync/ratings/movies")
+    suspend fun getAllMovieRatings(): Response<List<TraktRatingItem>>
+
+    @GET("sync/ratings/shows")
+    suspend fun getAllShowRatings(): Response<List<TraktRatingItem>>
+
     @GET("movies/{id}/videos")
     suspend fun getMovieVideos(@Path("id") id: String): Response<List<TraktVideo>>
 
