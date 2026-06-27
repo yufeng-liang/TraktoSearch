@@ -19,23 +19,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.animateLottieCompositionAsState
+import com.airbnb.lottie.compose.rememberLottieComposition
 import kotlinx.coroutines.delay
-
-// TODO: Lottie 依赖未配置，暂时用简单占位替代。添加 lottie-compose 依赖后恢复原实现。
 
 /**
  * 全屏彩蛋 Overlay
  *
- * 点击白云后弹出，显示趣味文案。
- * 点击蒙层 / 返回键 / 超时后自动关闭。
- * TODO: 配置 Lottie 依赖后恢复动画实现。
+ * 点击白云后弹出，播放治愈 Lottie 动画 + 趣味文案。
+ * 点击蒙层 / 返回键 / 动画播完自动关闭。
  */
 @Composable
 fun CloudOverlay(
@@ -48,12 +47,26 @@ fun CloudOverlay(
     // 返回键关闭
     BackHandler(enabled = visible) { onDismiss() }
 
-    // 使用 Box 包裹 AnimatedVisibility，避免 ColumnScope 上下文问题
     AnimatedVisibility(
         visible = visible,
         enter = fadeIn(animationSpec = androidx.compose.animation.core.tween(200)),
         exit = fadeOut(animationSpec = androidx.compose.animation.core.tween(200))
     ) {
+        val res = easterEggRes ?: return@AnimatedVisibility
+        val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(res))
+        val progress by animateLottieCompositionAsState(
+            composition = composition,
+            iterations = 1
+        )
+
+        // 动画播完自动关闭
+        LaunchedEffect(progress) {
+            if (progress >= 1f) {
+                delay(300)
+                onDismiss()
+            }
+        }
+
         // 3 秒超时自动关闭
         LaunchedEffect(Unit) {
             delay(3000)
@@ -75,21 +88,11 @@ fun CloudOverlay(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = 32.dp)
             ) {
-                // Lottie 动画占位
-                Box(
-                    modifier = Modifier
-                        .size(300.dp)
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            shape = MaterialTheme.shapes.extraLarge
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "☁️",
-                        style = MaterialTheme.typography.displayLarge
-                    )
-                }
+                LottieAnimation(
+                    composition = composition,
+                    progress = { progress },
+                    modifier = Modifier.size(300.dp)
+                )
 
                 Spacer(modifier = Modifier.height(24.dp))
 

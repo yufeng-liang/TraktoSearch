@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.rememberShimmerBrush
 import androidx.compose.ui.platform.LocalView
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -1129,28 +1130,18 @@ private fun heatmapColor(count: Int, primary: Color, emptyColor: Color): Color {
     }
 }
 
-/** 骨架屏：加载中的占位界面 */
+/** 骨架屏：加载中的占位界面，颜色风格与发现页一致 */
 @Composable
 private fun StatisticsSkeleton() {
-    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue = 0.7f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1000)
-        ),
-        label = "skeletonAlpha"
-    )
-    val skeletonColor = MaterialTheme.colorScheme.surfaceVariant
+    val brush = rememberShimmerBrush()
+    val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        contentPadding = PaddingValues(top = 80.dp, bottom = 16.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 65.dp + statusBarHeight, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 概览卡片占位
+        // 概览卡片占位（3个，和 OverviewCards 一致）
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1162,39 +1153,63 @@ private fun StatisticsSkeleton() {
                             .weight(1f)
                             .height(80.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(skeletonColor.copy(alpha = alpha))
+                            .background(brush)
                     )
                 }
             }
         }
 
-        // 观影时长 + 评分统计占位
+        // 观影时长占位
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(100.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(skeletonColor.copy(alpha = alpha))
-            )
-        }
-        item {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(140.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(skeletonColor.copy(alpha = alpha))
-            )
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Box(modifier = Modifier.fillMaxWidth(0.4f).height(32.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(0.6f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                }
+            }
         }
 
-        // 热力图占位（7行 x 13列网格）
+        // 评分统计占位
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(skeletonColor.copy(alpha = alpha))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(modifier = Modifier.fillMaxWidth(0.5f).height(16.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    Box(modifier = Modifier.fillMaxWidth(0.3f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    repeat(5) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.width(28.dp).height(10.dp).clip(RoundedCornerShape(4.dp)).background(brush))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Box(modifier = Modifier.weight(1f).height(10.dp).clip(RoundedCornerShape(5.dp)).background(brush))
+                        }
+                    }
+                }
+            }
+        }
+
+        // 热力图占位
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1205,7 +1220,7 @@ private fun StatisticsSkeleton() {
                                     modifier = Modifier
                                         .size(20.dp)
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                                        .background(brush)
                                 )
                             }
                         }
@@ -1220,7 +1235,7 @@ private fun StatisticsSkeleton() {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(skeletonColor.copy(alpha = alpha))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(16.dp)
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1228,43 +1243,30 @@ private fun StatisticsSkeleton() {
                         modifier = Modifier
                             .size(200.dp)
                             .clip(RoundedCornerShape(100.dp))
-                            .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                            .background(brush)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     repeat(5) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .clip(RoundedCornerShape(2.dp))
-                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
-                            )
+                            Box(modifier = Modifier.size(12.dp).clip(RoundedCornerShape(2.dp)).background(brush))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
-                            )
+                            Box(modifier = Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
                         }
                     }
                 }
             }
         }
 
-        // 柱状图排名占位（宽度递减）
+        // 柱状图排名占位
         item {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(skeletonColor.copy(alpha = alpha))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .padding(16.dp)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1274,20 +1276,9 @@ private fun StatisticsSkeleton() {
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
-                            )
+                            Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(4.dp)).background(brush))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(fraction)
-                                    .height(14.dp)
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
-                            )
+                            Box(modifier = Modifier.fillMaxWidth(fraction).height(14.dp).clip(RoundedCornerShape(4.dp)).background(brush))
                         }
                     }
                 }
