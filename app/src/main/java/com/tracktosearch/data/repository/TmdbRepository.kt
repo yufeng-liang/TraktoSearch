@@ -70,6 +70,7 @@ class TmdbRepository @Inject constructor(
     private val popularMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
     private val upcomingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
     private val topRatedMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
+    private val trendingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
 
     data class MovieEnrichment(
         val posterUrl: String?,
@@ -387,6 +388,24 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) response.body() else null
         } catch (_: Exception) {
             null
+        }
+    }
+
+    /** 趋势电影（今日/本周） */
+    suspend fun getTrendingMovies(timeWindow: String = "day"): List<TmdbSearchResult> {
+        trendingMoviesCache.get(timeWindow)?.let { return it }
+        return try {
+            val response = tmdbApiService.getTrendingMovies(
+                timeWindow = timeWindow,
+                language = getTmdbLanguage()
+            )
+            if (response.isSuccessful) {
+                val results = response.body()?.results ?: emptyList()
+                trendingMoviesCache.put(timeWindow, results)
+                results
+            } else emptyList()
+        } catch (_: Exception) {
+            emptyList()
         }
     }
 

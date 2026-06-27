@@ -204,7 +204,6 @@ fun WatchlistScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .hazeSource(state = hazeState)
         ) {
             val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
@@ -220,7 +219,9 @@ fun WatchlistScreen(
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState)
             ) {
                 // 根据 selectedMode 和 selectedTab 渲染对应列表
                 val items = currentItems

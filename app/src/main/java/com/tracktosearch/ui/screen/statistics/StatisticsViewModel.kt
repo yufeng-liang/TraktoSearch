@@ -29,6 +29,10 @@ data class StatisticsUiState(
     val thisYearWatched: Int = 0,
     val genreDistribution: Map<String, Int> = emptyMap(),
     val heatmapData: Map<String, Int> = emptyMap(),
+    val totalWatchMinutes: Long = 0,
+    val totalRatings: Int = 0,
+    val averageRating: Double = 0.0,
+    val ratingDistribution: Map<Int, Int> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -148,6 +152,18 @@ class StatisticsViewModel @Inject constructor(
                     }
                 }
 
+                // 总观影时长（分钟）
+                val movieMinutes = movies.sumOf { it.movie.runtime.toLong() }
+                val showMinutes = shows.sumOf { it.show.runtime.toLong() }
+                val totalWatchMinutes = movieMinutes + showMinutes
+
+                // 用户评分统计
+                val ratingsResult = traktRepository.getAllUserRatings()
+                val allRatings = ratingsResult.getOrElse { emptyList() }
+                val totalRatings = allRatings.size
+                val averageRating = if (totalRatings > 0) allRatings.map { it.rating }.average() else 0.0
+                val ratingDistribution = allRatings.groupBy { it.rating }.mapValues { it.value.size }
+
                 // 热力图数据：过去 365 天每天的观看次数
                 val heatmapData = mutableMapOf<String, Int>()
                 val dateKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -167,6 +183,10 @@ class StatisticsViewModel @Inject constructor(
                         .sortedByDescending { it.second }
                         .toMap(),
                     heatmapData = heatmapData.toMap(),
+                    totalWatchMinutes = totalWatchMinutes,
+                    totalRatings = totalRatings,
+                    averageRating = averageRating,
+                    ratingDistribution = ratingDistribution,
                     isLoading = false,
                     error = null
                 )

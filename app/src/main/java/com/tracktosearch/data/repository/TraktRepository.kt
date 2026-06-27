@@ -567,6 +567,24 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /** 批量获取用户所有评分（电影 + 电视剧） */
+    suspend fun getAllUserRatings(): Result<List<TraktRatingItem>> {
+        return try {
+            val movieResponse = traktApiService.getRatings("movies")
+            val showResponse = traktApiService.getRatings("shows")
+            val allRatings = mutableListOf<TraktRatingItem>()
+            if (movieResponse.isSuccessful) {
+                allRatings.addAll(movieResponse.body() ?: emptyList())
+            }
+            if (showResponse.isSuccessful) {
+                allRatings.addAll(showResponse.body() ?: emptyList())
+            }
+            Result.success(allRatings)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** Trakt 文本搜索（电影） */
     suspend fun searchMovies(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
         return try {
@@ -690,6 +708,16 @@ class TraktRepository @Inject constructor(
     suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
         return try {
             val response = traktApiService.getShowRecommendations(limit = limit)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取社区热门列表 */
+    suspend fun getTrendingLists(limit: Int = 10, page: Int = 1): Result<List<TraktTrendingListResponse>> {
+        return try {
+            val response = traktApiService.getTrendingLists(limit = limit, page = page)
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else Result.failure(Exception("HTTP ${response.code()}"))

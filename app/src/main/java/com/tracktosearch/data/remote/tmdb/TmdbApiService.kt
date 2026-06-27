@@ -96,6 +96,13 @@ interface TmdbApiService {
         @Query("page") page: Int = 1
     ): Response<TmdbMultiSearchResponse>
 
+    @GET("trending/movie/{time_window}")
+    suspend fun getTrendingMovies(
+        @Path("time_window") timeWindow: String = "day",
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1
+    ): Response<TmdbSearchResponse>
+
     @GET("movie/popular")
     suspend fun getPopularMovies(
         @Query("language") language: String = "zh-CN",

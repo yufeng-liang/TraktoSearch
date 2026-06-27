@@ -19,6 +19,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
@@ -52,6 +53,9 @@ data class DiscoverUiState(
     val traktAnticipatedMovies: List<TraktAnticipatedMovieResponse> = emptyList(),
     val traktAnticipatedShows: List<TraktAnticipatedShowResponse> = emptyList(),
     val traktShowRecommendations: List<TraktRecommendationShowResponse> = emptyList(),
+    val trendingTimeWindow: String = "day",
+    val trendingLists: List<TraktTrendingListResponse> = emptyList(),
+    val isLoadingTraktLists: Boolean = false,
     val popularTotal: Int = 0,
     val upcomingTotal: Int = 0,
     val recommendationsTotal: Int = 0,
@@ -133,12 +137,14 @@ class DiscoverViewModel @Inject constructor(
 
         // 豆瓣热榜：任一豆瓣栏目可见则加载
         if (DOUBAN_CATEGORIES.any { it in visibleIds }) loadDoubanHot()
-        // TMDB 热门电影
+        // TMDB 热门电影（使用趋势榜 API）
         if ("tmdb-popular" in visibleIds) loadTmdbPopular()
         // TMDB 即将上映
         if ("tmdb-upcoming" in visibleIds) loadTmdbUpcoming()
         // Trakt 推荐电影
         if ("trakt-recommendations" in visibleIds) loadTraktRecommendations()
+        // 社区热门列表
+        if ("trakt-lists" in visibleIds) loadTraktLists()
         // Trakt 数据（趋势/期待/剧集推荐）
         val traktSectionIds = listOf("trakt-trending-movies", "trakt-trending-shows", "trakt-anticipated", "trakt-show-recommendations")
         if (traktSectionIds.any { it in visibleIds }) loadTraktData()
@@ -275,10 +281,11 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadTmdbPopular() {
+        val timeWindow = _uiState.value.trendingTimeWindow
         _uiState.value = _uiState.value.copy(isLoadingPopular = true, popularError = null)
         viewModelScope.launch {
             try {
-                val movies = tmdbRepository.getPopularMovies()
+                val movies = tmdbRepository.getTrendingMovies(timeWindow = timeWindow)
                 _uiState.value = _uiState.value.copy(
                     tmdbPopularMovies = movies,
                     isLoadingPopular = false,
@@ -291,6 +298,13 @@ class DiscoverViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** 切换趋势榜时间窗口（今日/本周） */
+    fun switchTrendingTimeWindow(timeWindow: String) {
+        if (_uiState.value.trendingTimeWindow == timeWindow) return
+        _uiState.value = _uiState.value.copy(trendingTimeWindow = timeWindow)
+        loadTmdbPopular()
     }
 
     fun loadTmdbUpcoming() {
@@ -415,6 +429,26 @@ class DiscoverViewModel @Inject constructor(
                 )
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
+            }
+        }
+    }
+
+    /** 加载社区热门列表 */
+    fun loadTraktLists() {
+        _uiState.value = _uiState.value.copy(isLoadingTraktLists = true)
+        viewModelScope.launch {
+            try {
+                val result = traktRepository.getTrendingLists(limit = 10)
+                result.onSuccess { lists ->
+                    _uiState.value = _uiState.value.copy(
+                        trendingLists = lists,
+                        isLoadingTraktLists = false
+                    )
+                }.onFailure {
+                    _uiState.value = _uiState.value.copy(isLoadingTraktLists = false)
+                }
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingTraktLists = false)
             }
         }
     }

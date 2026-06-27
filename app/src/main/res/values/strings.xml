@@ -453,6 +453,12 @@
     <string name="statistics_heatmap">Watching Heatmap</string>
     <string name="statistics_genre_distribution">Genre Distribution</string>
     <string name="statistics_genre_ranking">Top Genres</string>
+    <string name="statistics_total_watch_time">Total Watch Time</string>
+    <string name="statistics_watch_hours">%d hours</string>
+    <string name="statistics_watch_days">≈%d days non-stop</string>
+    <string name="statistics_ratings">Rating Stats</string>
+    <string name="statistics_ratings_count">You rated %d times</string>
+    <string name="statistics_avg_rating">Average %.1f</string>
     <string name="statistics_less">Less</string>
     <string name="statistics_more">More</string>
     <string name="statistics_info">Statistics Guide</string>
@@ -548,6 +554,11 @@
     <string name="discover_trakt_recommendations_shows">Recommended Shows for You</string>
     <string name="discover_watchers">%1$d watchers</string>
     <string name="discover_list_count">%1$d lists</string>
+    <string name="discover_trending">Trending</string>
+    <string name="discover_trending_day">Today</string>
+    <string name="discover_trending_week">This Week</string>
+    <string name="discover_trending_lists">Community Lists</string>
+    <string name="common_view_all">View all</string>
 
     <!-- Search Source Type -->
     <string name="search_type_disk">Cloud Resources</string>

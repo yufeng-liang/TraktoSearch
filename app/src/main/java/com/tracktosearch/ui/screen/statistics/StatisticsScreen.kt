@@ -4,11 +4,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -91,7 +95,9 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (uiState.error != null) {
+            if (uiState.isLoading) {
+                StatisticsSkeleton()
+            } else if (uiState.error != null) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -146,6 +152,30 @@ fun StatisticsScreen(
                         }
                     }
                     OverviewCards(uiState, isVisible)
+                }
+
+                // 观影时长
+                item(key = "watch_time") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "watch_time" }
+                        }
+                    }
+                    SectionCard(title = stringResource(R.string.statistics_total_watch_time)) {
+                        WatchTimeCard(uiState = uiState, isVisible = isVisible)
+                    }
+                }
+
+                // 评分统计
+                item(key = "ratings") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ratings" }
+                        }
+                    }
+                    SectionCard(title = stringResource(R.string.statistics_ratings)) {
+                        RatingStatsCard(uiState = uiState, isVisible = isVisible)
+                    }
                 }
 
                 // 热力图
@@ -882,6 +912,42 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
                         }
                     }
                 }
+                .pointerInput(weekOffset) {
+                    val dragThresholdPx = with(density) { 50.dp.toPx() }
+                    var totalDrag = 0f
+                    var triggered = false
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            totalDrag = 0f
+                            triggered = false
+                        },
+                        onDragEnd = {
+                            totalDrag = 0f
+                            triggered = false
+                        },
+                        onDragCancel = {
+                            totalDrag = 0f
+                            triggered = false
+                        },
+                        onHorizontalDrag = { _, dragAmount ->
+                            if (triggered) return@detectHorizontalDragGestures
+                            totalDrag += dragAmount
+                            if (totalDrag < -dragThresholdPx) {
+                                // 向左滑：看更近日期
+                                if (canGoForward) {
+                                    weekOffset += 13
+                                    view.performHaptic(HapticType.CLICK)
+                                }
+                                triggered = true
+                            } else if (totalDrag > dragThresholdPx) {
+                                // 向右滑：看更早日期
+                                weekOffset -= 13
+                                view.performHaptic(HapticType.CLICK)
+                                triggered = true
+                            }
+                        }
+                    )
+                }
         ) {
             // 1. 绘制月份标签
             monthLabels.forEach { (startWeekIndex, label) ->
@@ -1060,5 +1126,271 @@ private fun heatmapColor(count: Int, primary: Color, emptyColor: Color): Color {
         count <= 5 -> primary.copy(alpha = 0.5f)
         count <= 9 -> primary.copy(alpha = 0.75f)
         else -> primary
+    }
+}
+
+/** 骨架屏：加载中的占位界面 */
+@Composable
+private fun StatisticsSkeleton() {
+    val infiniteTransition = rememberInfiniteTransition(label = "skeleton")
+    val alpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 0.7f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000)
+        ),
+        label = "skeletonAlpha"
+    )
+    val skeletonColor = MaterialTheme.colorScheme.surfaceVariant
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(top = 80.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 概览卡片占位
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(80.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(skeletonColor.copy(alpha = alpha))
+                    )
+                }
+            }
+        }
+
+        // 观影时长 + 评分统计占位
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(skeletonColor.copy(alpha = alpha))
+            )
+        }
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(skeletonColor.copy(alpha = alpha))
+            )
+        }
+
+        // 热力图占位（7行 x 13列网格）
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(skeletonColor.copy(alpha = alpha))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    repeat(7) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            repeat(13) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 饼图占位
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(skeletonColor.copy(alpha = alpha))
+                    .padding(16.dp)
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    repeat(5) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 柱状图排名占位（宽度递减）
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(skeletonColor.copy(alpha = alpha))
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val widths = listOf(1f, 0.92f, 0.84f, 0.76f, 0.68f, 0.6f, 0.52f, 0.44f, 0.36f, 0.28f)
+                    widths.forEach { fraction ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction)
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(skeletonColor.copy(alpha = alpha * 0.6f))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 观影时长卡片 */
+@Composable
+private fun WatchTimeCard(uiState: StatisticsUiState, isVisible: Boolean) {
+    val totalHours = uiState.totalWatchMinutes / 60
+    val totalDays = totalHours / 24
+
+    val animatedHours by animateIntAsState(
+        targetValue = if (isVisible) totalHours.toInt() else 0,
+        animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
+        label = "watchHours"
+    )
+
+    Column {
+        Text(
+            text = stringResource(R.string.statistics_watch_hours, animatedHours),
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (totalDays > 0) {
+            Text(
+                text = stringResource(R.string.statistics_watch_days, totalDays.toInt()),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/** 评分统计卡片 */
+@Composable
+private fun RatingStatsCard(uiState: StatisticsUiState, isVisible: Boolean) {
+    val maxCount = uiState.ratingDistribution.values.maxOrNull() ?: 1
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.statistics_ratings_count, uiState.totalRatings),
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = stringResource(R.string.statistics_avg_rating, uiState.averageRating),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 水平条形分布图（10分到1分）
+        (10 downTo 1).forEach { rating ->
+            val count = uiState.ratingDistribution[rating] ?: 0
+            val animatedFraction by animateFloatAsState(
+                targetValue = if (isVisible) count.toFloat() / maxCount.toFloat() else 0f,
+                animationSpec = tween(
+                    durationMillis = 1200,
+                    delayMillis = (10 - rating) * 80,
+                    easing = LinearOutSlowInEasing
+                ),
+                label = "ratingBar$rating"
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${rating}★",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(28.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(animatedFraction)
+                            .fillMaxHeight()
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                }
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(32.dp),
+                    textAlign = TextAlign.End,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

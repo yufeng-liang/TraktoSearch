@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
@@ -35,6 +36,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -51,6 +53,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
@@ -95,6 +98,7 @@ fun DiscoverScreen(
     var showTrendingShowsAll by remember { mutableStateOf(false) }
     var showAnticipatedAll by remember { mutableStateOf(false) }
     var showShowRecsAll by remember { mutableStateOf(false) }
+    var showTrendingListsAll by remember { mutableStateOf(false) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(showDoubanAllDialog) {
@@ -210,23 +214,44 @@ fun DiscoverScreen(
                                 }
                             }
                         }
-                        // 热门电影
+                        // 趋势电影（原热门电影，含今日/本周切换）
                         "tmdb-popular" -> {
                             item(key = "tmdb_popular") {
-                                TmdbMovieSection(
-                                    title = stringResource(R.string.discover_popular),
-                                    movies = uiState.tmdbPopularMovies,
-                                    isLoading = uiState.isLoadingPopular,
-                                    error = uiState.popularError,
-                                    resolvingItemId = uiState.resolvingTmdbId,
-                                    onItemClick = { movie ->
-                                        viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
-                                            onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
-                                        }
-                                    },
-                                    onRetry = { viewModel.loadTmdbPopular() },
-                                    onViewAll = { showPopularAll = true }
-                                )
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.discover_trending),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    SingleChoiceSegmentedButtonRow(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    ) {
+                                        SegmentedButton(
+                                            selected = uiState.trendingTimeWindow == "day",
+                                            onClick = { viewModel.switchTrendingTimeWindow("day") },
+                                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
+                                        ) { Text(stringResource(R.string.discover_trending_day)) }
+                                        SegmentedButton(
+                                            selected = uiState.trendingTimeWindow == "week",
+                                            onClick = { viewModel.switchTrendingTimeWindow("week") },
+                                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                                        ) { Text(stringResource(R.string.discover_trending_week)) }
+                                    }
+                                    TmdbMovieSection(
+                                        title = "",
+                                        movies = uiState.tmdbPopularMovies,
+                                        isLoading = uiState.isLoadingPopular,
+                                        error = uiState.popularError,
+                                        resolvingItemId = uiState.resolvingTmdbId,
+                                        onItemClick = { movie ->
+                                            viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
+                                                onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
+                                            }
+                                        },
+                                        onRetry = { viewModel.loadTmdbPopular() },
+                                        onViewAll = { showPopularAll = true }
+                                    )
+                                }
                             }
                         }
                         // 即将上映
@@ -339,6 +364,58 @@ fun DiscoverScreen(
                                     },
                                     onViewAll = { showShowRecsAll = true }
                                 )
+                            }
+                        }
+                        // 社区热门列表
+                        "trakt-lists" -> {
+                            item(key = "trakt_lists") {
+                                Column {
+                                    Text(
+                                        text = stringResource(R.string.discover_trending_lists),
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                    if (uiState.isLoadingTraktLists) {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+                                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                        }
+                                    } else {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            uiState.trendingLists.take(5).forEach { listResponse ->
+                                                Card(modifier = Modifier.fillMaxWidth()) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = listResponse.list.name,
+                                                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            Text(
+                                                                text = "${listResponse.list.item_count}部 · @${listResponse.list.user?.username ?: ""} · ❤${listResponse.like_count}",
+                                                                style = MaterialTheme.typography.bodySmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (uiState.trendingLists.isNotEmpty()) {
+                                                TextButton(
+                                                    onClick = { showTrendingListsAll = true },
+                                                    modifier = Modifier.align(Alignment.End)
+                                                ) {
+                                                    Text(stringResource(R.string.common_view_all))
+                                                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -526,6 +603,14 @@ fun DiscoverScreen(
                 }
             },
             onDismiss = { showShowRecsAll = false }
+        )
+    }
+
+    // 社区热门列表全部弹窗
+    if (showTrendingListsAll) {
+        TrendingListsAllSheet(
+            lists = uiState.trendingLists,
+            onDismiss = { showTrendingListsAll = false }
         )
     }
 
@@ -1426,4 +1511,68 @@ private fun SectionHeader(title: String) {
         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
         modifier = Modifier.padding(bottom = 8.dp)
     )
+}
+
+/** 社区热门列表全部弹窗 */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TrendingListsAllSheet(
+    lists: List<TraktTrendingListResponse>,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.discover_trending_lists),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.common_close))
+                }
+            }
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(lists) { _, listResponse ->
+                    Card(modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                            Text(
+                                text = listResponse.list.name,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "${listResponse.list.item_count}部 · @${listResponse.list.user?.username ?: ""} · ❤${listResponse.like_count}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            if (listResponse.list.description.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = listResponse.list.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

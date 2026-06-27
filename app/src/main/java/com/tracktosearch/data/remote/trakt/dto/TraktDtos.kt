@@ -19,6 +19,7 @@ data class TraktMovie(
     val year: Int = 0,
     val ids: TraktIds = TraktIds(),
     val rating: Double = 0.0,
+    val runtime: Int = 0,
     val genres: List<String> = emptyList(),
     @kotlinx.serialization.SerialName("poster_path")
     val posterPath: String? = null
@@ -30,6 +31,7 @@ data class TraktShow(
     val year: Int = 0,
     val ids: TraktIds = TraktIds(),
     val rating: Double = 0.0,
+    val runtime: Int = 0,
     val genres: List<String> = emptyList(),
     @kotlinx.serialization.SerialName("poster_path")
     val posterPath: String? = null
@@ -323,4 +325,40 @@ data class TraktAnticipatedShowResponse(
 @Serializable
 data class TraktRecommendationShowResponse(
     val show: TraktShow = TraktShow()
+)
+
+@Serializable
+data class TraktTrendingListResponse(
+    val like_count: Int = 0,
+    val comment_count: Int = 0,
+    val list: TraktListInfo = TraktListInfo()
+)
+
+@Serializable
+data class TraktListInfo(
+    val name: String = "",
+    val description: String = "",
+    val privacy: String = "",
+    val display_numbers: Boolean = false,
+    val allow_comments: Boolean = false,
+    val sort_by: String = "",
+    val sort_how: String = "",
+    val created_at: String = "",
+    val updated_at: String = "",
+    val item_count: Int = 0,
+    val comment_count: Int = 0,
+    val like_count: Int = 0,
+    val ids: TraktListIds = TraktListIds(),
+    val user: TraktListUser? = null
+)
+
+@Serializable
+data class TraktListIds(
+    val trakt: Int = 0,
+    val slug: String = ""
+)
+
+@Serializable
+data class TraktListUser(
+    val username: String = ""
 )

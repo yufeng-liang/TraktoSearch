@@ -149,6 +149,12 @@
     <string name="statistics_heatmap">視聴ヒートマップ</string>
     <string name="statistics_genre_distribution">ジャンル分布</string>
     <string name="statistics_genre_ranking">トップジャンル</string>
+    <string name="statistics_total_watch_time">総視聴時間</string>
+    <string name="statistics_watch_hours">%d時間</string>
+    <string name="statistics_watch_days">≈%d日間の視聴</string>
+    <string name="statistics_ratings">評価統計</string>
+    <string name="statistics_ratings_count">%d回評価しました</string>
+    <string name="statistics_avg_rating">平均 %.1f</string>
     <string name="statistics_less">少</string>
     <string name="statistics_more">多</string>
 
@@ -409,6 +415,11 @@
     <string name="discover_douban_top250">トップ250</string>
     <string name="discover_douban_us_box">全米興行収入</string>
     <string name="discover_view_all">すべて(%d) ></string>
+    <string name="discover_trending">トレンド映画</string>
+    <string name="discover_trending_day">今日</string>
+    <string name="discover_trending_week">今週</string>
+    <string name="discover_trending_lists">コミュニティリスト</string>
+    <string name="common_view_all">すべて見る</string>
 
     <!-- Search Source Type -->
     <string name="search_type_disk">クラウドリソース</string>

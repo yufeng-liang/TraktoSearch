@@ -39,7 +39,8 @@ class DiscoverSectionStorage @Inject constructor(
             "trakt-trending-shows",
             "trakt-anticipated",
             "trakt-recommendations",
-            "trakt-show-recommendations"
+            "trakt-show-recommendations",
+            "trakt-lists"
         )
 
         private val KEY_ORDER = stringPreferencesKey("section_order")

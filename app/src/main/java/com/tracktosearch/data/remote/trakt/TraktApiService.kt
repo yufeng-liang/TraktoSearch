@@ -186,6 +186,12 @@ interface TraktApiService {
         @Query("extended") extended: String = "full"
     ): Response<List<TraktRecommendationShowResponse>>
 
+    @GET("lists/trending")
+    suspend fun getTrendingLists(
+        @Query("limit") limit: Int = 10,
+        @Query("page") page: Int = 1
+    ): Response<List<TraktTrendingListResponse>>
+
     @GET("movies/{id}/videos")
     suspend fun getMovieVideos(@Path("id") id: String): Response<List<TraktVideo>>
 

@@ -453,6 +453,12 @@
     <string name="statistics_heatmap">观看热力图</string>
     <string name="statistics_genre_distribution">类型分布</string>
     <string name="statistics_genre_ranking">最常看的类型排行</string>
+    <string name="statistics_total_watch_time">总观影时长</string>
+    <string name="statistics_watch_hours">%d小时</string>
+    <string name="statistics_watch_days">≈%d天不间断观影</string>
+    <string name="statistics_ratings">评分统计</string>
+    <string name="statistics_ratings_count">你打了%d次分</string>
+    <string name="statistics_avg_rating">平均评分%.1f</string>
     <string name="statistics_less">少</string>
     <string name="statistics_more">多</string>
     <string name="statistics_info">统计说明</string>
@@ -548,6 +554,11 @@
     <string name="discover_trakt_recommendations_shows">为你推荐剧集</string>
     <string name="discover_watchers">%1$d 人在看</string>
     <string name="discover_list_count">%1$d 个列表</string>
+    <string name="discover_trending">趋势电影</string>
+    <string name="discover_trending_day">今日</string>
+    <string name="discover_trending_week">本周</string>
+    <string name="discover_trending_lists">社区热门列表</string>
+    <string name="common_view_all">查看全部</string>
 
     <!-- Search Source Type -->
     <string name="search_type_disk">网盘资源</string>
