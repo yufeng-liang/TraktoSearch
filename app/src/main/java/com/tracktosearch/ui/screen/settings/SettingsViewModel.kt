@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
+import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -71,11 +72,15 @@ class SettingsViewModel @Inject constructor(
     private val customSearchSourceStorage: CustomSearchSourceStorage,
     private val customSearchService: CustomSearchService,
     private val panHubConfigStorage: PanHubConfigStorage,
+    private val defaultTabStorage: DefaultTabStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     val themeMode: StateFlow<String> = themeStorage.themeMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStorage.MODE_SYSTEM)
+
+    val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DefaultTabStorage.DEFAULT_TAB_SEARCH)
 
     val language: StateFlow<String> = languageStorage.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LanguageStorage.LANGUAGE_SYSTEM)
@@ -103,6 +108,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch { themeStorage.setThemeMode(mode) }
+    }
+
+    fun setDefaultTab(tab: Int) {
+        viewModelScope.launch { defaultTabStorage.setDefaultTab(tab) }
     }
 
     fun setLanguage(language: String) {

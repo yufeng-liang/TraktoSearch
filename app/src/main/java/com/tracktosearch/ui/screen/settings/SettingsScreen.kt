@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
@@ -117,6 +118,7 @@ fun SettingsScreen(
 ) {
     val currentTheme by viewModel.themeMode.collectAsState()
     val currentLanguage by viewModel.language.collectAsState()
+    val currentDefaultTab by viewModel.defaultTab.collectAsState()
     val pansouEnabled by viewModel.pansouEnabled.collectAsState()
 
     LifecycleResumeEffect(Unit) {
@@ -132,6 +134,7 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showPanHubConfigDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showDefaultTabDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
@@ -256,6 +259,20 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_language),
                     subtitle = languageName,
                     onClick = { showLanguageDialog = true }
+                )
+            }
+            // 默认启动页
+            item {
+                val tabName = when (currentDefaultTab) {
+                    0 -> stringResource(R.string.tab_search)
+                    1 -> stringResource(R.string.tab_discover)
+                    else -> stringResource(R.string.tab_me)
+                }
+                SettingsItem(
+                    icon = Icons.Default.Home,
+                    title = stringResource(R.string.settings_default_tab),
+                    subtitle = tabName,
+                    onClick = { showDefaultTabDialog = true }
                 )
             }
 
@@ -583,6 +600,17 @@ fun SettingsScreen(
                 (context as? android.app.Activity)?.recreate()
             },
             onDismiss = { showLanguageDialog = false }
+        )
+    }
+
+    if (showDefaultTabDialog) {
+        DefaultTabSelectionDialog(
+            currentTab = currentDefaultTab,
+            onTabSelected = {
+                viewModel.setDefaultTab(it)
+                showDefaultTabDialog = false
+            },
+            onDismiss = { showDefaultTabDialog = false }
         )
     }
 
@@ -1658,6 +1686,49 @@ fun CustomSourceEditDialog(
                 Text(stringResource(R.string.settings_source_save))
             }
         },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun DefaultTabSelectionDialog(
+    currentTab: Int,
+    onTabSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val view = LocalView.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.settings_default_tab)) },
+        text = {
+            Column {
+                listOf(
+                    0 to stringResource(R.string.tab_search),
+                    1 to stringResource(R.string.tab_discover),
+                    2 to stringResource(R.string.tab_me)
+                ).forEach { (tabIndex, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { view.performHaptic(HapticType.TICK); onTabSelected(tabIndex) }
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = currentTab == tabIndex,
+                            onClick = { view.performHaptic(HapticType.TICK); onTabSelected(tabIndex) }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(android.R.string.cancel))

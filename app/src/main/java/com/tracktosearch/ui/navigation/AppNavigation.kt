@@ -47,7 +47,17 @@ import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.webview.WebViewScreen
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import javax.inject.Inject
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface DefaultTabEntryPoint {
+    fun defaultTabStorage(): com.tracktosearch.data.local.DefaultTabStorage
+}
 
 object Routes {
     const val LOGIN = "login"
@@ -114,11 +124,20 @@ fun AppNavigation(
     onLogout: () -> Unit = {}
 ) {
     val navController = rememberNavController()
-    var currentStartDest by remember { mutableStateOf(startDestination) }
-    // 登录成功后默认进入"我的"页
-    var mainInitialTab by remember { mutableIntStateOf(initialTab) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    var currentStartDest by remember { mutableStateOf(startDestination) }
+    // 读取默认启动页设置
+    val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
+    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsState(initial = 0)
+    // 登录成功后默认进入"我的"页，否则使用设置中的默认启动页
+    var mainInitialTab by remember { mutableIntStateOf(initialTab) }
+    // 首次启动时应用默认启动页设置
+    LaunchedEffect(storedDefaultTab) {
+        if (mainInitialTab == 0 && initialTab == 0) {
+            mainInitialTab = storedDefaultTab
+        }
+    }
+    val scope = rememberCoroutineScope()
 
     SharedTransitionLayout {
         CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {

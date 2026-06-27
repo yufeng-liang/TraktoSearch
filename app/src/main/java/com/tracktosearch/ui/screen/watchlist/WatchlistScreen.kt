@@ -112,6 +112,9 @@ fun WatchlistScreen(
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     val tabScope = rememberCoroutineScope()
 
+    // 保存每个 (mode, tab) 组合的滚动位置
+    val savedScrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
+
     // 切换模式时触发加载
     LaunchedEffect(selectedMode) {
         when (selectedMode) {
@@ -156,6 +159,24 @@ fun WatchlistScreen(
         isMultiSelectMode = false
     }
 
+    // 监听 tab 切换，保存/恢复滚动位置 + 退出多选
+    var prevTabKey by remember { mutableStateOf("${selectedMode}_${selectedTab}") }
+    LaunchedEffect(selectedMode, selectedTab) {
+        val currentKey = "${selectedMode}_${selectedTab}"
+        // 保存旧 tab 的位置
+        savedScrollPositions[prevTabKey] = Pair(
+            currentGridState.firstVisibleItemIndex,
+            currentGridState.firstVisibleItemScrollOffset
+        )
+        // 恢复新 tab 的位置
+        savedScrollPositions[currentKey]?.let { (index, offset) ->
+            currentGridState.scrollToItem(index, offset)
+        }
+        prevTabKey = currentKey
+        // 退出多选模式
+        isMultiSelectMode = false
+    }
+
     // 根据搜索关键词过滤当前 Tab 的列表
     val filteredMovies = remember(uiState.movies, searchQuery) {
         if (searchQuery.isBlank()) uiState.movies
@@ -192,11 +213,6 @@ fun WatchlistScreen(
         selectedMode == 0 && selectedTab == 1 -> filteredShows
         selectedMode == 1 && selectedTab == 0 -> filteredHistoryMovies
         else -> filteredHistoryShows
-    }
-
-    // 切换 tab 时退出多选
-    LaunchedEffect(selectedTab, selectedMode) {
-        isMultiSelectMode = false
     }
 
     Scaffold(
