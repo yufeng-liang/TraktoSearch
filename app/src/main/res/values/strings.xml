@@ -253,6 +253,7 @@
     <string name="detail_video_open_browser">Open in Browser</string>
     <string name="detail_video_play">Play</string>
     <string name="detail_video_retry">Retry</string>
+    <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>

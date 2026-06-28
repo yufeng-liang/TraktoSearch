@@ -253,6 +253,7 @@
     <string name="detail_video_open_browser">在浏览器中打开</string>
     <string name="detail_video_play">播放</string>
     <string name="detail_video_retry">重试</string>
+    <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
