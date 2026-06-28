@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -33,10 +34,10 @@ import androidx.compose.ui.unit.dp
 fun rememberShimmerBrush(): Brush {
     val transition = rememberInfiniteTransition(label = "shimmer")
     val progress = transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
+        initialValue = -0.5f,
+        targetValue = 1.5f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200),
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "shimmerProgress"
