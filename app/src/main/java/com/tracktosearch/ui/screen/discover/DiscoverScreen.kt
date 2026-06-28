@@ -18,7 +18,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
@@ -121,12 +120,6 @@ fun DiscoverScreen(
         }
     }
 
-    // 豆瓣热榜全部加载失败时（且至少有一个豆瓣栏目可见），显示整页重试
-    val visibleDoubanIds = sectionConfigs.filter { it.visible && it.id.startsWith("douban-") }.map { it.id }
-    val allDoubanFailed = visibleDoubanIds.isNotEmpty() &&
-        uiState.doubanHotCategories.isNotEmpty() &&
-        uiState.doubanHotCategories.filter { it.id in visibleDoubanIds }.all { it.error != null && it.items.isEmpty() }
-
     val discoverHazeState = remember { HazeState() }
     val discoverListState = rememberLazyListState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
@@ -150,36 +143,8 @@ fun DiscoverScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (allDoubanFailed) {
-                Column(
-                    modifier = modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 32.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CloudOff,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        text = stringResource(R.string.common_load_failed),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { viewModel.retryAll() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.error_retry))
-                    }
-                }
-            } else {
-                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                LazyColumn(
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            LazyColumn(
                     state = discoverListState,
                     modifier = modifier
                         .fillMaxSize()
@@ -420,7 +385,6 @@ fun DiscoverScreen(
                         }
                     }
                 }
-            }
             }
             // Haze模糊渐变TopAppBar（含状态栏）
             Column(
