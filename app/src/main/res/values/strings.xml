@@ -65,6 +65,7 @@
     <string name="search_history_delete">Delete</string>
     <string name="search_popular_title">Popular Searches</string>
     <string name="search_suggestions_title">Suggestions</string>
+    <string name="search_loading_disk">Searching disk resources...</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">My Watchlist</string>

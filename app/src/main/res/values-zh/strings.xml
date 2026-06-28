@@ -65,6 +65,7 @@
     <string name="search_history_delete">删除</string>
     <string name="search_popular_title">热门搜索</string>
     <string name="search_suggestions_title">搜索建议</string>
+    <string name="search_loading_disk">正在搜索网盘资源...</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">我的想看</string>
