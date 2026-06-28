@@ -336,6 +336,12 @@
     <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: 시청 기록에서 각 장르의 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
     <string name="statistics_info_genre_ranking">Q: 인기 장르 순위란?\nA: 시청 수에 따라 장르를 순위별로 표시합니다. 상위 3개는 금, 은, 동 메달로 표시됩니다.</string>
 
+    <!-- Help Statistics -->
+    <string name="help_statistics_b1">"마이" 페이지 오른쪽 상단에서 통계에 접근</string>
+    <string name="help_statistics_b2">시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
+    <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
+    <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
+
     <!-- Common UI -->
     <string name="common_retry">재시도</string>
     <string name="common_close">닫기</string>

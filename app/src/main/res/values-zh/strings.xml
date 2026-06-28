@@ -317,9 +317,9 @@
     <string name="help_watchlist_b3">标记已看支持按季勾选集数，第0季特别篇放在最后</string>
     <string name="help_watchlist_b4">电视剧部数统计：需看完某一整季全部集数才计入</string>
     <string name="help_statistics_b1">在"我的"页面右上角进入观看统计</string>
-    <string name="help_statistics_b2">查看电影/电视剧数量和热力图</string>
-    <string name="help_statistics_b3">集数统计为用户标记看完的总集数</string>
-    <string name="help_statistics_b4">热力图展示每日观影活跃度</string>
+    <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计</string>
+    <string name="help_statistics_b3">类型分布饼图和类型排行展示你的观影偏好</string>
+    <string name="help_statistics_b4">热力图展示过去一年的每日观影活跃度</string>
     <string name="help_notification_b1">开启通知后可自动提醒新上映和新季</string>
     <string name="help_notification_b2">Android 13及以上需要授予通知权限</string>
     <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>

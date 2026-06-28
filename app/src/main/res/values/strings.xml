@@ -317,9 +317,9 @@
     <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
     <string name="help_watchlist_b4">TV show count: requires watching all episodes of a full season</string>
     <string name="help_statistics_b1">Access statistics from the top-right of \"Me\" page</string>
-    <string name="help_statistics_b2">View movie/show counts and heatmap visualization</string>
-    <string name="help_statistics_b3">Episode count is total episodes you marked as watched</string>
-    <string name="help_statistics_b4">Heatmap shows daily viewing activity</string>
+    <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats</string>
+    <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
+    <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
     <string name="help_notification_b1">Enable notifications to get reminders for new releases and new seasons</string>
     <string name="help_notification_b2">Notification permission required on Android 13+</string>
     <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
