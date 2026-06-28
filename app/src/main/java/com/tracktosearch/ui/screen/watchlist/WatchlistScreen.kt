@@ -14,6 +14,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -298,26 +300,37 @@ fun WatchlistScreen(
                                         .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                                 )
                             }
-                            // 打勾图标：白色圆底衬托
+                            // 选中状态：实心圆+打勾图标；未选中：空心圆环
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
                                     .padding(4.dp)
                                     .size(28.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
-                                        else Color.White.copy(alpha = 0.7f)
+                                    .then(
+                                        if (isSelected) {
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .background(MaterialTheme.colorScheme.primary)
+                                        } else {
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .background(Color.Transparent)
+                                                .border(
+                                                    BorderStroke(2.dp, Color.White.copy(alpha = 0.7f)),
+                                                    CircleShape
+                                                )
+                                        }
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CheckCircle,
-                                    contentDescription = null,
-                                    tint = if (isSelected) Color.White
-                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                                    modifier = Modifier.size(22.dp)
-                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Filled.CheckCircle,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
                             }
                         }
                     }
