@@ -245,6 +245,18 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_tips_b10))
                     }
                 }
+
+                // VPN 说明
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_vpn),
+                        isExpanded = expandedIndex == 8,
+                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_vpn_b1))
+                        HelpBullet(stringResource(R.string.help_vpn_b2))
+                    }
+                }
             }
 
             // Haze模糊TopAppBar

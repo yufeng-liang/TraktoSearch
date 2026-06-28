@@ -342,6 +342,15 @@
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
 
+    <!-- VPN -->
+    <string name="help_vpn">VPN 안내</string>
+    <string name="help_vpn_b1">일부 기능은 해외 서비스에 접근해야 합니다. VPN을 활성화하지 않으면 정상적으로 사용할 수 없는 경우가 있습니다</string>
+    <string name="help_vpn_b2">해당 기능: 예고편 썸네일(YouTube), Trakt 데이터(인기/추천/기대榜), TMDB 데이터(영화 정보/포스터)</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_step7_title">추가 팁</string>
+    <string name="onboarding_step7_desc">상태 표시줄을 탭하여 맨 위로 스크롤; 설정에서 발견 섹션을 사용자 정의; 일부 기능(예고편, Trakt, TMDB)은 VPN이 필요합니다</string>
+
     <!-- Common UI -->
     <string name="common_retry">재시도</string>
     <string name="common_close">닫기</string>

@@ -386,6 +386,9 @@
     <string name="help_tips_b8">人物详情页可横向滑动查看多张图片，点击图片可全屏查看并保存到相册</string>
     <string name="help_tips_b9">在线搜索支持中文人名搜索（基于 TMDB），搜索人物时自动填充相关影视作品</string>
     <string name="help_tips_b10">发现页标题栏右侧可点击快速自定义栏目</string>
+    <string name="help_vpn">VPN 说明</string>
+    <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
+    <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>
     <string name="settings_restart_onboarding">新手引导</string>
     <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>
     <string name="onboarding_skip">跳过</string>
@@ -404,7 +407,7 @@
     <string name="onboarding_step6_title">详情页操作</string>
     <string name="onboarding_step6_desc">点击海报可大图查看并保存到相册；点击演职员头像可查看该演员的其他作品；评分支持半星选择</string>
     <string name="onboarding_step7_title">更多小技巧</string>
-    <string name="onboarding_step7_desc">点击状态栏可快速回到页面顶部；设置中可自定义发现页栏目；搜索历史点击右侧按钮可删除</string>
+    <string name="onboarding_step7_desc">点击状态栏可快速回到页面顶部；设置中可自定义发现页栏目；部分功能（预告片、Trakt、TMDB）需要VPN才能正常访问</string>
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
