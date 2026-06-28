@@ -158,6 +158,7 @@ fun WatchlistScreen(
 
     // 长按多选状态
     var isMultiSelectMode by remember { mutableStateOf(false) }
+    var isRemoving by remember { mutableStateOf(false) }
     val selectedItems = remember { mutableStateMapOf<Int, Boolean>() }
     // 退出多选模式时清空选中
     LaunchedEffect(isMultiSelectMode) {
@@ -165,6 +166,7 @@ fun WatchlistScreen(
     }
     BackHandler(enabled = isMultiSelectMode) {
         isMultiSelectMode = false
+        isRemoving = false
     }
 
     // 监听 tab 切换，保存/恢复滚动位置 + 退出多选
@@ -183,6 +185,7 @@ fun WatchlistScreen(
         prevTabKey = currentKey
         // 退出多选模式
         isMultiSelectMode = false
+        isRemoving = false
     }
 
     // 根据搜索关键词过滤当前 Tab 的列表
@@ -221,6 +224,18 @@ fun WatchlistScreen(
         selectedMode == 0 && selectedTab == 1 -> filteredShows
         selectedMode == 1 && selectedTab == 0 -> filteredHistoryMovies
         else -> filteredHistoryShows
+    }
+
+    // 监听列表变化，移除完成后关闭多选模式
+    LaunchedEffect(currentItems.size, isRemoving) {
+        if (isRemoving) {
+            val remainingIds = currentItems.map { it.traktId }.toSet()
+            val selectedIds = selectedItems.keys.toSet()
+            if (selectedIds.none { it in remainingIds }) {
+                isMultiSelectMode = false
+                isRemoving = false
+            }
+        }
     }
 
     Scaffold(
@@ -540,6 +555,7 @@ fun WatchlistScreen(
                         Row {
                             Button(
                                 onClick = {
+                                    isRemoving = true
                                     val ids = selectedItems.keys.toList()
                                     if (selectedMode == 0) {
                                         viewModel.batchRemoveFromWatchlist(
@@ -552,19 +568,27 @@ fun WatchlistScreen(
                                             if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
                                         )
                                     }
-                                    isMultiSelectMode = false
                                 },
+                                enabled = !isRemoving,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Text(
-                                    if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
-                                    else stringResource(R.string.watchlist_remove_history)
-                                )
+                                if (isRemoving) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onError
+                                    )
+                                } else {
+                                    Text(
+                                        if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
+                                        else stringResource(R.string.watchlist_remove_history)
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            OutlinedButton(onClick = { isMultiSelectMode = false }) {
+                            OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
                                 Text(stringResource(R.string.common_cancel))
                             }
                         }
