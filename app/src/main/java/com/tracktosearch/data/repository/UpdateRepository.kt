@@ -105,11 +105,12 @@ class UpdateRepository @Inject constructor(
                     }
                 } ?: ""
                 val header = if (dateStr.isNotBlank()) {
-                    "## ${release.tagName}（$dateStr）"
+                    "## ${release.tagName} 更新内容（$dateStr）"
                 } else {
-                    "## ${release.tagName}"
+                    "## ${release.tagName} 更新内容"
                 }
-                "$header\n\n${sanitizeChangelog(release.body)}"
+                val cleanBody = sanitizeChangelog(release.body)
+                "$header\n\n$cleanBody"
             }
     }
 

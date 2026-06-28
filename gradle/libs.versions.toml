@@ -3,16 +3,16 @@ agp = "8.9.1"
 kotlin = "2.1.0"
 ksp = "2.1.0-1.0.29"
 coreKtx = "1.15.0"
-lifecycleRuntime = "2.8.7"
+lifecycleRuntime = "2.11.0"
 activityCompose = "1.9.3"
-composeBom = "2024.12.01"
+composeBom = "2026.06.00"  # 从 "2024.12.01" 升级
 hilt = "2.53.1"
 hiltNavigationCompose = "1.2.0"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
 coil = "2.7.0"
 jsoup = "1.18.1"
-navigationCompose = "2.8.5"
+navigationCompose = "2.9.8"
 datastore = "1.1.1"
 coroutines = "1.9.0"
 serialization = "1.7.3"
@@ -26,6 +26,7 @@ hiltWork = "1.2.0"
 appcompat = "1.7.0"
 glance = "1.1.1"
 reorderable = "2.4.3"
+zoomable = "2.1.0"
 
 [libraries]
 # AndroidX Core
@@ -100,6 +101,9 @@ glance-material3 = { group = "androidx.glance", name = "glance-material3", versi
 
 # Reorderable (drag to reorder)
 reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
+
+# Zoomable
+zoomable = { group = "net.engawapg.lib", name = "zoomable", version.ref = "zoomable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

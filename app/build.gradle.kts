@@ -165,6 +165,7 @@ dependencies {
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
     implementation(libs.reorderable)
+    implementation(libs.zoomable)
 
     // 极光推送
     implementation("cn.jiguang.sdk:jpush:6.1.2")

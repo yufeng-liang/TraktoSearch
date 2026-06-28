@@ -123,6 +123,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
+import net.engawapg.lib.zoomable.rememberZoomState
+import net.engawapg.lib.zoomable.zoomable
+import androidx.compose.ui.geometry.Offset
+import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -3503,6 +3507,7 @@ private fun BackdropPagerOverlay(
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { backdrops.size })
     // 追踪每张截图的保存状态
     val savedBackdrops = remember { mutableStateOf<Set<Int>>(emptySet()) }
+    val zoomState = rememberZoomState()
 
     // 检查当前截图是否已保存
     LaunchedEffect(pagerState.currentPage) {
@@ -3517,7 +3522,13 @@ private fun BackdropPagerOverlay(
         }
     }
 
-    BackHandler(onBack = onDismiss)
+    BackHandler(enabled = true) {
+        if (zoomState.scale > 1f) {
+            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+        } else {
+            onDismiss()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -3532,12 +3543,19 @@ private fun BackdropPagerOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = {
+                        if (zoomState.scale > 1f) {
+                            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                        } else {
+                            onDismiss()
+                        }
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = zoomState.scale <= 1f,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val backdropUrl = backdrops[page].replace("/w780/", "/original/")
@@ -3553,6 +3571,7 @@ private fun BackdropPagerOverlay(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
+                        .zoomable(zoomState)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
@@ -3700,11 +3719,17 @@ private fun PosterFullscreenOverlay(
         isSaved = queryExistingFile(context, filename, relativePath) != null
     }
 
-    BackHandler(onBack = onDismiss)
-
     // 海报大图 overlay 的 Haze 状态
     val posterHazeState = remember { HazeState() }
-    var posterScale by remember { mutableFloatStateOf(1f) }
+    val zoomState = rememberZoomState()
+
+    BackHandler(enabled = true) {
+        if (zoomState.scale > 1f) {
+            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+        } else {
+            onDismiss()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -3714,7 +3739,13 @@ private fun PosterFullscreenOverlay(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onDismiss
+                onClick = {
+                    if (zoomState.scale > 1f) {
+                        scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                    } else {
+                        onDismiss()
+                    }
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
@@ -3732,12 +3763,7 @@ private fun PosterFullscreenOverlay(
             modifier = Modifier
                 .fillMaxWidth(0.85f)
                 .aspectRatio(2f / 3f)
-                .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
-                .pointerInput(Unit) {
-                    detectTransformGestures { _, _, zoom, _ ->
-                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
-                    }
-                }
+                .zoomable(zoomState)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,

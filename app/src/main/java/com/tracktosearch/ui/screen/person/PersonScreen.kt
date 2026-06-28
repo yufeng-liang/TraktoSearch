@@ -85,6 +85,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.queryExistingFile
 import android.os.Environment
+import net.engawapg.lib.zoomable.rememberZoomState
+import net.engawapg.lib.zoomable.zoomable
+import androidx.compose.ui.geometry.Offset
+import kotlinx.coroutines.launch
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
 import com.tracktosearch.R
@@ -1243,6 +1247,7 @@ private fun PersonImagePagerOverlay(
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { images.size })
     // 追踪每张图片的保存状态
     val savedImages = remember { mutableStateOf<Set<Int>>(emptySet()) }
+    val zoomState = rememberZoomState()
 
     // 检查当前图片是否已保存
     LaunchedEffect(pagerState.currentPage) {
@@ -1257,7 +1262,13 @@ private fun PersonImagePagerOverlay(
         }
     }
 
-    BackHandler(onBack = onDismiss)
+    BackHandler(enabled = true) {
+        if (zoomState.scale > 1f) {
+            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+        } else {
+            onDismiss()
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -1272,12 +1283,19 @@ private fun PersonImagePagerOverlay(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismiss
+                    onClick = {
+                        if (zoomState.scale > 1f) {
+                            scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                        } else {
+                            onDismiss()
+                        }
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {
             HorizontalPager(
                 state = pagerState,
+                userScrollEnabled = zoomState.scale <= 1f,
                 modifier = Modifier.fillMaxSize()
             ) { page ->
                 val imageUrl = images[page]
@@ -1293,6 +1311,7 @@ private fun PersonImagePagerOverlay(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
+                        .zoomable(zoomState)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

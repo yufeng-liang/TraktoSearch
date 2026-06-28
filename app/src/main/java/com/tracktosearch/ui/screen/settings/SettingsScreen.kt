@@ -1,4 +1,4 @@
-﻿package com.tracktosearch.ui.screen.settings
+package com.tracktosearch.ui.screen.settings
 
 import android.content.Intent
 import android.net.Uri
@@ -67,10 +67,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -87,7 +90,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.ui.component.ChangelogContent
+import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -192,9 +195,22 @@ fun SettingsScreen(
     val updateInfo by viewModel.updateInfo.collectAsState()
 
     val settingsHazeState = remember { HazeState() }
-    val settingsListState = rememberLazyListState()
+    val savedScrollIndex = rememberSaveable { mutableIntStateOf(0) }
+    val savedScrollOffset = rememberSaveable { mutableIntStateOf(0) }
+    val settingsListState = rememberLazyListState(
+        initialFirstVisibleItemIndex = savedScrollIndex.intValue,
+        initialFirstVisibleItemScrollOffset = savedScrollOffset.intValue
+    )
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val settingsCoroutineScope = rememberCoroutineScope()
+    LaunchedEffect(settingsListState) {
+        snapshotFlow {
+            settingsListState.firstVisibleItemIndex to settingsListState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            savedScrollIndex.intValue = index
+            savedScrollOffset.intValue = offset
+        }
+    }
     DisposableEffect(Unit) {
         scrollToTopProvider.register {
             settingsCoroutineScope.launch {
@@ -1217,13 +1233,7 @@ fun ChangelogDialog(
                         }
                     }
                     changelog != null && changelog!!.isNotBlank() -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            ChangelogContent(text = changelog!!)
-                        }
+                        StickyHeaderChangelogContent(text = changelog!!)
                     }
                     else -> {
                         Text(

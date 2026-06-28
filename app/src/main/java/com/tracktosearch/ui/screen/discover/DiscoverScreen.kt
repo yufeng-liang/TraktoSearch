@@ -183,24 +183,34 @@ fun DiscoverScreen(
                         "tmdb-popular" -> {
                             item(key = "tmdb_popular") {
                                 Column {
-                                    Text(
-                                        text = stringResource(R.string.discover_trending),
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
-                                    SingleChoiceSegmentedButtonRow(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        SegmentedButton(
-                                            selected = uiState.trendingTimeWindow == "day",
-                                            onClick = { viewModel.switchTrendingTimeWindow("day") },
-                                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                                        ) { Text(stringResource(R.string.discover_trending_day)) }
-                                        SegmentedButton(
-                                            selected = uiState.trendingTimeWindow == "week",
-                                            onClick = { viewModel.switchTrendingTimeWindow("week") },
-                                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
-                                        ) { Text(stringResource(R.string.discover_trending_week)) }
+                                        Text(
+                                            text = stringResource(R.string.discover_trending),
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                        )
+                                        Spacer(modifier = Modifier.width(32.dp))
+                                        Row(
+                                            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            FilterChip(
+                                                selected = uiState.trendingTimeWindow == "day",
+                                                onClick = { viewModel.switchTrendingTimeWindow("day") },
+                                                label = { Text(stringResource(R.string.discover_trending_day)) },
+                                                shape = RoundedCornerShape(20.dp),
+                                                border = null
+                                            )
+                                            FilterChip(
+                                                selected = uiState.trendingTimeWindow == "week",
+                                                onClick = { viewModel.switchTrendingTimeWindow("week") },
+                                                label = { Text(stringResource(R.string.discover_trending_week)) },
+                                                shape = RoundedCornerShape(20.dp),
+                                                border = null
+                                            )
+                                        }
                                     }
                                     TmdbMovieSection(
                                         title = "",

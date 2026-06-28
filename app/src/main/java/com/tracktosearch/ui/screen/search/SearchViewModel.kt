@@ -19,8 +19,10 @@ import com.tracktosearch.data.util.TtlCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -85,9 +87,17 @@ class SearchViewModel @Inject constructor(
     // 豆瓣热榜缓存
     private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
 
+    // 搜索历史 - 使用 stateIn 预加载，避免异步延迟
+    private val searchHistoryFlow = searchHistoryStorage.history.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
     init {
+        // 收集搜索历史并更新 UI 状态
         viewModelScope.launch {
-            searchHistoryStorage.history.collect { history ->
+            searchHistoryFlow.collect { history ->
                 _uiState.value = _uiState.value.copy(
                     searchHistory = history
                 )
