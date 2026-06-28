@@ -27,6 +27,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
@@ -172,11 +173,14 @@ private fun ScrollToTopButtonContent(
                 ),
             contentAlignment = Alignment.Center
         ) {
+            val shadowColor = if (arrowTint == Color(0xFF616161)) Color.White else Color.Black
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier
+                    .shadow(2.dp, CircleShape, ambientColor = shadowColor, spotColor = shadowColor)
+                    .size(32.dp)
             )
         }
     } else {
@@ -184,11 +188,14 @@ private fun ScrollToTopButtonContent(
             onClick = onClickWithHaptic,
             shape = CircleShape
         ) {
+            val shadowColor = if (arrowTint == Color(0xFF616161)) Color.White else Color.Black
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier
+                    .shadow(2.dp, CircleShape, ambientColor = shadowColor, spotColor = shadowColor)
+                    .size(32.dp)
             )
         }
     }
