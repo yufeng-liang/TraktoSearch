@@ -15,11 +15,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.data.remote.panhub.ChannelGroup
 import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.HapticType
 
 @Composable
 fun PanHubConfigDialog(
@@ -34,6 +37,8 @@ fun PanHubConfigDialog(
     var timeoutText by remember(config) { mutableStateOf(config.timeoutMs.toString()) }
     var enabledPlugins by remember(config) { mutableStateOf(config.enabledPlugins) }
     var enabledChannels by remember(config) { mutableStateOf(config.enabledChannels) }
+
+    val view = LocalView.current
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -52,6 +57,10 @@ fun PanHubConfigDialog(
                         value = (concurrencyText.toIntOrNull() ?: 4).toFloat(),
                         onValueChange = { v ->
                             val intVal = v.roundToInt()
+                            val oldVal = concurrencyText.toIntOrNull() ?: 4
+                            if (intVal != oldVal) {
+                                view.performHaptic(HapticType.TICK)
+                            }
                             concurrencyText = intVal.toString()
                             onConcurrencyChange(intVal)
                         },
@@ -114,6 +123,7 @@ fun PanHubConfigDialog(
                                 Switch(
                                     checked = plugin.id in enabledPlugins,
                                     onCheckedChange = { enabled ->
+                                        view.performHaptic(HapticType.CLICK)
                                         val updated = enabledPlugins.toMutableSet()
                                         if (enabled) updated.add(plugin.id) else updated.remove(plugin.id)
                                         enabledPlugins = updated
@@ -174,6 +184,7 @@ fun PanHubConfigDialog(
                             Switch(
                                 checked = allEnabledInGroup,
                                 onCheckedChange = { allOn ->
+                                    view.performHaptic(HapticType.CLICK)
                                     val updated = enabledChannels.toMutableSet()
                                     if (allOn) {
                                         updated.addAll(groupChannels.map { it.id })
@@ -201,6 +212,7 @@ fun PanHubConfigDialog(
                                         Switch(
                                             checked = channel.id in enabledChannels,
                                             onCheckedChange = { enabled ->
+                                                view.performHaptic(HapticType.CLICK)
                                                 val updated = enabledChannels.toMutableSet()
                                                 if (enabled) updated.add(channel.id) else updated.remove(channel.id)
                                                 enabledChannels = updated
