@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.location.Location
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.WeatherInfo
@@ -47,6 +48,11 @@ private val EASTER_MESSAGES = listOf(
     "你戳到我了，好痒！🤭"
 )
 
+private const val CACHE_PREFS_NAME = "cloud_theme"
+private const val KEY_THEME = "cloud_theme"
+private const val KEY_THEME_TIME = "cloud_theme_time"
+private const val CACHE_VALID_MS = 6 * 60 * 60 * 1000L // 6 小时
+
 @Singleton
 class CloudThemeManager @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -54,8 +60,10 @@ class CloudThemeManager @Inject constructor(
     private val holidayDetector: HolidayDetector
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val prefs: SharedPreferences = context.getSharedPreferences(CACHE_PREFS_NAME, Context.MODE_PRIVATE)
 
-    private val _currentTheme = MutableStateFlow(CloudTheme.SUNNY)
+    // 初始化时读取缓存，避免闪烁
+    private val _currentTheme = MutableStateFlow(loadCachedTheme())
     val currentTheme: StateFlow<CloudTheme> = _currentTheme
 
     // 彩蛋状态：null 表示未触发
@@ -75,18 +83,22 @@ class CloudThemeManager @Inject constructor(
             // 节日优先
             val holiday = holidayDetector.detect()
             if (holiday != null) {
-                _currentTheme.value = when (holiday) {
+                val theme = when (holiday) {
                     Holiday.CHRISTMAS -> CloudTheme.CHRISTMAS
                     Holiday.SPRING_FESTIVAL -> CloudTheme.SPRING_FESTIVAL
                     Holiday.HALLOWEEN -> CloudTheme.HALLOWEEN
                 }
+                _currentTheme.value = theme
+                saveCachedTheme(theme)
                 return@launch
             }
 
             // 天气
             val weather = weatherRepository.getCurrentWeather(location)
             if (weather != null) {
-                _currentTheme.value = weatherCodeToTheme(weather)
+                val theme = weatherCodeToTheme(weather)
+                _currentTheme.value = theme
+                saveCachedTheme(theme)
             }
         }
     }
@@ -113,6 +125,22 @@ class CloudThemeManager @Inject constructor(
     fun onEasterDismissed() {
         _easterEggRes.value = null
         _easterMessage.value = null
+    }
+
+    private fun loadCachedTheme(): CloudTheme {
+        val name = prefs.getString(KEY_THEME, null)
+        val time = prefs.getLong(KEY_THEME_TIME, 0)
+        if (name != null && System.currentTimeMillis() - time < CACHE_VALID_MS) {
+            return runCatching { CloudTheme.valueOf(name) }.getOrNull() ?: CloudTheme.SUNNY
+        }
+        return CloudTheme.SUNNY
+    }
+
+    private fun saveCachedTheme(theme: CloudTheme) {
+        prefs.edit()
+            .putString(KEY_THEME, theme.name)
+            .putLong(KEY_THEME_TIME, System.currentTimeMillis())
+            .apply()
     }
 
     private fun weatherCodeToTheme(weather: WeatherInfo): CloudTheme {

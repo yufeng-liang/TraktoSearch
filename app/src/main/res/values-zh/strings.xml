@@ -66,6 +66,7 @@
     <string name="search_popular_title">热门搜索</string>
     <string name="search_suggestions_title">搜索建议</string>
     <string name="search_loading_disk">正在搜索网盘资源...</string>
+    <string name="search_loading_disk_progress">搜索中 %1$d/%2$d 源...</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">我的想看</string>
@@ -146,6 +147,13 @@
     <string name="detail_disk_type_115">115</string>
     <string name="detail_disk_type_other">其他</string>
     <string name="detail_disk_type_magnet">磁力</string>
+    <string name="detail_share_links">资源链接：</string>
+    <string name="detail_year_suffix">%d年</string>
+    <string name="detail_watched">已看</string>
+    <string name="detail_not_watched">未看</string>
+    <string name="detail_saved">已保存</string>
+    <string name="detail_save">保存</string>
+    <string name="detail_comment_source">(来源:%s)</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">已查看</string>
@@ -255,6 +263,16 @@
     <string name="detail_video_retry">重试</string>
     <string name="trailer_youtube_restricted">YouTube在国内访问受限\n请使用VPN</string>
 
+    <!-- Crash Dialog -->
+    <string name="crash_dialog_title">应用异常提醒</string>
+    <string name="crash_dialog_message">检测到应用近期发生了 %d 次异常退出，是否将错误日志发送给开发者以帮助修复问题？</string>
+    <string name="crash_dialog_send">发送日志</string>
+    <string name="crash_dialog_cancel">暂不发送</string>
+    <string name="crash_email_subject">TrackToSearch 错误日志</string>
+    <string name="crash_email_body">以下是应用崩溃的错误日志：</string>
+    <string name="crash_email_no_log">应用发生了异常退出，但未找到详细的错误日志。</string>
+    <string name="crash_toast_copied">日志已复制到剪贴板，请手动发送至 1577865546@qq.com</string>
+
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
     <string name="person_tv_credits">参演电视剧</string>
@@ -272,10 +290,14 @@
     <string name="person_gender_non_binary">非二元</string>
 
     <!-- Theme -->
-    <string name="settings_theme">主题模式</string>
+    <string name="settings_theme">深色模式</string>
     <string name="theme_system">跟随系统</string>
     <string name="theme_dark">深色</string>
     <string name="theme_light">浅色</string>
+
+    <!-- Accent Color -->
+    <string name="settings_accent_color">应用色调</string>
+    <string name="settings_accent_dynamic">跟随壁纸取色（默认）</string>
 
     <!-- Language -->
     <string name="settings_language">语言</string>
@@ -451,6 +473,7 @@
     <string name="update_downloading">正在下载…</string>
     <string name="update_download_failed">下载失败，请尝试浏览器下载</string>
     <string name="update_install">正在安装…</string>
+    <string name="update_version_suffix">版本更新</string>
 
     <!-- Statistics -->
     <string name="statistics_title">观看统计</string>
@@ -471,10 +494,12 @@
     <string name="statistics_less">少</string>
     <string name="statistics_more">多</string>
     <string name="statistics_info">统计说明</string>
-    <string name="statistics_info_overview">Q：上方的数字是什么意思？\nA：显示你的观看总数、本月观看数和本年观看数，数据来源于你的 Trakt 观看历史。</string>
-    <string name="statistics_info_heatmap">Q：这里的观看热力图是什么意思？\nA：类似 GitHub 的贡献图，每个方块代表一天，颜色越深表示当天观看越多，覆盖过去一整年。</string>
+    <string name="statistics_info_overview">Q：上方的数字是什么意思？\nA：显示你的观看总数（电影+剧集）、本月观看数和本年观看数，数据来源于你的 Trakt 观看历史。</string>
+    <string name="statistics_info_heatmap">Q：观看热力图是什么意思？\nA：类似 GitHub 的贡献图，每个方块代表一天，颜色越深表示当天观看越多，覆盖过去一整年。</string>
     <string name="statistics_info_genre_distribution">Q：类型分布饼图是什么意思？\nA：展示你观看历史中各类型占比。点击每一块可查看具体数量和百分比。</string>
     <string name="statistics_info_genre_ranking">Q：最常看的类型排行是什么意思？\nA：按观看数量对你的类型进行排名，前三名分别用金牌、银牌、铜牌标记。</string>
+    <string name="statistics_info_watch_time">Q：观影时长是怎么算的？\nA：根据你观看的每部电影和剧集的时长累加得出，单位为小时。</string>
+    <string name="statistics_info_ratings">Q：评分统计是什么意思？\nA：显示你在 Trakt 上的评分总数、平均分和评分分布。仅统计已评分的影视。</string>
 
     <!-- Common UI -->
     <string name="common_retry">重试</string>
@@ -489,6 +514,25 @@
     <string name="common_saved_path">已保存: %1$s/%2$s</string>
     <string name="common_copy_success">已复制</string>
     <string name="common_open_failed">无法打开此链接</string>
+    <string name="common_done">完成</string>
+    <string name="error_load_failed">加载失败</string>
+    <string name="error_search_failed">搜索失败</string>
+
+    <!-- Snackbar Messages -->
+    <string name="snackbar_test_success">测试成功，解析到 %d 条结果</string>
+    <string name="snackbar_test_empty">连接成功，但未解析到结果</string>
+    <string name="snackbar_export_success">导出成功</string>
+    <string name="snackbar_export_failed">导出失败：未知错误</string>
+    <string name="snackbar_import_no_data">未找到有效记录</string>
+    <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
+    <string name="snackbar_import_done_letterboxd">Letterboxd 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
+    <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
+    <string name="snackbar_import_done_json">JSON 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
+    <string name="snackbar_import_failed">导入失败：未知错误</string>
+    <string name="snackbar_cache_cleared">缓存已清除</string>
+    <string name="snackbar_cache_clear_failed">清除缓存失败</string>
+    <string name="snackbar_already_latest">已是最新版本</string>
+    <string name="snackbar_check_update_failed">检查更新失败，请稍后重试</string>
 
     <!-- Search Filter -->
     <string name="search_filter_all">全部</string>
@@ -550,6 +594,17 @@
     <string name="settings_cache_clear_failed">清除缓存失败：%1$s</string>
     <string name="settings_no_changelog">暂无更新日志</string>
 
+    <!-- PanHub Config -->
+    <string name="settings_panhub_config">配置</string>
+    <string name="settings_panhub_desc">支持自定义插件、频道启用、并发数与超时设置</string>
+    <string name="panhub_config_title">PanHub 搜索配置</string>
+    <string name="panhub_concurrency">并发数</string>
+    <string name="panhub_timeout">超时 (ms)</string>
+    <string name="panhub_plugins">插件</string>
+    <string name="panhub_channels">频道</string>
+    <string name="panhub_select_all">全选</string>
+    <string name="panhub_deselect_all">全不选</string>
+
     <string name="settings_add_custom_source">添加自定义搜索源</string>
     <string name="settings_add_custom_source_desc">支持 PanSou/Zreso 兼容源或自定义 JSONPath</string>
     <string name="discover_douban_new_movies">新片榜</string>
@@ -567,6 +622,7 @@
     <string name="discover_trending_day">今日</string>
     <string name="discover_trending_week">本周</string>
     <string name="discover_trending_lists">社区热门列表</string>
+    <string name="discover_list_meta">%d部 · @%s · ❤%d</string>
     <string name="common_view_all">查看全部</string>
 
     <!-- Search Source Type -->

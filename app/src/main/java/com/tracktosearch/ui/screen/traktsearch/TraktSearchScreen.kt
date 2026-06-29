@@ -345,7 +345,7 @@ fun TraktSearchScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
                     }
                     OutlinedTextField(
                         value = searchQuery,
@@ -537,7 +537,11 @@ private fun DiskSearchContent(
                     SearchLoadingAnimation()
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = stringResource(R.string.search_loading_disk),
+                        text = if (diskState.totalSources > 0) {
+                            stringResource(R.string.search_loading_disk_progress, diskState.completedSources, diskState.totalSources)
+                        } else {
+                            stringResource(R.string.search_loading_disk)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

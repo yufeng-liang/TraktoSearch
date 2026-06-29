@@ -59,7 +59,7 @@ fun LoginPromptScreen(
             shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
         ) {
             Text(
-                text = "使用 Trakt 登录",
+                text = stringResource(R.string.login_prompt_button),
                 style = MaterialTheme.typography.titleMedium
             )
         }

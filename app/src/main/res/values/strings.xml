@@ -66,6 +66,7 @@
     <string name="search_popular_title">Popular Searches</string>
     <string name="search_suggestions_title">Suggestions</string>
     <string name="search_loading_disk">Searching disk resources...</string>
+    <string name="search_loading_disk_progress">Searching %1$d/%2$d sources...</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">My Watchlist</string>
@@ -146,6 +147,13 @@
     <string name="detail_disk_type_115">115</string>
     <string name="detail_disk_type_magnet">Magnet</string>
     <string name="detail_disk_type_other">Other</string>
+    <string name="detail_share_links">Links: </string>
+    <string name="detail_year_suffix">%d</string>
+    <string name="detail_watched">Watched</string>
+    <string name="detail_not_watched">Not watched</string>
+    <string name="detail_saved">Saved</string>
+    <string name="detail_save">Save</string>
+    <string name="detail_comment_source">(Source: %s)</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">Viewed</string>
@@ -255,6 +263,16 @@
     <string name="detail_video_retry">Retry</string>
     <string name="trailer_youtube_restricted">YouTube is restricted in China\nPlease use VPN</string>
 
+    <!-- Crash Dialog -->
+    <string name="crash_dialog_title">App Crash</string>
+    <string name="crash_dialog_message">The app has crashed %d time(s) recently. Send error logs to the developer?</string>
+    <string name="crash_dialog_send">Send logs</string>
+    <string name="crash_dialog_cancel">Not now</string>
+    <string name="crash_email_subject">TrackToSearch Error Log</string>
+    <string name="crash_email_body">Here are the crash logs:</string>
+    <string name="crash_email_no_log">The app crashed but no detailed logs were found.</string>
+    <string name="crash_toast_copied">Logs copied. Please send to 1577865546@qq.com</string>
+
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
     <string name="person_tv_credits">TV Credits</string>
@@ -272,10 +290,14 @@
     <string name="person_gender_non_binary">Non-binary</string>
 
     <!-- Theme -->
-    <string name="settings_theme">Theme</string>
+    <string name="settings_theme">Dark Mode</string>
     <string name="theme_system">Follow System</string>
     <string name="theme_dark">Dark</string>
     <string name="theme_light">Light</string>
+
+    <!-- Accent Color -->
+    <string name="settings_accent_color">Accent Color</string>
+    <string name="settings_accent_dynamic">Dynamic (default)</string>
 
     <!-- Language -->
     <string name="settings_language">Language</string>
@@ -451,6 +473,7 @@
     <string name="update_downloading">Downloading…</string>
     <string name="update_download_failed">Download failed, try browser download</string>
     <string name="update_install">Installing…</string>
+    <string name="update_version_suffix">update</string>
 
     <!-- Statistics -->
     <string name="statistics_title">Statistics</string>
@@ -471,10 +494,12 @@
     <string name="statistics_less">Less</string>
     <string name="statistics_more">More</string>
     <string name="statistics_info">Statistics Guide</string>
-    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They show your total watched count, this month\'s watched count, and this year\'s watched count, based on your Trakt history.</string>
+    <string name="statistics_info_overview">Q: What do the numbers above mean?\nA: They show your total watched count (movies + shows), this month\'s watched count, and this year\'s watched count, based on your Trakt history.</string>
     <string name="statistics_info_heatmap">Q: What is the watching heatmap?\nA: Similar to GitHub\'s contribution graph, each square represents one day. The darker the color, the more you watched that day. It covers the past year.</string>
     <string name="statistics_info_genre_distribution">Q: What is the genre distribution pie chart?\nA: It shows the proportion of each genre in your watched history. Tap a slice to see the exact count and percentage.</string>
     <string name="statistics_info_genre_ranking">Q: What is the top genres ranking?\nA: Your most-watched genres ranked by count. The top three are marked with gold, silver, and bronze medals.</string>
+    <string name="statistics_info_watch_time">Q: How is watch time calculated?\nA: It sums up the runtime of every movie and episode you watched, displayed in hours.</string>
+    <string name="statistics_info_ratings">Q: What are rating statistics?\nA: Shows your total number of ratings, average rating, and rating distribution on Trakt. Only rated titles are counted.</string>
 
     <!-- Common UI -->
     <string name="common_retry">Retry</string>
@@ -489,6 +514,25 @@
     <string name="common_saved_path">Saved: %1$s/%2$s</string>
     <string name="common_copy_success">Copied</string>
     <string name="common_open_failed">Cannot open this link</string>
+    <string name="common_done">Done</string>
+    <string name="error_load_failed">Load failed</string>
+    <string name="error_search_failed">Search failed</string>
+
+    <!-- Snackbar Messages -->
+    <string name="snackbar_test_success">Test passed, parsed %d results</string>
+    <string name="snackbar_test_empty">Connected, but no results parsed</string>
+    <string name="snackbar_export_success">Export successful</string>
+    <string name="snackbar_export_failed">Export failed: unknown error</string>
+    <string name="snackbar_import_no_data">No valid records found</string>
+    <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
+    <string name="snackbar_import_done_letterboxd">Letterboxd import done: %1$d matched, %2$d unmatched</string>
+    <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
+    <string name="snackbar_import_done_json">JSON import done: %1$d matched, %2$d unmatched</string>
+    <string name="snackbar_import_failed">Import failed: unknown error</string>
+    <string name="snackbar_cache_cleared">Cache cleared</string>
+    <string name="snackbar_cache_clear_failed">Failed to clear cache</string>
+    <string name="snackbar_already_latest">Already up to date</string>
+    <string name="snackbar_check_update_failed">Update check failed, please try again</string>
 
     <!-- Search Filter -->
     <string name="search_filter_all">All</string>
@@ -550,6 +594,17 @@
     <string name="settings_cache_clear_failed">Clear cache failed: %1$s</string>
     <string name="settings_no_changelog">No changelog available</string>
 
+    <!-- PanHub Config -->
+    <string name="settings_panhub_config">Configure</string>
+    <string name="settings_panhub_desc">Customize plugins, channels, concurrency and timeout</string>
+    <string name="panhub_config_title">PanHub Search Config</string>
+    <string name="panhub_concurrency">Concurrency</string>
+    <string name="panhub_timeout">Timeout (ms)</string>
+    <string name="panhub_plugins">Plugins</string>
+    <string name="panhub_channels">Channels</string>
+    <string name="panhub_select_all">Select All</string>
+    <string name="panhub_deselect_all">Deselect All</string>
+
     <string name="settings_add_custom_source">Add Custom Search Source</string>
     <string name="settings_add_custom_source_desc">Support PanSou/Zreso compatible sources or custom JSONPath</string>
     <string name="discover_douban_new_movies">New Movies</string>
@@ -567,6 +622,7 @@
     <string name="discover_trending_day">Today</string>
     <string name="discover_trending_week">This Week</string>
     <string name="discover_trending_lists">Community Lists</string>
+    <string name="discover_list_meta">%d items · @%s · ❤%d</string>
     <string name="common_view_all">View all</string>
 
     <!-- Search Source Type -->

@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Help
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -153,7 +152,14 @@ fun StatisticsScreen(
                             listState.layoutInfo.visibleItemsInfo.any { it.key == "overview" }
                         }
                     }
-                    OverviewCards(uiState, isVisible)
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        OverviewCards(uiState, isVisible)
+                    }
                 }
 
                 // 观影时长
@@ -240,7 +246,7 @@ fun StatisticsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back))
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
                 }
                 Text(stringResource(R.string.statistics_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(4.dp))
@@ -249,13 +255,10 @@ fun StatisticsScreen(
                         imageVector = Icons.AutoMirrored.Filled.Help,
                         contentDescription = stringResource(R.string.statistics_info),
                         modifier = Modifier.size(20.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = { viewModel.loadStatistics() }) {
-                    Icon(Icons.Default.Refresh, contentDescription = stringResource(R.string.watchlist_refresh))
-                }
             }
             }
         }
@@ -271,6 +274,7 @@ fun StatisticsScreen(
 private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.statistics_info)) },
         text = {
             Column(
@@ -281,6 +285,18 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
             ) {
                 Text(
                     text = stringResource(R.string.statistics_info_overview),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.statistics_info_watch_time),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.statistics_info_ratings),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
@@ -344,7 +360,7 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
                 Row(
@@ -364,18 +380,18 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                             text = "$animatedShows",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.statistics_shows),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Text(
                         text = "/",
                         style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         val animatedEpisodes by animateIntAsState(
@@ -387,12 +403,12 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                             text = "$animatedEpisodes",
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
                             text = stringResource(R.string.statistics_episodes),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -418,7 +434,7 @@ private fun AnimatedStatCard(
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
         Column(
@@ -431,13 +447,13 @@ private fun AnimatedStatCard(
                 text = animatedValue.toString(),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

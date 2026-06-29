@@ -285,7 +285,8 @@ fun HelpScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back"
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                     },

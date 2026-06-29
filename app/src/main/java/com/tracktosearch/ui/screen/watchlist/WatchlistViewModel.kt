@@ -9,6 +9,9 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.tracktosearch.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
@@ -62,7 +65,8 @@ data class WatchlistUiState(
 class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
-    private val offlineCacheManager: OfflineCacheManager
+    private val offlineCacheManager: OfflineCacheManager,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
@@ -144,7 +148,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                     moviesLoaded = true,
                     movies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.movies,
-                    moviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
+                    moviesError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
         }
@@ -223,7 +227,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                     showsLoaded = true,
                     shows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.shows,
-                    showsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
+                    showsError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
         }
@@ -274,7 +278,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingHistoryMovies = false,
                     historyMoviesLoaded = true,
                     historyMovies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyMovies,
-                    historyMoviesError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
+                    historyMoviesError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
         }
@@ -324,7 +328,7 @@ class WatchlistViewModel @Inject constructor(
                     isLoadingHistoryShows = false,
                     historyShowsLoaded = true,
                     historyShows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.historyShows,
-                    historyShowsError = if (cached.isNotEmpty()) null else (e.message ?: "加载失败")
+                    historyShowsError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
         }

@@ -145,6 +145,21 @@ interface TraktApiService {
         @Query("extended") extended: String = "full"
     ): Response<TraktPersonDetail>
 
+    @GET("people/{id}/movies")
+    suspend fun getPersonMovieCredits(
+        @Path("id") id: String
+    ): Response<TraktPersonCreditsResponse>
+
+    @GET("people/{id}/shows")
+    suspend fun getPersonShowCredits(
+        @Path("id") id: String
+    ): Response<TraktPersonCreditsResponse>
+
+    @GET("people/{id}/aliases")
+    suspend fun getPersonAliases(
+        @Path("id") id: String
+    ): Response<List<TraktPersonAlias>>
+
     @GET("search/person")
     suspend fun searchPeople(
         @Query("query") query: String,

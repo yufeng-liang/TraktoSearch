@@ -27,6 +27,8 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -93,7 +95,8 @@ class DiscoverViewModel @Inject constructor(
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
     private val discoverSectionStorage: DiscoverSectionStorage,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
@@ -201,7 +204,7 @@ class DiscoverViewModel @Inject constructor(
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
                         isLoading = false,
-                        error = e.message ?: "加载失败"
+                        error = e.message ?: context.getString(R.string.error_load_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -272,7 +275,7 @@ class DiscoverViewModel @Inject constructor(
                 if (idx >= 0) {
                     updated[idx] = updated[idx].copy(
                         isLoading = false,
-                        error = e.message ?: "加载失败"
+                        error = e.message ?: context.getString(R.string.error_load_failed)
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -289,12 +292,12 @@ class DiscoverViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     tmdbPopularMovies = movies,
                     isLoadingPopular = false,
-                    popularError = if (movies.isEmpty()) "暂无数据" else null
+                    popularError = if (movies.isEmpty()) context.getString(R.string.error_no_data) else null
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingPopular = false,
-                    popularError = e.message ?: "加载失败"
+                    popularError = e.message ?: context.getString(R.string.error_load_failed)
                 )
             }
         }
@@ -315,12 +318,12 @@ class DiscoverViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     tmdbUpcomingMovies = movies,
                     isLoadingUpcoming = false,
-                    upcomingError = if (movies.isEmpty()) "暂无数据" else null
+                    upcomingError = if (movies.isEmpty()) context.getString(R.string.error_no_data) else null
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingUpcoming = false,
-                    upcomingError = e.message ?: "加载失败"
+                    upcomingError = e.message ?: context.getString(R.string.error_load_failed)
                 )
             }
         }
@@ -526,12 +529,12 @@ class DiscoverViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 traktRecommendations = traktMovies,
                 isLoadingRecommendations = false,
-                recommendationsError = if (traktMovies.isEmpty()) "暂无数据" else null
+                recommendationsError = if (traktMovies.isEmpty()) context.getString(R.string.error_no_data) else null
             )
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoadingRecommendations = false,
-                recommendationsError = e.message ?: "加载失败"
+                recommendationsError = e.message ?: context.getString(R.string.error_load_failed)
             )
         }
     }

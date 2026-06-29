@@ -14,6 +14,14 @@ data class TraktIds(
 )
 
 @Serializable
+data class TraktSocialIds(
+    @kotlinx.serialization.SerialName("facebook") val facebook: String? = null,
+    @kotlinx.serialization.SerialName("instagram") val instagram: String? = null,
+    @kotlinx.serialization.SerialName("twitter") val twitter: String? = null,
+    @kotlinx.serialization.SerialName("wikipedia") val wikipedia: String? = null
+)
+
+@Serializable
 data class TraktMovie(
     val title: String = "",
     val year: Int = 0,
@@ -236,13 +244,37 @@ data class TraktPerson(
 data class TraktPersonDetail(
     val name: String = "",
     val ids: TraktIds = TraktIds(),
+    @kotlinx.serialization.SerialName("social_ids") val social_ids: TraktSocialIds = TraktSocialIds(),
     val gender: String = "",
     val known_for_department: String = "",
     val biography: String = "",
     val birthday: String? = null,
     val death: String? = null,
     val homepage: String? = null,
-    val headshot: String? = null
+    val headshot: String? = null,
+    val movie_credits: Int = 0,
+    val show_credits: Int = 0
+)
+
+// ==================== Trakt 人物参演 DTO ====================
+
+@Serializable
+data class TraktPersonCreditsResponse(
+    val cast: List<TraktPersonCreditItem> = emptyList(),
+    val crew: Map<String, List<TraktPersonCreditItem>> = emptyMap()
+)
+
+@Serializable
+data class TraktPersonCreditItem(
+    val characters: List<String> = emptyList(),
+    val movie: TraktMovie? = null,
+    val show: TraktShow? = null
+)
+
+@Serializable
+data class TraktPersonAlias(
+    val name: String = "",
+    val country: String? = null
 )
 
 // ==================== Trakt 视频 DTO ====================

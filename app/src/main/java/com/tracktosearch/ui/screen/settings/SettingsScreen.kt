@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,9 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Delete
@@ -40,6 +43,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
@@ -76,12 +80,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -121,6 +128,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
+    val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
@@ -136,6 +144,7 @@ fun SettingsScreen(
     val testResults by viewModel.testResults.collectAsStateWithLifecycle()
     val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
+    var showAccentColorDialog by remember { mutableStateOf(false) }
     var showPanHubConfigDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
@@ -257,10 +266,19 @@ fun SettingsScreen(
                     else -> stringResource(R.string.theme_system)
                 }
                 SettingsItem(
-                    icon = Icons.Default.Palette,
+                    icon = Icons.Default.DarkMode,
                     title = stringResource(R.string.settings_theme),
                     subtitle = themeName,
                     onClick = { showThemeDialog = true }
+                )
+            }
+            item {
+                val accentName = currentAccent?.label ?: stringResource(R.string.settings_accent_dynamic)
+                SettingsItem(
+                    icon = Icons.Default.Palette,
+                    title = stringResource(R.string.settings_accent_color),
+                    subtitle = accentName,
+                    onClick = { showAccentColorDialog = true }
                 )
             }
             item {
@@ -606,6 +624,13 @@ fun SettingsScreen(
             onDismiss = { showThemeDialog = false }
         )
     }
+    if (showAccentColorDialog) {
+        AccentColorDialog(
+            currentAccent = currentAccent,
+            onAccentSelected = { viewModel.setAccentColor(it); showAccentColorDialog = false },
+            onDismiss = { showAccentColorDialog = false }
+        )
+    }
 
     if (showLanguageDialog) {
         LanguageSelectionDialog(
@@ -641,6 +666,7 @@ fun SettingsScreen(
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_account)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
@@ -662,6 +688,7 @@ fun SettingsScreen(
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_cache)) },
             text = { Text(stringResource(R.string.settings_clear_cache_confirm)) },
             confirmButton = {
@@ -723,6 +750,7 @@ fun SettingsScreen(
     showDeleteCustomSource?.let { source ->
         AlertDialog(
             onDismissRequest = { showDeleteCustomSource = null },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_delete_source)) },
             text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
             confirmButton = {
@@ -866,7 +894,7 @@ fun PanHubSettingsItem(
             ) {
                 Icon(
                     Icons.Default.Tune,
-                    contentDescription = "配置",
+                    contentDescription = stringResource(R.string.settings_panhub_config),
                     modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -878,7 +906,7 @@ fun PanHubSettingsItem(
             )
         }
         Text(
-            text = "支持自定义插件、频道启用、并发数与超时设置",
+            text = stringResource(R.string.settings_panhub_desc),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 2.dp)
@@ -934,6 +962,7 @@ private fun ThemeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.settings_theme)) },
         text = {
             Column {
@@ -954,11 +983,7 @@ private fun ThemeSelectionDialog(
                 )
             }
         },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.ok))
-            }
-        }
+        confirmButton = {}
     )
 }
 
@@ -985,6 +1010,103 @@ private fun ThemeOptionRow(
     }
 }
 
+/** 主题色选择对话框 */
+@Composable
+private fun AccentColorDialog(
+    currentAccent: com.tracktosearch.ui.theme.MonetAccent?,
+    onAccentSelected: (com.tracktosearch.ui.theme.MonetAccent?) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val view = LocalView.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.settings_accent_color)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // 动态壁纸取色选项（带渐变色块）
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { view.performHaptic(HapticType.TICK); onAccentSelected(null) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    RadioButton(selected = currentAccent == null, onClick = { view.performHaptic(HapticType.TICK); onAccentSelected(null) })
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(
+                                brush = androidx.compose.ui.graphics.Brush.sweepGradient(
+                                    colors = listOf(
+                                        Color(0xFF7B68AE), Color(0xFFE8915A), Color(0xFF5A8F6B),
+                                        Color(0xFF6B7FA0), Color(0xFFC4A94D), Color(0xFFD4748A),
+                                        Color(0xFF4A7FB5), Color(0xFF7B68AE)
+                                    )
+                                )
+                            )
+                            .then(
+                                if (currentAccent == null)
+                                    Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                else Modifier
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (currentAccent == null) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(stringResource(R.string.settings_accent_dynamic))
+                }
+                // 莫奈/印象派色块网格
+                val accents = com.tracktosearch.ui.theme.MonetAccent.entries
+                val rows = accents.chunked(4)
+                rows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        row.forEach { accent ->
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable { view.performHaptic(HapticType.TICK); onAccentSelected(accent) }
+                                    .padding(vertical = 4.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(accent.light)
+                                        .then(
+                                            if (currentAccent == accent)
+                                                Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
+                                            else Modifier
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (currentAccent == accent) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(accent.label, fontSize = 11.sp)
+                            }
+                        }
+                        // 补齐空位
+                        repeat(4 - row.size) { Spacer(modifier = Modifier.weight(1f)) }
+                    }
+                }
+            }
+        },
+        confirmButton = {}
+    )
+}
+
 /** 语言选择对话框 */
 @Composable
 private fun LanguageSelectionDialog(
@@ -994,6 +1116,7 @@ private fun LanguageSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.settings_language)) },
         text = {
             Column {
@@ -1217,6 +1340,7 @@ fun ChangelogDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.settings_changelog)) },
         text = {
             Box(
@@ -1278,6 +1402,7 @@ fun DiscoverSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Column {
                 Text(stringResource(R.string.settings_discover_sections))
@@ -1390,6 +1515,7 @@ fun DetailSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Text(stringResource(R.string.settings_detail_sections))
         },
@@ -1534,6 +1660,7 @@ fun CustomSourceEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(if (isNew) stringResource(R.string.settings_add_source) else stringResource(R.string.settings_edit_source)) },
         text = {
             Column(
@@ -1717,6 +1844,7 @@ private fun DefaultTabSelectionDialog(
     val view = LocalView.current
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.settings_default_tab)) },
         text = {
             Column {
@@ -1742,12 +1870,7 @@ private fun DefaultTabSelectionDialog(
                 }
             }
         },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
-        }
+        confirmButton = {}
     )
 }
 

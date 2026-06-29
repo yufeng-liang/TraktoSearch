@@ -65,10 +65,12 @@ class SearchViewModel @Inject constructor(
 
     private var searchJob: Job? = null
 
-    // 热门搜索词（硬编码）
-    val popularSearches: List<String> = listOf(
-        "流浪地球", "满江红", "消失的她", "封神", "狂飙", "三体", "长津湖", "你好李焕英"
-    )
+    // 热门搜索词 - 从豆瓣新片榜实时获取
+    private val _hotSearches = MutableStateFlow<List<String>>(emptyList())
+    val hotSearches: StateFlow<List<String>> = _hotSearches.asStateFlow()
+
+    // 热门搜索缓存（1 小时）
+    private val hotSearchCache = TtlCache<List<String>>(TTL_DOUBAN)
 
     companion object {
         private const val TTL_SEARCH = 10 * 60 * 1000L      // 资源搜索 10 分钟
@@ -101,6 +103,29 @@ class SearchViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     searchHistory = history
                 )
+            }
+        }
+        // 加载热门搜索
+        loadHotSearches()
+    }
+
+    private fun loadHotSearches() {
+        viewModelScope.launch {
+            // 先检查缓存
+            val cached = hotSearchCache.get("hot_searches_v2")
+            if (cached != null) {
+                _hotSearches.value = cached
+                return@launch
+            }
+            try {
+                val response = doubanHotApi.getDoubanHot(category = "douban-movie", limit = 10)
+                val titles = response.data.items.mapNotNull { item ->
+                    item.title.replace(Regex("【\\d+\\.?\\d*】\\s*"), "").ifEmpty { null }
+                }.take(8)
+                _hotSearches.value = titles
+                hotSearchCache.put("hot_searches", titles)
+            } catch (_: Exception) {
+                // 加载失败时保持空列表
             }
         }
     }

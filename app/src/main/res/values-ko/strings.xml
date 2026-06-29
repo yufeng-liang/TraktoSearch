@@ -99,10 +99,14 @@
     <string name="error_retry">재시도</string>
 
     <!-- Theme -->
-    <string name="settings_theme">테마</string>
+    <string name="settings_theme">다크 모드</string>
     <string name="theme_system">시스템 따르기</string>
     <string name="theme_dark">다크</string>
     <string name="theme_light">라이트</string>
+
+    <!-- Accent Color -->
+    <string name="settings_accent_color">액센트 색상</string>
+    <string name="settings_accent_dynamic">다이나믹 (기본)</string>
 
     <!-- Language -->
     <string name="settings_language">언어</string>
@@ -210,6 +214,13 @@
     <string name="detail_disk_type_115">115</string>
     <string name="detail_disk_type_magnet">마그넷</string>
     <string name="detail_disk_type_other">기타</string>
+    <string name="detail_share_links">링크: </string>
+    <string name="detail_year_suffix">%d년</string>
+    <string name="detail_watched">시청함</string>
+    <string name="detail_not_watched">미시청</string>
+    <string name="detail_saved">저장됨</string>
+    <string name="detail_save">저장</string>
+    <string name="detail_comment_source">(출처: %s)</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">조회함</string>
@@ -217,6 +228,16 @@
     <string name="resource_invalid">유효하지 않음</string>
     <string name="resource_file_count">%1$d개 파일</string>
     <string name="detail_collection_title">시리즈: %s</string>
+
+    <!-- Crash Dialog -->
+    <string name="crash_dialog_title">앱 크래시</string>
+    <string name="crash_dialog_message">앱이 최근 %d회 크래시되었습니다. 개발자에게 로그를 전송하시겠습니까?</string>
+    <string name="crash_dialog_send">로그 전송</string>
+    <string name="crash_dialog_cancel">나중에</string>
+    <string name="crash_email_subject">TrackToSearch 오류 로그</string>
+    <string name="crash_email_body">앱 크래시 로그:\n\n</string>
+    <string name="crash_email_no_log">크래시되었으나 상세 로그를 찾을 수 없습니다.</string>
+    <string name="crash_toast_copied">로그가 복사되었습니다. 1577865546@qq.com 로 전송해주세요</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -328,13 +349,16 @@
     <string name="update_downloading">다운로드 중…</string>
     <string name="update_download_failed">다운로드 실패. 브라우저에서 다운로드해주세요</string>
     <string name="update_install">설치 중…</string>
+    <string name="update_version_suffix">업데이트</string>
 
     <!-- Statistics (추가) -->
     <string name="statistics_info">통계 설명</string>
-    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: 총 시청 수, 이번 달 시청 수, 올해 시청 수를 표시합니다. 데이터는 Trakt 시청 기록을 기반으로 합니다.</string>
+    <string name="statistics_info_overview">Q: 상단의 숫자는 무엇인가요?\nA: 총 시청 수 (영화+드라마), 이번 달 시청 수, 올해 시청 수를 표시합니다. 데이터는 Trakt 시청 기록을 기반으로 합니다.</string>
     <string name="statistics_info_heatmap">Q: 시청 히트맵이란?\nA: GitHub의 기여 그래프와 유사하게 각 사각형은 하루를 나타냅니다. 색상이 진할수록 해당 날짜에 더 많이 시청했음을 의미하며, 지난 1년을 포함합니다.</string>
     <string name="statistics_info_genre_distribution">Q: 장르 분포 파이 차트란?\nA: 시청 기록에서 각 장르의 비율을 표시합니다. 각 조각을 탭하여 정확한 수와 백분율을 확인할 수 있습니다.</string>
     <string name="statistics_info_genre_ranking">Q: 인기 장르 순위란?\nA: 시청 수에 따라 장르를 순위별로 표시합니다. 상위 3개는 금, 은, 동 메달로 표시됩니다.</string>
+    <string name="statistics_info_watch_time">Q: 시청 시간은 어떻게 계산되나요?\nA: 시청한 각 영화와 에피소드의 상영 시간을 합산하여 시간 단위로 표시합니다.</string>
+    <string name="statistics_info_ratings">Q: 평점 통계란?\nA: Trakt에서의 평점 수, 평균 평점, 평점 분포를 표시합니다. 평점이 매겨진 작품만 카운트됩니다.</string>
 
     <!-- Help Statistics -->
     <string name="help_statistics_b1">"마이" 페이지 오른쪽 상단에서 통계에 접근</string>
@@ -364,6 +388,25 @@
     <string name="common_saved_path">저장 위치: %1$s/%2$s</string>
     <string name="common_copy_success">복사되었습니다</string>
     <string name="common_open_failed">이 링크를 열 수 없습니다</string>
+    <string name="common_done">완료</string>
+    <string name="error_load_failed">로드 실패</string>
+    <string name="error_search_failed">검색 실패</string>
+
+    <!-- Snackbar Messages -->
+    <string name="snackbar_test_success">테스트 성공, %d 개 결과 파싱</string>
+    <string name="snackbar_test_empty">연결 성공, 결과 없음</string>
+    <string name="snackbar_export_success">내보내기 성공</string>
+    <string name="snackbar_export_failed">내보내기 실패</string>
+    <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
+    <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
+    <string name="snackbar_import_done_letterboxd">Letterboxd 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
+    <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
+    <string name="snackbar_import_done_json">JSON 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
+    <string name="snackbar_import_failed">가져오기 실패</string>
+    <string name="snackbar_cache_cleared">캐시 삭제 완료</string>
+    <string name="snackbar_cache_clear_failed">캐시 삭제 실패</string>
+    <string name="snackbar_already_latest">이미 최신 버전</string>
+    <string name="snackbar_check_update_failed">업데이트 확인 실패</string>
 
     <!-- Search Filter (추가) -->
     <string name="search_filter_all">전체</string>
@@ -424,6 +467,17 @@
     <string name="settings_cache_clear_failed">캐시 지우기 실패: %1$s</string>
     <string name="settings_no_changelog">업데이트 내역이 없습니다</string>
 
+    <!-- PanHub Config -->
+    <string name="settings_panhub_config">설정</string>
+    <string name="settings_panhub_desc">플러그인, 채널, 동시성 및 타임아웃 설정</string>
+    <string name="panhub_config_title">PanHub 검색 설정</string>
+    <string name="panhub_concurrency">동시성</string>
+    <string name="panhub_timeout">타임아웃 (ms)</string>
+    <string name="panhub_plugins">플러그인</string>
+    <string name="panhub_channels">채널</string>
+    <string name="panhub_select_all">전체 선택</string>
+    <string name="panhub_deselect_all">전체 해제</string>
+
     <string name="settings_add_custom_source">사용자 정의 검색 소스 추가</string>
     <string name="settings_add_custom_source_desc">PanSou/Zreso 호환 소스 또는 사용자 정의 JSONPath 지원</string>
     <string name="discover_douban_new_movies">신작 영화</string>
@@ -435,6 +489,7 @@
     <string name="discover_trending_day">오늘</string>
     <string name="discover_trending_week">이번 주</string>
     <string name="discover_trending_lists">커뮤니티 목록</string>
+    <string name="discover_list_meta">%d편 · @%s · ❤%d</string>
     <string name="common_view_all">모두 보기</string>
 
     <!-- Search Source Type -->

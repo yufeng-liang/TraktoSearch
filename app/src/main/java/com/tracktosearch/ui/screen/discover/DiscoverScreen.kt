@@ -23,6 +23,9 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
@@ -191,25 +194,71 @@ fun DiscoverScreen(
                                             text = stringResource(R.string.discover_trending),
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                         )
-                                        Spacer(modifier = Modifier.width(32.dp))
-                                        Row(
-                                            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
-                                            verticalAlignment = Alignment.CenterVertically
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        // 紧凑胶囊分段器：今日 / 本周
+                                        val isDay = uiState.trendingTimeWindow == "day"
+                                        Box(
+                                            modifier = Modifier
+                                                .width(100.dp)
+                                                .height(30.dp)
+                                                .clip(RoundedCornerShape(7.dp))
+                                                .background(MaterialTheme.colorScheme.surfaceVariant)
                                         ) {
-                                            FilterChip(
-                                                selected = uiState.trendingTimeWindow == "day",
-                                                onClick = { viewModel.switchTrendingTimeWindow("day") },
-                                                label = { Text(stringResource(R.string.discover_trending_day)) },
-                                                shape = RoundedCornerShape(20.dp),
-                                                border = null
+                                            // 滑块指示器（左半 or 右半）
+                                            val offset by animateDpAsState(
+                                                targetValue = if (isDay) 0.dp else 50.dp,
+                                                animationSpec = tween(200),
+                                                label = "indicator"
                                             )
-                                            FilterChip(
-                                                selected = uiState.trendingTimeWindow == "week",
-                                                onClick = { viewModel.switchTrendingTimeWindow("week") },
-                                                label = { Text(stringResource(R.string.discover_trending_week)) },
-                                                shape = RoundedCornerShape(20.dp),
-                                                border = null
+                                            Box(
+                                                modifier = Modifier
+                                                    .offset(x = offset)
+                                                    .fillMaxHeight()
+                                                    .width(50.dp)
+                                                    .padding(3.dp)
+                                                    .clip(RoundedCornerShape(5.dp))
+                                                    .background(MaterialTheme.colorScheme.primary)
                                             )
+                                            // 文字选项
+                                            Row(modifier = Modifier.fillMaxSize()) {
+                                                listOf(
+                                                    "day" to stringResource(R.string.discover_trending_day),
+                                                    "week" to stringResource(R.string.discover_trending_week)
+                                                ).forEach { (key, label) ->
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .weight(1f)
+                                                            .fillMaxHeight()
+                                                            .clickable { viewModel.switchTrendingTimeWindow(key) },
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text(
+                                                            text = label,
+                                                            fontSize = 13.sp,
+                                                            fontWeight = if ((key == "day") == isDay) FontWeight.Medium else FontWeight.Normal,
+                                                            color = if ((key == "day") == isDay)
+                                                                MaterialTheme.colorScheme.onPrimary
+                                                            else
+                                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.weight(1f))
+                                        if (uiState.tmdbPopularMovies.isNotEmpty()) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .clickable { showPopularAll = true }
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = stringResource(R.string.discover_view_all, uiState.tmdbPopularMovies.size),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
                                         }
                                     }
                                     TmdbMovieSection(
@@ -371,7 +420,7 @@ fun DiscoverScreen(
                                                                 overflow = TextOverflow.Ellipsis
                                                             )
                                                             Text(
-                                                                text = "${listResponse.list.item_count}部 · @${listResponse.list.user?.username ?: ""} · ❤${listResponse.like_count}",
+                                                                text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
                                                                 style = MaterialTheme.typography.bodySmall,
                                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                                             )
@@ -610,29 +659,31 @@ private fun TmdbMovieSection(
     onViewAll: () -> Unit
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (movies.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, movies.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+        if (title.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                if (movies.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .clickable { onViewAll() }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.discover_view_all, movies.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         }
@@ -939,7 +990,8 @@ private fun TmdbAllSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1022,7 +1074,8 @@ private fun TraktMovieAllSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1090,7 +1143,8 @@ private fun TraktShowAllSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1147,7 +1201,8 @@ private fun TraktAnticipatedAllSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -1529,7 +1584,7 @@ private fun TrendingListsAllSheet(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "${listResponse.list.item_count}部 · @${listResponse.list.user?.username ?: ""} · ❤${listResponse.like_count}",
+                                text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

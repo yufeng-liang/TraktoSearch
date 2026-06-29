@@ -674,7 +674,7 @@ fun DetailScreen(
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -710,6 +710,7 @@ fun DetailScreen(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {
+                            val shareLinksLabel = context.getString(R.string.detail_share_links)
                             val shareText = buildString {
                                 append(uiState.title)
                                 if (uiState.year != null) append(" (${uiState.year})")
@@ -721,7 +722,7 @@ fun DetailScreen(
                                 // 附带前两个资源搜索结果的网盘链接
                                 val topResources = uiState.resources.take(2)
                                 if (topResources.isNotEmpty()) {
-                                    append("\n资源链接：\n")
+                                    append("\n" + shareLinksLabel + "\n")
                                     topResources.forEachIndexed { index, item ->
                                         append("${index + 1}. ${item.name}\n${item.url}\n")
                                     }
@@ -739,7 +740,7 @@ fun DetailScreen(
                 Icon(
                     Icons.Filled.Share,
                     contentDescription = stringResource(R.string.detail_share),
-                    tint = MaterialTheme.colorScheme.onSurface,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -801,6 +802,7 @@ fun DetailScreen(
             if (uiState.showLoginPrompt) {
                 AlertDialog(
                     onDismissRequest = { viewModel.dismissLoginPrompt() },
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {
@@ -1002,7 +1004,7 @@ private fun DetailHeaderContent(
                             uiState.releaseDate
                         }
                     } else if (uiState.year != null) {
-                        "${uiState.year}年"
+                        stringResource(R.string.detail_year_suffix, uiState.year)
                     } else ""
                     val runtimeText = if (uiState.runtime != null && uiState.runtime!! > 0) {
                         val hours = uiState.runtime!! / 60
@@ -1064,16 +1066,16 @@ private fun DetailHeaderContent(
                         }
                     }
                 }
-                // 用户评分控件（有评分时才显示）
-                if (uiState.userRating != null) {
+                // 用户评分控件（始终预留 42dp 避免布局跳动）
                 Box(modifier = Modifier.height(42.dp)) {
-                    UserRatingBar(
-                        userRating = uiState.userRating,
-                        isRating = uiState.isRating,
-                        isRatingLoading = uiState.isRatingLoading,
-                        onClick = onShowRatingDialog
-                    )
-                }
+                    if (uiState.userRating != null) {
+                        UserRatingBar(
+                            userRating = uiState.userRating,
+                            isRating = uiState.isRating,
+                            isRatingLoading = uiState.isRatingLoading,
+                            onClick = onShowRatingDialog
+                        )
+                    }
                 }
                 // 标记已看按钮 + 想看按钮
                 Row(
@@ -1570,7 +1572,7 @@ private fun RatingDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(24.dp),
         title = null,
         text = {
@@ -1936,7 +1938,8 @@ private fun FullCastCrewSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
@@ -2270,6 +2273,7 @@ private fun MarkWatchedDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.detail_mark_watched_title)) },
         text = {
             // 第0季（特别篇）放到最后
@@ -2679,7 +2683,7 @@ private fun EpisodeRow(
         } else {
             Icon(
                 imageVector = Icons.Filled.CheckCircle,
-                contentDescription = if (isWatched) "已看" else "未看",
+                contentDescription = if (isWatched) stringResource(R.string.detail_watched) else stringResource(R.string.detail_not_watched),
                 modifier = Modifier.size(18.dp),
                 tint = if (isWatched) Color(0xFF4CAF50)
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
@@ -2853,7 +2857,7 @@ private fun CommentItem(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "(来源:${comment.source})",
+                    text = stringResource(R.string.detail_comment_source, comment.source),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -3167,7 +3171,8 @@ private fun FullVideosImagesSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
@@ -3629,7 +3634,7 @@ private fun BackdropPagerOverlay(
                 ) {
                     Icon(
                         if (isSaved) Icons.Filled.Check else Icons.Default.Download,
-                        contentDescription = if (isSaved) "已保存" else "保存",
+                        contentDescription = if (isSaved) stringResource(R.string.detail_saved) else stringResource(R.string.detail_save),
                         tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
                         modifier = Modifier.size(22.dp)
                     )

@@ -545,7 +545,8 @@ fun WatchlistScreen(
                             IconButton(onClick = { isMultiSelectMode = false }) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.common_cancel)
+                                    contentDescription = stringResource(R.string.common_cancel),
+                                    tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                             Text(

@@ -34,7 +34,10 @@ data class PersonUiState(
     val resolvingTmdbId: Int? = null,
     val traktPerson: TraktPersonDetail? = null,
     val personImages: List<String> = emptyList(), // 人物图片URL列表（headshot + fanart等）
-    val isLoadingPersonImages: Boolean = false
+    val isLoadingPersonImages: Boolean = false,
+    val totalMovieCredits: Int = 0,
+    val totalTvCredits: Int = 0,
+    val originalName: String? = null
 )
 
 @HiltViewModel
@@ -85,7 +88,14 @@ class PersonViewModel @Inject constructor(
                         hasMoreTvShows = tvCreditsPageResult.hasMore
                     )
                     // 异步加载 Trakt 人物数据（静默失败）
-                    loadTraktPerson(person.name)
+                    loadTraktPerson(personId, person.name)
+                    // 从 TMDB also_known_as 获取原名（英文名）
+                    val originalName = person.also_known_as.firstOrNull { name ->
+                        name.all { c -> c.isLetter() || c == ' ' || c == '.' || c == '-' || c == '\'' }
+                    }
+                    if (originalName != null) {
+                        _uiState.value = _uiState.value.copy(originalName = originalName)
+                    }
                 }
                 loaded = true
             } catch (_: Exception) {
@@ -94,19 +104,44 @@ class PersonViewModel @Inject constructor(
         }
     }
 
-    private fun loadTraktPerson(personName: String) {
+    private fun loadTraktPerson(tmdbId: Int, personName: String) {
         // 提前设置图片加载状态，避免图片栏目出现时导致下方内容跳变
         _uiState.value = _uiState.value.copy(isLoadingPersonImages = true)
         viewModelScope.launch {
             try {
-                val searchResult = traktRepository.searchPeople(personName, limit = 5)
-                searchResult.onSuccess { (results, _) ->
+                // 使用 TMDB ID 搜索 Trakt 人物
+                val searchResult = traktRepository.searchByTmdb(tmdbId, MediaType.PERSON)
+                searchResult.onSuccess { results ->
+                    android.util.Log.d("PersonVM", "Trakt search TMDB $tmdbId: ${results.size} results")
                     val personResult = results.firstOrNull { it.person != null }
                     val slug = personResult?.person?.ids?.slug
+                    android.util.Log.d("PersonVM", "Person slug: $slug")
                     if (!slug.isNullOrEmpty()) {
                         val detailResult = traktRepository.getPersonSummary(slug)
                         detailResult.onSuccess { detail ->
+                            android.util.Log.d("PersonVM", "Trakt person: ${detail.name}")
+                            android.util.Log.d("PersonVM", "social_ids.facebook: ${detail.social_ids?.facebook}")
+                            android.util.Log.d("PersonVM", "social_ids.instagram: ${detail.social_ids?.instagram}")
+                            android.util.Log.d("PersonVM", "social_ids.twitter: ${detail.social_ids?.twitter}")
+                            android.util.Log.d("PersonVM", "social_ids.wikipedia: ${detail.social_ids?.wikipedia}")
                             _uiState.value = _uiState.value.copy(traktPerson = detail)
+                        }
+                        // 获取参演数量
+                        val movieCreditsResult = traktRepository.getPersonMovieCredits(slug)
+                        movieCreditsResult.onSuccess { credits ->
+                            _uiState.value = _uiState.value.copy(totalMovieCredits = credits.cast.size)
+                        }
+                        val showCreditsResult = traktRepository.getPersonShowCredits(slug)
+                        showCreditsResult.onSuccess { credits ->
+                            _uiState.value = _uiState.value.copy(totalTvCredits = credits.cast.size)
+                        }
+                        // 获取原名
+                        val aliasesResult = traktRepository.getPersonAliases(slug)
+                        aliasesResult.onSuccess { aliases ->
+                            val originalName = aliases.firstOrNull { it.country == null }?.name
+                            if (originalName != null && originalName != detailResult.getOrNull()?.name) {
+                                _uiState.value = _uiState.value.copy(originalName = originalName)
+                            }
                         }
                         // 获取 Trakt 人物图片
                         val imagesResult = traktRepository.getPersonImages(slug)

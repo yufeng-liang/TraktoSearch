@@ -124,6 +124,7 @@ fun SearchScreen(
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val hotSearches by viewModel.hotSearches.collectAsStateWithLifecycle()
     var searchQuery by rememberSaveable { mutableStateOf(initialKeyword) }
     val context = LocalContext.current
     val view = LocalView.current
@@ -145,6 +146,8 @@ fun SearchScreen(
         cloudThemeManager.loadTheme(loc)
     }
     LaunchedEffect(Unit) {
+        // 先用缓存/无位置加载，不等权限，避免闪烁
+        cloudThemeManager.loadTheme(null)
         val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
@@ -253,7 +256,7 @@ fun SearchScreen(
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                             PopularSearchesSection(
-                                popularSearches = viewModel.popularSearches,
+                                popularSearches = hotSearches,
                                 onPopularClick = { keyword ->
                                     searchQuery = keyword
                                     // 热门搜索默认用网盘tab页搜索
@@ -351,7 +354,7 @@ private fun SearchBarTop(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(4.dp))
         }
@@ -408,7 +411,8 @@ private fun SearchBarTop(
                         }
                         DropdownMenu(
                             expanded = showTypeDropdown,
-                            onDismissRequest = { showTypeDropdown = false }
+                            onDismissRequest = { showTypeDropdown = false },
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ) {
                             val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
                             orderedTypes.forEach { type ->
@@ -904,7 +908,8 @@ fun DoubanHotAllSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.ui.res.painterResource
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +69,7 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.ui.platform.LocalContext
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.SocialMediaIcon
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -178,7 +180,13 @@ fun PersonScreen(
                                 traktGender = uiState.traktPerson?.gender ?: "",
                                 traktBiography = uiState.traktPerson?.biography ?: "",
                                 traktHomepage = uiState.traktPerson?.homepage,
-                                isLoading = uiState.isLoading
+                                isLoading = uiState.isLoading,
+                                facebookId = uiState.traktPerson?.social_ids?.facebook,
+                                instagramId = uiState.traktPerson?.social_ids?.instagram,
+                                twitterId = uiState.traktPerson?.social_ids?.twitter,
+                                wikipediaUrl = uiState.traktPerson?.social_ids?.wikipedia,
+                                originalName = uiState.originalName,
+                                traktPerson = uiState.traktPerson
                             )
                         }
 
@@ -502,7 +510,8 @@ private fun AllMovieCreditsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
@@ -582,7 +591,8 @@ private fun AllTvCreditsSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
@@ -824,7 +834,13 @@ private fun PersonHeaderContent(
     traktGender: String = "",
     traktBiography: String = "",
     traktHomepage: String? = null,
-    isLoading: Boolean = false
+    isLoading: Boolean = false,
+    facebookId: String? = null,
+    instagramId: String? = null,
+    twitterId: String? = null,
+    wikipediaUrl: String? = null,
+    originalName: String? = null,
+    traktPerson: Any? = null
 ) {
     val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val context = LocalContext.current
@@ -972,6 +988,175 @@ private fun PersonHeaderContent(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
+                // 原名显示
+                if (originalName == null && isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.5f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
+                } else if (!originalName.isNullOrEmpty() && originalName != name) {
+                    Text(
+                        text = originalName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // 社交媒体图标
+                if (traktPerson == null) {
+                    // Trakt 数据未加载时显示骨架屏
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(90.dp)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                    }
+                } else if (!facebookId.isNullOrEmpty() || !instagramId.isNullOrEmpty() || !twitterId.isNullOrEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (!facebookId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_facebook,
+                                label = facebookId,
+                                tint = Color(0xFF1877F2),
+                                labelColor = Color(0xFF1877F2),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                        if (!instagramId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_instagram,
+                                label = instagramId,
+                                tint = Color(0xFFE4405F),
+                                labelColor = Color(0xFFE4405F),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                        if (!twitterId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_x_twitter,
+                                label = twitterId,
+                                tint = Color(0xFF000000),
+                                labelColor = Color(0xFF000000),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                    }
+                }
+                // 主页链接 + 维基百科链接
+                if (traktPerson == null) {
+                    // Trakt 数据未加载时显示骨架屏
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.4f)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(70.dp)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                    }
+                } else if (!traktHomepage.isNullOrEmpty() || !wikipediaUrl.isNullOrEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (!traktHomepage.isNullOrEmpty()) {
+                            Text(
+                                text = traktHomepage,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        try {
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(traktHomepage))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) { }
+                                    }
+                            )
+                        }
+                        if (!wikipediaUrl.isNullOrEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        try {
+                                            val url = if (wikipediaUrl.startsWith("http")) {
+                                                wikipediaUrl
+                                            } else {
+                                                "https://en.wikipedia.org/wiki/${wikipediaUrl.replace(" ", "_")}"
+                                            }
+                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                            context.startActivity(intent)
+                                        } catch (_: Exception) { }
+                                    },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(id = R.drawable.ic_wikipedia),
+                                    contentDescription = "Wikipedia",
+                                    tint = Color(0xFF636466),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    text = "Wikipedia",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                }
                 if (isLoading && knownForDepartment.isBlank()) {
                     Box(
                         modifier = Modifier
@@ -984,7 +1169,7 @@ private fun PersonHeaderContent(
                     Text(
                         text = knownForDepartment,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 // 性别显示
@@ -992,7 +1177,7 @@ private fun PersonHeaderContent(
                     Text(
                         text = genderText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 if (isLoading && birthday.isNullOrEmpty()) {
@@ -1088,28 +1273,6 @@ private fun PersonHeaderContent(
                 text = stringResource(R.string.person_no_biography),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        // 主页链接
-        if (!traktHomepage.isNullOrEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = traktHomepage,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        try {
-                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(traktHomepage))
-                            context.startActivity(intent)
-                        } catch (_: Exception) { }
-                    }
             )
         }
     }

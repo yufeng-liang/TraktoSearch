@@ -7,6 +7,9 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.tracktosearch.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,7 +42,8 @@ data class StatisticsUiState(
 
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(StatisticsUiState(isLoading = true))
@@ -81,15 +85,15 @@ class StatisticsViewModel @Inject constructor(
                 val results = awaitAll(movieDeferred, showDeferred, watchedShowsDeferred)
 
                 val movies = (results[0] as Result<List<TraktWatchlistMovieItem>>).getOrElse {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
                 val shows = (results[1] as Result<List<TraktWatchlistShowItem>>).getOrElse {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
                 val watchedShows = (results[2] as Result<List<com.tracktosearch.data.remote.trakt.dto.TraktWatchedShow>>).getOrElse {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: "加载失败")
+                    _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
 
@@ -193,7 +197,7 @@ class StatisticsViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "加载失败"
+                    error = e.message ?: context.getString(R.string.error_load_failed)
                 )
             }
         }

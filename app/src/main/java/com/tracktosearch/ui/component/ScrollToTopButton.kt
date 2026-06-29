@@ -27,9 +27,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -143,7 +141,7 @@ private fun ScrollToTopButtonContent(
     hazeState: HazeState?
 ) {
     val view = LocalView.current
-    val arrowTint = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF616161) else Color.White
+    val arrowTint = MaterialTheme.colorScheme.primary
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     if (hazeState != null) {
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%
@@ -173,14 +171,11 @@ private fun ScrollToTopButtonContent(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            val shadowColor = if (arrowTint == Color(0xFF616161)) Color.White else Color.Black
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
-                modifier = Modifier
-                    .shadow(2.dp, CircleShape, ambientColor = shadowColor, spotColor = shadowColor)
-                    .size(32.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
     } else {
@@ -188,14 +183,11 @@ private fun ScrollToTopButtonContent(
             onClick = onClickWithHaptic,
             shape = CircleShape
         ) {
-            val shadowColor = if (arrowTint == Color(0xFF616161)) Color.White else Color.Black
             Icon(
                 imageVector = Icons.Filled.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
-                modifier = Modifier
-                    .shadow(2.dp, CircleShape, ambientColor = shadowColor, spotColor = shadowColor)
-                    .size(32.dp)
+                modifier = Modifier.size(32.dp)
             )
         }
     }

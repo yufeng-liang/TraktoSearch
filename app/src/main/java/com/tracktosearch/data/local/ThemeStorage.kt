@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.tracktosearch.ui.theme.MonetAccent
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -23,9 +24,23 @@ class ThemeStorage @Inject constructor(
         prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
     }.distinctUntilChanged()
 
+    /** null = 动态壁纸取色（默认） */
+    val accentColor: Flow<MonetAccent?> = context.themeDataStore.data.map { prefs ->
+        prefs[KEY_ACCENT_COLOR]?.let { name ->
+            runCatching { MonetAccent.valueOf(name) }.getOrNull()
+        }
+    }.distinctUntilChanged()
+
     suspend fun setThemeMode(mode: String) {
         context.themeDataStore.edit { prefs ->
             prefs[KEY_THEME_MODE] = mode
+        }
+    }
+
+    suspend fun setAccentColor(accent: MonetAccent?) {
+        context.themeDataStore.edit { prefs ->
+            if (accent == null) prefs.remove(KEY_ACCENT_COLOR)
+            else prefs[KEY_ACCENT_COLOR] = accent.name
         }
     }
 
@@ -34,5 +49,6 @@ class ThemeStorage @Inject constructor(
         const val MODE_DARK = "dark"
         const val MODE_LIGHT = "light"
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
+        private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
     }
 }

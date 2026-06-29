@@ -141,6 +141,7 @@ data class TmdbReviewAuthor(
 data class TmdbPerson(
     val id: Int = 0,
     val name: String = "",
+    val also_known_as: List<String> = emptyList(),
     val birthday: String? = null,
     val deathday: String? = null,
     val biography: String = "",

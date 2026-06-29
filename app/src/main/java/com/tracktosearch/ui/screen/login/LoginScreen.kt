@@ -61,7 +61,7 @@ class LoginViewModel @Inject constructor(
                 _loginState.value = LoginState.SUCCESS
             } else {
                 _loginState.value = LoginState.ERROR
-                _errorMessage.value = result.exceptionOrNull()?.message ?: "登录失败"
+                _errorMessage.value = result.exceptionOrNull()?.message ?: ""
             }
         }
     }
@@ -212,8 +212,10 @@ fun LoginScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        val loginFailedText = stringResource(R.string.login_failed)
+                        val loginDeniedText = stringResource(R.string.login_denied)
                         Text(
-                            text = errorMessage ?: stringResource(R.string.login_denied),
+                            text = errorMessage?.ifEmpty { loginFailedText } ?: loginDeniedText,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.error
                         )

@@ -16,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -197,7 +198,8 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle(initialValue = "system")
-            TraktToSearchTheme(themeMode = themeMode) {
+            val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle(initialValue = null)
+            TraktToSearchTheme(themeMode = themeMode, accentColor = accentColor) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
@@ -257,12 +259,24 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
 
+                    val splashStartColor: Color
+                    val splashEndColor: Color
+                    if (accentColor != null) {
+                        val darkTheme = themeMode == "dark" || (themeMode == "system" && isSystemInDarkTheme())
+                        val seed = if (darkTheme) accentColor!!.dark else accentColor!!.light
+                        splashStartColor = seed
+                        splashEndColor = seed.copy(alpha = 0.7f)
+                    } else {
+                        splashStartColor = Color(0xFF4B88E6)
+                        splashEndColor = Color(0xFF6C63FF)
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(
                                 Brush.linearGradient(
-                                    colors = listOf(Color(0xFF4B88E6), Color(0xFF6C63FF)),
+                                    colors = listOf(splashStartColor, splashEndColor),
                                     start = Offset.Zero,
                                     end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
                                 )
@@ -275,47 +289,23 @@ class MainActivity : AppCompatActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            // 半透明毛玻璃底衬
-                            Box(
-                                modifier = Modifier
-                                    .size(88.dp)
-                                    .scale(iconScale.value)
-                                    .alpha(iconAlpha.value)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .background(Color.White.copy(alpha = 0.2f))
-                                    .then(
-                                        Modifier.background(
-                                            Color.White.copy(alpha = 0.1f),
-                                            RoundedCornerShape(22.dp)
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // 白色圆角方形图标
-                                Box(
+                            val context = LocalContext.current
+                            val launcherBitmap = remember {
+                                android.graphics.BitmapFactory.decodeResource(
+                                    context.resources, R.drawable.ic_search_cloud
+                                )?.asImageBitmap()
+                            }
+                            if (launcherBitmap != null) {
+                                Image(
+                                    bitmap = launcherBitmap,
+                                    contentDescription = "App Icon",
                                     modifier = Modifier
-                                        .size(64.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(Color.White),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    val context = LocalContext.current
-                                    val launcherBitmap = remember {
-                                        android.graphics.BitmapFactory.decodeResource(
-                                            context.resources, R.drawable.ic_search_cloud
-                                        )?.asImageBitmap()
-                                    }
-                                    if (launcherBitmap != null) {
-                                        Image(
-                                            bitmap = launcherBitmap,
-                                            contentDescription = "App Icon",
-                                            modifier = Modifier
-                                                .size(56.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
+                                        .size(120.dp)
+                                        .scale(iconScale.value)
+                                        .alpha(iconAlpha.value)
+                                        .clip(RoundedCornerShape(24.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(
@@ -434,13 +424,13 @@ class MainActivity : AppCompatActivity() {
         if (crashCount >= 2) {
             val logs = CrashHandler.getCrashLogs(this)
             AlertDialog.Builder(this)
-                .setTitle("应用异常提醒")
-                .setMessage("检测到应用近期发生了 $crashCount 次异常退出，是否将错误日志发送给开发者以帮助修复问题？")
-                .setPositiveButton("发送日志") { _: DialogInterface, _: Int ->
+                .setTitle(getString(R.string.crash_dialog_title))
+                .setMessage(getString(R.string.crash_dialog_message, crashCount))
+                .setPositiveButton(getString(R.string.crash_dialog_send)) { _: DialogInterface, _: Int ->
                     sendCrashEmail(logs)
                     CrashHandler.clearCrashLogs(this)
                 }
-                .setNegativeButton("暂不发送") { dialog: DialogInterface, _: Int ->
+                .setNegativeButton(getString(R.string.crash_dialog_cancel)) { dialog: DialogInterface, _: Int ->
                     dialog.dismiss()
                     CrashHandler.clearCrashLogs(this)
                 }
@@ -450,11 +440,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendCrashEmail(logs: String) {
-        val subject = "TrackToSearch 错误日志"
+        val subject = getString(R.string.crash_email_subject)
         val body = if (logs.isNotEmpty()) {
-            "以下是应用崩溃的错误日志：\n\n$logs"
+            getString(R.string.crash_email_body) + logs
         } else {
-            "应用发生了异常退出，但未找到详细的错误日志。"
+            getString(R.string.crash_email_no_log)
         }
 
         val intent = Intent(Intent.ACTION_SENDTO).apply {
@@ -470,7 +460,7 @@ class MainActivity : AppCompatActivity() {
             clipboard.setPrimaryClip(
                 android.content.ClipData.newPlainText("Crash Log", body)
             )
-            showToast("日志已复制到剪贴板，请手动发送至 1577865546@qq.com", Toast.LENGTH_LONG)
+            showToast(getString(R.string.crash_toast_copied), Toast.LENGTH_LONG)
         }
     }
 

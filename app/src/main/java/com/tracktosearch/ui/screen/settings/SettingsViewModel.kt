@@ -7,6 +7,7 @@ import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
@@ -79,6 +80,9 @@ class SettingsViewModel @Inject constructor(
     val themeMode: StateFlow<String> = themeStorage.themeMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStorage.MODE_SYSTEM)
 
+    val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DefaultTabStorage.DEFAULT_TAB_SEARCH)
 
@@ -108,6 +112,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch { themeStorage.setThemeMode(mode) }
+    }
+
+    fun setAccentColor(accent: com.tracktosearch.ui.theme.MonetAccent?) {
+        viewModelScope.launch { themeStorage.setAccentColor(accent) }
     }
 
     fun setDefaultTab(tab: Int) {
@@ -207,9 +215,9 @@ class SettingsViewModel @Inject constructor(
             val state = when (result) {
                 is CustomSearchService.TestResult.Success -> {
                     if (result.count > 0) {
-                        TestResultState(source.id, isTesting = false, success = true, message = "测试成功，解析到 ${result.count} 条结果")
+                        TestResultState(source.id, isTesting = false, success = true, message = context.getString(R.string.snackbar_test_success, result.count))
                     } else {
-                        TestResultState(source.id, isTesting = false, success = true, message = "连接成功，但未解析到结果")
+                        TestResultState(source.id, isTesting = false, success = true, message = context.getString(R.string.snackbar_test_empty))
                     }
                 }
                 is CustomSearchService.TestResult.Error -> {
@@ -273,12 +281,12 @@ class SettingsViewModel @Inject constructor(
 
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = "导出成功：想看 ${watchlistMovies.size} 部电影、${watchlistShows.size} 部电视剧，已看 ${historyMovies.size} 部电影、${historyShows.size} 部电视剧"
+                    message = context.getString(R.string.snackbar_export_success)
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
-                    message = "导出失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_export_failed)
                 )
             }
         }
@@ -295,7 +303,7 @@ class SettingsViewModel @Inject constructor(
                 if (items.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
-                        message = "Letterboxd CSV 中没有找到有效记录"
+                        message = context.getString(R.string.snackbar_import_no_data)
                     )
                     return@launch
                 }
@@ -306,7 +314,7 @@ class SettingsViewModel @Inject constructor(
 
                 items.forEachIndexed { index, item ->
                     _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
                     )
                     try {
                         val searchResult = traktRepository.searchMovies(item.title, page = 1, limit = 1)
@@ -329,12 +337,12 @@ class SettingsViewModel @Inject constructor(
                     syncProgress = null,
                     syncSuccess = success,
                     syncFailed = failed,
-                    message = "Letterboxd 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
+                    message = context.getString(R.string.snackbar_import_done_letterboxd, success, failed)
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = "导入失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_import_failed)
                 )
             }
         }
@@ -351,7 +359,7 @@ class SettingsViewModel @Inject constructor(
                 if (items.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
-                        message = "IMDb CSV 中没有找到有效记录"
+                        message = context.getString(R.string.snackbar_import_no_data)
                     )
                     return@launch
                 }
@@ -362,7 +370,7 @@ class SettingsViewModel @Inject constructor(
 
                 items.forEachIndexed { index, item ->
                     _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
                     )
                     try {
                         val mediaType = when (item.mediaType) {
@@ -402,12 +410,12 @@ class SettingsViewModel @Inject constructor(
                     syncProgress = null,
                     syncSuccess = success,
                     syncFailed = failed,
-                    message = "IMDb 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
+                    message = context.getString(R.string.snackbar_import_done_imdb, success, failed)
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = "导入失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_import_failed)
                 )
             }
         }
@@ -434,7 +442,7 @@ class SettingsViewModel @Inject constructor(
                 if (allItems.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
-                        message = "JSON 文件中没有找到有效数据"
+                        message = context.getString(R.string.snackbar_import_no_data)
                     )
                     return@launch
                 }
@@ -445,7 +453,7 @@ class SettingsViewModel @Inject constructor(
 
                 allItems.forEachIndexed { index, (item, mediaType, isHistory) ->
                     _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = "正在同步 ${index + 1}/$total: ${item.title}"
+                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
                     )
                     try {
                         val traktId = if (item.tmdbId != null && item.tmdbId > 0) {
@@ -498,12 +506,12 @@ class SettingsViewModel @Inject constructor(
                     syncProgress = null,
                     syncSuccess = success,
                     syncFailed = failed,
-                    message = "JSON 导入完成：成功 $success 条，未匹配 $failed 条，共 $total 条"
+                    message = context.getString(R.string.snackbar_import_done_json, success, failed)
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = "导入失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_import_failed)
                 )
             }
         }
@@ -519,11 +527,11 @@ class SettingsViewModel @Inject constructor(
                 offlineCacheManager.clearAll()
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = "缓存已清除"
+                    message = context.getString(R.string.snackbar_cache_cleared)
                 )
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = "清除缓存失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_cache_clear_failed)
                 )
             }
         }
@@ -650,17 +658,17 @@ class SettingsViewModel @Inject constructor(
                     _latestVersion.value = info.latestVersion
                     _changelog.value = info.changelog
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = "已是最新版本"
+                        message = context.getString(R.string.snackbar_already_latest)
                     )
                 } else {
                     _latestVersion.value = BuildConfig.VERSION_NAME
                     _exportImportState.value = _exportImportState.value.copy(
-                        message = "检查更新失败，请稍后重试"
+                        message = context.getString(R.string.snackbar_check_update_failed)
                     )
                 }
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
-                    message = "检查更新失败：${e.message ?: "未知错误"}"
+                    message = context.getString(R.string.snackbar_check_update_failed)
                 )
             } finally {
                 _isCheckingUpdate.value = false

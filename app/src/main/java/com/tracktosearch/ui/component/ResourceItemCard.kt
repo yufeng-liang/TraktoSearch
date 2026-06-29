@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.component
 
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,6 +11,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,16 +27,17 @@ import java.time.format.DateTimeFormatter
 
 data class DiskStyle(
     val shortNameResId: Int,
-    val backgroundColor: Color
+    val backgroundColor: Color,
+    @DrawableRes val iconRes: Int = 0
 )
 
 fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
-    DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue)
-    DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue)
-    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo)
-    DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue)
-    DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange)
-    DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115)
+    DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.drawable.ic_disk_quark)
+    DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.drawable.ic_disk_baidu)
+    DiskType.ALI -> DiskStyle(R.string.disk_ali, AliIndigo, R.drawable.ic_disk_ali)
+    DiskType.XUNLEI -> DiskStyle(R.string.disk_xunlei, XunleiBlue, R.drawable.ic_disk_xunlei)
+    DiskType.UC -> DiskStyle(R.string.disk_uc, UcOrange, R.drawable.ic_disk_uc)
+    DiskType.ONEONEFIVE -> DiskStyle(R.string.disk_115, Blue115, R.drawable.ic_disk_115)
     DiskType.MAGNET -> DiskStyle(R.string.disk_magnet, Color(0xFFD44000))
     DiskType.OTHER -> DiskStyle(R.string.disk_other, Color(0xFF8E8E93))
 }
@@ -66,7 +71,7 @@ fun ResourceItemCard(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
@@ -88,18 +93,27 @@ fun ResourceItemCard(
                     modifier = Modifier.width(28.dp)
                 )
 
-                // 网盘类型标签（品牌色背景 + 白色文字，居中）
+                // 网盘类型标签（品牌色背景 + 图标 + 文字，居中）
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = style.backgroundColor,
                     modifier = Modifier.height(26.dp)
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
-                            .padding(horizontal = 8.dp)
+                            .padding(horizontal = 6.dp)
                             .fillMaxHeight(),
-                        contentAlignment = Alignment.Center
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        if (style.iconRes != 0) {
+                            Image(
+                                painter = painterResource(id = style.iconRes),
+                                contentDescription = null,
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                         Text(
                             text = stringResource(style.shortNameResId),
                             style = MaterialTheme.typography.labelSmall.copy(

@@ -12,6 +12,9 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.tracktosearch.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,7 +55,9 @@ data class DiskSearchState(
     val error: String? = null,
     val hasSearched: Boolean = false,
     val typeFilter: ResourceType = ResourceType.ALL,
-    val diskTypeFilter: com.tracktosearch.data.remote.dto.DiskType? = null
+    val diskTypeFilter: com.tracktosearch.data.remote.dto.DiskType? = null,
+    val completedSources: Int = 0,
+    val totalSources: Int = 0
 )
 
 data class TraktSearchUiState(
@@ -77,7 +82,8 @@ class TraktSearchViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
     private val resourceRepository: ResourceRepository,
-    savedStateHandle: SavedStateHandle
+    savedStateHandle: SavedStateHandle,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val initialTypeFromNav = when (savedStateHandle.get<String>("type")) {
@@ -273,7 +279,7 @@ class TraktSearchViewModel @Inject constructor(
                     } else {
                         updateTabState(searchType, SearchTabState(
                             isLoading = false,
-                            error = e.message ?: "搜索失败",
+                            error = e.message ?: context.getString(R.string.error_search_failed),
                             hasSearched = true
                         ))
                     }
@@ -294,7 +300,7 @@ class TraktSearchViewModel @Inject constructor(
                 }.onFailure { e ->
                     updateTabState(searchType, SearchTabState(
                         isLoading = false,
-                        error = e.message ?: "搜索失败",
+                        error = e.message ?: context.getString(R.string.error_search_failed),
                         hasSearched = true
                     ))
                 }
@@ -435,21 +441,32 @@ class TraktSearchViewModel @Inject constructor(
         if (diskState.isLoading) return
 
         viewModelScope.launch {
+            val totalSources = resourceRepository.getEnabledSources().size
             _uiState.value = _uiState.value.copy(
-                diskState = diskState.copy(isLoading = true, hasSearched = true, error = null)
+                diskState = diskState.copy(
+                    isLoading = true, hasSearched = true, error = null,
+                    totalSources = totalSources, completedSources = 0
+                )
             )
 
-            resourceRepository.searchResourcesFlow(keyword = query)
-                .collect { items ->
-                    if (items.isNotEmpty()) {
-                        _uiState.value = _uiState.value.copy(
-                            diskState = _uiState.value.diskState.copy(
-                                isLoading = false,
-                                resources = items
-                            )
-                        )
-                    }
+            resourceRepository.searchResourcesFlow(
+                keyword = query,
+                onSourceComplete = {
+                    val current = _uiState.value.diskState
+                    _uiState.value = _uiState.value.copy(
+                        diskState = current.copy(completedSources = current.completedSources + 1)
+                    )
                 }
+            ).collect { items ->
+                if (items.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(
+                        diskState = _uiState.value.diskState.copy(
+                            isLoading = false,
+                            resources = items
+                        )
+                    )
+                }
+            }
             if (_uiState.value.diskState.isLoading) {
                 _uiState.value = _uiState.value.copy(
                     diskState = _uiState.value.diskState.copy(isLoading = false)

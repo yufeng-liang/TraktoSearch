@@ -787,6 +787,36 @@ class TraktRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
+    /** 获取人物电影参演 */
+    suspend fun getPersonMovieCredits(personSlug: String): Result<TraktPersonCreditsResponse> {
+        return try {
+            val response = traktApiService.getPersonMovieCredits(personSlug)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: TraktPersonCreditsResponse())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取人物电视剧参演 */
+    suspend fun getPersonShowCredits(personSlug: String): Result<TraktPersonCreditsResponse> {
+        return try {
+            val response = traktApiService.getPersonShowCredits(personSlug)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: TraktPersonCreditsResponse())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** 获取人物别名 */
+    suspend fun getPersonAliases(personSlug: String): Result<List<TraktPersonAlias>> {
+        return try {
+            val response = traktApiService.getPersonAliases(personSlug)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: emptyList())
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
     // 社区热门列表
     suspend fun getTrendingLists(limit: Int = 10, page: Int = 1): Result<List<TraktTrendingListResponse>> {
         return try {

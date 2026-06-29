@@ -99,10 +99,14 @@
     <string name="error_retry">再試行</string>
 
     <!-- Theme -->
-    <string name="settings_theme">テーマ</string>
+    <string name="settings_theme">ダークモード</string>
     <string name="theme_system">システムに従う</string>
     <string name="theme_dark">ダーク</string>
     <string name="theme_light">ライト</string>
+
+    <!-- Accent Color -->
+    <string name="settings_accent_color">アクセントカラー</string>
+    <string name="settings_accent_dynamic">ダイナミック（デフォルト）</string>
 
     <!-- Language -->
     <string name="settings_language">言語</string>
@@ -210,6 +214,13 @@
     <string name="detail_disk_type_115">115</string>
     <string name="detail_disk_type_magnet">マグネット</string>
     <string name="detail_disk_type_other">その他</string>
+    <string name="detail_share_links">リンク：</string>
+    <string name="detail_year_suffix">%d年</string>
+    <string name="detail_watched">視聴済み</string>
+    <string name="detail_not_watched">未視聴</string>
+    <string name="detail_saved">保存済み</string>
+    <string name="detail_save">保存</string>
+    <string name="detail_comment_source">(出典: %s)</string>
 
     <!-- Resource Item Card -->
     <string name="resource_viewed">閲覧済み</string>
@@ -217,6 +228,16 @@
     <string name="resource_invalid">無効</string>
     <string name="resource_file_count">%1$dファイル</string>
     <string name="detail_collection_title">コレクション：%s</string>
+
+    <!-- Crash Dialog -->
+    <string name="crash_dialog_title">アプリクラッシュ</string>
+    <string name="crash_dialog_message">アプリが最近%d回クラッシュしました。開発者にログを送信しますか？</string>
+    <string name="crash_dialog_send">ログ送信</string>
+    <string name="crash_dialog_cancel">後で</string>
+    <string name="crash_email_subject">TrackToSearch エラーログ</string>
+    <string name="crash_email_body">アプリクラッシュのログ：</string>
+    <string name="crash_email_no_log">クラッシュしましたが詳細ログが見つかりませんでした.</string>
+    <string name="crash_toast_copied">ログをコピーしました。1577865546@qq.com に送信してください</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -328,13 +349,16 @@
     <string name="update_downloading">ダウンロード中…</string>
     <string name="update_download_failed">ダウンロードに失敗しました。ブラウザでダウンロードしてください</string>
     <string name="update_install">インストール中…</string>
+    <string name="update_version_suffix">アップデート</string>
 
     <!-- Statistics (追加) -->
     <string name="statistics_info">統計の説明</string>
-    <string name="statistics_info_overview">Q：上部の数字は何ですか？\nA：総視聴数、今月の視聴数、今年の視聴数を表示しています。データはTraktの視聴履歴に基づきます。</string>
+    <string name="statistics_info_overview">Q：上部の数字は何ですか？\nA：総視聴数（映画+ドラマ）、今月の視聴数、今年の視聴数を表示しています。データはTraktの視聴履歴に基づきます。</string>
     <string name="statistics_info_heatmap">Q：視聴ヒートマップとは？\nA：GitHubのコントリビューショングラフと同様に、各マス目は1日を表します。色が濃いほどその日の視聴が多いことを示し、過去1年分をカバーします。</string>
     <string name="statistics_info_genre_distribution">Q：ジャンル分布の円グラフとは？\nA：視聴履歴における各ジャンルの割合を表示します。各スライスをタップすると正確な数とパーセンテージが表示されます。</string>
     <string name="statistics_info_genre_ranking">Q：トップジャンルランキングとは？\nA：視聴数に基づいてジャンルをランキング表示します。上位3つは金、銀、銅のメダルでマークされます。</string>
+    <string name="statistics_info_watch_time">Q：視聴時間はどのように計算されますか？\nA：視聴した各映画とエピソードの上映時間を合計し、時間単位で表示します。</string>
+    <string name="statistics_info_ratings">Q：評価統計とは？\nA：Traktでの評価数、平均評価、評価分布を表示します。評価した作品のみカウントされます。</string>
 
     <!-- Help Statistics -->
     <string name="help_statistics_b1">「マイ」ページの右上角から統計にアクセス</string>
@@ -364,6 +388,25 @@
     <string name="common_saved_path">保存先: %1$s/%2$s</string>
     <string name="common_copy_success">コピーしました</string>
     <string name="common_open_failed">このリンクを開けません</string>
+    <string name="common_done">完了</string>
+    <string name="error_load_failed">読み込み失敗</string>
+    <string name="error_search_failed">検索失敗</string>
+
+    <!-- Snackbar Messages -->
+    <string name="snackbar_test_success">テスト成功、%d 件の結果を解析</string>
+    <string name="snackbar_test_empty">接続成功、結果なし</string>
+    <string name="snackbar_export_success">エクスポート成功</string>
+    <string name="snackbar_export_failed">エクスポート失敗</string>
+    <string name="snackbar_import_no_data">有効なレコードが見つかりません</string>
+    <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
+    <string name="snackbar_import_done_letterboxd">Letterboxd インポート完了: %1$d 件一致、%2$d 件不一致</string>
+    <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>
+    <string name="snackbar_import_done_json">JSON インポート完了: %1$d 件一致、%2$d 件不一致</string>
+    <string name="snackbar_import_failed">インポート失敗</string>
+    <string name="snackbar_cache_cleared">キャッシュをクリア</string>
+    <string name="snackbar_cache_clear_failed">キャッシュクリア失敗</string>
+    <string name="snackbar_already_latest">最新バージョンです</string>
+    <string name="snackbar_check_update_failed">更新チェック失敗</string>
 
     <!-- Search Filter (追加) -->
     <string name="search_filter_all">すべて</string>
@@ -424,6 +467,17 @@
     <string name="settings_cache_clear_failed">キャッシュクリア失敗: %1$s</string>
     <string name="settings_no_changelog">更新履歴はありません</string>
 
+    <!-- PanHub Config -->
+    <string name="settings_panhub_config">設定</string>
+    <string name="settings_panhub_desc">プラグイン、チャンネル、並列数、タイムアウトの設定</string>
+    <string name="panhub_config_title">PanHub 検索設定</string>
+    <string name="panhub_concurrency">並列数</string>
+    <string name="panhub_timeout">タイムアウト (ms)</string>
+    <string name="panhub_plugins">プラグイン</string>
+    <string name="panhub_channels">チャンネル</string>
+    <string name="panhub_select_all">すべて選択</string>
+    <string name="panhub_deselect_all">すべて解除</string>
+
     <string name="settings_add_custom_source">カスタム検索ソースを追加</string>
     <string name="settings_add_custom_source_desc">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
     <string name="discover_douban_new_movies">新作映画</string>
@@ -435,6 +489,7 @@
     <string name="discover_trending_day">今日</string>
     <string name="discover_trending_week">今週</string>
     <string name="discover_trending_lists">コミュニティリスト</string>
+    <string name="discover_list_meta">%d作品 · @%s · ❤%d</string>
     <string name="common_view_all">すべて見る</string>
 
     <!-- Search Source Type -->

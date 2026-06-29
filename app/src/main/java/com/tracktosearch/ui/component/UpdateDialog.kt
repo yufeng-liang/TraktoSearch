@@ -345,6 +345,7 @@ fun UpdateDialog(
 
     AlertDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.update_new_version, updateInfo.latestVersion)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -355,7 +356,7 @@ fun UpdateDialog(
                         .heightIn(max = 320.dp)
                 ) {
                     StickyHeaderChangelogContent(
-                        text = updateInfo.changelog.ifBlank { "v${updateInfo.latestVersion} 版本更新" }
+                        text = updateInfo.changelog.ifBlank { context.getString(R.string.update_version_suffix) + " v${updateInfo.latestVersion}" }
                     )
                 }
 
@@ -413,7 +414,7 @@ fun UpdateDialog(
                                     )
                                     downloadState = DownloadState.Completed(file)
                                 } catch (e: Exception) {
-                                    downloadState = DownloadState.Error(e.message ?: "下载失败")
+                                    downloadState = DownloadState.Error(e.message ?: context.getString(R.string.update_download_failed))
                                 }
                             }
                         }, modifier = Modifier.fillMaxWidth()) {

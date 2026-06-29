@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -17,33 +18,81 @@ import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = Red500,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
+    onPrimary = Color.White,
     primaryContainer = Red700,
     secondary = QuarkBlue,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
+    onSecondary = Color.White,
     background = DarkBackground,
-    onBackground = androidx.compose.ui.graphics.Color.White,
+    onBackground = Color.White,
     surface = DarkSurface,
-    onSurface = androidx.compose.ui.graphics.Color.White,
+    onSurface = Color.White,
     surfaceVariant = DarkCard,
     onSurfaceVariant = LightGray,
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = Red700,
-    onPrimary = androidx.compose.ui.graphics.Color.White,
+    onPrimary = Color.White,
     primaryContainer = Red500,
     secondary = QuarkBlue,
-    onSecondary = androidx.compose.ui.graphics.Color.White,
-    background = androidx.compose.ui.graphics.Color.White,
+    onSecondary = Color.White,
+    background = Color.White,
     onBackground = DarkGray,
-    surface = androidx.compose.ui.graphics.Color.White,
+    surface = Color.White,
     onSurface = DarkGray,
 )
+
+/** 根据种子色生成自定义 colorScheme */
+private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
+    val primary = seed
+    val onPrimary = Color.White
+    val primaryContainer = seed.copy(alpha = 0.8f)
+    val secondary = seed.copy(alpha = 0.7f)
+    val onSecondary = Color.White
+    val secondaryContainer = seed.copy(alpha = 0.15f)
+    val onSecondaryContainer = seed
+    return if (dark) {
+        darkColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            secondary = secondary,
+            onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = onSecondaryContainer,
+            background = DarkBackground,
+            onBackground = Color.White,
+            surface = DarkSurface,
+            onSurface = Color.White,
+            surfaceVariant = DarkCard,
+            onSurfaceVariant = LightGray,
+        )
+    } else {
+        lightColorScheme(
+            primary = primary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            secondary = secondary,
+            onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = onSecondaryContainer,
+            background = Color.White,
+            onBackground = DarkGray,
+            surface = Color.White,
+            onSurface = DarkGray,
+            surfaceVariant = Color(
+                red = seed.red * 0.08f + 0.92f,
+                green = seed.green * 0.08f + 0.92f,
+                blue = seed.blue * 0.08f + 0.92f
+            ),
+        )
+    }
+}
 
 @Composable
 fun TraktToSearchTheme(
     themeMode: String = "system",
+    accentColor: MonetAccent? = null,
     content: @Composable () -> Unit
 ) {
     val darkTheme = when (themeMode) {
@@ -52,10 +101,17 @@ fun TraktToSearchTheme(
         else -> isSystemInDarkTheme()
     }
     val colorScheme = when {
+        // 自定义莫奈主题色：直接用种子色生成 scheme，忽略动态壁纸
+        accentColor != null -> monetColorScheme(
+            seed = if (darkTheme) accentColor.dark else accentColor.light,
+            dark = darkTheme
+        )
+        // 默认：Android 12+ 使用壁纸动态颜色
         Build.VERSION.SDK_INT >= 31 -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
+        // 低版本：静态配色
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -64,7 +120,6 @@ fun TraktToSearchTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            // 关闭导航栏对比度增强，防止系统自动添加半透明遮罩（小白条横线）
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 window.isNavigationBarContrastEnforced = false
             }

@@ -16,11 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.data.remote.panhub.ChannelGroup
 import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
+import com.tracktosearch.R
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 
@@ -42,7 +44,8 @@ fun PanHubConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("PanHub 搜索配置") },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.panhub_config_title)) },
         text = {
             Column(
                 modifier = Modifier
@@ -52,7 +55,7 @@ fun PanHubConfigDialog(
             ) {
                 // 并发数
                 Column {
-                    Text("并发数", style = MaterialTheme.typography.labelLarge)
+                    Text(stringResource(R.string.panhub_concurrency), style = MaterialTheme.typography.labelLarge)
                     Slider(
                         value = (concurrencyText.toIntOrNull() ?: 4).toFloat(),
                         onValueChange = { v ->
@@ -82,7 +85,7 @@ fun PanHubConfigDialog(
                         timeoutText = v
                         v.toIntOrNull()?.let { onTimeoutMsChange(it) }
                     },
-                    label = { Text("超时 (ms)") },
+                    label = { Text(stringResource(R.string.panhub_timeout)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -93,14 +96,14 @@ fun PanHubConfigDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("插件", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.panhub_plugins), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     val allPluginsSelected = enabledPlugins.size == PanHubPlugin.entries.size
                     TextButton(onClick = {
                         val newSet = if (allPluginsSelected) emptySet() else PanHubPlugin.entries.map { it.id }.toSet()
                         enabledPlugins = newSet
                         onEnabledPluginsChange(newSet)
                     }) {
-                        Text(if (allPluginsSelected) "全不选" else "全选")
+                        Text(if (allPluginsSelected) stringResource(R.string.panhub_deselect_all) else stringResource(R.string.panhub_select_all))
                     }
                 }
 
@@ -143,14 +146,14 @@ fun PanHubConfigDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("频道", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.panhub_channels), style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
                     val allChannelsSelected = enabledChannels.size == PanHubChannel.entries.size
                     TextButton(onClick = {
                         val newSet = if (allChannelsSelected) emptySet() else PanHubChannel.entries.map { it.id }.toSet()
                         enabledChannels = newSet
                         onEnabledChannelsChange(newSet)
                     }) {
-                        Text(if (allChannelsSelected) "全不选" else "全选")
+                        Text(if (allChannelsSelected) stringResource(R.string.panhub_deselect_all) else stringResource(R.string.panhub_select_all))
                     }
                 }
 
@@ -229,7 +232,7 @@ fun PanHubConfigDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("完成")
+                Text(stringResource(R.string.common_done))
             }
         }
     )

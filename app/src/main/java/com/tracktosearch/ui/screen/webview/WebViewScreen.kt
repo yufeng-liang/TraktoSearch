@@ -151,7 +151,8 @@ fun WebViewScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(R.string.content_desc_back)
+                    contentDescription = stringResource(R.string.content_desc_back),
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
             Text(
