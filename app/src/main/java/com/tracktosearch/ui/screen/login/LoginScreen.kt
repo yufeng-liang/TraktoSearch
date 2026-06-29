@@ -17,8 +17,9 @@ import com.tracktosearch.R
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
@@ -85,8 +86,8 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val loginState by viewModel.loginState.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
+    val loginState by viewModel.loginState.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle()
 
     // 如果 redirectToBrowser 为 true，直接进入浏览器授权
     LaunchedEffect(redirectToBrowser) {

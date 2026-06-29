@@ -26,8 +26,7 @@ class OfflineCacheManager @Inject constructor(
     // ========== 想看/已看列表 ==========
 
     suspend fun saveMediaItems(type: String, items: List<MediaItemEntity>) {
-        mediaItemDao.deleteByType(type)
-        mediaItemDao.insertAll(items)
+        mediaItemDao.replaceByType(type, items)
     }
 
     suspend fun getMediaItems(type: String): List<MediaItemEntity> {

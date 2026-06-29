@@ -1,0 +1,2 @@
+HSPLcom/tracktosearch/**;**->*(*)
+HSPLandroidx/compose/**;**->*(*)

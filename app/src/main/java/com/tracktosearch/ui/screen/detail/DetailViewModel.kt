@@ -34,10 +34,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
@@ -159,7 +156,7 @@ class DetailViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        private const val CACHE_MAX_SIZE = 5
+        private const val CACHE_MAX_SIZE = 3
         @Volatile
         private var detailCache = LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true)
 
@@ -374,15 +371,15 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchRatingsAsync(tmdbRating: Double) {
         ratingsJob?.cancel()
-        ratingsJob = ratingsRepository.fetchRatingsStream(
-            imdbId = currentImdbId,
-            tmdbRating = tmdbRating,
-            traktRating = currentTraktRating
-        ).onEach { ratings ->
-            _uiState.value = _uiState.value.copy(ratings = ratings, ratingsError = false)
-        }.catch {
-            _uiState.value = _uiState.value.copy(ratingsError = true)
-        }.launchIn(viewModelScope)
+        ratingsJob = viewModelScope.launch {
+            ratingsRepository.fetchRatingsStream(
+                imdbId = currentImdbId,
+                tmdbRating = tmdbRating,
+                traktRating = currentTraktRating
+            ).collect { ratings ->
+                _uiState.value = _uiState.value.copy(ratings = ratings, ratingsError = false)
+            }
+        }
     }
 
     private fun fetchComments() {

@@ -50,7 +50,7 @@ class CustomSearchService @Inject constructor(
         val url = buildUrl(source, keyword)
         val request = Request.Builder()
             .url(url)
-            .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+            .addHeader("User-Agent", com.tracktosearch.di.NetworkModule.USER_AGENT)
             .addHeader("Referer", source.baseUrl)
             .build()
 

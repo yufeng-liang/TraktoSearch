@@ -82,8 +82,9 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.os.Build
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
@@ -119,21 +120,21 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val currentTheme by viewModel.themeMode.collectAsState()
-    val currentLanguage by viewModel.language.collectAsState()
-    val currentDefaultTab by viewModel.defaultTab.collectAsState()
-    val pansouEnabled by viewModel.pansouEnabled.collectAsState()
+    val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
+    val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
+    val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
+    val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshCacheInfo()
         onPauseOrDispose { }
     }
-    val panhubEnabled by viewModel.panhubEnabled.collectAsState()
-    val zresoEnabled by viewModel.zresoEnabled.collectAsState()
-    val exportImportState by viewModel.exportImportState.collectAsState()
-    val customSources by viewModel.customSources.collectAsState()
-    val testResults by viewModel.testResults.collectAsState()
-    val panHubConfig by viewModel.panHubConfig.collectAsState()
+    val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
+    val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
+    val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
+    val customSources by viewModel.customSources.collectAsStateWithLifecycle()
+    val testResults by viewModel.testResults.collectAsStateWithLifecycle()
+    val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showPanHubConfigDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
@@ -191,8 +192,8 @@ fun SettingsScreen(
         context.startActivity(intent)
     }
 
-    val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
-    val updateInfo by viewModel.updateInfo.collectAsState()
+    val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
 
     val settingsHazeState = remember { HazeState() }
     val savedScrollIndex = rememberSaveable { mutableIntStateOf(0) }
@@ -338,7 +339,7 @@ fun SettingsScreen(
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_notification)) }
                 item {
-                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
                     val context = LocalContext.current
                     val notificationPermissionLauncher = rememberLauncherForActivityResult(
                         contract = ActivityResultContracts.RequestPermission()
@@ -364,8 +365,8 @@ fun SettingsScreen(
                     )
                 }
                 item {
-                    val releaseEnabled by viewModel.releaseReminderEnabled.collectAsState()
-                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
                     SwitchSettingsItem(
                         title = stringResource(R.string.settings_notification_release),
                         subtitle = stringResource(R.string.settings_notification_release_desc),
@@ -375,8 +376,8 @@ fun SettingsScreen(
                     )
                 }
                 item {
-                    val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsState()
-                    val notificationEnabled by viewModel.notificationEnabled.collectAsState()
+                    val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
+                    val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
                     SwitchSettingsItem(
                         title = stringResource(R.string.settings_notification_new_season),
                         subtitle = stringResource(R.string.settings_notification_new_season_desc),
@@ -509,9 +510,9 @@ fun SettingsScreen(
             // 关于
             item { SettingsSectionHeader(stringResource(R.string.settings_about)) }
             item {
-                val latestVersion by viewModel.latestVersion.collectAsState()
-                val isChecking by viewModel.isCheckingUpdate.collectAsState()
-                val updateInfo by viewModel.updateInfo.collectAsState()
+                val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
+                val isChecking by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
+                val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
                 VersionItem(
                     localVersion = BuildConfig.VERSION_NAME,
                     latestVersion = latestVersion,
@@ -559,7 +560,7 @@ fun SettingsScreen(
             // 缓存管理（倒数第二）
             item { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
             item {
-                val cacheInfo by viewModel.cacheInfo.collectAsState()
+                val cacheInfo by viewModel.cacheInfo.collectAsStateWithLifecycle()
                 CacheItem(
                     sizeText = cacheInfo,
                     onClear = { showClearCacheDialog = true }
@@ -1211,8 +1212,8 @@ fun ChangelogDialog(
     viewModel: SettingsViewModel,
     onDismiss: () -> Unit
 ) {
-    val changelog by viewModel.changelog.collectAsState()
-    val isLoading by viewModel.isLoadingChangelog.collectAsState()
+    val changelog by viewModel.changelog.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoadingChangelog.collectAsStateWithLifecycle()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1259,7 +1260,7 @@ fun DiscoverSectionsDialog(
     viewModel: SettingsViewModel,
     onDismiss: () -> Unit
 ) {
-    val sections by viewModel.discoverSections.collectAsState()
+    val sections by viewModel.discoverSections.collectAsStateWithLifecycle()
     var reorderedSections by remember { mutableStateOf(sections) }
 
     LaunchedEffect(sections) {
@@ -1384,7 +1385,7 @@ fun DetailSectionsDialog(
     viewModel: SettingsViewModel,
     onDismiss: () -> Unit
 ) {
-    val sections by viewModel.detailSections.collectAsState()
+    val sections by viewModel.detailSections.collectAsStateWithLifecycle()
     val view = LocalView.current
 
     AlertDialog(

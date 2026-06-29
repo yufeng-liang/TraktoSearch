@@ -10,7 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tracktosearch.data.local.DefaultTabStorage
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -20,7 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.snapshotFlow
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -128,7 +129,7 @@ fun AppNavigation(
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
-    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsState(initial = defaultTabStorage.getCurrentValueSync())
+    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle(initialValue = DefaultTabStorage.DEFAULT_TAB_SEARCH)
     // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
     // 监听默认启动页设置变化
@@ -169,13 +170,13 @@ fun AppNavigation(
 
                 composable(Routes.MAIN) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsState(initial = false)
+                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
 
                         // 从详情页返回时，若标记已看则触发列表刷新
                         // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry
                         // 后者在导航过渡期间可能为 null 或指向错误的 entry
                         val savedState = backStackEntry.savedStateHandle
-                        val watchlistChanged by savedState.getStateFlow("watchlist_changed", false).collectAsState()
+                        val watchlistChanged by savedState.getStateFlow("watchlist_changed", false).collectAsStateWithLifecycle()
                         val watchlistViewModel: WatchlistViewModel = hiltViewModel()
                         LaunchedEffect(watchlistChanged) {
                             if (watchlistChanged) {
@@ -189,7 +190,7 @@ fun AppNavigation(
                         val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
                         var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
                         var updateChecked by rememberSaveable { mutableStateOf(false) }
-                        val uiState by watchlistViewModel.uiState.collectAsState()
+                        val uiState by watchlistViewModel.uiState.collectAsStateWithLifecycle()
                         // 用 snapshotFlow 监听条件，避免 LaunchedEffect key 变化导致协程取消
                         LaunchedEffect(Unit) {
                             snapshotFlow {

@@ -7,6 +7,8 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,7 +19,6 @@ class NotificationScheduler @Inject constructor(
 ) {
     companion object {
         const val WORK_NAME = "release_check_work"
-        // 每 12 小时检查一次（WorkManager 最小间隔 15 分钟）
         private const val CHECK_INTERVAL_HOURS = 12L
     }
 
@@ -44,13 +45,11 @@ class NotificationScheduler @Inject constructor(
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 
-    fun isScheduled(callback: (Boolean) -> Unit) {
+    suspend fun isScheduled(): Boolean = withContext(Dispatchers.IO) {
         WorkManager.getInstance(context)
             .getWorkInfosForUniqueWork(WORK_NAME)
             .get()
-            .let { infos ->
-                callback(infos.any { it.state == androidx.work.WorkInfo.State.ENQUEUED ||
-                        it.state == androidx.work.WorkInfo.State.RUNNING })
-            }
+            .any { it.state == androidx.work.WorkInfo.State.ENQUEUED ||
+                    it.state == androidx.work.WorkInfo.State.RUNNING }
     }
 }

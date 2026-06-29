@@ -10,6 +10,9 @@ import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -34,8 +37,10 @@ class ReleaseCheckWorker @AssistedInject constructor(
         const val WORK_NAME = "release_check_work"
     }
 
-    private val dateParser = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
-        timeZone = TimeZone.getTimeZone("UTC")
+    private fun createDateParser(): SimpleDateFormat {
+        return SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
     }
 
     override suspend fun doWork(): Result {
@@ -80,54 +85,55 @@ class ReleaseCheckWorker @AssistedInject constructor(
         today: Calendar,
         startDate: Calendar
     ) {
-        for (item in watchlist) {
-            val tmdbId = item.movie.ids.tmdb.takeIf { it > 0 } ?: continue
-            val traktId = item.movie.ids.trakt
+        coroutineScope {
+            watchlist.mapNotNull { item ->
+                val tmdbId = item.movie.ids.tmdb.takeIf { it > 0 } ?: return@mapNotNull null
+                val traktId = item.movie.ids.trakt
+                async {
+                    try {
+                        val response = tmdbApiService.getMovieDetail(tmdbId)
+                        if (!response.isSuccessful) return@async
+                        val detail = response.body() ?: return@async
+                        val releaseDateStr = detail.release_date.takeIf { it.isNotBlank() } ?: return@async
 
-            try {
-                val response = tmdbApiService.getMovieDetail(tmdbId)
-                if (!response.isSuccessful) continue
-                val detail = response.body() ?: continue
-                val releaseDateStr = detail.release_date.takeIf { it.isNotBlank() } ?: continue
+                        val releaseDate = try {
+                            createDateParser().parse(releaseDateStr) ?: return@async
+                        } catch (_: Exception) {
+                            return@async
+                        }
 
-                val releaseDate = try {
-                    dateParser.parse(releaseDateStr) ?: continue
-                } catch (_: Exception) {
-                    continue
-                }
+                        val releaseCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                            time = releaseDate
+                        }
 
-                val releaseCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                    time = releaseDate
-                }
-
-                // 上映日期在过去 30 天内（刚上映）且不超过今天
-                if (releaseCal.after(startDate) && !releaseCal.after(today)) {
-                    // 检查是否已通知过
-                    val payload = releaseDateStr
-                    val existing = notificationRecordDao.find(traktId, "release", payload)
-                    if (existing == null) {
-                        notificationHelper.showReleaseNotification(
-                            title = item.movie.title,
-                            releaseDate = releaseDateStr,
-                            traktId = traktId,
-                            tmdbId = tmdbId,
-                            mediaType = "movie"
-                        )
-                        notificationRecordDao.insert(
-                            com.tracktosearch.data.local.db.NotificationRecordEntity(
-                                traktId = traktId,
-                                tmdbId = tmdbId,
-                                mediaType = "movie",
-                                title = item.movie.title,
-                                type = "release",
-                                payload = payload
-                            )
-                        )
+                        if (releaseCal.after(startDate) && !releaseCal.after(today)) {
+                            val payload = releaseDateStr
+                            val existing = notificationRecordDao.find(traktId, "release", payload)
+                            if (existing == null) {
+                                notificationHelper.showReleaseNotification(
+                                    title = item.movie.title,
+                                    releaseDate = releaseDateStr,
+                                    traktId = traktId,
+                                    tmdbId = tmdbId,
+                                    mediaType = "movie"
+                                )
+                                notificationRecordDao.insert(
+                                    com.tracktosearch.data.local.db.NotificationRecordEntity(
+                                        traktId = traktId,
+                                        tmdbId = tmdbId,
+                                        mediaType = "movie",
+                                        title = item.movie.title,
+                                        type = "release",
+                                        payload = payload
+                                    )
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // 单个失败不影响其他
                     }
                 }
-            } catch (_: Exception) {
-                // 单个失败不影响其他
-            }
+            }.awaitAll()
         }
     }
 
@@ -136,52 +142,55 @@ class ReleaseCheckWorker @AssistedInject constructor(
         today: Calendar,
         startDate: Calendar
     ) {
-        for (item in watchlist) {
-            val tmdbId = item.show.ids.tmdb.takeIf { it > 0 } ?: continue
-            val traktId = item.show.ids.trakt
+        coroutineScope {
+            watchlist.mapNotNull { item ->
+                val tmdbId = item.show.ids.tmdb.takeIf { it > 0 } ?: return@mapNotNull null
+                val traktId = item.show.ids.trakt
+                async {
+                    try {
+                        val response = tmdbApiService.getTvDetail(tmdbId)
+                        if (!response.isSuccessful) return@async
+                        val detail = response.body() ?: return@async
+                        val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: return@async
 
-            try {
-                val response = tmdbApiService.getTvDetail(tmdbId)
-                if (!response.isSuccessful) continue
-                val detail = response.body() ?: continue
-                val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: continue
+                        val airDate = try {
+                            createDateParser().parse(airDateStr) ?: return@async
+                        } catch (_: Exception) {
+                            return@async
+                        }
 
-                val airDate = try {
-                    dateParser.parse(airDateStr) ?: continue
-                } catch (_: Exception) {
-                    continue
-                }
+                        val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                            time = airDate
+                        }
 
-                val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                    time = airDate
-                }
-
-                if (airCal.after(startDate) && !airCal.after(today)) {
-                    val payload = airDateStr
-                    val existing = notificationRecordDao.find(traktId, "release", payload)
-                    if (existing == null) {
-                        notificationHelper.showReleaseNotification(
-                            title = item.show.title,
-                            releaseDate = airDateStr,
-                            traktId = traktId,
-                            tmdbId = tmdbId,
-                            mediaType = "show"
-                        )
-                        notificationRecordDao.insert(
-                            com.tracktosearch.data.local.db.NotificationRecordEntity(
-                                traktId = traktId,
-                                tmdbId = tmdbId,
-                                mediaType = "show",
-                                title = item.show.title,
-                                type = "release",
-                                payload = payload
-                            )
-                        )
+                        if (airCal.after(startDate) && !airCal.after(today)) {
+                            val payload = airDateStr
+                            val existing = notificationRecordDao.find(traktId, "release", payload)
+                            if (existing == null) {
+                                notificationHelper.showReleaseNotification(
+                                    title = item.show.title,
+                                    releaseDate = airDateStr,
+                                    traktId = traktId,
+                                    tmdbId = tmdbId,
+                                    mediaType = "show"
+                                )
+                                notificationRecordDao.insert(
+                                    com.tracktosearch.data.local.db.NotificationRecordEntity(
+                                        traktId = traktId,
+                                        tmdbId = tmdbId,
+                                        mediaType = "show",
+                                        title = item.show.title,
+                                        type = "release",
+                                        payload = payload
+                                    )
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // 单个失败不影响其他
                     }
                 }
-            } catch (_: Exception) {
-                // 单个失败不影响其他
-            }
+            }.awaitAll()
         }
     }
 
@@ -193,53 +202,56 @@ class ReleaseCheckWorker @AssistedInject constructor(
         // TMDB TV 详情不直接返回季列表，需要额外请求 /tv/{id}/season/{season_number}
         // 这里简化处理：仅检查首播日期作为新季开播的近似（适用于想看列表中的剧集）
         // 完整的新季检测需要调用 Trakt 的 seasons API，此处先实现基础版本
-        for (item in watchlist) {
-            val tmdbId = item.show.ids.tmdb.takeIf { it > 0 } ?: continue
-            val traktId = item.show.ids.trakt
+        coroutineScope {
+            watchlist.mapNotNull { item ->
+                val tmdbId = item.show.ids.tmdb.takeIf { it > 0 } ?: return@mapNotNull null
+                val traktId = item.show.ids.trakt
+                async {
+                    try {
+                        val response = tmdbApiService.getTvDetail(tmdbId)
+                        if (!response.isSuccessful) return@async
+                        val detail = response.body() ?: return@async
+                        val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: return@async
 
-            try {
-                val response = tmdbApiService.getTvDetail(tmdbId)
-                if (!response.isSuccessful) continue
-                val detail = response.body() ?: continue
-                val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: continue
+                        val airDate = try {
+                            createDateParser().parse(airDateStr) ?: return@async
+                        } catch (_: Exception) {
+                            return@async
+                        }
 
-                val airDate = try {
-                    dateParser.parse(airDateStr) ?: continue
-                } catch (_: Exception) {
-                    continue
-                }
+                        val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                            time = airDate
+                        }
 
-                val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                    time = airDate
-                }
-
-                // 如果首播日期在过去 30 天内，视为"新季开播"（简化逻辑）
-                if (airCal.after(startDate) && !airCal.after(today)) {
-                    val payload = "season_1_$airDateStr"
-                    val existing = notificationRecordDao.find(traktId, "new_season", payload)
-                    if (existing == null) {
-                        notificationHelper.showNewSeasonNotification(
-                            title = item.show.title,
-                            seasonNumber = 1,
-                            airDate = airDateStr,
-                            traktId = traktId,
-                            tmdbId = tmdbId
-                        )
-                        notificationRecordDao.insert(
-                            com.tracktosearch.data.local.db.NotificationRecordEntity(
-                                traktId = traktId,
-                                tmdbId = tmdbId,
-                                mediaType = "show",
-                                title = item.show.title,
-                                type = "new_season",
-                                payload = payload
-                            )
-                        )
+                        // 如果首播日期在过去 30 天内，视为"新季开播"（简化逻辑）
+                        if (airCal.after(startDate) && !airCal.after(today)) {
+                            val payload = "season_1_$airDateStr"
+                            val existing = notificationRecordDao.find(traktId, "new_season", payload)
+                            if (existing == null) {
+                                notificationHelper.showNewSeasonNotification(
+                                    title = item.show.title,
+                                    seasonNumber = 1,
+                                    airDate = airDateStr,
+                                    traktId = traktId,
+                                    tmdbId = tmdbId
+                                )
+                                notificationRecordDao.insert(
+                                    com.tracktosearch.data.local.db.NotificationRecordEntity(
+                                        traktId = traktId,
+                                        tmdbId = tmdbId,
+                                        mediaType = "show",
+                                        title = item.show.title,
+                                        type = "new_season",
+                                        payload = payload
+                                    )
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // 单个失败不影响其他
                     }
                 }
-            } catch (_: Exception) {
-                // 单个失败不影响其他
-            }
+            }.awaitAll()
         }
     }
 }

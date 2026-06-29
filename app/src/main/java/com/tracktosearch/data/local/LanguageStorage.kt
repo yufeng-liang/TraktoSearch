@@ -8,9 +8,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,14 +28,9 @@ class LanguageStorage @Inject constructor(
         private val KEY_LANGUAGE = stringPreferencesKey("language")
     }
 
-    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
-    fun getCurrentValueSync(): String = runBlocking {
-        language.first()
-    }
-
     val language: Flow<String> = context.languageDataStore.data.map { prefs ->
         prefs[KEY_LANGUAGE] ?: LANGUAGE_SYSTEM
-    }
+    }.distinctUntilChanged()
 
     suspend fun setLanguage(language: String) {
         context.languageDataStore.edit { prefs ->

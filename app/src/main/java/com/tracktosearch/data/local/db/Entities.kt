@@ -1,13 +1,20 @@
 package com.tracktosearch.data.local.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * 想看/已看列表的离线缓存实体
  * type: "watchlist_movie" / "watchlist_show" / "history_movie" / "history_show"
  */
-@Entity(tableName = "media_items")
+@Entity(
+    tableName = "media_items",
+    indices = [
+        Index("type"),
+        Index("type", "listedAt")
+    ]
+)
 data class MediaItemEntity(
     @PrimaryKey
     val traktId: Int,
@@ -50,7 +57,14 @@ data class MediaDetailEntity(
  * 通知记录实体：跟踪已发送的通知，避免重复推送
  * type: "release" (上映) / "new_season" (新季)
  */
-@Entity(tableName = "notification_records")
+@Entity(
+    tableName = "notification_records",
+    indices = [
+        Index("traktId"),
+        Index("traktId", "type"),
+        Index("notifiedAt")
+    ]
+)
 data class NotificationRecordEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

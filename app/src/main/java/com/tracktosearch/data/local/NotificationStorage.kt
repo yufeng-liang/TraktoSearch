@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,17 +22,17 @@ class NotificationStorage @Inject constructor(
     /** 通知总开关 */
     val enabled: Flow<Boolean> = context.notificationDataStore.data.map { prefs ->
         prefs[KEY_ENABLED] ?: false
-    }
+    }.distinctUntilChanged()
 
     /** 上映提醒（电影即将上映/已上映） */
     val releaseReminderEnabled: Flow<Boolean> = context.notificationDataStore.data.map { prefs ->
         prefs[KEY_RELEASE] ?: true
-    }
+    }.distinctUntilChanged()
 
     /** 新季开播提醒（电视剧新一季） */
     val newSeasonReminderEnabled: Flow<Boolean> = context.notificationDataStore.data.map { prefs ->
         prefs[KEY_NEW_SEASON] ?: true
-    }
+    }.distinctUntilChanged()
 
     suspend fun setEnabled(enabled: Boolean) {
         context.notificationDataStore.edit { prefs ->

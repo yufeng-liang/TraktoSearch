@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -30,15 +31,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -49,6 +54,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.tween
 import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.lifecycleScope
 import com.tracktosearch.data.local.GuestModeStorage
@@ -66,6 +74,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.pow
 import java.util.Locale
 import javax.inject.Inject
 
@@ -75,13 +84,18 @@ object OAuthCallback {
     var pendingCode: String? = null
     @Volatile
     var authDenied: Boolean = false
+
+    fun clear() {
+        pendingCode = null
+        authDenied = false
+    }
 }
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val MIN_SPLASH_DURATION_MS = 1500L
+        private const val MIN_SPLASH_DURATION_MS = 1200L
     }
 
     @Inject
@@ -98,6 +112,12 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var defaultTabStorage: DefaultTabStorage
+
+    @Inject
+    lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
+
+    @Inject
+    lateinit var tmdbRepository: com.tracktosearch.data.repository.TmdbRepository
 
     // 全局 scrollToTop 提供者
     private val scrollToTopProvider = ScrollToTopProvider()
@@ -143,13 +163,20 @@ class MainActivity : AppCompatActivity() {
             }
             // 已登录时读取用户设置的默认启动页，未登录时使用搜索页（0）
             initialTab = if (isValid || isGuest) {
-                defaultTabStorage.getCurrentValueSync()
+                defaultTabStorage.defaultTab.first()
             } else {
                 0
             }
 
             val language = languageStorage.language.first()
             applyLanguage(language)
+
+            // Splash delay 期间并行预取默认首页数据
+            if (isValid) {
+                launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 50) } }
+            }
+            launch { runCatching { tmdbRepository.getPopularMovies() } }
+            launch { runCatching { tmdbRepository.getUpcomingMovies() } }
 
             // 确保自定义 splash 最短显示时长，品牌展示充分
             val elapsed = System.currentTimeMillis() - splashStartTime
@@ -169,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         setupStatusBarTapListener()
 
         setContent {
-            val themeMode by themeStorage.themeMode.collectAsState(initial = "system")
+            val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle(initialValue = "system")
             TraktToSearchTheme(themeMode = themeMode) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 if (isReady) {
@@ -193,7 +220,43 @@ class MainActivity : AppCompatActivity() {
                         }
                     )
                 } else {
-                    // 自定义开屏页（方案A：渐变背景 + 居中品牌展示）
+                    // 自定义开屏页 + 优雅渐入动画
+                    val iconScale = remember { Animatable(0.8f) }
+                    val iconAlpha = remember { Animatable(0f) }
+                    val titleAlpha = remember { Animatable(0f) }
+                    val titleOffset = remember { Animatable(20f) }
+                    val sloganAlpha = remember { Animatable(0f) }
+                    val versionAlpha = remember { Animatable(0f) }
+
+                    LaunchedEffect(Unit) {
+                        // 图标：0-600ms 缩放+淡入
+                        launch {
+                            iconAlpha.animateTo(1f, tween(600, easing = Easing { it * it * it }))
+                        }
+                        launch {
+                            iconScale.animateTo(1f, tween(700, easing = Easing { 1f - (1f - it).pow(3) }))
+                        }
+                        // App 名：300-800ms 淡入+上移
+                        launch {
+                            delay(300)
+                            titleAlpha.animateTo(1f, tween(500))
+                        }
+                        launch {
+                            delay(300)
+                            titleOffset.animateTo(0f, tween(500, easing = Easing { 1f - (1f - it).pow(3) }))
+                        }
+                        // Slogan：500-900ms 淡入
+                        launch {
+                            delay(500)
+                            sloganAlpha.animateTo(1f, tween(400))
+                        }
+                        // 版本号：700-1100ms 淡入
+                        launch {
+                            delay(700)
+                            versionAlpha.animateTo(1f, tween(400))
+                        }
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -216,6 +279,8 @@ class MainActivity : AppCompatActivity() {
                             Box(
                                 modifier = Modifier
                                     .size(88.dp)
+                                    .scale(iconScale.value)
+                                    .alpha(iconAlpha.value)
                                     .clip(RoundedCornerShape(22.dp))
                                     .background(Color.White.copy(alpha = 0.2f))
                                     .then(
@@ -258,13 +323,17 @@ class MainActivity : AppCompatActivity() {
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
-                                letterSpacing = 0.5.sp
+                                letterSpacing = 0.5.sp,
+                                modifier = Modifier
+                                    .alpha(titleAlpha.value)
+                                    .offset(y = titleOffset.value.dp)
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = stringResource(R.string.splash_slogan),
                                 fontSize = 13.sp,
-                                color = Color.White.copy(alpha = 0.7f)
+                                color = Color.White.copy(alpha = 0.7f),
+                                modifier = Modifier.alpha(sloganAlpha.value)
                             )
                         }
                         // 版本号在底部
@@ -275,6 +344,7 @@ class MainActivity : AppCompatActivity() {
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 32.dp)
+                                .alpha(versionAlpha.value)
                         )
                     }
                 }

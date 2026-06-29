@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 @Immutable
@@ -165,26 +166,28 @@ class TraktSearchViewModel @Inject constructor(
                 val tmdbResults = tmdbRepository.searchPerson(query)
                 result.onSuccess { (searchResults, totalCount) ->
                     val traktItems = searchResults.map { item ->
-                        async { enrichSearchResult(item, searchType) }
-                    }.awaitAll()
+                        async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
+                    }.awaitAll().filterNotNull()
                     // 收集已有的 tmdbId
                     val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
                     // TMDB 独有的结果：通过 TMDB ID 反查 Trakt
                     val tmdbOnlyItems = tmdbResults.filter { it.id !in existingTmdbIds }.map { person ->
                         async {
-                            val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
-                            val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                            val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
-                            TraktSearchUiItem(
-                                traktId = traktPerson?.ids?.trakt ?: 0,
-                                tmdbId = person.id,
-                                title = person.original_name,
-                                displayTitle = person.name,
-                                posterUrl = profileUrl,
-                                knownForDepartment = person.known_for_department
-                            )
+                            withTimeoutOrNull(8_000) {
+                                val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                                val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                TraktSearchUiItem(
+                                    traktId = traktPerson?.ids?.trakt ?: 0,
+                                    tmdbId = person.id,
+                                    title = person.original_name,
+                                    displayTitle = person.name,
+                                    posterUrl = profileUrl,
+                                    knownForDepartment = person.known_for_department
+                                )
+                            }
                         }
-                    }.awaitAll()
+                    }.awaitAll().filterNotNull()
                     val merged = traktItems + tmdbOnlyItems
                     val mergedTotal = totalCount + tmdbOnlyItems.size
                     updateTabState(searchType, SearchTabState(
@@ -244,19 +247,21 @@ class TraktSearchViewModel @Inject constructor(
                     if (tmdbResults.isNotEmpty()) {
                         val tmdbItems = tmdbResults.map { person ->
                             async {
-                                val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
-                                val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
-                                TraktSearchUiItem(
-                                    traktId = traktPerson?.ids?.trakt ?: 0,
-                                    tmdbId = person.id,
-                                    title = person.original_name,
-                                    displayTitle = person.name,
-                                    posterUrl = profileUrl,
-                                    knownForDepartment = person.known_for_department
-                                )
+                                withTimeoutOrNull(8_000) {
+                                    val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                                    val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                                    val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                    TraktSearchUiItem(
+                                        traktId = traktPerson?.ids?.trakt ?: 0,
+                                        tmdbId = person.id,
+                                        title = person.original_name,
+                                        displayTitle = person.name,
+                                        posterUrl = profileUrl,
+                                        knownForDepartment = person.known_for_department
+                                    )
+                                }
                             }
-                        }.awaitAll()
+                        }.awaitAll().filterNotNull()
                         updateTabState(searchType, SearchTabState(
                             results = tmdbItems,
                             isLoading = false,
@@ -276,8 +281,8 @@ class TraktSearchViewModel @Inject constructor(
             } else {
                 result.onSuccess { (searchResults, totalCount) ->
                     val uiItems = searchResults.map { item ->
-                        async { enrichSearchResult(item, searchType) }
-                    }.awaitAll()
+                        async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
+                    }.awaitAll().filterNotNull()
                     updateTabState(searchType, SearchTabState(
                         results = uiItems,
                         isLoading = false,
@@ -317,8 +322,8 @@ class TraktSearchViewModel @Inject constructor(
 
             result.onSuccess { (searchResults, totalCount) ->
                 val newItems = searchResults.map { item ->
-                    async { enrichSearchResult(item, current.selectedTab) }
-                }.awaitAll()
+                    async { withTimeoutOrNull(8_000) { enrichSearchResult(item, current.selectedTab) } }
+                }.awaitAll().filterNotNull()
                 val updatedState = _uiState.value.currentTabState
                 updateTabState(current.selectedTab, updatedState.copy(
                     results = updatedState.results + newItems,

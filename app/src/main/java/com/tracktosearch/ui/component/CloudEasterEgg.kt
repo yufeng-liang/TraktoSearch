@@ -7,7 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -32,7 +32,7 @@ fun CloudEasterEgg(
     modifier: Modifier = Modifier,
     onCloudClicked: () -> Unit = { themeManager.onCloudClicked() }
 ) {
-    val theme by themeManager.currentTheme.collectAsState()
+    val theme by themeManager.currentTheme.collectAsStateWithLifecycle()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 

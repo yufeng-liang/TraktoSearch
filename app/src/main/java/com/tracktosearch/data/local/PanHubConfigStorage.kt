@@ -12,9 +12,8 @@ import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,11 +23,6 @@ private val Context.panHubConfigDataStore: DataStore<Preferences> by preferences
 class PanHubConfigStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
-    fun getCurrentConfigSync(): PanHubConfig = runBlocking {
-        config.first()
-    }
-
     val config: Flow<PanHubConfig> = context.panHubConfigDataStore.data.map { prefs ->
         val concurrency = prefs[KEY_CONCURRENCY] ?: PanHubConfig.CONCURRENCY_DEFAULT
         val timeoutMs = prefs[KEY_TIMEOUT_MS] ?: PanHubConfig.TIMEOUT_DEFAULT
@@ -53,7 +47,7 @@ class PanHubConfigStorage @Inject constructor(
             enabledPlugins = enabledPlugins,
             enabledChannels = enabledChannels
         )
-    }
+    }.distinctUntilChanged()
 
     suspend fun setConcurrency(value: Int) {
         context.panHubConfigDataStore.edit { prefs ->

@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val localProps = rootProject.file("local.properties")
 val properties = Properties()
@@ -8,7 +9,6 @@ if (localProps.exists()) {
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
@@ -18,12 +18,12 @@ plugins {
 
 android {
     namespace = "com.tracktosearch"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.tracktosearch"
         minSdk = 26
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 29
         versionName = "2.14.0"
 
@@ -81,8 +81,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     buildFeatures {
@@ -118,6 +120,7 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.errorprone.annotations)
 
     // Network
     implementation(libs.retrofit)
@@ -129,7 +132,7 @@ dependencies {
     implementation(libs.coil.compose)
 
     // Lottie 动画
-    implementation("com.airbnb.android:lottie-compose:6.6.6")
+    implementation(libs.lottie.compose)
 
     // HTML Parsing
     implementation(libs.jsoup)
@@ -167,8 +170,11 @@ dependencies {
     implementation(libs.reorderable)
     implementation(libs.zoomable)
 
+    // Baseline Profile
+    implementation(libs.profileinstaller)
+
     // 极光推送
-    implementation("cn.jiguang.sdk:jpush:6.1.2")
+    implementation(libs.jpush)
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,7 +35,7 @@ class SearchHistoryStorage @Inject constructor(
                 SearchHistoryItem(keyword = raw, type = "disk")
             }
         }
-    }
+    }.distinctUntilChanged()
 
     suspend fun add(keyword: String, type: String = "disk") {
         if (keyword.isBlank()) return

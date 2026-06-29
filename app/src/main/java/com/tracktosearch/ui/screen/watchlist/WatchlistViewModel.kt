@@ -108,21 +108,16 @@ class WatchlistViewModel @Inject constructor(
                             imdbId = item.movie.ids.imdb, rating = item.movie.rating,
                             listedAt = item.listed_at, isMovie = true
                         )
-                        // 非静默模式每完成一个就更新 UI；静默模式等整批完成后再一次性替换，避免闪烁
                         if (!silent) {
-                            val currentMovies = _uiState.value.movies.toMutableList()
-                            // 按原始顺序插入到对应位置
-                            if (index < currentMovies.size) {
-                                currentMovies[index] = uiItem
-                            } else {
-                                // 补齐中间空位
-                                while (currentMovies.size < index) {
-                                    val p = items[currentMovies.size].movie
-                                    currentMovies.add(createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[currentMovies.size].listed_at))
+                            synchronized(_uiState) {
+                                val current = _uiState.value.movies.toMutableList()
+                                while (current.size <= index) {
+                                    val p = items[current.size].movie
+                                    current.add(createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[current.size].listed_at))
                                 }
-                                currentMovies.add(uiItem)
+                                current[index] = uiItem
+                                _uiState.value = _uiState.value.copy(movies = current)
                             }
-                            _uiState.value = _uiState.value.copy(movies = currentMovies.toList())
                         }
                         uiItem
                     }
@@ -192,19 +187,16 @@ class WatchlistViewModel @Inject constructor(
                             imdbId = item.show.ids.imdb, rating = item.show.rating,
                             listedAt = item.listed_at, isMovie = false
                         )
-                        // 非静默模式每完成一个就更新 UI；静默模式等整批完成后再一次性替换，避免闪烁
                         if (!silent) {
-                            val currentShows = _uiState.value.shows.toMutableList()
-                            if (index < currentShows.size) {
-                                currentShows[index] = uiItem
-                            } else {
-                                while (currentShows.size < index) {
-                                    val s = items[currentShows.size].show
-                                    currentShows.add(createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[currentShows.size].listed_at))
+                            synchronized(_uiState) {
+                                val current = _uiState.value.shows.toMutableList()
+                                while (current.size <= index) {
+                                    val s = items[current.size].show
+                                    current.add(createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[current.size].listed_at))
                                 }
-                                currentShows.add(uiItem)
+                                current[index] = uiItem
+                                _uiState.value = _uiState.value.copy(shows = current)
                             }
-                            _uiState.value = _uiState.value.copy(shows = currentShows.toList())
                         }
                         uiItem
                     }

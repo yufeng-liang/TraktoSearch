@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -26,6 +27,12 @@ interface MediaItemDao {
 
     @Query("DELETE FROM media_items WHERE type = :type")
     suspend fun deleteByType(type: String)
+
+    @Transaction
+    suspend fun replaceByType(type: String, items: List<MediaItemEntity>) {
+        deleteByType(type)
+        insertAll(items)
+    }
 
     @Query("DELETE FROM media_items WHERE type = :type AND traktId = :traktId")
     suspend fun deleteItem(type: String, traktId: Int)

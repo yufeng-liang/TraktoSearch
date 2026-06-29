@@ -66,7 +66,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -131,7 +131,7 @@ fun SearchScreen(
     val viewedItemStorage = remember {
         EntryPointAccessors.fromApplication(context, ViewedStorageProvider::class.java).viewedItemStorage()
     }
-    val viewedUrls by viewedItemStorage.viewedUrls.collectAsState(initial = emptySet())
+    val viewedUrls by viewedItemStorage.viewedUrls.collectAsStateWithLifecycle(initialValue = emptySet())
 
     // 白云彩蛋主题管理
     val cloudThemeManager = remember {
@@ -153,8 +153,8 @@ fun SearchScreen(
             locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
         }
     }
-    val easterEggRes by cloudThemeManager.easterEggRes.collectAsState()
-    val easterMessage by cloudThemeManager.easterMessage.collectAsState()
+    val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
+    val easterMessage by cloudThemeManager.easterMessage.collectAsStateWithLifecycle()
 
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }

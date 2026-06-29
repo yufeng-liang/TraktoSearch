@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,7 +25,7 @@ class GuestModeStorage @Inject constructor(
 
     val isGuestMode: Flow<Boolean> = context.guestDataStore.data.map { prefs ->
         prefs[KEY_IS_GUEST] ?: false
-    }
+    }.distinctUntilChanged()
 
     suspend fun setGuestMode(isGuest: Boolean) {
         context.guestDataStore.edit { prefs ->

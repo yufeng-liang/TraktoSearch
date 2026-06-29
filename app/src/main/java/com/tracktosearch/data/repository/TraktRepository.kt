@@ -338,9 +338,8 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.addToHistory(request)
             if (response.isSuccessful) {
-                // 标记已看后自动从想看列表移除
                 traktApiService.removeFromWatchlist(request)
-                Result.success(response.body()!!)
+                Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to mark as watched: ${response.code()}"))
             }
@@ -360,9 +359,8 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.removeFromHistory(request)
             if (response.isSuccessful) {
-                // 取消已看后重新加入想看列表
                 traktApiService.addToWatchlist(request)
-                Result.success(response.body()!!)
+                Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove watched: ${response.code()}"))
             }
@@ -513,7 +511,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.addToWatchlist(request)
             if (response.isSuccessful) {
-                Result.success(response.body()!!)
+                Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to add to watchlist: ${response.code()}"))
             }
@@ -534,7 +532,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.removeFromWatchlist(request)
             if (response.isSuccessful) {
-                Result.success(response.body()!!)
+                Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove from watchlist: ${response.code()}"))
             }

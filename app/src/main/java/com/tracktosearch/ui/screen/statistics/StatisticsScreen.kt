@@ -49,7 +49,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import androidx.compose.ui.platform.LocalView
@@ -79,7 +80,7 @@ fun StatisticsScreen(
     onBack: () -> Unit,
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {

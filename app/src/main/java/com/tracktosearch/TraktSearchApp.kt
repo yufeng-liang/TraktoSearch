@@ -30,7 +30,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     override fun onCreate() {
         super.onCreate()
         CrashHandler.init(this)
-        JPushHelper.init(this)
+        Thread { JPushHelper.init(this) }.start()
     }
 
     override fun newImageLoader(): ImageLoader {
@@ -49,7 +49,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             val newRequest = if (request.url.host.contains("doubanio.com")) {
                 request.newBuilder()
                     .header("Referer", "https://movie.douban.com/")
-                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .header("User-Agent", com.tracktosearch.di.NetworkModule.USER_AGENT)
                     .build()
             } else {
                 request

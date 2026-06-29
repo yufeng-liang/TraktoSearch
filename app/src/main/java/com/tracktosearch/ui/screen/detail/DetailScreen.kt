@@ -63,6 +63,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.StarHalf
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -79,7 +81,6 @@ import androidx.compose.material.icons.filled.StarHalf
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -136,7 +137,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
@@ -1538,7 +1539,7 @@ private fun UserRatingBar(
                     Icon(
                         imageVector = when (starType) {
                             "full" -> Icons.Filled.Star
-                            "half" -> Icons.Filled.StarHalf
+                            "half" -> Icons.AutoMirrored.Filled.StarHalf
                             else -> Icons.Filled.StarBorder
                         },
                         contentDescription = null,
@@ -1622,7 +1623,7 @@ private fun RatingDialog(
                             Icon(
                                 imageVector = when (starType) {
                                     "full" -> Icons.Filled.Star
-                                    "half" -> Icons.Filled.StarHalf
+                                    "half" -> Icons.AutoMirrored.Filled.StarHalf
                                     else -> Icons.Filled.StarBorder
                                 },
                                 contentDescription = null,
@@ -3469,7 +3470,7 @@ private fun YouTubePlayerOverlay(
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
                 context.startActivity(intent)
             }) {
-                Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.detail_video_open_browser))
             }

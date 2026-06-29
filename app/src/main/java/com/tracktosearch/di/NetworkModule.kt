@@ -15,21 +15,29 @@ import com.tracktosearch.data.remote.zreso.ZresoApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import kotlinx.serialization.json.Json
+import okhttp3.ConnectionPool
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import okhttp3.Cache
+import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
+import kotlin.math.pow
 
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+
+    private const val CACHE_SIZE = 10L * 1024 * 1024 // 10 MB
+    const val USER_AGENT = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -43,6 +51,12 @@ object NetworkModule {
 
     @Provides
     @Singleton
+    fun provideCache(@ApplicationContext context: android.content.Context): Cache {
+        return Cache(context.cacheDir.resolve("http_cache"), CACHE_SIZE)
+    }
+
+    @Provides
+    @Singleton
     fun provideLoggingInterceptor(): HttpLoggingInterceptor {
         return HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
@@ -53,21 +67,43 @@ object NetworkModule {
         }
     }
 
+    /** 共享基础 OkHttpClient：连接池 + 线程池 + IPv4 DNS，子客户端通过 newBuilder() 复用 */
+    @Provides
+    @Singleton
+    fun provideBaseOkHttpClient(): OkHttpClient {
+        return OkHttpClient.Builder()
+            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .dns(object : okhttp3.Dns {
+                override fun lookup(hostname: String): List<java.net.InetAddress> {
+                    val addrs = okhttp3.Dns.SYSTEM.lookup(hostname)
+                    return addrs.filter { it is Inet4Address }.ifEmpty { addrs }
+                }
+            })
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .writeTimeout(10, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
     @Provides
     @Singleton
     @Named("trakt")
     fun provideTraktOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
-        tokenStorage: TokenStorage
+        tokenStorage: TokenStorage,
+        cache: Cache
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(Interceptor { chain ->
-                // 直接用 TokenStorage 的内存缓存，避免 runBlocking 阻塞主线程
                 val token = tokenStorage.getCachedAccessToken()
                 val request = chain.request().newBuilder()
                     .addHeader("Content-Type", "application/json")
                     .addHeader("trakt-api-key", BuildConfig.TRAKT_CLIENT_ID)
                     .addHeader("trakt-api-version", "2")
+                    .addHeader("User-Agent", USER_AGENT)
                     .apply {
                         if (!token.isNullOrEmpty()) {
                             addHeader("Authorization", "Bearer $token")
@@ -76,12 +112,8 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
+            .addInterceptor(RetryInterceptor(maxRetries = 2))
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .writeTimeout(10, TimeUnit.SECONDS)
-            // 失败自动重试
-            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -102,25 +134,24 @@ object NetworkModule {
     @Singleton
     @Named("tmdb")
     fun provideTmdbOkHttpClient(
-        loggingInterceptor: HttpLoggingInterceptor
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("Authorization", "Bearer ${BuildConfig.TMDB_API_KEY}")
+                    .addHeader("User-Agent", USER_AGENT)
                     .build()
                 chain.proceed(request)
             })
+            .addInterceptor(RetryInterceptor(maxRetries = 2))
             .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
-            .dns(object : okhttp3.Dns {
-                override fun lookup(hostname: String): List<java.net.InetAddress> {
-                    val systemAddresses = okhttp3.Dns.SYSTEM.lookup(hostname)
-                    return systemAddresses.filter { it is java.net.Inet4Address }
-                        .ifEmpty { systemAddresses }
-                }
-            })
+            .writeTimeout(15, TimeUnit.SECONDS)
             .build()
     }
 
@@ -141,12 +172,13 @@ object NetworkModule {
     @Singleton
     @Named("pansou")
     fun providePanSouOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .addHeader("User-Agent", USER_AGENT)
                     .addHeader("Referer", "https://so.252035.xyz/")
                     .build()
                 chain.proceed(request)
@@ -155,7 +187,6 @@ object NetworkModule {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -176,12 +207,13 @@ object NetworkModule {
     @Singleton
     @Named("panhub")
     fun providePanHubOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .addHeader("User-Agent", USER_AGENT)
                     .addHeader("Referer", "https://panhub.shenzjd.com/")
                     .build()
                 chain.proceed(request)
@@ -190,7 +222,6 @@ object NetworkModule {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -238,12 +269,11 @@ object NetworkModule {
     @Singleton
     @Named("zreso")
     fun provideZresoOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
             .build()
     }
 
@@ -264,14 +294,14 @@ object NetworkModule {
     @Singleton
     @Named("omdb")
     fun provideOmdbOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
             .addInterceptor(loggingInterceptor)
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(8, TimeUnit.SECONDS)
             .callTimeout(10, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
             .build()
     }
 
@@ -291,23 +321,21 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGitHubUpdateApiService(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): GitHubUpdateApiService {
         val token = BuildConfig.GITHUB_UPDATE_TOKEN
-        val client = OkHttpClient.Builder()
-            .apply {
-                if (token.isNotEmpty()) {
-                    addInterceptor(Interceptor { chain ->
-                        val request = chain.request().newBuilder()
-                            .addHeader("Authorization", "Bearer $token")
-                            .build()
-                        chain.proceed(request)
-                    })
-                }
+        val client = baseClient.newBuilder().apply {
+            if (token.isNotEmpty()) {
+                addInterceptor(Interceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                    chain.proceed(request)
+                })
             }
+        }
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
             .build()
         return Retrofit.Builder()
             .baseUrl("https://api.github.com/")
@@ -320,27 +348,21 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideGiteeUpdateApiService(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): GiteeUpdateApiService {
         val token = BuildConfig.GITEE_ACCESS_TOKEN
-        val client = OkHttpClient.Builder()
-            .apply {
-                if (token.isNotEmpty()) {
-                    addInterceptor(Interceptor { chain ->
-                        val originalUrl = chain.request().url
-                        val newUrl = originalUrl.newBuilder()
-                            .addQueryParameter("access_token", token)
-                            .build()
-                        val request = chain.request().newBuilder()
-                            .url(newUrl)
-                            .build()
-                        chain.proceed(request)
-                    })
-                }
+        val client = baseClient.newBuilder().apply {
+            if (token.isNotEmpty()) {
+                addInterceptor(Interceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                    chain.proceed(request)
+                })
             }
+        }
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
             .build()
         return Retrofit.Builder()
             .baseUrl("https://gitee.com/api/v5/")
@@ -354,12 +376,13 @@ object NetworkModule {
     @Singleton
     @Named("custom_search")
     fun provideCustomSearchOkHttpClient(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OkHttpClient {
-        return OkHttpClient.Builder()
+        return baseClient.newBuilder()
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36")
+                    .addHeader("User-Agent", USER_AGENT)
                     .build()
                 chain.proceed(request)
             })
@@ -367,20 +390,17 @@ object NetworkModule {
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .callTimeout(20, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
             .build()
     }
 
     @Provides
     @Singleton
     fun provideOpenMeteoApiService(
+        baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor
     ): OpenMeteoApi {
-        val client = OkHttpClient.Builder()
+        val client = baseClient.newBuilder()
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(true)
             .build()
         return Retrofit.Builder()
             .baseUrl("https://api.open-meteo.com/v1/")
@@ -388,5 +408,38 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(OpenMeteoApi::class.java)
+    }
+}
+
+/**
+ * 带指数退避的重试拦截器
+ * 对 429 (Too Many Requests) 和 5xx 错误自动重试
+ */
+class RetryInterceptor(
+    private val maxRetries: Int = 2,
+    private val baseDelayMs: Long = 500L
+) : Interceptor {
+    override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
+        val request = chain.request()
+        var response = chain.proceed(request)
+        var retries = 0
+
+        while (shouldRetry(response) && retries < maxRetries) {
+            response.close()
+            val delayMs = baseDelayMs * 2.0.pow(retries.toDouble()).toLong()
+            try {
+                Thread.sleep(delayMs)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                return response
+            }
+            retries++
+            response = chain.proceed(request)
+        }
+        return response
+    }
+
+    private fun shouldRetry(response: okhttp3.Response): Boolean {
+        return response.code == 429 || response.code >= 500
     }
 }

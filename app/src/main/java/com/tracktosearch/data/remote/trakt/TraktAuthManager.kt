@@ -3,13 +3,11 @@ package com.tracktosearch.data.remote.trakt
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.trakt.dto.*
-import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,11 +24,7 @@ class TraktAuthManager @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val traktApiService: TraktApiService by lazy {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
         val client = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
             .build()
         val retrofit = Retrofit.Builder()
             .baseUrl(API_BASE_URL)

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -35,7 +36,7 @@ class TokenStorage @Inject constructor(
     @Volatile
     private var cacheLoaded: Boolean = false
 
-    val accessToken: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }
+    val accessToken: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }.distinctUntilChanged()
 
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn

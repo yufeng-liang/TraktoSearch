@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +24,7 @@ data class MultiRatings(
 class RatingsRepository @Inject constructor(
     private val omdbApiService: OmdbApiService
 ) {
-    private val cache = mutableMapOf<String, MultiRatings>()
+    private val cache = ConcurrentHashMap<String, MultiRatings>()
 
     /**
      * 流式获取评分：

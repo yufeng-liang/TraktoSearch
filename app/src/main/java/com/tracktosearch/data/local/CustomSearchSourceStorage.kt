@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -30,7 +31,7 @@ class CustomSearchSourceStorage @Inject constructor(
         } catch (_: Exception) {
             emptyList()
         }
-    }
+    }.distinctUntilChanged()
 
     suspend fun addSource(source: CustomSearchSource) {
         context.customSearchSourceDataStore.edit { prefs ->

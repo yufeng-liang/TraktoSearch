@@ -9,9 +9,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,16 +48,10 @@ class DiscoverSectionStorage @Inject constructor(
         private fun visibilityKey(id: String) = booleanPreferencesKey("visible_$id")
     }
 
-    /** 同步获取当前配置（用于 StateFlow 初始值，避免加载跳动） */
-    fun getCurrentConfigsSync(): List<DiscoverSectionConfig> = runBlocking {
-        sectionConfigs.first()
-    }
-
     /** 获取所有栏目的配置列表（按排序顺序） */
     val sectionConfigs: Flow<List<DiscoverSectionConfig>> = context.discoverSectionDataStore.data.map { prefs ->
         val orderStr = prefs[KEY_ORDER] ?: ALL_SECTION_IDS.joinToString(",")
         val orderedIds = orderStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-        // 确保所有已知栏目都包含在内
         val allIds = (orderedIds + ALL_SECTION_IDS).distinct()
         allIds.mapIndexed { index, id ->
             DiscoverSectionConfig(
@@ -66,7 +60,7 @@ class DiscoverSectionStorage @Inject constructor(
                 order = index
             )
         }
-    }
+    }.distinctUntilChanged()
 
     suspend fun setSectionVisible(id: String, visible: Boolean) {
         context.discoverSectionDataStore.edit { prefs ->
