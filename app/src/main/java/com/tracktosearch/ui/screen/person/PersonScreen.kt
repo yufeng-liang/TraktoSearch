@@ -186,7 +186,8 @@ fun PersonScreen(
                                 twitterId = uiState.traktPerson?.social_ids?.twitter,
                                 wikipediaUrl = uiState.traktPerson?.social_ids?.wikipedia,
                                 originalName = uiState.originalName,
-                                traktPerson = uiState.traktPerson
+                                traktPerson = uiState.traktPerson,
+                                isLoadingTrakt = uiState.isLoadingTrakt
                             )
                         }
 
@@ -719,19 +720,19 @@ private fun PersonSkeletonContent() {
                     }
                 }
 
-                // 简介区域骨架（3-4 行不同宽度）
-                Spacer(modifier = Modifier.height(24.dp))
+                // 简介区域骨架（标题 + 4 行不同宽度）
+                Spacer(modifier = Modifier.height(12.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(16.dp)
+                        .width(48.dp)
+                        .height(18.dp)
                         .clip(textShape)
                         .background(skeletonColor)
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(4.dp))
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth(0.9f)
+                        .fillMaxWidth()
                         .height(16.dp)
                         .clip(textShape)
                         .background(skeletonColor)
@@ -747,6 +748,14 @@ private fun PersonSkeletonContent() {
                 Spacer(modifier = Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
+                        .fillMaxWidth(0.9f)
+                        .height(16.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
                         .fillMaxWidth(0.7f)
                         .height(16.dp)
                         .clip(textShape)
@@ -755,9 +764,38 @@ private fun PersonSkeletonContent() {
             }
         }
 
+        // 人物图片栏骨架（匹配实际的 110x165dp 图片 + 标题行）
+        item(key = "skeleton_person_images") {
+            Column(modifier = Modifier.padding(top = 16.dp)) {
+                // 标题骨架
+                Box(
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, bottom = 2.dp)
+                        .width(80.dp)
+                        .height(20.dp)
+                        .clip(textShape)
+                        .background(skeletonColor)
+                )
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
+                ) {
+                    items(5) {
+                        Box(
+                            modifier = Modifier
+                                .width(110.dp)
+                                .height(165.dp)
+                                .clip(cardShape)
+                                .background(skeletonColor)
+                        )
+                    }
+                }
+            }
+        }
+
         // 电影作品区域骨架
         item(key = "skeleton_movie_section") {
-            Column(modifier = Modifier.padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(top = 32.dp)) {
                 // 标题骨架
                 Box(
                     modifier = Modifier
@@ -788,7 +826,7 @@ private fun PersonSkeletonContent() {
 
         // 电视剧作品区域骨架
         item(key = "skeleton_tv_section") {
-            Column(modifier = Modifier.padding(top = 16.dp)) {
+            Column(modifier = Modifier.padding(top = 32.dp)) {
                 // 标题骨架
                 Box(
                     modifier = Modifier
@@ -840,7 +878,8 @@ private fun PersonHeaderContent(
     twitterId: String? = null,
     wikipediaUrl: String? = null,
     originalName: String? = null,
-    traktPerson: Any? = null
+    traktPerson: Any? = null,
+    isLoadingTrakt: Boolean = true
 ) {
     val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val context = LocalContext.current
@@ -1005,8 +1044,8 @@ private fun PersonHeaderContent(
                     )
                 }
                 // 社交媒体图标
-                if (traktPerson == null) {
-                    // Trakt 数据未加载时显示骨架屏
+                if (isLoadingTrakt && traktPerson == null) {
+                    // Trakt 数据未加载时显示单行骨架屏，减少加载后高度跳变
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -1076,7 +1115,7 @@ private fun PersonHeaderContent(
                     }
                 }
                 // 主页链接 + 维基百科链接
-                if (traktPerson == null) {
+                if (isLoadingTrakt && traktPerson == null) {
                     // Trakt 数据未加载时显示骨架屏
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1250,15 +1289,16 @@ private fun PersonHeaderContent(
                         indication = null
                     ) { showFullBio = !showFullBio }
             )
-        } else if (isLoading) {
+        } else if (isLoadingTrakt) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(3) { index ->
+                repeat(4) { index ->
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(
                                 when (index) {
                                     0 -> 1f
-                                    1 -> 0.9f
+                                    1 -> 0.95f
+                                    2 -> 0.9f
                                     else -> 0.7f
                                 }
                             )

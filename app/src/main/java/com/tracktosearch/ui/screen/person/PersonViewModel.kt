@@ -37,7 +37,8 @@ data class PersonUiState(
     val isLoadingPersonImages: Boolean = false,
     val totalMovieCredits: Int = 0,
     val totalTvCredits: Int = 0,
-    val originalName: String? = null
+    val originalName: String? = null,
+    val isLoadingTrakt: Boolean = true // Trakt 数据是否正在加载（控制社媒/简介骨架占位）
 )
 
 @HiltViewModel
@@ -105,8 +106,8 @@ class PersonViewModel @Inject constructor(
     }
 
     private fun loadTraktPerson(tmdbId: Int, personName: String) {
-        // 提前设置图片加载状态，避免图片栏目出现时导致下方内容跳变
-        _uiState.value = _uiState.value.copy(isLoadingPersonImages = true)
+        // 提前设置加载状态，避免社媒/简介/图片栏目出现时导致下方内容跳变
+        _uiState.value = _uiState.value.copy(isLoadingPersonImages = true, isLoadingTrakt = true)
         viewModelScope.launch {
             try {
                 // 使用 TMDB ID 搜索 Trakt 人物
@@ -167,6 +168,7 @@ class PersonViewModel @Inject constructor(
                 }
             } catch (_: Exception) {
                 // 静默失败，不影响页面正常显示
+                _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
             }
             // 额外获取 TMDB 人物图片并合并
             loadTmdbPersonImages()
@@ -202,7 +204,7 @@ class PersonViewModel @Inject constructor(
                 }
             } catch (_: Exception) {
             } finally {
-                _uiState.value = _uiState.value.copy(isLoadingPersonImages = false)
+                _uiState.value = _uiState.value.copy(isLoadingPersonImages = false, isLoadingTrakt = false)
             }
         }
     }

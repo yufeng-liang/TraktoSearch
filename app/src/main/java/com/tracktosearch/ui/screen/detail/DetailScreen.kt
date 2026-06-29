@@ -1330,15 +1330,45 @@ private fun DetailHeaderContent(
         }
 
         // 简介标签 + 折叠/展开正文
-        if (sectionVisible.overview && uiState.overview.isNotEmpty()) {
-            Column(modifier = Modifier.padding(bottom = 8.dp)) {
-                Text(
-                    text = "${stringResource(R.string.detail_overview_label)}：",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                ExpandableText(text = uiState.overview)
+        if (sectionVisible.overview) {
+            if (uiState.overview.isNotEmpty()) {
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text(
+                        text = "${stringResource(R.string.detail_overview_label)}：",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    ExpandableText(text = uiState.overview)
+                }
+            } else if (uiState.isLoading) {
+                // 简介骨架占位，防止加载后推下下方内容
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(48.dp)
+                            .height(18.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    repeat(3) { index ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(
+                                    when (index) {
+                                        0 -> 1f
+                                        1 -> 0.95f
+                                        else -> 0.7f
+                                    }
+                                )
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        )
+                        if (index < 2) Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
             }
         }
 

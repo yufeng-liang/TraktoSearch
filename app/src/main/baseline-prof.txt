@@ -1,2 +1,1 @@
-HSPLcom/tracktosearch/**;**->*(*)
-HSPLandroidx/compose/**;**->*(*)
+# Baseline profile rules
