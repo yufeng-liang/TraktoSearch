@@ -1,30 +1,30 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "auth")
 
 @Singleton
 class TokenStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private companion object {
-        val KEY_ACCESS_TOKEN = stringPreferencesKey("access_token")
-        val KEY_REFRESH_TOKEN = stringPreferencesKey("refresh_token")
-        val KEY_EXPIRES_AT = longPreferencesKey("expires_at")
+    private val prefs: SharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "auth_encrypted",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
     }
 
     @Volatile
@@ -36,32 +36,33 @@ class TokenStorage @Inject constructor(
     @Volatile
     private var cacheLoaded: Boolean = false
 
-    val accessToken: Flow<String?> = context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }.distinctUntilChanged()
+    private val _accessTokenFlow = MutableStateFlow<String?>(null)
+    val accessToken: Flow<String?> = _accessTokenFlow
 
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
-        context.dataStore.edit { prefs ->
-            prefs[KEY_ACCESS_TOKEN] = accessToken
-            prefs[KEY_REFRESH_TOKEN] = refreshToken
-            prefs[KEY_EXPIRES_AT] = expiresAt
-        }
+        prefs.edit()
+            .putString(KEY_ACCESS_TOKEN, accessToken)
+            .putString(KEY_REFRESH_TOKEN, refreshToken)
+            .putLong(KEY_EXPIRES_AT, expiresAt)
+            .apply()
         cachedAccessToken = accessToken
         cachedExpiresAt = expiresAt
         cacheLoaded = true
+        _accessTokenFlow.value = accessToken
     }
 
     suspend fun getAccessToken(): String? {
         cachedAccessToken?.let { return it }
-        return context.dataStore.data.map { it[KEY_ACCESS_TOKEN] }.first().also {
+        return prefs.getString(KEY_ACCESS_TOKEN, null).also {
             cachedAccessToken = it
         }
     }
 
-    // 同步获取缓存的 token（不触发 IO，用于 OkHttp 拦截器）
     fun getCachedAccessToken(): String? = cachedAccessToken
 
     suspend fun getRefreshToken(): String? {
-        return context.dataStore.data.map { it[KEY_REFRESH_TOKEN] }.first()
+        return prefs.getString(KEY_REFRESH_TOKEN, null)
     }
 
     suspend fun isTokenValid(): Boolean {
@@ -69,10 +70,8 @@ class TokenStorage @Inject constructor(
             val now = System.currentTimeMillis() / 1000
             return cachedExpiresAt > now && cachedAccessToken != null
         }
-        // 一次读取所有字段，避免多次 IO
-        val prefs = context.dataStore.data.first()
-        val expiresAt = prefs[KEY_EXPIRES_AT] ?: 0L
-        val token = prefs[KEY_ACCESS_TOKEN]
+        val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
+        val token = prefs.getString(KEY_ACCESS_TOKEN, null)
         cachedExpiresAt = expiresAt
         cachedAccessToken = token
         cacheLoaded = true
@@ -81,13 +80,20 @@ class TokenStorage @Inject constructor(
     }
 
     suspend fun clearTokens() {
-        context.dataStore.edit { prefs ->
-            prefs.remove(KEY_ACCESS_TOKEN)
-            prefs.remove(KEY_REFRESH_TOKEN)
-            prefs.remove(KEY_EXPIRES_AT)
-        }
+        prefs.edit()
+            .remove(KEY_ACCESS_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_EXPIRES_AT)
+            .apply()
         cachedAccessToken = null
         cachedExpiresAt = 0L
         cacheLoaded = false
+        _accessTokenFlow.value = null
+    }
+
+    private companion object {
+        private const val KEY_ACCESS_TOKEN = "access_token"
+        private const val KEY_REFRESH_TOKEN = "refresh_token"
+        private const val KEY_EXPIRES_AT = "expires_at"
     }
 }

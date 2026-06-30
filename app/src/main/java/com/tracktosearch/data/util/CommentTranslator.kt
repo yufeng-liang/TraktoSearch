@@ -21,12 +21,10 @@ class CommentTranslator @Inject constructor() {
     // 翻译结果缓存（相同评论的翻译不会变，永久缓存）
     private val translationCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
 
-    // 百度翻译 API 配置
-    // 大模型文本翻译使用 API Key（Bearer Token）
-    // 通用文本翻译使用 APP ID + 密钥（MD5 签名）
-    private val BAIDU_APP_ID = "20221130001478267"
-    private val BAIDU_SECRET_KEY = "06CRIETtOe2Xcsk9DbC3"
-    private val BAIDU_API_KEY = "59Uf_d8miv7c3um9ef2qq4060"
+    // 百度翻译 API 配置（来自 local.properties）
+    private val BAIDU_APP_ID = com.tracktosearch.BuildConfig.BAIDU_APP_ID
+    private val BAIDU_SECRET_KEY = com.tracktosearch.BuildConfig.BAIDU_SECRET_KEY
+    private val BAIDU_API_KEY = com.tracktosearch.BuildConfig.BAIDU_API_KEY
 
     /** 翻译提示词：让大模型知道这是影视评论，保留人名/专有名词 */
     private val TRANSLATION_CONTEXT = "这是一条外文影视评论，请翻译为中文。保留电影/电视剧名称、演员名、导演名等专有名词不翻译。"

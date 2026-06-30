@@ -25,6 +25,9 @@ class TraktAuthManager @Inject constructor(
 
     private val traktApiService: TraktApiService by lazy {
         val client = OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .build()
         val retrofit = Retrofit.Builder()
             .baseUrl(API_BASE_URL)

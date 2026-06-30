@@ -31,6 +31,7 @@ lottie = "6.7.1"
 jpush = "6.1.2"
 errorproneAnnotations = "2.50.0"
 profileinstaller = "1.4.1"
+securityCrypto = "1.1.0"
 
 [libraries]
 # AndroidX Core
@@ -116,6 +117,9 @@ errorprone-annotations = { group = "com.google.errorprone", name = "error_prone_
 
 # Baseline Profile
 profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+
+# Security
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

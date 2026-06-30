@@ -38,6 +38,9 @@ android {
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
         buildConfigField("String", "GITEE_RELEASE_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "JPUSH_APPKEY", "\"${properties.getProperty("jpush.appkey", "")}\"")
+        buildConfigField("String", "BAIDU_APP_ID", "\"${properties.getProperty("baidu.app.id", "")}\"")
+        buildConfigField("String", "BAIDU_SECRET_KEY", "\"${properties.getProperty("baidu.secret.key", "")}\"")
+        buildConfigField("String", "BAIDU_API_KEY", "\"${properties.getProperty("baidu.api.key", "")}\"")
 
         val appId = applicationId ?: "com.tracktosearch"
         manifestPlaceholders["JPUSH_PKGNAME"] = appId
@@ -172,6 +175,9 @@ dependencies {
 
     // Baseline Profile
     implementation(libs.profileinstaller)
+
+    // Security
+    implementation(libs.security.crypto)
 
     // 极光推送
     implementation(libs.jpush)
