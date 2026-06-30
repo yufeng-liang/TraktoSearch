@@ -94,7 +94,7 @@ object OAuthCallback {
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val MIN_SPLASH_DURATION_MS = 1200L
+        private const val MIN_SPLASH_DURATION_MS = 1700L
     }
 
     @Inject
