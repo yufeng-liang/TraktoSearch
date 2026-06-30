@@ -2291,7 +2291,7 @@ private fun MarkWatchedDialog(
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.heightIn(max = 400.dp)
             ) {
-                items(sortedSeasons.size) { index ->
+                items(sortedSeasons.size, key = { sortedSeasons[it].number }) { index ->
                     val season = sortedSeasons[index]
                     val isSpecial = season.number == 0
                     val isExpanded = season.number in expandedSeasons.value

@@ -327,7 +327,7 @@ fun SettingsScreen(
             item { SearchSourceItem("Zreso", zresoEnabled) { viewModel.setZresoEnabled(it) } }
 
             // 自定义搜索源
-            items(customSources.size) { index ->
+            items(customSources.size, key = { customSources[it].id }) { index ->
                 val source = customSources[index]
                 val testResult = testResults[source.id]
                 CustomSearchSourceItem(

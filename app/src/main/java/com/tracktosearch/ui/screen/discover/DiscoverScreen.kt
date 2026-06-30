@@ -1648,7 +1648,7 @@ private fun TrendingListsAllSheet(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(lists) { _, listResponse ->
+                itemsIndexed(lists, key = { _, item -> item.list.ids.slug }) { _, listResponse ->
                     Card(modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.slug, listResponse.list.name) }) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
