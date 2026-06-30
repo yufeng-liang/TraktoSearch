@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.tracktosearch.ui.component.ScrollToTopButton
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
@@ -577,115 +578,125 @@ private fun DiskSearchContent(
             }
         }
         else -> {
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(start = 8.dp, top = 130.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.hazeSource(state = hazeState)
-            ) {
-                stickyHeader {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.background)
-                    ) {
-                        // 影视类型筛选
-                        Row(
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(start = 8.dp, top = 130.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    modifier = Modifier.hazeSource(state = hazeState)
+                ) {
+                    stickyHeader {
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .background(MaterialTheme.colorScheme.background)
                         ) {
-                            Text(
-                                text = stringResource(R.string.search_filter_type),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(64.dp)
-                            )
-                            LazyRow(
-                                modifier = Modifier.weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            // 影视类型筛选
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                item {
-                                    FilterChip(
-                                        selected = diskState.typeFilter == ResourceType.ALL,
-                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
-                                        label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                    )
-                                }
-                                item {
-                                    FilterChip(
-                                        selected = diskState.typeFilter == ResourceType.MOVIE,
-                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
-                                        label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                    )
-                                }
-                                item {
-                                    FilterChip(
-                                        selected = diskState.typeFilter == ResourceType.SHOW,
-                                        onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
-                                        label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                    )
+                                Text(
+                                    text = stringResource(R.string.search_filter_type),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.width(64.dp)
+                                )
+                                LazyRow(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = diskState.typeFilter == ResourceType.ALL,
+                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
+                                            label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                        )
+                                    }
+                                    item {
+                                        FilterChip(
+                                            selected = diskState.typeFilter == ResourceType.MOVIE,
+                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
+                                            label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                        )
+                                    }
+                                    item {
+                                        FilterChip(
+                                            selected = diskState.typeFilter == ResourceType.SHOW,
+                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
+                                            label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                        )
+                                    }
                                 }
                             }
-                        }
-                        // 网盘类型筛选
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.search_filter_disk),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.width(64.dp)
-                            )
-                            LazyRow(
-                                modifier = Modifier.weight(1f),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            // 网盘类型筛选
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                item {
-                                    FilterChip(
-                                        selected = diskState.diskTypeFilter == null,
-                                        onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(null) },
-                                        label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                    )
-                                }
-                                items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
-                                    FilterChip(
-                                        selected = diskState.diskTypeFilter == type,
-                                        onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(type) },
-                                        label = {
-                                            val label = when (type) {
-                                                DiskType.QUARK -> stringResource(R.string.disk_quark)
-                                                DiskType.BAIDU -> stringResource(R.string.disk_baidu)
-                                                DiskType.ALI -> stringResource(R.string.disk_ali)
-                                                DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
-                                                DiskType.UC -> stringResource(R.string.disk_uc)
-                                                DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
-                                                DiskType.MAGNET -> stringResource(R.string.disk_magnet)
-                                                DiskType.OTHER -> stringResource(R.string.disk_other)
+                                Text(
+                                    text = stringResource(R.string.search_filter_disk),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.width(64.dp)
+                                )
+                                LazyRow(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    item {
+                                        FilterChip(
+                                            selected = diskState.diskTypeFilter == null,
+                                            onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(null) },
+                                            label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                        )
+                                    }
+                                    items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
+                                        FilterChip(
+                                            selected = diskState.diskTypeFilter == type,
+                                            onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(type) },
+                                            label = {
+                                                val label = when (type) {
+                                                    DiskType.QUARK -> stringResource(R.string.disk_quark)
+                                                    DiskType.BAIDU -> stringResource(R.string.disk_baidu)
+                                                    DiskType.ALI -> stringResource(R.string.disk_ali)
+                                                    DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
+                                                    DiskType.UC -> stringResource(R.string.disk_uc)
+                                                    DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
+                                                    DiskType.MAGNET -> stringResource(R.string.disk_magnet)
+                                                    DiskType.OTHER -> stringResource(R.string.disk_other)
+                                                }
+                                                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
-                                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                    itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
+                        ResourceItemCard(
+                            item = item,
+                            isViewed = false,
+                            index = index,
+                            onClick = { onItemClick(item) }
+                        )
+                    }
                 }
-                itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
-                    ResourceItemCard(
-                        item = item,
-                        isViewed = false,
-                        index = index,
-                        onClick = { onItemClick(item) }
-                    )
-                }
+
+                ScrollToTopButton(
+                    listState = listState,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 100.dp, end = 16.dp),
+                    hazeState = hazeState
+                )
             }
         }
     }

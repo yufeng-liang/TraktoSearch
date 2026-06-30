@@ -298,6 +298,20 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">Accent Color</string>
     <string name="settings_accent_dynamic">Dynamic (default)</string>
+    <!-- Accent Color Names -->
+    <string name="accent_water_lily">Water Lily Purple</string>
+    <string name="accent_sunrise">Sunrise Orange</string>
+    <string name="accent_japanese_bridge">Japanese Bridge Green</string>
+    <string name="accent_cathedral">Cathedral Blue-Gray</string>
+    <string name="accent_haystack">Haystack Gold</string>
+    <string name="accent_renoir">Renoir Pink</string>
+    <string name="accent_starry_night">Starry Night Blue</string>
+    <string name="accent_poppy">Poppy Red</string>
+    <string name="accent_wheat_field">Wheat Field Gold</string>
+    <string name="accent_rouen_cathedral">Rouen Cathedral Purple</string>
+    <string name="accent_ballet">Ballet Purple</string>
+    <string name="accent_water_lily_green">Water Lily Green</string>
+    <string name="accent_boat_breakfast">Boat Breakfast Blue</string>
 
     <!-- Language -->
     <string name="settings_language">Language</string>

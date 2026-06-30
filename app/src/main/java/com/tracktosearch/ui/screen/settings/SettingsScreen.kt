@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,6 +88,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -112,6 +114,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
@@ -216,7 +219,7 @@ fun SettingsScreen(
     LaunchedEffect(settingsListState) {
         snapshotFlow {
             settingsListState.firstVisibleItemIndex to settingsListState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
+        }.debounce(150).collect { (index, offset) ->
             savedScrollIndex.intValue = index
             savedScrollOffset.intValue = offset
         }
@@ -273,7 +276,7 @@ fun SettingsScreen(
                 )
             }
             item {
-                val accentName = currentAccent?.label ?: stringResource(R.string.settings_accent_dynamic)
+                val accentName = currentAccent?.let { stringResource(it.labelResId) } ?: stringResource(R.string.settings_accent_dynamic)
                 SettingsItem(
                     icon = Icons.Default.Palette,
                     title = stringResource(R.string.settings_accent_color),
@@ -890,16 +893,16 @@ fun PanHubSettingsItem(
                     view.performHaptic(HapticType.CLICK)
                     onConfigClick()
                 },
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
                     Icons.Default.Tune,
                     contentDescription = stringResource(R.string.settings_panhub_config),
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = enabled,
                 onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) }
@@ -1094,7 +1097,15 @@ private fun AccentColorDialog(
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
-                                Text(accent.label, fontSize = 11.sp)
+                                Box(modifier = Modifier.widthIn(max = 60.dp)) {
+                                    Text(
+                                        text = stringResource(accent.labelResId),
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                                    )
+                                }
                             }
                         }
                         // 补齐空位

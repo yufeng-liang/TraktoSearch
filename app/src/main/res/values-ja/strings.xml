@@ -107,6 +107,20 @@
     <!-- Accent Color -->
     <string name="settings_accent_color">アクセントカラー</string>
     <string name="settings_accent_dynamic">ダイナミック（デフォルト）</string>
+    <!-- アクセントカラー -->
+    <string name="accent_water_lily">睡蓮紫</string>
+    <string name="accent_sunrise">日の出オレンジ</string>
+    <string name="accent_japanese_bridge">日本橋グリーン</string>
+    <string name="accent_cathedral">大聖堂ブルーグレー</string>
+    <string name="accent_haystack">干草ゴールド</string>
+    <string name="accent_renoir">ルノワールピンク</string>
+    <string name="accent_starry_night">星月夜ブルー</string>
+    <string name="accent_poppy">ポピー赤</string>
+    <string name="accent_wheat_field">麦畑ゴールド</string>
+    <string name="accent_rouen_cathedral">ルーアン大聖堂パープル</string>
+    <string name="accent_ballet">バレエパープル</string>
+    <string name="accent_water_lily_green">睡蓮グリーン</string>
+    <string name="accent_boat_breakfast">ボート朝食ブルー</string>
 
     <!-- Language -->
     <string name="settings_language">言語</string>

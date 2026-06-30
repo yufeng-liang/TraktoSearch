@@ -250,11 +250,14 @@ fun StatisticsScreen(
                 }
                 Text(stringResource(R.string.statistics_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(4.dp))
-                IconButton(onClick = { showInfoDialog = true }) {
+                IconButton(
+                    onClick = { showInfoDialog = true },
+                    modifier = Modifier.size(40.dp)
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Help,
                         contentDescription = stringResource(R.string.statistics_info),
-                        modifier = Modifier.size(20.dp),
+                        modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
