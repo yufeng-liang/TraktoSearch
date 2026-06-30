@@ -54,6 +54,10 @@ class PersonViewModel @Inject constructor(
     companion object {
         // 人物图片 URL 列表内存缓存（personId -> urls）
         private val personImagesCache = mutableMapOf<Int, List<String>>()
+        // Trakt人物详情缓存（personId -> TraktPersonDetail），包含社媒、维基百科等
+        private val traktPersonCache = mutableMapOf<Int, com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail>()
+        // 原名缓存（personId -> originalName）
+        private val originalNameCache = mutableMapOf<Int, String>()
     }
 
     private val _uiState = MutableStateFlow(PersonUiState())
@@ -128,12 +132,28 @@ class PersonViewModel @Inject constructor(
     }
 
     private fun loadTraktPerson(tmdbId: Int, personName: String) {
-        // 提前设置加载状态；若有缓存则先用缓存显示，后台刷新
-        val cached = personImagesCache[tmdbId]
-        if (cached != null && cached.isNotEmpty()) {
-            _uiState.value = _uiState.value.copy(personImages = cached)
+        // 检查缓存：若有缓存则先用缓存显示，后台刷新
+        val cachedImages = personImagesCache[tmdbId]
+        val cachedTraktPerson = traktPersonCache[tmdbId]
+        val cachedOriginalName = originalNameCache[tmdbId]
+
+        if (cachedTraktPerson != null) {
+            _uiState.value = _uiState.value.copy(traktPerson = cachedTraktPerson)
         }
-        _uiState.value = _uiState.value.copy(isLoadingPersonImages = cached.isNullOrEmpty(), isLoadingTrakt = true)
+        if (cachedOriginalName != null) {
+            _uiState.value = _uiState.value.copy(originalName = cachedOriginalName)
+        }
+        if (cachedImages != null && cachedImages.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(personImages = cachedImages)
+        }
+
+        // 有缓存时不显示加载状态，直接显示缓存数据
+        val hasAnyCache = cachedTraktPerson != null || cachedImages?.isNotEmpty() == true
+        _uiState.value = _uiState.value.copy(
+            isLoadingPersonImages = cachedImages.isNullOrEmpty(),
+            isLoadingTrakt = !hasAnyCache
+        )
+
         viewModelScope.launch {
             try {
                 // 使用 TMDB ID 搜索 Trakt 人物
@@ -153,6 +173,8 @@ class PersonViewModel @Inject constructor(
 
                         val detailResult = detailDeferred.await()
                         detailResult.onSuccess { detail ->
+                            // 更新缓存
+                            traktPersonCache[tmdbId] = detail
                             _uiState.value = _uiState.value.copy(traktPerson = detail)
                         }
                         movieCreditsDeferred.await().onSuccess { credits ->
@@ -164,6 +186,8 @@ class PersonViewModel @Inject constructor(
                         aliasesDeferred.await().onSuccess { aliases ->
                             val originalName = aliases.firstOrNull { it.country == null }?.name
                             if (originalName != null && originalName != detailResult.getOrNull()?.name) {
+                                // 更新缓存
+                                originalNameCache[tmdbId] = originalName
                                 _uiState.value = _uiState.value.copy(originalName = originalName)
                             }
                         }
