@@ -116,12 +116,12 @@ class TmdbRepository @Inject constructor(
                 rating = cached.vote_average,
                 runtime = cached.runtime,
                 releaseDate = cached.release_date ?: "",
-                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, getTmdbLanguage()) }.joinToString(" · ")
+                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · ")
             )
         }
 
         return try {
-            val response = tmdbApiService.getMovieDetail(tmdbId, language = getTmdbLanguage())
+            val response = tmdbApiService.getMovieDetail(tmdbId, language = tmdbLang)
             if (response.isSuccessful) {
                 val detail = response.body() ?: return fallbackMovie(originalTitle, year)
                 movieDetailCache.put(key, detail)
@@ -494,11 +494,17 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 获取电影详情（含海报路径） */
+    /** 获取电影详情（含海报路径），优先读缓存 */
     suspend fun getMovieDetail(movieId: Int): TmdbMovieDetail? {
+        val key = movieId.toString()
+        movieDetailCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getMovieDetail(movieId, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful) {
+                val detail = response.body()
+                detail?.let { movieDetailCache.put(key, it) }
+                detail
+            } else null
         } catch (_: Exception) {
             null
         }

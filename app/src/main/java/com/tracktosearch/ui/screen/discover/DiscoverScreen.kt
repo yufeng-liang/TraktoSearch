@@ -1,18 +1,36 @@
 package com.tracktosearch.ui.screen.discover
 
-import com.tracktosearch.ui.util.showToast
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,24 +38,38 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,31 +78,30 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
-import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
-import com.tracktosearch.data.remote.trakt.dto.TraktMovie
-import com.tracktosearch.data.remote.trakt.dto.TraktShow
-import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
-import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
+import com.tracktosearch.ui.component.MarqueeText
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
-import com.tracktosearch.ui.screen.settings.SettingsViewModel
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
+import com.tracktosearch.ui.screen.settings.SettingsViewModel
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
@@ -79,6 +110,7 @@ fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onOpenWebView: (url: String) -> Unit,
+    onListClick: (slug: String, listName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
@@ -195,53 +227,79 @@ fun DiscoverScreen(
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
-                                        // 紧凑胶囊分段器：今日 / 本周
+                                        // 紧凑胶囊分段器：今日 / 本周（宽度跟随文字）
                                         val isDay = uiState.trendingTimeWindow == "day"
+                                        val dayLabel = stringResource(R.string.discover_trending_day)
+                                        val weekLabel = stringResource(R.string.discover_trending_week)
+                                        var dayTextWidth by remember { mutableStateOf(0f) }
+                                        var weekTextWidth by remember { mutableStateOf(0f) }
+                                        val tabPadding = 12.dp
+                                        val tabHeight = 30.dp
+                                        val dayTabWidthDp = with(LocalDensity.current) { dayTextWidth.toDp() + tabPadding * 2 }
+                                        val weekTabWidthDp = with(LocalDensity.current) { weekTextWidth.toDp() + tabPadding * 2 }
+                                        val indicatorOffset by animateDpAsState(
+                                            targetValue = if (isDay) 0.dp else dayTabWidthDp,
+                                            animationSpec = tween(200),
+                                            label = "indicator"
+                                        )
+                                        val indicatorWidth by animateDpAsState(
+                                            targetValue = if (isDay) dayTabWidthDp else weekTabWidthDp,
+                                            animationSpec = tween(200),
+                                            label = "indicatorWidth"
+                                        )
                                         Box(
                                             modifier = Modifier
-                                                .width(100.dp)
-                                                .height(30.dp)
+                                                .height(tabHeight)
                                                 .clip(RoundedCornerShape(7.dp))
                                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                         ) {
-                                            // 滑块指示器（左半 or 右半）
-                                            val offset by animateDpAsState(
-                                                targetValue = if (isDay) 0.dp else 50.dp,
-                                                animationSpec = tween(200),
-                                                label = "indicator"
-                                            )
+                                            // 滑块指示器
                                             Box(
                                                 modifier = Modifier
-                                                    .offset(x = offset)
+                                                    .offset(x = indicatorOffset)
                                                     .fillMaxHeight()
-                                                    .width(50.dp)
+                                                    .width(indicatorWidth)
                                                     .padding(3.dp)
                                                     .clip(RoundedCornerShape(5.dp))
                                                     .background(MaterialTheme.colorScheme.primary)
                                             )
                                             // 文字选项
-                                            Row(modifier = Modifier.fillMaxSize()) {
-                                                listOf(
-                                                    "day" to stringResource(R.string.discover_trending_day),
-                                                    "week" to stringResource(R.string.discover_trending_week)
-                                                ).forEach { (key, label) ->
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .weight(1f)
-                                                            .fillMaxHeight()
-                                                            .clickable { viewModel.switchTrendingTimeWindow(key) },
-                                                        contentAlignment = Alignment.Center
-                                                    ) {
-                                                        Text(
-                                                            text = label,
-                                                            fontSize = 13.sp,
-                                                            fontWeight = if ((key == "day") == isDay) FontWeight.Medium else FontWeight.Normal,
-                                                            color = if ((key == "day") == isDay)
-                                                                MaterialTheme.colorScheme.onPrimary
-                                                            else
-                                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                                        )
-                                                    }
+                                            Row {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxHeight()
+                                                        .clickable { viewModel.switchTrendingTimeWindow("day") }
+                                                        .padding(horizontal = tabPadding),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = dayLabel,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = if (isDay) FontWeight.Medium else FontWeight.Normal,
+                                                        color = if (isDay)
+                                                            MaterialTheme.colorScheme.onPrimary
+                                                        else
+                                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        onTextLayout = { dayTextWidth = it.size.width.toFloat() }
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxHeight()
+                                                        .clickable { viewModel.switchTrendingTimeWindow("week") }
+                                                        .padding(horizontal = tabPadding),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = weekLabel,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = if (!isDay) FontWeight.Medium else FontWeight.Normal,
+                                                        color = if (!isDay)
+                                                            MaterialTheme.colorScheme.onPrimary
+                                                        else
+                                                            MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        onTextLayout = { weekTextWidth = it.size.width.toFloat() }
+                                                    )
                                                 }
                                             }
                                         }
@@ -403,10 +461,18 @@ fun DiscoverScreen(
                                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                                         }
+                                    } else if (uiState.trendingLists.isEmpty()) {
+                                        Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                            Text(
+                                                text = stringResource(R.string.discover_list_empty),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEach { listResponse ->
-                                                Card(modifier = Modifier.fillMaxWidth()) {
+                                                Card(modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.slug, listResponse.list.name) }) {
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -633,6 +699,10 @@ fun DiscoverScreen(
     if (showTrendingListsAll) {
         TrendingListsAllSheet(
             lists = uiState.trendingLists,
+            onListClick = { slug, listName ->
+                showTrendingListsAll = false
+                onListClick(slug, listName)
+            },
             onDismiss = { showTrendingListsAll = false }
         )
     }
@@ -899,11 +969,9 @@ private fun MovieCard(
                 }
             }
             Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
-                Text(
+                MarqueeText(
                     text = title,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    style = MaterialTheme.typography.bodySmall
                 )
                 if (subtitle != null) {
                     Text(
@@ -1547,6 +1615,7 @@ private fun SectionHeader(title: String) {
 @Composable
 private fun TrendingListsAllSheet(
     lists: List<TraktTrendingListResponse>,
+    onListClick: (slug: String, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
@@ -1574,7 +1643,7 @@ private fun TrendingListsAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(lists) { _, listResponse ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.slug, listResponse.list.name) }) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
                                 text = listResponse.list.name,

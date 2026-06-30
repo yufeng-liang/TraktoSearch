@@ -73,6 +73,14 @@ class CloudThemeManager @Inject constructor(
     private val _easterMessage = MutableStateFlow<String?>(null)
     val easterMessage: StateFlow<String?> = _easterMessage
 
+    // 定位权限状态
+    private val _hasLocationPermission = MutableStateFlow(false)
+    val hasLocationPermission: StateFlow<Boolean> = _hasLocationPermission
+
+    // 权限提示弹窗显示状态
+    private val _showPermissionDialog = MutableStateFlow(false)
+    val showPermissionDialog: StateFlow<Boolean> = _showPermissionDialog
+
     // 随机去重：记录最近播放过的彩蛋索引
     private val recentEasterIndices = ArrayDeque<Int>(2)
     private var lastMessageIndex = -1
@@ -105,6 +113,12 @@ class CloudThemeManager @Inject constructor(
 
     /** 用户点击白云，触发彩蛋 */
     fun onCloudClicked() {
+        // 未授权时，弹出权限提示而不是触发彩蛋
+        if (!_hasLocationPermission.value) {
+            _showPermissionDialog.value = true
+            return
+        }
+
         // 选择彩蛋动画（避免连续重复）
         val available = EASTER_EGG_RES.indices.filter { it !in recentEasterIndices }
         val index = if (available.isNotEmpty()) available.random() else EASTER_EGG_RES.indices.random()
@@ -119,6 +133,24 @@ class CloudThemeManager @Inject constructor(
         do { msgIndex = EASTER_MESSAGES.indices.random() } while (msgIndex == lastMessageIndex && EASTER_MESSAGES.size > 1)
         lastMessageIndex = msgIndex
         _easterMessage.value = EASTER_MESSAGES[msgIndex]
+    }
+
+    /** 权限已授权 */
+    fun onPermissionGranted() {
+        _hasLocationPermission.value = true
+        _showPermissionDialog.value = false
+    }
+
+    /** 权限弹窗已取消 */
+    fun onPermissionDismissed() {
+        _showPermissionDialog.value = false
+    }
+
+    /** 触发权限提示弹窗（新手引导完成后调用） */
+    fun requestPermissionPrompt() {
+        if (!_hasLocationPermission.value) {
+            _showPermissionDialog.value = true
+        }
     }
 
     /** 关闭彩蛋 */

@@ -3,6 +3,8 @@ package com.tracktosearch.data.repository
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.TtlCache
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -826,6 +828,19 @@ class TraktRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
+    // 列表详情条目
+    suspend fun getListItems(
+        slug: String,
+        limit: Int = 20,
+        page: Int = 1
+    ): Result<List<TraktListItemResponse>> {
+        return try {
+            val response = traktApiService.getListItems(slug, limit, page)
+            if (response.isSuccessful) Result.success(response.body() ?: emptyList())
+            else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
     // 用户统计
     suspend fun getUserStats(): Result<TraktUserStatsResponse> {
         return try {
@@ -853,12 +868,16 @@ class TraktRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    // 合并全量评分
+    // 合并全量评分（并行请求）
     suspend fun getAllUserRatings(): Result<List<TraktRatingItem>> {
         return try {
-            val movieRatings = getAllMovieRatings().getOrDefault(emptyList())
-            val showRatings = getAllShowRatings().getOrDefault(emptyList())
-            Result.success(movieRatings + showRatings)
+            coroutineScope {
+                val movieDeferred = async { getAllMovieRatings() }
+                val showDeferred = async { getAllShowRatings() }
+                val movieRatings = movieDeferred.await().getOrDefault(emptyList())
+                val showRatings = showDeferred.await().getOrDefault(emptyList())
+                Result.success(movieRatings + showRatings)
+            }
         } catch (e: Exception) { Result.failure(e) }
     }
 }

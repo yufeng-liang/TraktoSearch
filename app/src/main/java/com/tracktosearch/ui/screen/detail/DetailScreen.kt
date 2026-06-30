@@ -2,60 +2,45 @@ package com.tracktosearch.ui.screen.detail
 
 import android.content.Intent
 import android.net.Uri
-import android.graphics.Bitmap
 import android.os.Environment
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import com.tracktosearch.ui.util.showToast
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.animation.animateContentSize
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -63,43 +48,40 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.StarHalf
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.StarHalf
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
-import androidx.compose.material.icons.filled.StarHalf
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -120,61 +102,58 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
-import androidx.compose.ui.geometry.Offset
-import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
-import coil.imageLoader
 import coil.request.ImageRequest
-import coil.request.SuccessResult
-import androidx.core.graphics.drawable.toBitmap
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
+import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
-import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.MarqueeText
+import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.component.queryExistingFile
+import com.tracktosearch.ui.component.savePosterToGallery
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+import kotlinx.coroutines.launch
+import net.engawapg.lib.zoomable.rememberZoomState
+import net.engawapg.lib.zoomable.zoomable
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -324,13 +303,13 @@ fun DetailScreen(
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
-                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", modifier = Modifier.animateContentSize()) }
+                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1, modifier = Modifier.basicMarquee().animateContentSize()) }
                         )
                         if (showCommentsTab) {
                             Tab(
                                 selected = selectedTab == 1,
                                 onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
-                                text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", modifier = Modifier.animateContentSize()) }
+                                text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1, modifier = Modifier.basicMarquee().animateContentSize()) }
                             )
                         }
                         if (showRecommendationsTab) {
@@ -338,7 +317,7 @@ fun DetailScreen(
                             Tab(
                                 selected = selectedTab == recTabIndex,
                                 onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
-                                text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", modifier = Modifier.animateContentSize()) }
+                                text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1, modifier = Modifier.basicMarquee().animateContentSize()) }
                             )
                         }
                     }
@@ -349,6 +328,7 @@ fun DetailScreen(
                     // 筛选器
                     item(key = "filter_section") {
                         FilterSection(
+                            availableSources = uiState.availableSources,
                             enabledSources = uiState.enabledSources,
                             customSourceNames = uiState.customSourceNames,
                             enabledDiskTypes = uiState.enabledDiskTypes,
@@ -728,11 +708,11 @@ fun DetailScreen(
                                     }
                                 }
                             }
-                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"
-                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                putExtra(Intent.EXTRA_TEXT, shareText)
                             }
-                            context.startActivity(android.content.Intent.createChooser(intent, null))
+                            context.startActivity(Intent.createChooser(intent, null))
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -962,12 +942,10 @@ private fun DetailHeaderContent(
                 // 原名
                 Box(modifier = Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) {
                     if (uiState.originalTitle.isNotEmpty()) {
-                        Text(
+                        MarqueeText(
                             text = stringResource(R.string.detail_original_title, uiState.originalTitle),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -1006,9 +984,9 @@ private fun DetailHeaderContent(
                     } else if (uiState.year != null) {
                         stringResource(R.string.detail_year_suffix, uiState.year)
                     } else ""
-                    val runtimeText = if (uiState.runtime != null && uiState.runtime!! > 0) {
-                        val hours = uiState.runtime!! / 60
-                        val minutes = uiState.runtime!! % 60
+                    val runtimeText = if (uiState.runtime != null && uiState.runtime > 0) {
+                        val hours = uiState.runtime / 60
+                        val minutes = uiState.runtime % 60
                         if (hours > 0) {
                             " (${stringResource(R.string.detail_runtime_hours, hours, minutes)})"
                         } else {
@@ -1066,8 +1044,8 @@ private fun DetailHeaderContent(
                         }
                     }
                 }
-                // 用户评分控件（始终预留 42dp 避免布局跳动）
-                Box(modifier = Modifier.height(42.dp)) {
+                // 用户评分控件（始终预留固定高度避免布局跳动）
+                Box(modifier = Modifier.height(56.dp)) {
                     if (uiState.userRating != null) {
                         UserRatingBar(
                             userRating = uiState.userRating,
@@ -1132,6 +1110,7 @@ private fun DetailHeaderContent(
                                         isMarkedWatchlist -> stringResource(R.string.detail_marked_watchlist)
                                         else -> stringResource(R.string.detail_mark_watchlist)
                                     },
+                                    maxLines = 1,
                                     style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
                                     color = when {
                                         isMarkingWatchlist -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -1184,7 +1163,7 @@ private fun DetailHeaderContent(
                                         else MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                                Text(
+                                MarqueeText(
                                     text = when {
                                         isMarkingWatched -> stringResource(R.string.detail_mark_processing)
                                         isMarkedWatched -> stringResource(R.string.detail_marked_watched)
@@ -1525,34 +1504,38 @@ private fun UserRatingBar(
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
-    Row(
+    Column(
         modifier = Modifier
-            .padding(top = 8.dp, bottom = 14.dp)
+            .padding(top = 8.dp, bottom = 8.dp)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 enabled = !isRating && !isRatingLoading,
                 onClick = onClick
             ),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        // 标签：我的评分
-        Text(
-            text = stringResource(R.string.detail_your_rating),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (userRating != null) {
+        // 第一行：标签 + 分数
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Text(
-                text = "$userRating/10",
+                text = stringResource(R.string.detail_your_rating),
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold,
-                color = starColor,
-                modifier = Modifier.width(38.dp)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (userRating != null) {
+                Text(
+                    text = "$userRating/10",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = starColor,
+                    modifier = Modifier.width(38.dp)
+                )
+            }
         }
-        // 星标（紧跟在文字右边）
+        // 第二行：星标
         if (isRatingLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(14.dp),
@@ -1922,21 +1905,15 @@ private fun CastCard(name: String, role: String, profileUrl: String?, personId: 
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        MarqueeText(
             text = name,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
             modifier = Modifier.fillMaxWidth()
         )
-        Text(
+        MarqueeText(
             text = role,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, textAlign = TextAlign.Center),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
     }
@@ -2173,13 +2150,13 @@ private fun ExpandableText(text: String, maxLines: Int = 3) {
 
 @Composable
 private fun FilterSection(
+    availableSources: List<String>,
     enabledSources: Set<String>,
     customSourceNames: Map<String, String>,
     enabledDiskTypes: Set<DiskType>,
     onToggleSource: (String) -> Unit,
     onToggleDiskType: (DiskType) -> Unit
 ) {
-    val context = LocalContext.current
     val view = LocalView.current
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
@@ -2201,7 +2178,7 @@ private fun FilterSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(
-                    items = enabledSources.toList(),
+                    items = availableSources,
                     key = { it }
                 ) { source ->
                     val label = when (source) {
@@ -2322,7 +2299,6 @@ private fun MarkWatchedDialog(
                     val allEpisodeNumbers = episodes[season.number]?.map { it.number }
                         ?: (1..season.episode_count).toList()
                     val allSelected = allEpisodeNumbers.isNotEmpty() && allEpisodeNumbers.all { it in seasonSelected }
-                    val someSelected = seasonSelected.isNotEmpty() && !allSelected
                     val watchedCount = seasonSelected.size
                     val totalCount = season.episode_count
 
@@ -2524,13 +2500,11 @@ private fun SeasonsSection(
     onToggleSeason: (Int) -> Unit,
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
-    val context = LocalContext.current
     val view = LocalView.current
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
     val specialSeasons = seasons.filter { it.number == 0 }
     val allSeasons = regularSeasons + specialSeasons
-    val totalSeasonCount = allSeasons.count { it.number == 0 || it.episode_count > 0 }
 
     // 默认显示前3季，点击展开全部
     var showAllSeasons by rememberSaveable { mutableStateOf(false) }
@@ -2688,7 +2662,6 @@ private fun EpisodeRow(
     isToggling: Boolean,
     onToggleWatched: () -> Unit
 ) {
-    val context = LocalContext.current
     val view = LocalView.current
     Row(
         modifier = Modifier
@@ -2730,7 +2703,6 @@ private fun CollectionSection(
     currentTmdbId: Int,
     onMovieClick: (tmdbId: Int, title: String) -> Unit
 ) {
-    val context = LocalContext.current
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
         Text(
             text = stringResource(R.string.detail_collection_title, collection.name),
@@ -2825,7 +2797,6 @@ private fun SearchingState(completedSources: Int, totalSources: Int) {
 
 @Composable
 private fun EmptyState(onRetry: () -> Unit) {
-    val context = LocalContext.current
     val view = LocalView.current
     Box(
         modifier = Modifier
@@ -3017,16 +2988,16 @@ private fun VideosAndImagesSection(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(horizontal = 0.dp)
         ) {
-            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { index, video ->
-                VideoCard(
-                    video = video,
-                    onClick = { onVideoClick(video) }
-                )
-            }
             itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
                 BackdropCard(
                     backdropUrl = backdropUrl,
                     onClick = { onBackdropClick(index) }
+                )
+            }
+            itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
+                VideoCard(
+                    video = video,
+                    onClick = { onVideoClick(video) }
                 )
             }
         }
@@ -3172,8 +3143,8 @@ private fun FullVideosImagesSheet(
     val hasVideos = videos.isNotEmpty()
     val hasBackdrops = backdrops.isNotEmpty()
     val tabCount = (if (hasVideos) 1 else 0) + (if (hasBackdrops) 1 else 0)
-    // 默认选中预告片Tab（如果有）
-    val initialPage = if (hasVideos) 0 else 0
+    // 默认选中截图Tab（如果有）
+    val initialPage = if (hasBackdrops) 0 else 0
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabCount })
 
     // 同步 pager 和 tab
@@ -3227,21 +3198,22 @@ private fun FullVideosImagesSheet(
             if (tabCount > 1) {
                 PrimaryTabRow(
                     selectedTabIndex = selectedTabIndex,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    containerColor = Color.Transparent
                 ) {
-                    if (hasVideos) {
+                    if (hasBackdrops) {
                         Tab(
                             selected = selectedTabIndex == 0,
                             onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            text = { Text(stringResource(R.string.detail_videos_trailers_section, videos.size)) }
+                            text = { Text(stringResource(R.string.detail_videos_backdrops_section, backdrops.size)) }
                         )
                     }
-                    if (hasBackdrops) {
-                        val backdropTabIndex = if (hasVideos) 1 else 0
+                    if (hasVideos) {
+                        val videoTabIndex = if (hasBackdrops) 1 else 0
                         Tab(
-                            selected = selectedTabIndex == backdropTabIndex,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(backdropTabIndex) } },
-                            text = { Text(stringResource(R.string.detail_videos_backdrops_section, backdrops.size)) }
+                            selected = selectedTabIndex == videoTabIndex,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(videoTabIndex) } },
+                            text = { Text(stringResource(R.string.detail_videos_trailers_section, videos.size)) }
                         )
                     }
                 }
@@ -3255,9 +3227,9 @@ private fun FullVideosImagesSheet(
                     .fillMaxHeight(0.8f),
                 userScrollEnabled = tabCount > 1
             ) { page ->
-                // 计算当前 page 对应的内容
-                val showVideos = if (hasVideos) page == 0 else false
-                val showBackdrops = if (hasVideos) page == 1 else page == 0
+                // 计算当前 page 对应的内容（截图在前，预告片在后）
+                val showBackdrops = if (hasBackdrops) page == 0 else false
+                val showVideos = if (hasBackdrops) page == 1 else page == 0
 
                 when {
                     showVideos -> {
@@ -3507,7 +3479,7 @@ private fun YouTubePlayerOverlay(
             }) {
                 Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.detail_video_open_browser))
+                Text(stringResource(R.string.detail_video_open_browser), maxLines = 1)
             }
         }
 
@@ -3549,7 +3521,6 @@ private fun BackdropPagerOverlay(
     LaunchedEffect(pagerState.currentPage) {
         val index = pagerState.currentPage
         if (index in savedBackdrops.value) return@LaunchedEffect
-        val url = backdrops.getOrNull(index) ?: return@LaunchedEffect
         val fileName = "TrackToSearch_backdrop_${index}.jpg"
         val relativePath = Environment.DIRECTORY_PICTURES + "/TrackToSearch"
         val exists = queryExistingFile(context, fileName, relativePath) != null

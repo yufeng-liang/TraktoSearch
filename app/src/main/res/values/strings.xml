@@ -406,10 +406,39 @@
     <string name="help_custom_source_parse_b1">pansou_template: compatible with PanSou API response format. This format places the resource list under the data field, with each resource containing title, url, type, etc.</string>
     <string name="help_custom_source_parse_b2">zreso_template: compatible with ZReso API response format. This format places the resource list under the data.list field, with possibly different field names.</string>
     <string name="help_custom_source_parse_b3">custom: custom mode, requires JSONPath expressions (e.g. $.data.results) to parse JSON response yourself.</string>
-    <string name="help_custom_source_parse_pansou_example">pansou_template format example:\n{\n  "data": [\n    {\n      "title": "Movie Name",\n      "url": "https://pan.quark.cn/xxx",\n      "type": "quark",\n      "datetime": "2024-01-01"\n    }\n  ]\n}</string>
-    <string name="help_custom_source_parse_zreso_example">zreso_template format example:\n{\n  "data": {\n    "list": [\n      {\n        "name": "Movie Name",\n        "url": "https://pan.baidu.cn/xxx",\n        "cloud_type": "baidu"\n      }\n    ]\n  }\n}</string>
+    <string name="help_custom_source_parse_pansou_example">pansou_template format example:
+{
+  "data": [
+    {
+      "title": "Movie Name",
+      "url": "https://pan.quark.cn/xxx",
+      "type": "quark",
+      "datetime": "2024-01-01"
+    }
+  ]
+}</string>
+    <string name="help_custom_source_parse_zreso_example">zreso_template format example:
+{
+  "data": {
+    "list": [
+      {
+        "name": "Movie Name",
+        "url": "https://pan.baidu.cn/xxx",
+        "cloud_type": "baidu"
+      }
+    ]
+  }
+}</string>
     <string name="help_custom_source_example_title">Custom Mode Example</string>
-    <string name="help_custom_source_example">If API returns JSON:\n{"data": {"results": [{"title": "Movie Name", "url": "https://...", "type": "quark"}]}}\n\nConfig:\n  parseMode = custom\n  listPath = $.data.results\n  namePath = $.title\n  urlPath = $.url\n  diskTypePath = $.type</string>
+    <string name="help_custom_source_example">If API returns JSON:
+{"data": {"results": [{"title": "Movie Name", "url": "https://...", "type": "quark"}]}}
+
+Config:
+  parseMode = custom
+  listPath = $.data.results
+  namePath = $.title
+  urlPath = $.url
+  diskTypePath = $.type</string>
     <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
     <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
     <string name="help_tips_b1">Tap status bar to quickly scroll to top</string>
@@ -637,6 +666,7 @@
     <string name="discover_trending_week">This Week</string>
     <string name="discover_trending_lists">Community Lists</string>
     <string name="discover_list_meta">%d items · @%s · ❤%d</string>
+    <string name="discover_list_empty">No community lists yet, check back later~</string>
     <string name="common_view_all">View all</string>
 
     <!-- Search Source Type -->

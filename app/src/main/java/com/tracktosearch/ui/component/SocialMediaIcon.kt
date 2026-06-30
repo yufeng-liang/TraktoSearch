@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -21,10 +22,11 @@ fun SocialMediaIcon(
     label: String,
     tint: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = modifier.clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -37,7 +39,9 @@ fun SocialMediaIcon(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = labelColor
+            color = labelColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

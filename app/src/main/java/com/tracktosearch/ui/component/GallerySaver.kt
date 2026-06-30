@@ -4,11 +4,10 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Environment
-import coil.ImageLoader
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import coil.imageLoader
-import androidx.core.graphics.drawable.toBitmap
 import com.tracktosearch.R
 import com.tracktosearch.ui.util.showToast
 import kotlinx.coroutines.CoroutineScope

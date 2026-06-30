@@ -37,6 +37,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -69,7 +71,8 @@ data class DetailUiState(
     val posterUrl: String? = null,
     val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
-    val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
+    val availableSources: List<String> = emptyList(),   // 筛选条上所有可用源（来自设置页，固定不变）
+    val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES, // 当前选中的源（点击筛选时变化）
     val customSourceNames: Map<String, String> = emptyMap(), // 自定义源 ID -> 名称
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
     // 资源搜索进度：已完成源数 / 总源数
@@ -664,6 +667,8 @@ class DetailViewModel @Inject constructor(
         if (currentTraktId <= 0) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingRecommendations = true)
+            // 限制并发数，避免触发 API 限流
+            val enrichSemaphore = Semaphore(5)
             try {
                 // 并行请求 Trakt related 和 TMDB similar
                 val enriched = when (currentMediaType) {
@@ -673,20 +678,22 @@ class DetailViewModel @Inject constructor(
                             val movies = result.getOrDefault(emptyList())
                             movies.map { movie ->
                                 async {
-                                    val enrichment = tmdbRepository.enrichMovie(
-                                        movie.ids.tmdb, movie.title, movie.year.takeIf { it > 0 }
-                                    )
-                                    RecommendationItem(
-                                        traktId = movie.ids.trakt,
-                                        tmdbId = movie.ids.tmdb,
-                                        title = movie.title,
-                                        displayTitle = enrichment.chineseTitle,
-                                        year = enrichment.year,
-                                        genres = enrichment.genres,
-                                        posterUrl = enrichment.posterUrl,
-                                        imdbId = movie.ids.imdb,
-                                        traktRating = movie.rating
-                                    )
+                                    enrichSemaphore.withPermit {
+                                        val enrichment = tmdbRepository.enrichMovie(
+                                            movie.ids.tmdb, movie.title, movie.year.takeIf { it > 0 }
+                                        )
+                                        RecommendationItem(
+                                            traktId = movie.ids.trakt,
+                                            tmdbId = movie.ids.tmdb,
+                                            title = movie.title,
+                                            displayTitle = enrichment.chineseTitle,
+                                            year = enrichment.year,
+                                            genres = enrichment.genres,
+                                            posterUrl = enrichment.posterUrl,
+                                            imdbId = movie.ids.imdb,
+                                            traktRating = movie.rating
+                                        )
+                                    }
                                 }
                             }.awaitAll()
                         }
@@ -721,20 +728,22 @@ class DetailViewModel @Inject constructor(
                             val shows = result.getOrDefault(emptyList())
                             shows.map { show ->
                                 async {
-                                    val enrichment = tmdbRepository.enrichTv(
-                                        show.ids.tmdb, show.title, show.year.takeIf { it > 0 }
-                                    )
-                                    RecommendationItem(
-                                        traktId = show.ids.trakt,
-                                        tmdbId = show.ids.tmdb,
-                                        title = show.title,
-                                        displayTitle = enrichment.chineseTitle,
-                                        year = enrichment.year,
-                                        genres = enrichment.genres,
-                                        posterUrl = enrichment.posterUrl,
-                                        imdbId = show.ids.imdb,
-                                        traktRating = show.rating
-                                    )
+                                    enrichSemaphore.withPermit {
+                                        val enrichment = tmdbRepository.enrichTv(
+                                            show.ids.tmdb, show.title, show.year.takeIf { it > 0 }
+                                        )
+                                        RecommendationItem(
+                                            traktId = show.ids.trakt,
+                                            tmdbId = show.ids.tmdb,
+                                            title = show.title,
+                                            displayTitle = enrichment.chineseTitle,
+                                            year = enrichment.year,
+                                            genres = enrichment.genres,
+                                            posterUrl = enrichment.posterUrl,
+                                            imdbId = show.ids.imdb,
+                                            traktRating = show.rating
+                                        )
+                                    }
                                 }
                             }.awaitAll()
                         }
@@ -845,6 +854,7 @@ class DetailViewModel @Inject constructor(
                         userRating = rating,
                         isRating = false
                     )
+                    saveToCache()
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isRating = false)
@@ -864,6 +874,7 @@ class DetailViewModel @Inject constructor(
                         userRating = null,
                         isRating = false
                     )
+                    saveToCache()
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isRating = false)
@@ -966,6 +977,7 @@ class DetailViewModel @Inject constructor(
                 error = null,
                 completedSources = 0,
                 totalSources = storageEnabledSources.size,
+                availableSources = storageEnabledSources.toList(),
                 enabledSources = storageEnabledSources,
                 customSourceNames = customNames
             )
@@ -1098,6 +1110,7 @@ class DetailViewModel @Inject constructor(
             val customSources = resourceRepository.getEnabledCustomSources()
             val customNames = customSources.associate { it.id to it.name }
             val state = _uiState.value.copy(
+                availableSources = storageEnabledSources.toList(),
                 enabledSources = storageEnabledSources,
                 customSourceNames = customNames,
                 totalSources = storageEnabledSources.size
@@ -1109,24 +1122,28 @@ class DetailViewModel @Inject constructor(
             )
             val isShow = currentMediaType == MediaType.SHOW
 
-            // 强制刷新中文名搜索
-            val chineseResult = resourceRepository.refreshResources(
-                keyword = currentKeyword,
-                enabledSources = storageEnabledSources,
-                enabledDiskTypes = state.enabledDiskTypes,
-                isShow = isShow
-            )
-            // 如果有英文名，也刷新英文名搜索
-            val englishResult = if (currentOriginalTitle.isNotEmpty()) {
+            // 中英文名并行搜索
+            val chineseDeferred = async {
                 resourceRepository.refreshResources(
-                    keyword = currentOriginalTitle,
+                    keyword = currentKeyword,
                     enabledSources = storageEnabledSources,
                     enabledDiskTypes = state.enabledDiskTypes,
                     isShow = isShow
                 )
-            } else {
-                Result.success(emptyList())
             }
+            val englishDeferred = if (currentOriginalTitle.isNotEmpty()) {
+                async {
+                    resourceRepository.refreshResources(
+                        keyword = currentOriginalTitle,
+                        enabledSources = storageEnabledSources,
+                        enabledDiskTypes = state.enabledDiskTypes,
+                        isShow = isShow
+                    )
+                }
+            } else null
+
+            val chineseResult = chineseDeferred.await()
+            val englishResult = englishDeferred?.await() ?: Result.success(emptyList())
 
             val chineseItems = chineseResult.getOrDefault(emptyList())
             val englishItems = englishResult.getOrDefault(emptyList())
@@ -1213,6 +1230,7 @@ class DetailViewModel @Inject constructor(
                             isMarkedWatchlist = true,
                             isMarkingWatched = false
                         )
+                        saveToCache()
                     }
                     .onFailure {
                         _uiState.value = _uiState.value.copy(isMarkingWatched = false)
@@ -1238,6 +1256,7 @@ class DetailViewModel @Inject constructor(
                         isMarkingWatched = false,
                         showRatingDialog = true
                     )
+                    saveToCache()
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
@@ -1275,6 +1294,7 @@ class DetailViewModel @Inject constructor(
                         isMarkedWatchlist = false,
                         isMarkingWatched = false
                     )
+                    saveToCache()
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
@@ -1313,6 +1333,7 @@ class DetailViewModel @Inject constructor(
                     isMarkedWatchlist = targetState,
                     isMarkingWatchlist = false
                 )
+                saveToCache()
             } else {
                 _uiState.value = _uiState.value.copy(isMarkingWatchlist = false)
             }

@@ -1,66 +1,95 @@
 package com.tracktosearch.ui.screen.search
 
-import android.content.Intent
 import android.location.Location
 import android.location.LocationManager
-import android.net.Uri
-
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,32 +97,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.tracktosearch.R
-import kotlin.math.roundToInt
-import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
-import com.tracktosearch.data.remote.dto.DiskType
-import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.data.remote.dto.ResourceType
-import com.tracktosearch.data.remote.dto.inferResourceType
+import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
-import com.tracktosearch.ui.component.EmptyView
-import com.tracktosearch.ui.component.ErrorStateView
-import com.tracktosearch.ui.component.LoadingView
-import com.tracktosearch.ui.component.ResourceItemCard
-import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
-import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import androidx.compose.foundation.lazy.grid.items as gridItems
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -138,24 +158,34 @@ fun SearchScreen(
     val cloudThemeManager = remember {
         EntryPointAccessors.fromApplication(context, CloudThemeProvider::class.java).cloudThemeManager()
     }
+    val cloudPermissionStorage = remember {
+        CloudPermissionStorage(context.applicationContext)
+    }
+    val scope = rememberCoroutineScope()
     // 定位权限申请
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        val loc = if (granted) getLastKnownLocation(context) else null
-        cloudThemeManager.loadTheme(loc)
+        if (granted) {
+            val loc = getLastKnownLocation(context)
+            cloudThemeManager.onPermissionGranted()
+            cloudThemeManager.loadTheme(loc)
+        } else {
+            cloudThemeManager.onPermissionDismissed()
+        }
     }
     LaunchedEffect(Unit) {
-        // 先用缓存/无位置加载，不等权限，避免闪烁
-        cloudThemeManager.loadTheme(null)
         val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
+            cloudThemeManager.onPermissionGranted()
             cloudThemeManager.loadTheme(getLastKnownLocation(context))
         } else {
-            locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+            // 未授权时只加载缓存主题，不自动请求权限
+            cloudThemeManager.loadTheme(null)
         }
     }
+    val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
     val easterMessage by cloudThemeManager.easterMessage.collectAsStateWithLifecycle()
 
@@ -279,6 +309,38 @@ fun SearchScreen(
         ) {
             // 云朵图标 — 带显隐动画
             CloudIconWithAnimation(cloudThemeManager, isActive)
+
+            // 权限提示弹窗
+            if (showPermissionDialog) {
+                AlertDialog(
+                    onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
+                    text = {
+                        Text("想知道白云会变身吗？授权位置后，它会随天气和节日悄悄变化哦~")
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                cloudThemeManager.onPermissionDismissed()
+                                locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                            }
+                        ) {
+                            Text("去授权")
+                        }
+                    },
+                    dismissButton = {
+                        androidx.compose.material3.TextButton(
+                            onClick = {
+                                cloudThemeManager.onPermissionDismissed()
+                                scope.launch(Dispatchers.IO) {
+                                    cloudPermissionStorage.setDismissed(true)
+                                }
+                            }
+                        ) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
 
             // Spacer between icon and search box
             Spacer(modifier = Modifier.height(16.dp))
@@ -1103,6 +1165,7 @@ private fun getLastKnownLocation(context: android.content.Context): Location? {
 
 @Composable
 private fun CloudIconWithAnimation(cloudThemeManager: CloudThemeManager, isActive: Boolean) {
+    val hasPermission by cloudThemeManager.hasLocationPermission.collectAsStateWithLifecycle()
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1114,12 +1177,27 @@ private fun CloudIconWithAnimation(cloudThemeManager: CloudThemeManager, isActiv
             enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
             exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
         ) {
-            CloudEasterEgg(
-                themeManager = cloudThemeManager,
-                modifier = Modifier
-                    .size(182.dp)
-                    .padding(top = 16.dp)
-            )
+            if (hasPermission) {
+                CloudEasterEgg(
+                    themeManager = cloudThemeManager,
+                    modifier = Modifier
+                        .size(182.dp)
+                        .padding(top = 16.dp)
+                )
+            } else {
+                Image(
+                    painter = painterResource(R.drawable.ic_search_cloud),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(182.dp)
+                        .padding(top = 16.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = { cloudThemeManager.onCloudClicked() }
+                        )
+                )
+            }
         }
     }
 }

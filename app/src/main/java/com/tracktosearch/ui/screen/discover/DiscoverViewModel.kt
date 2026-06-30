@@ -1,34 +1,37 @@
 package com.tracktosearch.ui.screen.discover
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
-import com.tracktosearch.data.local.SearchHistoryStorage
-import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DiscoverSectionStorage
+import com.tracktosearch.data.local.SearchHistoryStorage
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
-import com.tracktosearch.data.remote.trakt.dto.TraktMovie
-import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
-import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
-import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
+import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -36,12 +39,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 
 @Immutable

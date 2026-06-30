@@ -13,6 +13,8 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,6 +32,8 @@ data class PersonUiState(
     val hasMoreTvShows: Boolean = false,
     val isLoadingMoreMovies: Boolean = false,
     val isLoadingMoreTvShows: Boolean = false,
+    val isLoadingMovies: Boolean = false, // 电影作品是否正在加载
+    val isLoadingTvShows: Boolean = false, // 剧集作品是否正在加载
     val error: String? = null,
     val resolvingTmdbId: Int? = null,
     val traktPerson: TraktPersonDetail? = null,
@@ -46,6 +50,11 @@ class PersonViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository
 ) : ViewModel() {
+
+    companion object {
+        // 人物图片 URL 列表内存缓存（personId -> urls）
+        private val personImagesCache = mutableMapOf<Int, List<String>>()
+    }
 
     private val _uiState = MutableStateFlow(PersonUiState())
     val uiState: StateFlow<PersonUiState> = _uiState.asStateFlow()
@@ -65,7 +74,7 @@ class PersonViewModel @Inject constructor(
         movieCreditsPage = 1
         tvCreditsPage = 1
 
-        _uiState.value = PersonUiState(isLoading = true)
+        _uiState.value = PersonUiState(isLoading = true, isLoadingMovies = true, isLoadingTvShows = true)
 
         viewModelScope.launch {
             try {
@@ -73,20 +82,14 @@ class PersonViewModel @Inject constructor(
                 val movieCreditsDeferred = async { tmdbRepository.getPersonMovieCredits(personId, page = 1) }
                 val tvCreditsDeferred = async { tmdbRepository.getPersonTvCredits(personId, page = 1) }
 
+                // 渐进式渲染：人物基本信息先显示
                 val person = personDeferred.await()
-                val movieCreditsPageResult = movieCreditsDeferred.await()
-                val tvCreditsPageResult = tvCreditsDeferred.await()
-
                 if (person == null) {
                     _uiState.value = PersonUiState(error = "Failed to load person")
                 } else {
-                    _uiState.value = PersonUiState(
+                    _uiState.value = _uiState.value.copy(
                         isLoading = false,
-                        person = person,
-                        movieCredits = movieCreditsPageResult.items,
-                        tvCredits = tvCreditsPageResult.items,
-                        hasMoreMovies = movieCreditsPageResult.hasMore,
-                        hasMoreTvShows = tvCreditsPageResult.hasMore
+                        person = person
                     )
                     // 异步加载 Trakt 人物数据（静默失败）
                     loadTraktPerson(personId, person.name)
@@ -98,6 +101,25 @@ class PersonViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(originalName = originalName)
                     }
                 }
+
+                // 电影作品加载完成，独立更新
+                movieCreditsDeferred.await().let { result ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMovies = false,
+                        movieCredits = result.items,
+                        hasMoreMovies = result.hasMore
+                    )
+                }
+
+                // 剧集作品加载完成，独立更新
+                tvCreditsDeferred.await().let { result ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingTvShows = false,
+                        tvCredits = result.items,
+                        hasMoreTvShows = result.hasMore
+                    )
+                }
+
                 loaded = true
             } catch (_: Exception) {
                 _uiState.value = PersonUiState(error = "Failed to load person data")
@@ -106,8 +128,12 @@ class PersonViewModel @Inject constructor(
     }
 
     private fun loadTraktPerson(tmdbId: Int, personName: String) {
-        // 提前设置加载状态，避免社媒/简介/图片栏目出现时导致下方内容跳变
-        _uiState.value = _uiState.value.copy(isLoadingPersonImages = true, isLoadingTrakt = true)
+        // 提前设置加载状态；若有缓存则先用缓存显示，后台刷新
+        val cached = personImagesCache[tmdbId]
+        if (cached != null && cached.isNotEmpty()) {
+            _uiState.value = _uiState.value.copy(personImages = cached)
+        }
+        _uiState.value = _uiState.value.copy(isLoadingPersonImages = cached.isNullOrEmpty(), isLoadingTrakt = true)
         viewModelScope.launch {
             try {
                 // 使用 TMDB ID 搜索 Trakt 人物
@@ -118,35 +144,30 @@ class PersonViewModel @Inject constructor(
                     val slug = personResult?.person?.ids?.slug
                     android.util.Log.d("PersonVM", "Person slug: $slug")
                     if (!slug.isNullOrEmpty()) {
-                        val detailResult = traktRepository.getPersonSummary(slug)
+                        // 5 个请求并行执行，总耗时取最慢的一个
+                        val detailDeferred = async { traktRepository.getPersonSummary(slug) }
+                        val movieCreditsDeferred = async { traktRepository.getPersonMovieCredits(slug) }
+                        val showCreditsDeferred = async { traktRepository.getPersonShowCredits(slug) }
+                        val aliasesDeferred = async { traktRepository.getPersonAliases(slug) }
+                        val imagesDeferred = async { traktRepository.getPersonImages(slug) }
+
+                        val detailResult = detailDeferred.await()
                         detailResult.onSuccess { detail ->
-                            android.util.Log.d("PersonVM", "Trakt person: ${detail.name}")
-                            android.util.Log.d("PersonVM", "social_ids.facebook: ${detail.social_ids?.facebook}")
-                            android.util.Log.d("PersonVM", "social_ids.instagram: ${detail.social_ids?.instagram}")
-                            android.util.Log.d("PersonVM", "social_ids.twitter: ${detail.social_ids?.twitter}")
-                            android.util.Log.d("PersonVM", "social_ids.wikipedia: ${detail.social_ids?.wikipedia}")
                             _uiState.value = _uiState.value.copy(traktPerson = detail)
                         }
-                        // 获取参演数量
-                        val movieCreditsResult = traktRepository.getPersonMovieCredits(slug)
-                        movieCreditsResult.onSuccess { credits ->
+                        movieCreditsDeferred.await().onSuccess { credits ->
                             _uiState.value = _uiState.value.copy(totalMovieCredits = credits.cast.size)
                         }
-                        val showCreditsResult = traktRepository.getPersonShowCredits(slug)
-                        showCreditsResult.onSuccess { credits ->
+                        showCreditsDeferred.await().onSuccess { credits ->
                             _uiState.value = _uiState.value.copy(totalTvCredits = credits.cast.size)
                         }
-                        // 获取原名
-                        val aliasesResult = traktRepository.getPersonAliases(slug)
-                        aliasesResult.onSuccess { aliases ->
+                        aliasesDeferred.await().onSuccess { aliases ->
                             val originalName = aliases.firstOrNull { it.country == null }?.name
                             if (originalName != null && originalName != detailResult.getOrNull()?.name) {
                                 _uiState.value = _uiState.value.copy(originalName = originalName)
                             }
                         }
-                        // 获取 Trakt 人物图片
-                        val imagesResult = traktRepository.getPersonImages(slug)
-                        imagesResult.onSuccess { images ->
+                        imagesDeferred.await().onSuccess { images ->
                             val imageUrls = mutableListOf<String>()
                             images.headshot.forEach { url ->
                                 val fullUrl = if (url.startsWith("http")) url else "https://$url"
@@ -161,6 +182,7 @@ class PersonViewModel @Inject constructor(
                                 imageUrls.add(fullUrl)
                             }
                             if (imageUrls.isNotEmpty()) {
+                                personImagesCache[tmdbId] = imageUrls
                                 _uiState.value = _uiState.value.copy(personImages = imageUrls)
                             }
                         }
@@ -204,6 +226,11 @@ class PersonViewModel @Inject constructor(
                 }
             } catch (_: Exception) {
             } finally {
+                // 更新缓存为最终合并结果
+                val finalImages = _uiState.value.personImages
+                if (finalImages.isNotEmpty()) {
+                    personImagesCache[currentPersonId] = finalImages
+                }
                 _uiState.value = _uiState.value.copy(isLoadingPersonImages = false, isLoadingTrakt = false)
             }
         }

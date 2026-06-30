@@ -4,6 +4,7 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@android:color/white</item>
     </style>
 
     <!-- Android 12 以下的启动页主题：直接使用 App 主题，不显示系统 splash -->

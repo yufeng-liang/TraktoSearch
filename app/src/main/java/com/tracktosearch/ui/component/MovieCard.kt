@@ -162,11 +162,9 @@ fun MovieCard(
             Column(
                 modifier = Modifier.padding(6.dp)
             ) {
-                Text(
+                MarqueeText(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 if (genres.isNotEmpty()) {

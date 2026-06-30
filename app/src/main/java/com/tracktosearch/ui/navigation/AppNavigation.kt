@@ -43,6 +43,7 @@ import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
+import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
@@ -70,6 +71,13 @@ object Routes {
     const val STATISTICS = "statistics"
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
     const val HELP = "help"
+    const val LIST_DETAIL = "listDetail/{slug}/{listName}"
+
+    fun listDetailRoute(slug: String, listName: String): String {
+        val encodedSlug = java.net.URLEncoder.encode(slug, "UTF-8")
+        val encodedName = java.net.URLEncoder.encode(listName, "UTF-8")
+        return "listDetail/$encodedSlug/$encodedName"
+    }
 
     fun traktSearchRoute(type: String, query: String): String {
         val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
@@ -247,6 +255,9 @@ fun AppNavigation(
                             onPersonClick = { tmdbId, name, profileUrl ->
                                 navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
                             },
+                            onListClick = { slug, listName ->
+                                navController.navigate(Routes.listDetailRoute(slug, listName))
+                            },
                             onLogout = {
                                 onLogout()
                                 currentStartDest = Routes.LOGIN
@@ -394,6 +405,32 @@ fun AppNavigation(
                             personId = personId,
                             personName = personName,
                             profileUrl = profileUrl,
+                            onBack = { navController.popBackStack() },
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            }
+                        )
+                    }
+                }
+
+                composable(
+                    route = Routes.LIST_DETAIL,
+                    arguments = listOf(
+                        navArgument("slug") { type = NavType.StringType },
+                        navArgument("listName") { type = NavType.StringType; defaultValue = "" }
+                    )
+                ) { backStackEntry ->
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        val slug = java.net.URLDecoder.decode(
+                            backStackEntry.arguments?.getString("slug") ?: "", "UTF-8"
+                        )
+                        val listName = java.net.URLDecoder.decode(
+                            backStackEntry.arguments?.getString("listName") ?: "", "UTF-8"
+                        )
+                        TraktListDetailScreen(
                             onBack = { navController.popBackStack() },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))

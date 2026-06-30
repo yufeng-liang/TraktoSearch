@@ -406,10 +406,39 @@
     <string name="help_custom_source_parse_b1">pansou_template：兼容盘搜搜 API 的返回格式。该格式将资源列表放在 data 字段下，每个资源包含 title、url、type 等字段。</string>
     <string name="help_custom_source_parse_b2">zreso_template：兼容 ZReso API 的返回格式。该格式将资源列表放在 data.list 字段下，字段命名可能不同。</string>
     <string name="help_custom_source_parse_b3">custom：自定义模式，需填写 JSONPath 表达式（如 $.data.results）自行解析 JSON 响应。</string>
-    <string name="help_custom_source_parse_pansou_example">pansou_template 格式示例：\n{\n  "data": [\n    {\n      "title": "电影名称",\n      "url": "https://pan.quark.cn/xxx",\n      "type": "quark",\n      "datetime": "2024-01-01"\n    }\n  ]\n}</string>
-    <string name="help_custom_source_parse_zreso_example">zreso_template 格式示例：\n{\n  "data": {\n    "list": [\n      {\n        "name": "电影名称",\n        "url": "https://pan.baidu.cn/xxx",\n        "cloud_type": "baidu"\n      }\n    ]\n  }\n}</string>
+    <string name="help_custom_source_parse_pansou_example">pansou_template 格式示例：
+{
+  "data": [
+    {
+      "title": "电影名称",
+      "url": "https://pan.quark.cn/xxx",
+      "type": "quark",
+      "datetime": "2024-01-01"
+    }
+  ]
+}</string>
+    <string name="help_custom_source_parse_zreso_example">zreso_template 格式示例：
+{
+  "data": {
+    "list": [
+      {
+        "name": "电影名称",
+        "url": "https://pan.baidu.cn/xxx",
+        "cloud_type": "baidu"
+      }
+    ]
+  }
+}</string>
     <string name="help_custom_source_example_title">自定义模式示例</string>
-    <string name="help_custom_source_example">假设 API 返回 JSON：\n{"data": {"results": [{"title": "电影名", "url": "https://...", "type": "quark"}]}}\n\n参数配置：\n  parseMode = custom\n  listPath = $.data.results\n  namePath = $.title\n  urlPath = $.url\n  diskTypePath = $.type</string>
+    <string name="help_custom_source_example">假设 API 返回 JSON：
+{"data": {"results": [{"title": "电影名", "url": "https://...", "type": "quark"}]}}
+
+参数配置：
+  parseMode = custom
+  listPath = $.data.results
+  namePath = $.title
+  urlPath = $.url
+  diskTypePath = $.type</string>
     <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
     <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
     <string name="help_tips_b1">点击状态栏可快速回到页面顶部</string>
@@ -637,6 +666,7 @@
     <string name="discover_trending_week">本周</string>
     <string name="discover_trending_lists">社区热门列表</string>
     <string name="discover_list_meta">%d部 · @%s · ❤%d</string>
+    <string name="discover_list_empty">暂无社区热门列表，稍后再来看看吧~</string>
     <string name="common_view_all">查看全部</string>
 
     <!-- Search Source Type -->

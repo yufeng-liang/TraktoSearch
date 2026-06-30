@@ -1,26 +1,27 @@
 package com.tracktosearch
 
+import android.app.AlertDialog
+import android.content.DialogInterface
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import com.tracktosearch.ui.util.showToast
 import android.widget.Toast
-import android.app.AlertDialog
-import android.content.DialogInterface
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -29,21 +30,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -51,33 +48,34 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.tween
 import androidx.core.os.LocaleListCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.DefaultTabStorage
+import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.push.JPushHelper
-import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.navigation.AppNavigation
+import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.theme.TraktToSearchTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ScrollToTopProvider
+import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.pow
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.math.pow
 
 // 全局共享的 OAuth 结果，供 MainActivity 传递给 LoginViewModel
 object OAuthCallback {
@@ -179,15 +177,14 @@ class MainActivity : AppCompatActivity() {
             launch { runCatching { tmdbRepository.getPopularMovies() } }
             launch { runCatching { tmdbRepository.getUpcomingMovies() } }
 
-            // 确保自定义 splash 最短显示时长，品牌展示充分
-            val elapsed = System.currentTimeMillis() - splashStartTime
-            if (elapsed < MIN_SPLASH_DURATION_MS) {
-                delay(MIN_SPLASH_DURATION_MS - elapsed)
-            }
-
-            isReady = true
-            // 自定义 splash 已渲染完成，解除系统 splash 的保持状态
+            // 系统 splash 尽快消失，不设置最短时间
             keepSplashOnScreen = false
+
+            // 自定义 splash 显示 1.2 秒（动画时间）
+            delay(MIN_SPLASH_DURATION_MS)
+
+            // 切换到主界面
+            isReady = true
         }
 
         handleIntent(intent)
@@ -222,40 +219,53 @@ class MainActivity : AppCompatActivity() {
                         }
                     )
                 } else {
-                    // 自定义开屏页 + 优雅渐入动画
-                    val iconScale = remember { Animatable(0.8f) }
+                    // 自定义开屏页 + 连贯弹性动画
+                    val iconScale = remember { Animatable(0.5f) }
                     val iconAlpha = remember { Animatable(0f) }
+                    val glowScale = remember { Animatable(0.5f) }
+                    val glowAlpha = remember { Animatable(0.5f) }
                     val titleAlpha = remember { Animatable(0f) }
-                    val titleOffset = remember { Animatable(20f) }
+                    val titleOffset = remember { Animatable(30f) }
                     val sloganAlpha = remember { Animatable(0f) }
+                    val sloganOffset = remember { Animatable(10f) }
                     val versionAlpha = remember { Animatable(0f) }
 
                     LaunchedEffect(Unit) {
-                        // 图标：0-600ms 缩放+淡入
+                        // 图标：弹性放大 + 淡入
                         launch {
-                            iconAlpha.animateTo(1f, tween(600, easing = Easing { it * it * it }))
+                            iconAlpha.animateTo(1f, tween(400))
                         }
                         launch {
-                            iconScale.animateTo(1f, tween(700, easing = Easing { 1f - (1f - it).pow(3) }))
+                            iconScale.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 180f))
                         }
-                        // App 名：300-800ms 淡入+上移
+                        // 光晕：从图标中心向外扩散后消失
                         launch {
-                            delay(300)
+                            delay(100)
+                            glowScale.animateTo(2.8f, tween(900, easing = Easing { it * it }))
+                            glowAlpha.animateTo(0f, tween(900))
+                        }
+                        // App 名：弹性上移 + 淡入
+                        launch {
+                            delay(200)
                             titleAlpha.animateTo(1f, tween(500))
                         }
                         launch {
-                            delay(300)
-                            titleOffset.animateTo(0f, tween(500, easing = Easing { 1f - (1f - it).pow(3) }))
+                            delay(200)
+                            titleOffset.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 200f))
                         }
-                        // Slogan：500-900ms 淡入
+                        // Slogan：淡入 + 轻微上移
                         launch {
-                            delay(500)
-                            sloganAlpha.animateTo(1f, tween(400))
+                            delay(400)
+                            sloganAlpha.animateTo(1f, tween(500))
                         }
-                        // 版本号：700-1100ms 淡入
                         launch {
-                            delay(700)
-                            versionAlpha.animateTo(1f, tween(400))
+                            delay(400)
+                            sloganOffset.animateTo(0f, tween(500, easing = Easing { 1f - (1f - it).pow(3) }))
+                        }
+                        // 版本号：淡入
+                        launch {
+                            delay(600)
+                            versionAlpha.animateTo(1f, tween(500))
                         }
                     }
 
@@ -289,28 +299,55 @@ class MainActivity : AppCompatActivity() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center
                         ) {
-                            val context = LocalContext.current
-                            val launcherBitmap = remember {
-                                android.graphics.BitmapFactory.decodeResource(
-                                    context.resources, R.drawable.ic_search_cloud
-                                )?.asImageBitmap()
-                            }
-                            if (launcherBitmap != null) {
-                                Image(
-                                    bitmap = launcherBitmap,
-                                    contentDescription = "App Icon",
+                            // 图标 + 光晕
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.size(200.dp)
+                            ) {
+                                // 光晕层
+                                val density = LocalDensity.current
+                                val glowRadiusPx = with(density) { 120.dp.toPx() }
+                                Box(
                                     modifier = Modifier
-                                        .size(120.dp)
-                                        .scale(iconScale.value)
-                                        .alpha(iconAlpha.value)
-                                        .clip(RoundedCornerShape(24.dp)),
-                                    contentScale = ContentScale.Crop
+                                        .size(162.dp)
+                                        .scale(glowScale.value)
+                                        .alpha(glowAlpha.value)
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    Color.White.copy(alpha = 0.35f),
+                                                    Color.White.copy(alpha = 0.08f),
+                                                    Color.Transparent
+                                                ),
+                                                center = Offset.Unspecified,
+                                                radius = glowRadiusPx
+                                            ),
+                                            shape = CircleShape
+                                        )
                                 )
+                                val context = LocalContext.current
+                                val launcherBitmap = remember {
+                                    android.graphics.BitmapFactory.decodeResource(
+                                        context.resources, R.drawable.ic_search_cloud
+                                    )?.asImageBitmap()
+                                }
+                                if (launcherBitmap != null) {
+                                    Image(
+                                        bitmap = launcherBitmap,
+                                        contentDescription = "App Icon",
+                                        modifier = Modifier
+                                            .size(162.dp)
+                                            .scale(iconScale.value)
+                                            .alpha(iconAlpha.value)
+                                            .clip(RoundedCornerShape(24.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                }
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(
                                 text = "TraktToSearch",
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
                                 letterSpacing = 0.5.sp,
@@ -321,15 +358,17 @@ class MainActivity : AppCompatActivity() {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = stringResource(R.string.splash_slogan),
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 color = Color.White.copy(alpha = 0.7f),
-                                modifier = Modifier.alpha(sloganAlpha.value)
+                                modifier = Modifier
+                                    .alpha(sloganAlpha.value)
+                                    .offset(y = sloganOffset.value.dp)
                             )
                         }
                         // 版本号在底部
                         Text(
                             text = "v${getAppVersion(LocalContext.current)}",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = Color.White.copy(alpha = 0.5f),
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)

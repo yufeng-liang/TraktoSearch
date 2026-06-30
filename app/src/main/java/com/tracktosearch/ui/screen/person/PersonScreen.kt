@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.person
 
+import android.os.Environment
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,9 +15,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -26,19 +28,18 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.ui.res.painterResource
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,53 +55,47 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.ui.platform.LocalContext
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.SocialMediaIcon
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.SubcomposeAsyncImage
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import com.tracktosearch.ui.component.savePosterToGallery
-import com.tracktosearch.ui.component.queryExistingFile
-import android.os.Environment
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
-import androidx.compose.ui.geometry.Offset
-import kotlinx.coroutines.launch
+import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
-import com.tracktosearch.R
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.MarqueeText
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.SocialMediaIcon
+import com.tracktosearch.ui.component.queryExistingFile
+import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import kotlinx.coroutines.launch
+import net.engawapg.lib.zoomable.rememberZoomState
+import net.engawapg.lib.zoomable.zoomable
 
 private data class AgeInfo(val age: Int, val isDeceased: Boolean)
 
@@ -261,7 +256,7 @@ fun PersonScreen(
                             }
                         }
 
-                        if (uiState.movieCredits.isNotEmpty()) {
+                        if (uiState.movieCredits.isNotEmpty() || uiState.isLoadingMovies) {
                             item(key = "movie_credits_section") {
                                 Column {
                                     // 标题 + 全部按钮
@@ -277,47 +272,67 @@ fun PersonScreen(
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Text(
-                                            text = stringResource(R.string.person_all_count, uiState.movieCredits.size),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.clickable { showAllMovies = true }
-                                        )
-                                    }
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp)
-                                    ) {
-                                        itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }) { _, credit ->
-                                            CreditCard(
-                                                title = credit.title,
-                                                subtitle = credit.character,
-                                                year = credit.release_date.take(4),
-                                                posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                                isResolving = uiState.resolvingTmdbId == credit.id,
-                                                onClick = {
-                                                    viewModel.resolveAndNavigate(
-                                                        tmdbId = credit.id,
-                                                        title = credit.title,
-                                                        isMovie = true,
-                                                        onNavigate = onMovieClick
-                                                    )
-                                                }
+                                        if (uiState.movieCredits.isNotEmpty()) {
+                                            Text(
+                                                text = stringResource(R.string.person_all_count, uiState.movieCredits.size),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.clickable { showAllMovies = true }
                                             )
                                         }
-                                        if (uiState.hasMoreMovies) {
-                                            item(key = "movie_load_more") {
+                                    }
+                                    if (uiState.movieCredits.isEmpty() && uiState.isLoadingMovies) {
+                                        // 骨架屏
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            items(5) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .width(60.dp)
-                                                        .height(90.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (uiState.isLoadingMoreMovies) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                    } else {
-                                                        LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
-                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        .width(120.dp)
+                                                        .height(180.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }) { _, credit ->
+                                                CreditCard(
+                                                    title = credit.title,
+                                                    subtitle = credit.character,
+                                                    year = credit.release_date.take(4),
+                                                    posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                    isResolving = uiState.resolvingTmdbId == credit.id,
+                                                    onClick = {
+                                                        viewModel.resolveAndNavigate(
+                                                            tmdbId = credit.id,
+                                                            title = credit.title,
+                                                            isMovie = true,
+                                                            onNavigate = onMovieClick
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            if (uiState.hasMoreMovies) {
+                                                item(key = "movie_load_more") {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(60.dp)
+                                                            .height(90.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (uiState.isLoadingMoreMovies) {
+                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        } else {
+                                                            LaunchedEffect(Unit) { viewModel.loadMoreMovies() }
+                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -327,7 +342,7 @@ fun PersonScreen(
                             }
                         }
 
-                        if (uiState.tvCredits.isNotEmpty()) {
+                        if (uiState.tvCredits.isNotEmpty() || uiState.isLoadingTvShows) {
                             item(key = "tv_credits_section") {
                                 Column {
                                     // 标题 + 全部按钮
@@ -343,47 +358,67 @@ fun PersonScreen(
                                             style = MaterialTheme.typography.titleMedium,
                                             fontWeight = FontWeight.Bold
                                         )
-                                        Text(
-                                            text = stringResource(R.string.person_all_count, uiState.tvCredits.size),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.clickable { showAllTvShows = true }
-                                        )
-                                    }
-                                    LazyRow(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        contentPadding = PaddingValues(horizontal = 16.dp)
-                                    ) {
-                                        itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }) { _, credit ->
-                                            CreditCard(
-                                                title = credit.name,
-                                                subtitle = credit.character,
-                                                year = credit.first_air_date.take(4),
-                                                posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
-                                                isResolving = uiState.resolvingTmdbId == credit.id,
-                                                onClick = {
-                                                    viewModel.resolveAndNavigate(
-                                                        tmdbId = credit.id,
-                                                        title = credit.name,
-                                                        isMovie = false,
-                                                        onNavigate = onShowClick
-                                                    )
-                                                }
+                                        if (uiState.tvCredits.isNotEmpty()) {
+                                            Text(
+                                                text = stringResource(R.string.person_all_count, uiState.tvCredits.size),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.clickable { showAllTvShows = true }
                                             )
                                         }
-                                        if (uiState.hasMoreTvShows) {
-                                            item(key = "tv_load_more") {
+                                    }
+                                    if (uiState.tvCredits.isEmpty() && uiState.isLoadingTvShows) {
+                                        // 骨架屏
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            items(5) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .width(60.dp)
-                                                        .height(90.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    if (uiState.isLoadingMoreTvShows) {
-                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                                                    } else {
-                                                        LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
-                                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        .width(120.dp)
+                                                        .height(180.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        LazyRow(
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 16.dp)
+                                        ) {
+                                            itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }) { _, credit ->
+                                                CreditCard(
+                                                    title = credit.name,
+                                                    subtitle = credit.character,
+                                                    year = credit.first_air_date.take(4),
+                                                    posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                    isResolving = uiState.resolvingTmdbId == credit.id,
+                                                    onClick = {
+                                                        viewModel.resolveAndNavigate(
+                                                            tmdbId = credit.id,
+                                                            title = credit.name,
+                                                            isMovie = false,
+                                                            onNavigate = onShowClick
+                                                        )
+                                                    }
+                                                )
+                                            }
+                                            if (uiState.hasMoreTvShows) {
+                                                item(key = "tv_load_more") {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .width(60.dp)
+                                                            .height(90.dp),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        if (uiState.isLoadingMoreTvShows) {
+                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        } else {
+                                                            LaunchedEffect(Unit) { viewModel.loadMoreTvShows() }
+                                                            CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                                        }
                                                     }
                                                 }
                                             }
@@ -1076,6 +1111,7 @@ private fun PersonHeaderContent(
                                 label = facebookId,
                                 tint = Color(0xFF1877F2),
                                 labelColor = Color(0xFF1877F2),
+                                modifier = Modifier.weight(1f, fill = false),
                                 onClick = {
                                     try {
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
@@ -1090,6 +1126,7 @@ private fun PersonHeaderContent(
                                 label = instagramId,
                                 tint = Color(0xFFE4405F),
                                 labelColor = Color(0xFFE4405F),
+                                modifier = Modifier.weight(1f, fill = false),
                                 onClick = {
                                     try {
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
@@ -1102,8 +1139,9 @@ private fun PersonHeaderContent(
                             SocialMediaIcon(
                                 iconRes = R.drawable.ic_x_twitter,
                                 label = twitterId,
-                                tint = Color(0xFF000000),
-                                labelColor = Color(0xFF000000),
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                labelColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false),
                                 onClick = {
                                     try {
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
@@ -1405,22 +1443,16 @@ private fun CreditCard(
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        MarqueeText(
             text = title,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
             modifier = Modifier.fillMaxWidth()
         )
         if (subtitle.isNotEmpty()) {
-            Text(
+            MarqueeText(
                 text = subtitle,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
         }

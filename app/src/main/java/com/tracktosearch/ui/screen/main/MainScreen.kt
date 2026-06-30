@@ -1,9 +1,5 @@
 package com.tracktosearch.ui.screen.main
 
-import com.tracktosearch.ui.util.showToast
-import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.HapticType
-import androidx.compose.ui.platform.LocalView
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -15,19 +11,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,10 +34,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -53,8 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,34 +54,43 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.tracktosearch.R
+import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
+import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
 import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
-import androidx.compose.ui.res.stringResource
-import com.tracktosearch.R
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.showToast
+import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import javax.inject.Inject
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -105,6 +105,7 @@ fun MainScreen(
     onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String) -> Unit = { _, _, _ -> },
+    onListClick: (slug: String, listName: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
     onRestartOnboarding: () -> Unit
@@ -124,6 +125,14 @@ fun MainScreen(
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
     val density = LocalDensity.current
+
+    // 白云主题管理器（用于新手引导完成后触发权限提示）
+    val cloudThemeManager = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, CloudThemeProvider::class.java).cloudThemeManager()
+    }
+    val cloudPermissionStorage = remember {
+        CloudPermissionStorage(context.applicationContext)
+    }
 
     LaunchedEffect(onboardingCompleted) {
         if (onboardingCompleted == false) {
@@ -264,6 +273,7 @@ fun MainScreen(
                         onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                         onShowClick = { traktId, tmdbId, title, imdbId, traktRating -> onShowClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                         onOpenWebView = onOpenWebView,
+                        onListClick = onListClick,
                         modifier = Modifier.fillMaxSize()
                     )
                     2 -> {
@@ -397,6 +407,16 @@ fun MainScreen(
                     onComplete = {
                         showOnboarding = false
                         scope.launch { onboardingStorage.setCompleted(true) }
+                        // 新手引导完成 0.8s 后弹出位置权限提示（仅当未授权且未取消过时）
+                        scope.launch {
+                            delay(800)
+                            val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                                android.content.pm.PackageManager.PERMISSION_GRANTED
+                            val dismissed = cloudPermissionStorage.isDismissed.first()
+                            if (!hasPermission && !dismissed) {
+                                cloudThemeManager.requestPermissionPrompt()
+                            }
+                        }
                     },
                     onSkip = {
                         showOnboarding = false

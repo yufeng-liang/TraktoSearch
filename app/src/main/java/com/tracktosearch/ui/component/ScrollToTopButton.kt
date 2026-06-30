@@ -27,18 +27,16 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 private const val DEEP_SCROLL_THRESHOLD = 5

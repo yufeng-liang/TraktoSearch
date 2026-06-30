@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -15,12 +16,15 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,21 +34,24 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.NewReleases
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
@@ -66,11 +73,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -94,31 +99,28 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.os.Build
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.MarqueeText
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.util.HapticType
-import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
-import java.text.SimpleDateFormat
-import java.util.Locale
-import sh.calvin.reorderable.ReorderableItem
-import sh.calvin.reorderable.rememberReorderableLazyListState
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.statusBarsPadding
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -544,7 +546,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsItem(
-                    icon = Icons.Default.Info,
+                    icon = Icons.Default.NewReleases,
                     title = stringResource(R.string.settings_changelog),
                     subtitle = "",
                     onClick = {
@@ -555,7 +557,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsItem(
-                    icon = Icons.Default.Info,
+                    icon = Icons.Outlined.HelpOutline,
                     title = stringResource(R.string.settings_help),
                     subtitle = "",
                     onClick = { onHelpClick() }
@@ -563,7 +565,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsItem(
-                    icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    icon = Icons.Default.AutoAwesome,
                     title = stringResource(R.string.settings_restart_onboarding),
                     subtitle = "",
                     onClick = { onRestartOnboarding() }
@@ -1098,12 +1100,9 @@ private fun AccentColorDialog(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(modifier = Modifier.widthIn(max = 60.dp)) {
-                                    Text(
+                                    MarqueeText(
                                         text = stringResource(accent.labelResId),
-                                        fontSize = 11.sp,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.horizontalScroll(rememberScrollState())
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
                                     )
                                 }
                             }
@@ -1249,7 +1248,7 @@ fun VersionItem(
             )
         }
         // 按钮区域固定宽度，防止 loading 态高度变化
-        Box(modifier = Modifier.widthIn(min = 80.dp, max = 120.dp).height(36.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.widthIn(min = 80.dp, max = 140.dp).height(36.dp), contentAlignment = Alignment.Center) {
             if (isChecking) {
                 CircularProgressIndicator(
                     modifier = Modifier.size(24.dp),
@@ -1260,7 +1259,7 @@ fun VersionItem(
                     onClick = { view.performHaptic(HapticType.CLICK); onCheckUpdate() },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Text(stringResource(R.string.settings_check_update))
+                    Text(stringResource(R.string.settings_check_update), maxLines = 1)
                 }
             }
         }

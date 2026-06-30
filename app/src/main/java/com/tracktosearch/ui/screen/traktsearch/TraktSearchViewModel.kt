@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
@@ -86,6 +88,9 @@ class TraktSearchViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
+    // 限制 enrich 并发数，避免触发 API 限流
+    private val enrichSemaphore = Semaphore(5)
+
     private val initialTypeFromNav = when (savedStateHandle.get<String>("type")) {
         "show" -> MediaType.SHOW
         "person" -> MediaType.PERSON
@@ -104,12 +109,17 @@ class TraktSearchViewModel @Inject constructor(
      * inline 模式下 savedStateHandle 中没有 type，需要通过此方法同步正确的类型。
      */
     fun initSearch(query: String, type: MediaType) {
+        val current = _uiState.value
+        val anySearched = current.movieState.hasSearched || current.showState.hasSearched ||
+                current.personState.hasSearched || current.diskState.hasSearched
+        // 已有搜索结果且查询词相同，不重置（从详情页返回时保持状态）
+        // 查询词不同则是新的搜索，需要重置
+        if (anySearched && current.query == query) return
+
         // 同步 selectedTab 为传入的 type（修复 inline 模式下初始类型错误的问题）
         if (_uiState.value.selectedTab != type) {
             _uiState.value = _uiState.value.copy(selectedTab = type)
         }
-        val current = _uiState.value
-        if (current.currentTabState.hasSearched && current.selectedTab == type) return
         _uiState.value = TraktSearchUiState(query = query, selectedTab = type)
         if (type == MediaType.DISK) {
             searchDiskInternal(query)
@@ -355,80 +365,82 @@ class TraktSearchViewModel @Inject constructor(
     }
 
     private suspend fun enrichSearchResult(result: TraktSearchResult, type: MediaType): TraktSearchUiItem {
-        return when (type) {
-            MediaType.MOVIE -> {
-                val movie = result.movie ?: return TraktSearchUiItem()
-                if (movie.ids.tmdb <= 0) {
+        return enrichSemaphore.withPermit {
+            when (type) {
+                MediaType.MOVIE -> {
+                    val movie = result.movie ?: return@withPermit TraktSearchUiItem()
+                    if (movie.ids.tmdb <= 0) {
+                        TraktSearchUiItem(
+                            traktId = movie.ids.trakt,
+                            tmdbId = 0,
+                            title = movie.title,
+                            displayTitle = movie.title,
+                            year = movie.year,
+                            genres = movie.genres.joinToString(" · "),
+                            posterUrl = movie.posterPath,
+                            imdbId = movie.ids.imdb,
+                            traktRating = movie.rating
+                        )
+                    } else {
+                        val enrichment = tmdbRepository.enrichMovie(movie.ids.tmdb, movie.title, movie.year)
+                        TraktSearchUiItem(
+                            traktId = movie.ids.trakt,
+                            tmdbId = movie.ids.tmdb,
+                            title = movie.title,
+                            displayTitle = enrichment.chineseTitle,
+                            year = enrichment.year,
+                            genres = enrichment.genres,
+                            posterUrl = enrichment.posterUrl,
+                            imdbId = movie.ids.imdb,
+                            traktRating = movie.rating
+                        )
+                    }
+                }
+                MediaType.SHOW -> {
+                    val show = result.show ?: return@withPermit TraktSearchUiItem()
+                    if (show.ids.tmdb <= 0) {
+                        TraktSearchUiItem(
+                            traktId = show.ids.trakt,
+                            tmdbId = 0,
+                            title = show.title,
+                            displayTitle = show.title,
+                            year = show.year,
+                            genres = show.genres.joinToString(" · "),
+                            posterUrl = null,
+                            imdbId = show.ids.imdb,
+                            traktRating = show.rating
+                        )
+                    } else {
+                        val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, show.year)
+                        TraktSearchUiItem(
+                            traktId = show.ids.trakt,
+                            tmdbId = show.ids.tmdb,
+                            title = show.title,
+                            displayTitle = enrichment.chineseTitle,
+                            year = enrichment.year,
+                            genres = enrichment.genres,
+                            posterUrl = enrichment.posterUrl,
+                            imdbId = show.ids.imdb,
+                            traktRating = show.rating
+                        )
+                    }
+                }
+                MediaType.PERSON -> {
+                    val person = result.person ?: return@withPermit TraktSearchUiItem()
+                    val tmdbId = person.ids.tmdb
+                    val tmdbPerson = if (tmdbId > 0) tmdbRepository.getPersonDetail(tmdbId) else null
+                    val profileUrl = tmdbPerson?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
                     TraktSearchUiItem(
-                        traktId = movie.ids.trakt,
-                        tmdbId = 0,
-                        title = movie.title,
-                        displayTitle = movie.title,
-                        year = movie.year,
-                        genres = movie.genres.joinToString(" · "),
-                        posterUrl = movie.posterPath,
-                        imdbId = movie.ids.imdb,
-                        traktRating = movie.rating
-                    )
-                } else {
-                    val enrichment = tmdbRepository.enrichMovie(movie.ids.tmdb, movie.title, movie.year)
-                    TraktSearchUiItem(
-                        traktId = movie.ids.trakt,
-                        tmdbId = movie.ids.tmdb,
-                        title = movie.title,
-                        displayTitle = enrichment.chineseTitle,
-                        year = enrichment.year,
-                        genres = enrichment.genres,
-                        posterUrl = enrichment.posterUrl,
-                        imdbId = movie.ids.imdb,
-                        traktRating = movie.rating
+                        traktId = person.ids.trakt,
+                        tmdbId = tmdbId,
+                        title = person.name,
+                        displayTitle = person.name,
+                        posterUrl = profileUrl,
+                        knownForDepartment = tmdbPerson?.known_for_department ?: ""
                     )
                 }
+                MediaType.DISK -> TraktSearchUiItem()
             }
-            MediaType.SHOW -> {
-                val show = result.show ?: return TraktSearchUiItem()
-                if (show.ids.tmdb <= 0) {
-                    TraktSearchUiItem(
-                        traktId = show.ids.trakt,
-                        tmdbId = 0,
-                        title = show.title,
-                        displayTitle = show.title,
-                        year = show.year,
-                        genres = show.genres.joinToString(" · "),
-                        posterUrl = null,
-                        imdbId = show.ids.imdb,
-                        traktRating = show.rating
-                    )
-                } else {
-                    val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, show.year)
-                    TraktSearchUiItem(
-                        traktId = show.ids.trakt,
-                        tmdbId = show.ids.tmdb,
-                        title = show.title,
-                        displayTitle = enrichment.chineseTitle,
-                        year = enrichment.year,
-                        genres = enrichment.genres,
-                        posterUrl = enrichment.posterUrl,
-                        imdbId = show.ids.imdb,
-                        traktRating = show.rating
-                    )
-                }
-            }
-            MediaType.PERSON -> {
-                val person = result.person ?: return TraktSearchUiItem()
-                val tmdbId = person.ids.tmdb
-                val tmdbPerson = if (tmdbId > 0) tmdbRepository.getPersonDetail(tmdbId) else null
-                val profileUrl = tmdbPerson?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
-                TraktSearchUiItem(
-                    traktId = person.ids.trakt,
-                    tmdbId = tmdbId,
-                    title = person.name,
-                    displayTitle = person.name,
-                    posterUrl = profileUrl,
-                    knownForDepartment = tmdbPerson?.known_for_department ?: ""
-                )
-            }
-            MediaType.DISK -> TraktSearchUiItem()
         }
     }
 
@@ -458,14 +470,12 @@ class TraktSearchViewModel @Inject constructor(
                     )
                 }
             ).collect { items ->
-                if (items.isNotEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        diskState = _uiState.value.diskState.copy(
-                            isLoading = false,
-                            resources = items
-                        )
+                // 搜索期间只更新资源列表，保持 isLoading = true 以显示进度
+                _uiState.value = _uiState.value.copy(
+                    diskState = _uiState.value.diskState.copy(
+                        resources = items
                     )
-                }
+                )
             }
             if (_uiState.value.diskState.isLoading) {
                 _uiState.value = _uiState.value.copy(

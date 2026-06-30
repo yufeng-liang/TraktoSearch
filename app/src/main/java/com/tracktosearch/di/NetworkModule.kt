@@ -173,9 +173,11 @@ object NetworkModule {
     @Named("pansou")
     fun providePanSouOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache
     ): OkHttpClient {
         return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
@@ -208,9 +210,11 @@ object NetworkModule {
     @Named("panhub")
     fun providePanHubOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache
     ): OkHttpClient {
         return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
@@ -270,9 +274,11 @@ object NetworkModule {
     @Named("zreso")
     fun provideZresoOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        cache: Cache
     ): OkHttpClient {
         return baseClient.newBuilder()
+            .cache(cache)
             .addInterceptor(loggingInterceptor)
             .build()
     }

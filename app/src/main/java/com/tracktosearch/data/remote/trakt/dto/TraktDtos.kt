@@ -409,3 +409,14 @@ data class TraktStatsDetail(
     val ratings: Int = 0,
     val minutes: Int = 0
 )
+
+@Serializable
+data class TraktListItemResponse(
+    val rank: Int = 0,
+    val id: Int = 0,
+    val listed_at: String = "",
+    val notes: String = "",
+    val type: String = "",
+    val movie: TraktMovie? = null,
+    val show: TraktShow? = null
+)
