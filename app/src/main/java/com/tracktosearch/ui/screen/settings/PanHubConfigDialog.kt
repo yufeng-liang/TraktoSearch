@@ -131,7 +131,12 @@ fun PanHubConfigDialog(
                                         if (enabled) updated.add(plugin.id) else updated.remove(plugin.id)
                                         enabledPlugins = updated
                                         onEnabledPluginsChange(updated)
-                                    }
+                                    },
+                                    colors = androidx.compose.material3.SwitchDefaults.colors(
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                        uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                                        uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    )
                                 )
                             }
                         }
@@ -196,7 +201,12 @@ fun PanHubConfigDialog(
                                     }
                                     enabledChannels = updated
                                     onEnabledChannelsChange(updated)
-                                }
+                                },
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                )
                             )
                         }
 
@@ -220,7 +230,12 @@ fun PanHubConfigDialog(
                                                 if (enabled) updated.add(channel.id) else updated.remove(channel.id)
                                                 enabledChannels = updated
                                                 onEnabledChannelsChange(updated)
-                                            }
+                                            },
+                                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                            )
                                         )
                                     }
                                 }

@@ -864,7 +864,12 @@ fun SearchSourceItem(
         )
         Switch(
             checked = checked,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) }
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            )
         )
     }
 }
@@ -907,7 +912,12 @@ fun PanHubSettingsItem(
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
                 checked = enabled,
-                onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) }
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                )
             )
         }
         Text(
@@ -953,7 +963,12 @@ fun SwitchSettingsItem(
         Switch(
             checked = checked,
             enabled = enabled,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) }
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            )
         )
     }
 }
@@ -1489,7 +1504,12 @@ private fun DiscoverSectionRow(
         )
         Switch(
             checked = visible,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) }
+            onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
+            colors = androidx.compose.material3.SwitchDefaults.colors(
+                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+            )
         )
     }
 }
@@ -1552,7 +1572,12 @@ fun DetailSectionsDialog(
                             onCheckedChange = {
                                 view.performHaptic(HapticType.CLICK)
                                 viewModel.setDetailSectionVisible(section.id, it)
-                            }
+                            },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                            )
                         )
                     }
                 }
@@ -1625,7 +1650,15 @@ fun CustomSearchSourceItem(
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
             }
-            Switch(checked = source.enabled, onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) })
+            Switch(
+                checked = source.enabled,
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
+                colors = androidx.compose.material3.SwitchDefaults.colors(
+                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                )
+            )
         }
         // 测试结果
         testResult?.message?.let { msg ->

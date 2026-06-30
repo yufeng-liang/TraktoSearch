@@ -262,15 +262,9 @@ fun HelpScreen(
                     .fillMaxWidth()
                     .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .clickable(enabled = false, onClick = {})
             ) {
-                Spacer(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .fillMaxWidth()
-                        .clickable {
-                            scope.launch { lazyListState.animateScrollToItem(0) }
-                        }
-                )
+                Spacer(modifier = Modifier.statusBarsPadding())
                 TopAppBar(
                     title = {
                         Text(

@@ -268,7 +268,10 @@ fun DiscoverScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxHeight()
-                                                        .clickable { viewModel.switchTrendingTimeWindow("day") }
+                                                        .clickable(
+                                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                            indication = null
+                                                        ) { viewModel.switchTrendingTimeWindow("day") }
                                                         .padding(horizontal = tabPadding),
                                                     contentAlignment = Alignment.Center
                                                 ) {
@@ -286,7 +289,10 @@ fun DiscoverScreen(
                                                 Box(
                                                     modifier = Modifier
                                                         .fillMaxHeight()
-                                                        .clickable { viewModel.switchTrendingTimeWindow("week") }
+                                                        .clickable(
+                                                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                                                            indication = null
+                                                        ) { viewModel.switchTrendingTimeWindow("week") }
                                                         .padding(horizontal = tabPadding),
                                                     contentAlignment = Alignment.Center
                                                 ) {
