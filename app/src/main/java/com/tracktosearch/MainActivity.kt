@@ -180,7 +180,7 @@ class MainActivity : AppCompatActivity() {
             // 系统 splash 尽快消失，不设置最短时间
             keepSplashOnScreen = false
 
-            // 自定义 splash 显示 1.2 秒（动画时间）
+            // 自定义 splash 显示 1.7 秒（动画时间）
             delay(MIN_SPLASH_DURATION_MS)
 
             // 切换到主界面

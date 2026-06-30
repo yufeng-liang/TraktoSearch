@@ -472,7 +472,7 @@ Config:
     <string name="onboarding_step6_title">Detail Page</string>
     <string name="onboarding_step6_desc">Tap poster for fullscreen view and save to gallery; tap cast avatar for actor\'s works; rating supports half-star</string>
     <string name="onboarding_step7_title">More Tips</string>
-    <string name="onboarding_step7_desc">Tap status bar to scroll to top; customize discover sections in Settings; some features (trailers, Trakt, TMDB) require VPN for access</string>
+    <string name="onboarding_step7_desc">Customize detail page sections in Settings; long-press movie card for multi-select mode; some features (trailers, Trakt, TMDB) require VPN for access</string>
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>

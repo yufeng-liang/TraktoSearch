@@ -383,6 +383,8 @@ fun MainScreen(
             }
 
             // 新手引导遮罩（4个Tab高亮 + 3个纯信息提示）
+            // 步骤→Tab页映射：搜索(0)→发现(1)→我的(2)→设置(3)→我的(2)→我的(2)→不切换(-1)
+            val onboardingTabMap = listOf(0, 1, 2, 3, 2, 2, -1)
             if (showOnboarding && tabRects.value.size == 4) {
                 OnboardingOverlay(
                     targetRects = tabRects.value + listOf(Rect.Zero, Rect.Zero, Rect.Zero),
@@ -421,6 +423,13 @@ fun MainScreen(
                     onSkip = {
                         showOnboarding = false
                         scope.launch { onboardingStorage.setCompleted(true) }
+                    },
+                    onStepChanged = { step ->
+                        val targetTab = onboardingTabMap.getOrNull(step)
+                        if (targetTab != null && targetTab >= 0) {
+                            scope.launch { pagerState.scrollToPage(targetTab) }
+                            selectedTab = targetTab
+                        }
                     }
                 )
             }

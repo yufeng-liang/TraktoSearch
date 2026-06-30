@@ -57,7 +57,8 @@ fun OnboardingOverlay(
     titles: List<String>,
     descriptions: List<String>,
     onComplete: () -> Unit,
-    onSkip: () -> Unit
+    onSkip: () -> Unit,
+    onStepChanged: (stepIndex: Int) -> Unit = {}
 ) {
     var currentStep by remember { mutableIntStateOf(0) }
     val totalSteps = targetRects.size
@@ -193,7 +194,10 @@ fun OnboardingOverlay(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
-                        onClick = { currentStep++ },
+                        onClick = {
+                            currentStep++
+                            onStepChanged(currentStep)
+                        },
                         contentPadding = ButtonDefaults.ContentPadding
                     ) {
                         Text(

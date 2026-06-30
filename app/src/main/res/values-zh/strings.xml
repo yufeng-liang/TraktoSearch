@@ -472,7 +472,7 @@
     <string name="onboarding_step6_title">详情页操作</string>
     <string name="onboarding_step6_desc">点击海报可大图查看并保存到相册；点击演职员头像可查看该演员的其他作品；评分支持半星选择</string>
     <string name="onboarding_step7_title">更多小技巧</string>
-    <string name="onboarding_step7_desc">点击状态栏可快速回到页面顶部；设置中可自定义发现页栏目；部分功能（预告片、Trakt、TMDB）需要VPN才能正常访问</string>
+    <string name="onboarding_step7_desc">设置中可自定义详情页板块；长按影视卡片可进入多选模式；部分功能（预告片、Trakt、TMDB）需要VPN才能正常访问</string>
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
