@@ -1115,11 +1115,12 @@ private fun AccentColorDialog(
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Box(
-                                    modifier = Modifier.widthIn(max = 72.dp),
+                                    modifier = Modifier.width(72.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     MarqueeText(
                                         text = stringResource(accent.labelResId),
+                                        modifier = Modifier.width(72.dp),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp)
                                     )
                                 }

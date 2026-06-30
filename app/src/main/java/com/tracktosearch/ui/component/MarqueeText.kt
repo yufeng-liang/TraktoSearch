@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 
 /**
@@ -23,14 +24,14 @@ fun MarqueeText(
     color: Color = LocalContentColor.current
 ) {
     // basicMarquee 仅在内容超出容器时才会滚动
-    Box(modifier = modifier.fillMaxWidth()) {
-        androidx.compose.material3.Text(
-            text = text,
-            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE),
-            style = style,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Clip
-        )
-    }
+    // 不主动 fillMaxWidth，由外部容器约束宽度
+    androidx.compose.material3.Text(
+        text = text,
+        modifier = modifier.basicMarquee(iterations = Int.MAX_VALUE),
+        style = style,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+        textAlign = TextAlign.Center
+    )
 }
