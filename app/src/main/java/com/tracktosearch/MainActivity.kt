@@ -125,8 +125,8 @@ class MainActivity : AppCompatActivity() {
         val splashStartTime = System.currentTimeMillis()
         // 安装 SplashScreen，处理系统默认启动页到自定义 splash 的平滑过渡
         val splashScreen = installSplashScreen()
-        // 让系统 splash 保持显示直到自定义 splash 渲染完成，避免切换闪烁
-        var keepSplashOnScreen = true
+        // 使用 mutableStateOf 让 Compose 能观察到变化
+        var keepSplashOnScreen by mutableStateOf(true)
         splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -177,9 +177,6 @@ class MainActivity : AppCompatActivity() {
             launch { runCatching { tmdbRepository.getPopularMovies() } }
             launch { runCatching { tmdbRepository.getUpcomingMovies() } }
 
-            // 系统 splash 尽快消失，不设置最短时间
-            keepSplashOnScreen = false
-
             // 自定义 splash 显示 1.7 秒（动画时间）
             delay(MIN_SPLASH_DURATION_MS)
 
@@ -198,6 +195,10 @@ class MainActivity : AppCompatActivity() {
             val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle(initialValue = null)
             TraktToSearchTheme(themeMode = themeMode, accentColor = accentColor) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
+                // 自定义启动页渲染后，系统启动页立即消失
+                LaunchedEffect(Unit) {
+                    keepSplashOnScreen = false
+                }
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
