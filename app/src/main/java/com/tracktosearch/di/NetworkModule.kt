@@ -30,7 +30,6 @@ import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
-import kotlin.math.pow
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -432,7 +431,7 @@ class RetryInterceptor(
 
         while (shouldRetry(response) && retries < maxRetries) {
             response.close()
-            val delayMs = baseDelayMs * 2.0.pow(retries.toDouble()).toLong()
+            val delayMs = baseDelayMs * (1L shl retries)
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {
@@ -449,3 +448,5 @@ class RetryInterceptor(
         return response.code == 429 || response.code >= 500
     }
 }
+
+
