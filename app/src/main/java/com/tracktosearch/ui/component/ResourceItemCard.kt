@@ -1,8 +1,9 @@
 package com.tracktosearch.ui.component
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -53,11 +54,13 @@ private fun formatFileDate(raw: String): String {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ResourceItemCard(
     item: ResourceItem,
     isViewed: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     index: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -68,7 +71,10 @@ fun ResourceItemCard(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 2.dp)
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant

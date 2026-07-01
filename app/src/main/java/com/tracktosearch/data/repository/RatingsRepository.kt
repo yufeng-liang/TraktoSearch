@@ -6,7 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +23,11 @@ data class MultiRatings(
 class RatingsRepository @Inject constructor(
     private val omdbApiService: OmdbApiService
 ) {
-    private val cache = ConcurrentHashMap<String, MultiRatings>()
+    private val cache = object : LinkedHashMap<String, MultiRatings>(50, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MultiRatings>): Boolean {
+            return size > 50
+        }
+    }
 
     /**
      * 流式获取评分：
@@ -40,7 +43,7 @@ class RatingsRepository @Inject constructor(
         emit(MultiRatings(tmdbRating = tmdbRating, traktRating = traktRating))
 
         if (imdbId.isBlank()) return@flow
-        cache[imdbId]?.let {
+        synchronized(cache) { cache[imdbId] }?.let {
             emit(it)
             return@flow
         }
@@ -69,7 +72,7 @@ class RatingsRepository @Inject constructor(
             director = omdbRatings?.Director?.takeIf { it != "N/A" && it.isNotEmpty() } ?: "",
             actors = omdbRatings?.Actors?.takeIf { it != "N/A" && it.isNotEmpty() } ?: ""
         )
-        cache[imdbId] = result
+        synchronized(cache) { cache[imdbId] = result }
         emit(result)
     }.flowOn(Dispatchers.IO)
 }

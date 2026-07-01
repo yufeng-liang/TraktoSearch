@@ -4,7 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -88,7 +87,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
@@ -129,16 +127,6 @@ fun WatchlistScreen(
     LaunchedEffect(Unit) {
         viewModel.loadMovies()
         viewModel.loadShows()
-    }
-    // 从外置浏览器（如"去 Trakt 添加想看的"）返回时，自动刷新列表
-    var hasResumedOnce by remember { mutableStateOf(false) }
-    LifecycleResumeEffect(hasResumedOnce) {
-        if (hasResumedOnce) {
-            viewModel.refreshIfLoaded(silent = true)
-        } else {
-            hasResumedOnce = true
-        }
-        onPauseOrDispose { /* no-op */ }
     }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -292,7 +280,7 @@ fun WatchlistScreen(
             ) {
                 // 根据 selectedMode 和 selectedTab 渲染对应列表
                 val items = currentItems
-                items(items.size, key = { items[it].traktId }) { index ->
+                items(items.size, key = { items[it].traktId }, contentType = { "media_card" }) { index ->
                     val item = items[index]
                     val isSelected = selectedItems[item.traktId] == true
                     Box {
@@ -324,11 +312,7 @@ fun WatchlistScreen(
                                     isMultiSelectMode = true
                                 }
                                 selectedItems[item.traktId] = true
-                            },
-                            modifier = Modifier.animateItem(
-                                fadeInSpec = tween(300),
-                                placementSpec = tween(300)
-                            )
+                            }
                         )
                         // 多选模式下显示选中遮罩 + 打勾图标
                         if (isMultiSelectMode) {

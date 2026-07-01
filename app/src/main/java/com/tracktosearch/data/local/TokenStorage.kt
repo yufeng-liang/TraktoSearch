@@ -39,6 +39,18 @@ class TokenStorage @Inject constructor(
     private val _accessTokenFlow = MutableStateFlow<String?>(null)
     val accessToken: Flow<String?> = _accessTokenFlow
 
+    init {
+        // 启动时从磁盘加载 token，确保 Flow 初始值正确
+        val token = prefs.getString(KEY_ACCESS_TOKEN, null)
+        val expiresAt = prefs.getLong(KEY_EXPIRES_AT, 0L)
+        cachedAccessToken = token
+        cachedExpiresAt = expiresAt
+        cacheLoaded = true
+        if (!token.isNullOrEmpty()) {
+            _accessTokenFlow.value = token
+        }
+    }
+
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
         prefs.edit()

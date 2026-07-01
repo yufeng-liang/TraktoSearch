@@ -35,6 +35,7 @@
     <string name="gallery_saved">Saved: %1$s/%2$s</string>
     <string name="gallery_saved_to_album">Saved to album</string>
     <string name="magnet_copied">Magnet link copied to clipboard</string>
+    <string name="link_copied">Link copied</string>
     <string name="cannot_open_link">Cannot open this link</string>
     <string name="install_success">Installation successful</string>
     <string name="update_new_version">New version v%1$s available</string>
@@ -560,6 +561,8 @@ Config:
     <string name="common_done">Done</string>
     <string name="error_load_failed">Load failed</string>
     <string name="error_search_failed">Search failed</string>
+    <string name="error_search_timeout">Search timed out, please check your network connection and try again</string>
+    <string name="search_retrying">Retrying (attempt %d)...</string>
 
     <!-- Snackbar Messages -->
     <string name="snackbar_test_success">Test passed, parsed %d results</string>

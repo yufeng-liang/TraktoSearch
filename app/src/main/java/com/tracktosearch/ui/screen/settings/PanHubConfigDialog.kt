@@ -133,9 +133,9 @@ fun PanHubConfigDialog(
                                         onEnabledPluginsChange(updated)
                                     },
                                     colors = androidx.compose.material3.SwitchDefaults.colors(
-                                        uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                        uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                         uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                        uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                        uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                     )
                                 )
                             }
@@ -203,9 +203,9 @@ fun PanHubConfigDialog(
                                     onEnabledChannelsChange(updated)
                                 },
                                 colors = androidx.compose.material3.SwitchDefaults.colors(
-                                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                     uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                 )
                             )
                         }
@@ -232,9 +232,9 @@ fun PanHubConfigDialog(
                                                 onEnabledChannelsChange(updated)
                                             },
                                             colors = androidx.compose.material3.SwitchDefaults.colors(
-                                                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                                                 uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                             )
                                         )
                                     }

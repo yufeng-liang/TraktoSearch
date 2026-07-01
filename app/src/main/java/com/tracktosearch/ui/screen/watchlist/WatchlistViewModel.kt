@@ -408,6 +408,30 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /** 仅刷新想看列表（从详情页标记想看后调用） */
+    fun refreshWatchlist() {
+        val state = _uiState.value
+        if (state.moviesLoaded || state.showsLoaded) {
+            _uiState.value = state.copy(
+                moviePage = 1,
+                showPage = 1,
+                hasMoreMovies = true,
+                hasMoreShows = true
+            )
+            loadMovies(forceReload = true, silent = true)
+            loadShows(forceReload = true, silent = true)
+        }
+    }
+
+    /** 仅刷新已看历史（从详情页标记已看后调用） */
+    fun refreshWatched() {
+        val state = _uiState.value
+        if (state.historyMoviesLoaded || state.historyShowsLoaded) {
+            loadHistoryMovies(forceReload = true)
+            loadHistoryShows(forceReload = true)
+        }
+    }
+
     /** 从想看列表批量移除 */
     fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
         viewModelScope.launch {

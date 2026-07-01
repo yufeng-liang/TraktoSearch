@@ -34,6 +34,7 @@
     <string name="gallery_saved">저장됨: %1$s/%2$s</string>
     <string name="gallery_saved_to_album">앨범에 저장됨</string>
     <string name="magnet_copied">마그넷 링크가 클립보드에 복사되었습니다</string>
+    <string name="link_copied">링크가 복사되었습니다</string>
     <string name="cannot_open_link">이 링크를 열 수 없습니다</string>
     <string name="install_success">설치 성공</string>
     <string name="update_new_version">새 버전 v%1$s 사용 가능</string>
@@ -405,6 +406,8 @@
     <string name="common_done">완료</string>
     <string name="error_load_failed">로드 실패</string>
     <string name="error_search_failed">검색 실패</string>
+    <string name="error_search_timeout">검색 시간이 초과되었습니다. 네트워크 연결을 확인한 후 다시 시도해 주세요</string>
+    <string name="search_retrying">재시도 중 (시도 %d회)...</string>
 
     <!-- Snackbar Messages -->
     <string name="snackbar_test_success">테스트 성공, %d 개 결과 파싱</string>

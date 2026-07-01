@@ -17,9 +17,11 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tracktosearch.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -48,7 +50,9 @@ data class SearchTabState(
     val hasSearched: Boolean = false,
     val totalCount: Int = 0,
     val currentPage: Int = 1,
-    val hasMore: Boolean = false
+    val hasMore: Boolean = false,
+    val retryCount: Int = 0,
+    val isRetrying: Boolean = false
 )
 
 data class DiskSearchState(
@@ -170,11 +174,19 @@ class TraktSearchViewModel @Inject constructor(
                 hasSearched = true
             ))
 
-            val result = when (searchType) {
-                MediaType.MOVIE -> traktRepository.searchMovies(query, page = 1)
-                MediaType.SHOW -> traktRepository.searchShows(query, page = 1)
-                MediaType.PERSON -> traktRepository.searchPeople(query, page = 1)
-                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
+            val result = withTimeoutOrNull(15_000) {
+                when (searchType) {
+                    MediaType.MOVIE -> traktRepository.searchMovies(query, page = 1)
+                    MediaType.SHOW -> traktRepository.searchShows(query, page = 1)
+                    MediaType.PERSON -> traktRepository.searchPeople(query, page = 1)
+                    MediaType.DISK -> Result.failure(Exception("DISK not supported"))
+                }
+            }
+
+            if (result == null) {
+                // 超时，自动重试
+                handleTimeoutRetry(searchType, query, retryCount = 0)
+                return@launch
             }
 
             if (searchType == MediaType.PERSON) {
@@ -313,6 +325,141 @@ class TraktSearchViewModel @Inject constructor(
                         error = e.message ?: context.getString(R.string.error_search_failed),
                         hasSearched = true
                     ))
+                }
+            }
+        }
+    }
+
+    private suspend fun handleTimeoutRetry(searchType: MediaType, query: String, retryCount: Int) {
+        val maxRetries = 3
+        if (retryCount >= maxRetries) {
+            updateTabState(searchType, SearchTabState(
+                isLoading = false,
+                error = context.getString(R.string.error_search_timeout),
+                hasSearched = true
+            ))
+            return
+        }
+
+        updateTabState(searchType, SearchTabState(
+            isLoading = true,
+            hasSearched = true,
+            retryCount = retryCount + 1,
+            isRetrying = true
+        ))
+
+        // 指数退避延迟
+        val delayMs = 1000L * (1 shl retryCount)
+        delay(delayMs)
+
+        val result = withTimeoutOrNull(15_000) {
+            when (searchType) {
+                MediaType.MOVIE -> traktRepository.searchMovies(query, page = 1)
+                MediaType.SHOW -> traktRepository.searchShows(query, page = 1)
+                MediaType.PERSON -> traktRepository.searchPeople(query, page = 1)
+                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
+            }
+        }
+
+        if (result == null) {
+            // 继续重试
+            handleTimeoutRetry(searchType, query, retryCount + 1)
+            return
+        }
+
+        // 处理搜索结果
+        coroutineScope {
+            when (searchType) {
+                MediaType.PERSON -> {
+                    val tmdbResults = tmdbRepository.searchPerson(query)
+                    result.onSuccess { (searchResults, totalCount) ->
+                        val traktItems = searchResults.map { item ->
+                            async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
+                        }.awaitAll().filterNotNull()
+                        val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
+                        val tmdbOnlyItems = tmdbResults.filter { it.id !in existingTmdbIds }.map { person ->
+                            async {
+                                withTimeoutOrNull(8_000) {
+                                    val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                                    val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                                    val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                    TraktSearchUiItem(
+                                        traktId = traktPerson?.ids?.trakt ?: 0,
+                                        tmdbId = person.id,
+                                        title = person.original_name,
+                                        displayTitle = person.name,
+                                        posterUrl = profileUrl,
+                                        knownForDepartment = person.known_for_department
+                                    )
+                                }
+                            }
+                        }.awaitAll().filterNotNull()
+                        val merged = traktItems + tmdbOnlyItems
+                        val mergedTotal = totalCount + tmdbOnlyItems.size
+                        updateTabState(searchType, SearchTabState(
+                            results = merged,
+                            isLoading = false,
+                            totalCount = mergedTotal,
+                            currentPage = 1,
+                            hasMore = traktItems.size < totalCount,
+                            hasSearched = true
+                        ))
+                    }.onFailure { e ->
+                        if (tmdbResults.isNotEmpty()) {
+                            val tmdbItems = tmdbResults.map { person ->
+                                async {
+                                    withTimeoutOrNull(8_000) {
+                                        val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
+                                        val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
+                                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                        TraktSearchUiItem(
+                                            traktId = traktPerson?.ids?.trakt ?: 0,
+                                            tmdbId = person.id,
+                                            title = person.original_name,
+                                            displayTitle = person.name,
+                                            posterUrl = profileUrl,
+                                            knownForDepartment = person.known_for_department
+                                        )
+                                    }
+                                }
+                            }.awaitAll().filterNotNull()
+                            updateTabState(searchType, SearchTabState(
+                                results = tmdbItems,
+                                isLoading = false,
+                                totalCount = tmdbResults.size,
+                                currentPage = 1,
+                                hasMore = false,
+                                hasSearched = true
+                            ))
+                        } else {
+                            updateTabState(searchType, SearchTabState(
+                                isLoading = false,
+                                error = e.message ?: context.getString(R.string.error_search_failed),
+                                hasSearched = true
+                            ))
+                        }
+                    }
+                }
+                else -> {
+                    result.onSuccess { (searchResults, totalCount) ->
+                        val uiItems = searchResults.map { item ->
+                            async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
+                        }.awaitAll().filterNotNull()
+                        updateTabState(searchType, SearchTabState(
+                            results = uiItems,
+                            isLoading = false,
+                            totalCount = totalCount,
+                            currentPage = 1,
+                            hasMore = uiItems.size < totalCount,
+                            hasSearched = true
+                        ))
+                    }.onFailure { e ->
+                        updateTabState(searchType, SearchTabState(
+                            isLoading = false,
+                            error = e.message ?: context.getString(R.string.error_search_failed),
+                            hasSearched = true
+                        ))
+                    }
                 }
             }
         }

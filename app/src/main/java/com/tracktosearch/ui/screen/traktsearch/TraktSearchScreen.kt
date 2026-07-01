@@ -11,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -108,6 +107,8 @@ import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.copyResourceLink
+import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -235,6 +236,25 @@ fun TraktSearchScreen(
                             else MovieCardSkeleton()
                         }
                     }
+                    // 重试状态提示
+                    if (currentTabState.isRetrying) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .hazeSource(state = hazeState),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(modifier = Modifier.size(48.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = stringResource(R.string.search_retrying, currentTabState.retryCount),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 }
                 currentTabState.error != null -> {
                     Box(
@@ -244,7 +264,7 @@ fun TraktSearchScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            EmptyView(message = currentTabState.error!!)
+                            EmptyView(message = currentTabState.error)
                             Spacer(modifier = Modifier.height(16.dp))
                             Button(onClick = { viewModel.search(uiState.query, uiState.selectedTab) }) {
                                 Text(stringResource(R.string.watchlist_retry))
@@ -299,7 +319,7 @@ fun TraktSearchScreen(
                                 .fillMaxSize()
                                 .hazeSource(state = hazeState)
                         ) {
-                            items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }) { index ->
+                            items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }, contentType = { "person" }) { index ->
                                 val item = currentTabState.results[index]
                                 PersonSearchCard(
                                     name = item.displayTitle,
@@ -335,7 +355,7 @@ fun TraktSearchScreen(
                                 .fillMaxSize()
                                 .hazeSource(state = hazeState)
                         ) {
-                            items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }) { index ->
+                            items(currentTabState.results.size, key = { "${currentTabState.results[it].traktId}_$it" }, contentType = { "media_card" }) { index ->
                                 val item = currentTabState.results[index]
                                 MovieCard(
                                     title = item.displayTitle,
@@ -440,7 +460,7 @@ fun TraktSearchScreen(
                                 stringResource(R.string.trakt_search_tab_movies_count, count)
                             else
                                 stringResource(R.string.trakt_search_tab_movies)
-                            Text(label, maxLines = 1, modifier = Modifier.basicMarquee())
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     )
                     Tab(
@@ -452,7 +472,7 @@ fun TraktSearchScreen(
                                 stringResource(R.string.trakt_search_tab_shows_count, count)
                             else
                                 stringResource(R.string.trakt_search_tab_shows)
-                            Text(label, maxLines = 1, modifier = Modifier.basicMarquee())
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     )
                     Tab(
@@ -464,7 +484,7 @@ fun TraktSearchScreen(
                                 stringResource(R.string.trakt_search_tab_persons_count, count)
                             else
                                 stringResource(R.string.trakt_search_tab_persons)
-                            Text(label, maxLines = 1, modifier = Modifier.basicMarquee())
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     )
                     Tab(
@@ -476,7 +496,7 @@ fun TraktSearchScreen(
                                 stringResource(R.string.trakt_search_tab_disk_count, count)
                             else
                                 stringResource(R.string.trakt_search_tab_disk)
-                            Text(label, maxLines = 1, modifier = Modifier.basicMarquee())
+                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     )
                 }
@@ -539,6 +559,7 @@ private fun DiskSearchContent(
     statusBarHeight: Dp = 0.dp
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
 
     val filteredResources = remember(diskState.resources, diskState.diskTypeFilter, diskState.typeFilter) {
         diskState.resources
@@ -591,7 +612,7 @@ private fun DiskSearchContent(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    EmptyView(message = diskState.error!!)
+                    EmptyView(message = diskState.error)
                 }
             }
         }
@@ -714,12 +735,16 @@ private fun DiskSearchContent(
                             }
                         }
                     }
-                    itemsIndexed(filteredResources, key = { _, it -> it.url }) { index, item ->
+                    itemsIndexed(filteredResources, key = { _, it -> it.url }, contentType = { _, _ -> "resource" }) { index, item ->
                         ResourceItemCard(
                             item = item,
                             isViewed = false,
                             index = index,
-                            onClick = { onItemClick(item) }
+                            onClick = { onItemClick(item) },
+                            onLongClick = {
+                                view.performHaptic(HapticType.HEAVY_CLICK)
+                                copyResourceLink(context, item)
+                            }
                         )
                     }
                 }
@@ -734,37 +759,6 @@ private fun DiskSearchContent(
             }
         }
     }
-}
-
-private fun openResourceLink(context: android.content.Context, item: ResourceItem) {
-    val url = item.url
-    val appPackages = when (item.diskType) {
-        DiskType.QUARK -> listOf("com.quark.clouddrive", "com.quark.browser")
-        DiskType.BAIDU -> listOf("com.baidu.netdisk")
-        DiskType.ALI -> listOf("com.alicloud.databox")
-        DiskType.XUNLEI -> listOf("com.xunlei.downloadprovider", "com.xunlei.browser")
-        DiskType.UC -> listOf("com.UCMobile")
-        DiskType.ONEONEFIVE -> listOf("com.crland.app")
-        DiskType.MAGNET, DiskType.OTHER -> emptyList()
-    }
-    for (pkg in appPackages) {
-        try {
-            val appIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
-                setPackage(pkg)
-                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            if (appIntent.resolveActivity(context.packageManager) != null) {
-                context.startActivity(appIntent)
-                return
-            }
-        } catch (_: Exception) {}
-    }
-    try {
-        val browserIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
-            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
-        context.startActivity(browserIntent)
-    } catch (_: Exception) {}
 }
 
 @Composable
@@ -795,8 +789,8 @@ private fun PersonSearchCard(
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(profileUrl)
-                            .size(300)
-                            .crossfade(true)
+                            .size(200)
+                            .crossfade(false)
                             .build(),
                         contentDescription = name,
                         modifier = Modifier

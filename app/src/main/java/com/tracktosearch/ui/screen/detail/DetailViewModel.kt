@@ -31,11 +31,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -112,8 +114,10 @@ data class DetailUiState(
     val videos: List<TmdbVideo> = emptyList(),
     val backdrops: List<String> = emptyList(),
     val isLoadingVideosImages: Boolean = false,
-    // 列表是否变更（标记已看后变为 true，上级页面用于决定是否刷新）
+    // 想看列表是否变更（添加/移除想看后变为 true）
     val watchlistChanged: Boolean = false,
+    // 已看历史是否变更（标记/取消已看后变为 true）
+    val watchedChanged: Boolean = false,
     // 相关推荐
     val recommendations: List<RecommendationItem> = emptyList(),
     val isLoadingRecommendations: Boolean = false,
@@ -346,29 +350,20 @@ class DetailViewModel @Inject constructor(
             // 根据模块可见性设置，按需加载各模块数据
             val visibility = _uiState.value.sectionVisible
 
-            // 异步获取多平台评分
+            // 首屏关键数据：评分、评论、季信息、演职员、预告片截图
             if (visibility.myRating) fetchRatingsAsync(tmdbRating)
-
-            // 异步获取评论
             if (visibility.comments) fetchComments()
-
-            // 异步获取季/集信息（仅电视剧，属于核心功能不受模块设置影响）
             fetchSeasons()
-
-            // 异步获取演职员
             if (visibility.cast) fetchCredits()
-
-            // 异步获取预告片与截图
             if (visibility.videosImages) fetchVideosAndImages()
-
-            // 异步获取相关推荐（内部合并检查当前影视+推荐项的想看/已看状态）
-            if (visibility.recommendations) fetchRecommendations()
-
-            // 异步获取系列信息（仅电影）
-            if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)
-
-            // 异步获取用户评分
             if (visibility.myRating) fetchUserRating()
+
+            // 非首屏数据延迟加载，降低进入详情页时的网络请求峰值
+            viewModelScope.launch {
+                delay(1500)
+                if (visibility.recommendations) fetchRecommendations()
+                if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)
+            }
         }
     }
 
@@ -668,7 +663,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingRecommendations = true)
             // 限制并发数，避免触发 API 限流
-            val enrichSemaphore = Semaphore(5)
+            val enrichSemaphore = Semaphore(3)
             try {
                 // 并行请求 Trakt related 和 TMDB similar
                 val enriched = when (currentMediaType) {
@@ -988,20 +983,18 @@ class DetailViewModel @Inject constructor(
             // 线程安全地跟踪已完成的源（中英文搜索共享同一集合，去重计数）
             val completedSourceNames = ConcurrentHashMap.newKeySet<String>()
             val onSourceComplete: (String) -> Unit = { source ->
-                if (completedSourceNames.add(source)) {
-                    _uiState.value = _uiState.value.copy(
-                        completedSources = completedSourceNames.size
-                    )
-                }
+                completedSourceNames.add(source)
+                // 不单独更新 state，在 updateSearchResults 中一并更新减少重组次数
             }
 
+            // conflate: 跳过中间值，只处理最新发射，减少高频更新时的重组
             val chineseFlow = resourceRepository.searchResourcesFlow(
                 currentKeyword, isShow = isShow, onSourceComplete = onSourceComplete
-            )
+            ).conflate()
             val englishFlow = if (hasEnglish) {
                 resourceRepository.searchResourcesFlow(
                     currentOriginalTitle, isShow = isShow, onSourceComplete = onSourceComplete
-                )
+                ).conflate()
             } else null
 
             var firstResultShown = false
@@ -1019,7 +1012,7 @@ class DetailViewModel @Inject constructor(
                                 firstResultShown = true
                                 _uiState.value = _uiState.value.copy(isSearching = false)
                             }
-                            updateSearchResults(chineseItems, englishItems, isShow)
+                            updateSearchResults(chineseItems, englishItems, isShow, completedSourceNames.size)
                         }
                     }
                     val englishJob = launch {
@@ -1029,7 +1022,7 @@ class DetailViewModel @Inject constructor(
                                 firstResultShown = true
                                 _uiState.value = _uiState.value.copy(isSearching = false)
                             }
-                            updateSearchResults(chineseItems, englishItems, isShow)
+                            updateSearchResults(chineseItems, englishItems, isShow, completedSourceNames.size)
                         }
                     }
                     chineseJob.join()
@@ -1046,7 +1039,7 @@ class DetailViewModel @Inject constructor(
                         firstResultShown = true
                         _uiState.value = _uiState.value.copy(isSearching = false)
                     }
-                    updateSearchResults(chineseItems, englishItems, isShow)
+                    updateSearchResults(chineseItems, englishItems, isShow, completedSourceNames.size)
                 }
                 // 单个 Flow 收集完成后若仍无结果，关闭搜索状态
                 if (_uiState.value.isSearching) {
@@ -1062,7 +1055,8 @@ class DetailViewModel @Inject constructor(
     private suspend fun updateSearchResults(
         chineseItems: List<ResourceItem>,
         englishItems: List<ResourceItem>,
-        isShow: Boolean
+        isShow: Boolean,
+        completedSourceCount: Int = _uiState.value.completedSources
     ) {
         val existingUrls = chineseItems.map { it.url }.toSet()
         val mergedItems = chineseItems + englishItems.filter { it.url !in existingUrls }
@@ -1085,7 +1079,8 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
             resources = filtered,
-            viewedUrls = viewedUrls
+            viewedUrls = viewedUrls,
+            completedSources = completedSourceCount
         )
         saveToCache()
     }
@@ -1221,7 +1216,7 @@ class DetailViewModel @Inject constructor(
 
         // 如果已标记已看，则取消标记
         if (current.isMarkedWatched) {
-            _uiState.value = current.copy(isMarkingWatched = true, watchlistChanged = false)
+            _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true)
             viewModelScope.launch {
                 traktRepository.removeWatched(currentTraktId, currentMediaType)
                     .onSuccess {
@@ -1246,7 +1241,7 @@ class DetailViewModel @Inject constructor(
         }
 
         // 电影：直接标记
-        _uiState.value = current.copy(isMarkingWatched = true, watchlistChanged = true)
+        _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true)
         viewModelScope.launch {
             traktRepository.markAsWatched(currentTraktId, currentMediaType)
                 .onSuccess {
@@ -1261,7 +1256,7 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isMarkingWatched = false,
-                        watchlistChanged = false
+                        watchedChanged = false
                     )
                 }
         }
@@ -1282,7 +1277,7 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             showMarkWatchedDialog = false,
             isMarkingWatched = true,
-            watchlistChanged = true
+            watchedChanged = true
         )
         viewModelScope.launch {
             traktRepository.markEpisodesWatched(selectedEpisodeIds)
@@ -1299,7 +1294,7 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isMarkingWatched = false,
-                        watchlistChanged = false
+                        watchedChanged = false
                     )
                 }
         }

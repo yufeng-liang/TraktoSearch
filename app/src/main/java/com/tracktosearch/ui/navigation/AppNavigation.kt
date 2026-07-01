@@ -180,16 +180,23 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
 
-                        // 从详情页返回时，若标记已看则触发列表刷新
+                        // 从详情页返回时，按变更类型分别刷新想看列表或已看历史
                         // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry
                         // 后者在导航过渡期间可能为 null 或指向错误的 entry
                         val savedState = backStackEntry.savedStateHandle
                         val watchlistChanged by savedState.getStateFlow("watchlist_changed", false).collectAsStateWithLifecycle()
+                        val watchedChanged by savedState.getStateFlow("watched_changed", false).collectAsStateWithLifecycle()
                         val watchlistViewModel: WatchlistViewModel = hiltViewModel()
                         LaunchedEffect(watchlistChanged) {
                             if (watchlistChanged) {
-                                watchlistViewModel.refreshIfLoaded()
+                                watchlistViewModel.refreshWatchlist()
                                 savedState.set("watchlist_changed", false)
+                            }
+                        }
+                        LaunchedEffect(watchedChanged) {
+                            if (watchedChanged) {
+                                watchlistViewModel.refreshWatched()
+                                savedState.set("watched_changed", false)
                             }
                         }
 
@@ -304,10 +311,13 @@ fun AppNavigation(
                         // 用于在标记已看/想看后通知上级列表页刷新
                         // 同时检查从子详情页（推荐跳转）传递回来的变更标记
                         val previousEntry = navController.previousBackStackEntry
-                        fun goBack(changed: Boolean) {
-                            val childChanged = backStackEntry.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
-                            previousEntry?.savedStateHandle?.set("watchlist_changed", changed || childChanged)
+                        fun goBack(watchlistChanged: Boolean, watchedChanged: Boolean) {
+                            val childWatchlistChanged = backStackEntry.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
+                            val childWatchedChanged = backStackEntry.savedStateHandle.get<Boolean>("watched_changed") ?: false
+                            previousEntry?.savedStateHandle?.set("watchlist_changed", watchlistChanged || childWatchlistChanged)
+                            previousEntry?.savedStateHandle?.set("watched_changed", watchedChanged || childWatchedChanged)
                             backStackEntry.savedStateHandle["watchlist_changed"] = false
+                            backStackEntry.savedStateHandle["watched_changed"] = false
                             navController.popBackStack()
                         }
 
@@ -320,7 +330,7 @@ fun AppNavigation(
                             traktRating = traktRating,
                             initialInWatchlist = inWatchlist,
                             initialIsWatched = isWatched,
-                            onBack = { changed -> goBack(changed) },
+                            onBack = { wlChanged, wChanged -> goBack(wlChanged, wChanged) },
                             onPersonClick = { personId, personName, profileUrl ->
                                 navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))
                             },

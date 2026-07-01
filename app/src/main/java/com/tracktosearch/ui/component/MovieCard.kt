@@ -48,8 +48,8 @@ fun MovieCard(
     val imageRequest = remember(posterUrl) {
         ImageRequest.Builder(context)
             .data(posterUrl)
-            .size(300)
-            .crossfade(true)
+            .size(200)
+            .crossfade(false)
             .build()
     }
 
@@ -162,10 +162,12 @@ fun MovieCard(
             Column(
                 modifier = Modifier.padding(6.dp)
             ) {
-                MarqueeText(
+                Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (genres.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(2.dp))
