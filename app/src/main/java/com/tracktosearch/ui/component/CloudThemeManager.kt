@@ -26,14 +26,31 @@ enum class CloudTheme(val rawRes: Int) {
     THUNDER(R.raw.cloud_thunder),
     CHRISTMAS(R.raw.cloud_christmas),
     SPRING_FESTIVAL(R.raw.cloud_spring_festival),
-    HALLOWEEN(R.raw.cloud_halloween);
+    HALLOWEEN(R.raw.cloud_halloween),
+    // 新增天气主题
+    CLOUDY(R.raw.cloud_cloudy),
+    OVERCAST(R.raw.cloud_overcast),
+    MIST(R.raw.cloud_mist),
+    NIGHT(R.raw.cloud_night),
+    // 新增节日主题
+    NATIONAL(R.raw.cloud_national),
+    MIDAUTUMN(R.raw.cloud_midautumn),
+    DRAGONBOAT(R.raw.cloud_dragonboat),
+    LABOR(R.raw.cloud_labor);
 }
 
 /** 彩蛋动画资源列表 */
 private val EASTER_EGG_RES = listOf(
     R.raw.easter_shy,
     R.raw.easter_cat,
-    R.raw.easter_sleepy
+    R.raw.easter_sleepy,
+    // 新增彩蛋
+    R.raw.easter_dog,
+    R.raw.easter_bunny,
+    R.raw.easter_panda,
+    R.raw.easter_rainbow,
+    R.raw.easter_firework,
+    R.raw.easter_lantern
 )
 
 /** 趣味文案池 */
@@ -81,6 +98,10 @@ class CloudThemeManager @Inject constructor(
     private val _showPermissionDialog = MutableStateFlow(false)
     val showPermissionDialog: StateFlow<Boolean> = _showPermissionDialog
 
+    // 夜晚交替状态
+    private val _isNightAlternate = MutableStateFlow(false)
+    val isNightAlternate: StateFlow<Boolean> = _isNightAlternate
+
     // 随机去重：记录最近播放过的彩蛋索引
     private val recentEasterIndices = ArrayDeque<Int>(2)
     private var lastMessageIndex = -1
@@ -95,6 +116,10 @@ class CloudThemeManager @Inject constructor(
                     Holiday.CHRISTMAS -> CloudTheme.CHRISTMAS
                     Holiday.SPRING_FESTIVAL -> CloudTheme.SPRING_FESTIVAL
                     Holiday.HALLOWEEN -> CloudTheme.HALLOWEEN
+                    Holiday.NATIONAL_DAY -> CloudTheme.NATIONAL
+                    Holiday.MID_AUTUMN -> CloudTheme.MIDAUTUMN
+                    Holiday.DRAGON_BOAT -> CloudTheme.DRAGONBOAT
+                    Holiday.LABOR_DAY -> CloudTheme.LABOR
                 }
                 _currentTheme.value = theme
                 saveCachedTheme(theme)
@@ -141,6 +166,28 @@ class CloudThemeManager @Inject constructor(
         _showPermissionDialog.value = false
     }
 
+    /** 检查当前是否为夜间（20:00-06:00） */
+    fun isNightTime(): Boolean {
+        val hour = java.time.LocalTime.now().hour
+        return hour >= 20 || hour < 6
+    }
+
+    /** 切换夜晚交替状态 */
+    fun toggleNightAlternate() {
+        if (isNightTime()) {
+            _isNightAlternate.value = !_isNightAlternate.value
+        }
+    }
+
+    /** 获取当前应显示的主题 */
+    fun getCurrentDisplayTheme(): CloudTheme {
+        return if (isNightTime() && _isNightAlternate.value) {
+            CloudTheme.NIGHT
+        } else {
+            _currentTheme.value
+        }
+    }
+
     /** 权限弹窗已取消 */
     fun onPermissionDismissed() {
         _showPermissionDialog.value = false
@@ -177,8 +224,10 @@ class CloudThemeManager @Inject constructor(
 
     private fun weatherCodeToTheme(weather: WeatherInfo): CloudTheme {
         return when (weather.weatherCode) {
-            0, 1, 2, 3 -> CloudTheme.SUNNY
-            45, 48 -> CloudTheme.RAINY
+            0, 1 -> CloudTheme.SUNNY
+            2 -> CloudTheme.CLOUDY
+            3 -> CloudTheme.OVERCAST
+            45, 48 -> CloudTheme.MIST
             in 51..67 -> CloudTheme.RAINY
             in 71..86 -> CloudTheme.SNOWY
             in 95..99 -> CloudTheme.THUNDER

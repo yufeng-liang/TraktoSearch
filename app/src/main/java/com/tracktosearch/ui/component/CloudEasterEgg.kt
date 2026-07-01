@@ -33,6 +33,7 @@ fun CloudEasterEgg(
     onCloudClicked: () -> Unit = { themeManager.onCloudClicked() }
 ) {
     val theme by themeManager.currentTheme.collectAsStateWithLifecycle()
+    val isNightAlternate by themeManager.isNightAlternate.collectAsStateWithLifecycle()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
 
@@ -43,9 +44,12 @@ fun CloudEasterEgg(
         label = "cloud_press_scale"
     )
 
+    // 获取当前应显示的主题
+    val displayTheme = themeManager.getCurrentDisplayTheme()
+
     // 加载 Lottie 动画
     val composition by rememberLottieComposition(
-        LottieCompositionSpec.RawRes(theme.rawRes)
+        LottieCompositionSpec.RawRes(displayTheme.rawRes)
     )
     val progress by animateLottieCompositionAsState(
         composition = composition,

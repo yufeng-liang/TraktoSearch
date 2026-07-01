@@ -188,6 +188,8 @@ fun SearchScreen(
             // 未授权时只加载缓存主题，不自动请求权限
             cloudThemeManager.loadTheme(null)
         }
+        // 触发夜晚交替
+        cloudThemeManager.toggleNightAlternate()
     }
     val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
@@ -929,8 +931,8 @@ fun DoubanHotCard(
                     val imageRequest = remember(item.cover) {
                         coil.request.ImageRequest.Builder(context)
                             .data(item.cover)
-                            .size(300)
-                            .crossfade(true)
+                            .size(200)
+                            .crossfade(false)
                             .build()
                     }
                     coil.compose.AsyncImage(
@@ -1098,8 +1100,8 @@ private fun DoubanHotGridItem(
                     val imageRequest = remember(item.cover) {
                         coil.request.ImageRequest.Builder(context)
                             .data(item.cover)
-                            .size(300)
-                            .crossfade(true)
+                            .size(200)
+                            .crossfade(false)
                             .build()
                     }
                     coil.compose.AsyncImage(
