@@ -45,3 +45,7 @@ fresh_log.txt
 icon.png
 backup.kt
 .claude/worktrees/
+
+# Local directories (not tracked in git)
+docs/
+.superpowers/

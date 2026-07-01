@@ -1,1 +1,77 @@
 # Baseline profile rules
+
+# App 自身关键类（消除首次进入详情页 244ms 的 VerifyClass 开销）
+Lcom/tracktosearch/ui/screen/detail/;
+Lcom/tracktosearch/ui/screen/watchlist/;
+Lcom/tracktosearch/ui/screen/traktsearch/;
+Lcom/tracktosearch/ui/screen/discover/;
+Lcom/tracktosearch/ui/screen/person/;
+Lcom/tracktosearch/ui/screen/main/;
+Lcom/tracktosearch/ui/screen/settings/;
+Lcom/tracktosearch/ui/component/;
+Lcom/tracktosearch/ui/navigation/;
+Lcom/tracktosearch/data/repository/;
+Lcom/tracktosearch/data/remote/dto/;
+Lcom/tracktosearch/data/remote/trakt/dto/;
+Lcom/tracktosearch/data/remote/tmdb/dto/;
+Lcom/tracktosearch/data/remote/omdb/dto/;
+Lcom/tracktosearch/data/remote/pansou/dto/;
+Lcom/tracktosearch/data/remote/panhub/dto/;
+Lcom/tracktosearch/data/remote/zreso/dto/;
+Lcom/tracktosearch/data/remote/douban/;
+Lcom/tracktosearch/data/local/;
+Lcom/tracktosearch/di/;
+Lcom/tracktosearch/;
+
+# Compose
+Landroidx/compose/animation/;
+Landroidx/compose/foundation/;
+Landroidx/compose/material3/;
+Landroidx/compose/runtime/;
+Landroidx/compose/ui/;
+Landroidx/compose/ui/graphics/;
+Landroidx/compose/ui/layout/;
+Landroidx/compose/ui/node/;
+Landroidx/compose/ui/platform/;
+Landroidx/compose/ui/viewinterop/;
+
+# Navigation Compose
+Landroidx/navigation/compose/;
+
+# Hilt
+Ldagger/hilt/android/;
+Ldagger/hilt/android/internal/;
+Ldagger/hilt/android/lifecycle/;
+
+# Retrofit + OkHttp
+Lretrofit2/;
+Lokhttp3/;
+Lokio/;
+
+# Room
+Landroidx/room/;
+
+# Coil
+Lcoil/compose/;
+Lcoil/;
+
+# Coroutines
+Lkotlinx/coroutines/;
+
+# Lifecycle
+Landroidx/lifecycle/;
+
+# WorkManager
+Landroidx/work/;
+
+# App Startup
+Landroidx/startup/;
+
+# DataStore
+Landroidx/datastore/;
+
+# Core KTX
+Landroidx/core/;
+
+# Activity Compose
+Landroidx/activity/compose/;
