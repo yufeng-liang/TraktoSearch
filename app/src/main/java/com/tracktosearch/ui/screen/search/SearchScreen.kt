@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -328,25 +329,23 @@ fun SearchScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 24.dp, vertical = 16.dp)
                     ) {
-                        // 猫咪动画 + 标题
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        ) {
-                            // Lottie 猫咪动画
-                            val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
-                            LottieAnimation(
-                                composition = composition,
-                                iterations = LottieConstants.IterateForever,
-                                modifier = Modifier.size(80.dp)
-                            )
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = "想知道白云会变身吗？",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        // 猫咪动画
+                        val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
+                        LottieAnimation(
+                            composition = composition,
+                            iterations = LottieConstants.IterateForever,
+                            modifier = Modifier
+                                .size(120.dp)
+                                .padding(start = 0.dp)
+                        )
+
+                        // 标题
+                        Text(
+                            text = "想知道白云会变身吗？",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+                        )
 
                         // 文案
                         Text(
@@ -371,7 +370,7 @@ fun SearchScreen(
                                 Text("取消")
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            TextButton(
+                            Button(
                                 onClick = {
                                     cloudThemeManager.onPermissionDismissed()
                                     locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)

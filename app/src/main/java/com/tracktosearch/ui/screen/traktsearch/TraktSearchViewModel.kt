@@ -42,6 +42,7 @@ data class TraktSearchUiItem(
     val knownForDepartment: String = ""
 )
 
+@Immutable
 data class SearchTabState(
     val results: List<TraktSearchUiItem> = emptyList(),
     val isLoading: Boolean = false,
@@ -55,6 +56,7 @@ data class SearchTabState(
     val isRetrying: Boolean = false
 )
 
+@Immutable
 data class DiskSearchState(
     val resources: List<ResourceItem> = emptyList(),
     val isLoading: Boolean = false,
@@ -66,6 +68,7 @@ data class DiskSearchState(
     val totalSources: Int = 0
 )
 
+@Immutable
 data class TraktSearchUiState(
     val query: String = "",
     val selectedTab: MediaType = MediaType.MOVIE,
@@ -94,6 +97,9 @@ class TraktSearchViewModel @Inject constructor(
 
     // 限制 enrich 并发数，避免触发 API 限流
     private val enrichSemaphore = Semaphore(5)
+
+    // 当前搜索任务，新搜索前取消旧任务避免竞态
+    private var searchJob: kotlinx.coroutines.Job? = null
 
     private val initialTypeFromNav = when (savedStateHandle.get<String>("type")) {
         "show" -> MediaType.SHOW
@@ -168,7 +174,9 @@ class TraktSearchViewModel @Inject constructor(
         val tabState = _uiState.value.currentTabState
         if (tabState.isLoading) return
 
-        viewModelScope.launch {
+        // 取消上一次未完成的搜索，避免旧结果覆盖新结果
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             updateTabState(searchType, SearchTabState(
                 isLoading = true,
                 hasSearched = true

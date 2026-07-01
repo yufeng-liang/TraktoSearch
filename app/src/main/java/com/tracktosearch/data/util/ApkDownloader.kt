@@ -1,17 +1,25 @@
 package com.tracktosearch.data.util
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.util.concurrent.TimeUnit
 
 object ApkDownloader {
+    private const val CHANNEL_ID = "apk_download"
+    private const val NOTIFICATION_ID = 1001
+
     suspend fun downloadApk(
         context: Context,
         url: String,
@@ -44,17 +52,33 @@ object ApkDownloader {
             }
             .build()
 
-        // 尝试主 URL
-        val result = tryDownload(client, url, context, fileName, onProgress)
+        createDownloadChannel(context)
+        showDownloadNotification(context, 0f, indeterminate = true)
 
-        // 主 URL 失败且有备用 URL，自动降级尝试
-        if (result == null && fallbackUrl.isNotEmpty()) {
-            tryDownload(client, fallbackUrl, context, fileName, onProgress)
-                ?: throw Exception("主URL和备用URL均下载失败")
-        } else if (result == null) {
-            throw Exception("下载失败")
-        } else {
-            result
+        try {
+            // 尝试主 URL
+            val result = tryDownload(client, url, context, fileName) { progress ->
+                onProgress(progress)
+                showDownloadNotification(context, progress, indeterminate = false)
+            }
+
+            // 主 URL 失败且有备用 URL，自动降级尝试
+            val finalResult = if (result == null && fallbackUrl.isNotEmpty()) {
+                tryDownload(client, fallbackUrl, context, fileName) { progress ->
+                    onProgress(progress)
+                    showDownloadNotification(context, progress, indeterminate = false)
+                } ?: throw Exception("主URL和备用URL均下载失败")
+            } else if (result == null) {
+                throw Exception("下载失败")
+            } else {
+                result
+            }
+
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+            finalResult
+        } catch (e: Exception) {
+            NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+            throw e
         }
     }
 
@@ -112,6 +136,38 @@ object ApkDownloader {
             null
         } finally {
             // response 在成功时由 body.use 关闭，失败时在此关闭
+        }
+    }
+
+    private fun createDownloadChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "APK 下载",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "应用更新下载进度"
+                setShowBadge(false)
+            }
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun showDownloadNotification(context: Context, progress: Float, indeterminate: Boolean) {
+        val percent = (progress * 100).toInt().coerceIn(0, 100)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setContentTitle(context.getString(R.string.update_download_builtin))
+            .setContentText(if (indeterminate) "准备下载..." else "$percent%")
+            .setProgress(100, percent, indeterminate)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .build()
+        try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // Android 13+ 未授予 POST_NOTIFICATIONS 权限时静默失败
         }
     }
 }

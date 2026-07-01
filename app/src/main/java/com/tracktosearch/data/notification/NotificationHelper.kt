@@ -62,9 +62,12 @@ class NotificationHelper @Inject constructor(
             putExtra("tmdbId", tmdbId)
             putExtra("title", title)
         }
+        // movie/show 的 traktId 命名空间独立，用不同前缀避免 notification id 冲突
+        val baseId = if (mediaType == "show") 200000 else 100000
+        val notificationId = baseId + traktId
         val pendingIntent = PendingIntent.getActivity(
             context,
-            traktId,
+            notificationId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -80,7 +83,7 @@ class NotificationHelper @Inject constructor(
             .build()
 
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager?.notify(traktId, notification)
+        manager?.notify(notificationId, notification)
     }
 
     fun showNewSeasonNotification(
@@ -98,9 +101,11 @@ class NotificationHelper @Inject constructor(
             putExtra("tmdbId", tmdbId)
             putExtra("title", title)
         }
+        // 新季通知属于 show，用 200000 前缀 + traktId*100 + seasonNumber 避免与 movie 冲突
+        val notificationId = 200000 + traktId * 100 + seasonNumber
         val pendingIntent = PendingIntent.getActivity(
             context,
-            traktId * 100 + seasonNumber,
+            notificationId,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -116,6 +121,6 @@ class NotificationHelper @Inject constructor(
             .build()
 
         val manager = context.getSystemService(NotificationManager::class.java)
-        manager?.notify(traktId * 100 + seasonNumber, notification)
+        manager?.notify(notificationId, notification)
     }
 }

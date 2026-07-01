@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.person
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.runtime.Immutable
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPerson
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+@Immutable
 data class PersonUiState(
     val isLoading: Boolean = false,
     val person: TmdbPerson? = null,
@@ -52,12 +54,12 @@ class PersonViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        // 人物图片 URL 列表内存缓存（personId -> urls）
-        private val personImagesCache = mutableMapOf<Int, List<String>>()
-        // Trakt人物详情缓存（personId -> TraktPersonDetail），包含社媒、维基百科等
-        private val traktPersonCache = mutableMapOf<Int, com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail>()
-        // 原名缓存（personId -> originalName）
-        private val originalNameCache = mutableMapOf<Int, String>()
+        // 人物图片 URL 列表内存缓存（personId -> urls），LRU 限制 30 条
+        private val personImagesCache = android.util.LruCache<Int, List<String>>(30)
+        // Trakt人物详情缓存（personId -> TraktPersonDetail），包含社媒、维基百科等，LRU 限制 30 条
+        private val traktPersonCache = android.util.LruCache<Int, com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail>(30)
+        // 原名缓存（personId -> originalName），LRU 限制 30 条
+        private val originalNameCache = android.util.LruCache<Int, String>(30)
     }
 
     private val _uiState = MutableStateFlow(PersonUiState())
@@ -174,7 +176,7 @@ class PersonViewModel @Inject constructor(
                         val detailResult = detailDeferred.await()
                         detailResult.onSuccess { detail ->
                             // 更新缓存
-                            traktPersonCache[tmdbId] = detail
+                            traktPersonCache.put(tmdbId, detail)
                             _uiState.value = _uiState.value.copy(traktPerson = detail)
                         }
                         movieCreditsDeferred.await().onSuccess { credits ->
@@ -187,7 +189,7 @@ class PersonViewModel @Inject constructor(
                             val originalName = aliases.firstOrNull { it.country == null }?.name
                             if (originalName != null && originalName != detailResult.getOrNull()?.name) {
                                 // 更新缓存
-                                originalNameCache[tmdbId] = originalName
+                                originalNameCache.put(tmdbId, originalName)
                                 _uiState.value = _uiState.value.copy(originalName = originalName)
                             }
                         }
@@ -206,7 +208,7 @@ class PersonViewModel @Inject constructor(
                                 imageUrls.add(fullUrl)
                             }
                             if (imageUrls.isNotEmpty()) {
-                                personImagesCache[tmdbId] = imageUrls
+                                personImagesCache.put(tmdbId, imageUrls)
                                 _uiState.value = _uiState.value.copy(personImages = imageUrls)
                             }
                         }
@@ -253,7 +255,7 @@ class PersonViewModel @Inject constructor(
                 // 更新缓存为最终合并结果
                 val finalImages = _uiState.value.personImages
                 if (finalImages.isNotEmpty()) {
-                    personImagesCache[currentPersonId] = finalImages
+                    personImagesCache.put(currentPersonId, finalImages)
                 }
                 _uiState.value = _uiState.value.copy(isLoadingPersonImages = false, isLoadingTrakt = false)
             }

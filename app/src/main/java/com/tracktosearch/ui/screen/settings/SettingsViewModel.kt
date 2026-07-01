@@ -41,8 +41,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 enum class ExportFormat { JSON, CSV }
@@ -77,35 +79,47 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
+    // 用 runBlocking 同步预加载 DataStore 真实值作为 stateIn 初始值，
+    // 避免初次进入设置页时开关先用硬编码默认值渲染、真实值到达后跳变
+    private val initialThemeMode: String = runBlocking { themeStorage.themeMode.first() }
     val themeMode: StateFlow<String> = themeStorage.themeMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStorage.MODE_SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialThemeMode)
 
+    private val initialAccentColor: com.tracktosearch.ui.theme.MonetAccent? = runBlocking { themeStorage.accentColor.first() }
     val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialAccentColor)
 
+    private val initialDefaultTab: Int = runBlocking { defaultTabStorage.defaultTab.first() }
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DefaultTabStorage.DEFAULT_TAB_SEARCH)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialDefaultTab)
 
+    private val initialLanguage: String = runBlocking { languageStorage.language.first() }
     val language: StateFlow<String> = languageStorage.language
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LanguageStorage.LANGUAGE_SYSTEM)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialLanguage)
 
+    private val initialPansouEnabled: Boolean = runBlocking { searchSourceStorage.pansouEnabled.first() }
     val pansouEnabled: StateFlow<Boolean> = searchSourceStorage.pansouEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialPansouEnabled)
 
+    private val initialPanhubEnabled: Boolean = runBlocking { searchSourceStorage.panhubEnabled.first() }
     val panhubEnabled: StateFlow<Boolean> = searchSourceStorage.panhubEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialPanhubEnabled)
 
+    private val initialZresoEnabled: Boolean = runBlocking { searchSourceStorage.zresoEnabled.first() }
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialZresoEnabled)
 
+    private val initialNotificationEnabled: Boolean = runBlocking { notificationStorage.enabled.first() }
     val notificationEnabled: StateFlow<Boolean> = notificationStorage.enabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialNotificationEnabled)
 
+    private val initialReleaseReminderEnabled: Boolean = runBlocking { notificationStorage.releaseReminderEnabled.first() }
     val releaseReminderEnabled: StateFlow<Boolean> = notificationStorage.releaseReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialReleaseReminderEnabled)
 
+    private val initialNewSeasonReminderEnabled: Boolean = runBlocking { notificationStorage.newSeasonReminderEnabled.first() }
     val newSeasonReminderEnabled: StateFlow<Boolean> = notificationStorage.newSeasonReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialNewSeasonReminderEnabled)
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
@@ -152,8 +166,9 @@ class SettingsViewModel @Inject constructor(
 
     // ========== PanHub 配置 ==========
 
+    private val initialPanHubConfig: PanHubConfig = runBlocking { panHubConfigStorage.config.first() }
     val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PanHubConfig())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialPanHubConfig)
 
     fun setPanHubConcurrency(value: Int) {
         viewModelScope.launch { panHubConfigStorage.setConcurrency(value) }
@@ -173,11 +188,12 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 自定义搜索源 ==========
 
+    private val initialCustomSources: List<CustomSearchSource> = runBlocking { customSearchSourceStorage.sources.first() }
     val customSources: StateFlow<List<CustomSearchSource>> = customSearchSourceStorage.sources
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            emptyList()
+            initialCustomSources
         )
 
     fun addCustomSource(source: CustomSearchSource) {
@@ -572,13 +588,12 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 发现页栏目设置 ==========
 
+    private val initialDiscoverSections: List<DiscoverSectionConfig> = runBlocking { discoverSectionStorage.sectionConfigs.first() }
     val discoverSections: StateFlow<List<DiscoverSectionConfig>> = discoverSectionStorage.sectionConfigs
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
-                DiscoverSectionConfig(id = id, visible = true, order = index)
-            }
+            initialDiscoverSections
         )
 
     fun setSectionVisible(id: String, visible: Boolean) {
@@ -591,11 +606,12 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 详情页模块设置 ==========
 
+    private val initialDetailSections: List<DetailSectionConfig> = runBlocking { detailSectionStorage.sectionConfigs.first() }
     val detailSections: StateFlow<List<DetailSectionConfig>> = detailSectionStorage.sectionConfigs
         .stateIn(
             viewModelScope,
             SharingStarted.WhileSubscribed(5000),
-            DetailSectionStorage.ALL_SECTION_IDS.map { DetailSectionConfig(id = it, visible = true) }
+            initialDetailSections
         )
 
     fun setDetailSectionVisible(id: String, visible: Boolean) {

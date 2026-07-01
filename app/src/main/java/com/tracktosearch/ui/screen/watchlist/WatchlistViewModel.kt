@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -84,7 +85,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingMovies = !silent,
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
+            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, forceRefresh = forceReload) }
             result.onSuccess { (items, totalPages) ->
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
@@ -113,14 +114,14 @@ class WatchlistViewModel @Inject constructor(
                             listedAt = item.listed_at, isMovie = true
                         )
                         if (!silent) {
-                            synchronized(_uiState) {
-                                val current = _uiState.value.movies.toMutableList()
+                            _uiState.update { state ->
+                                val current = state.movies.toMutableList()
                                 while (current.size <= index) {
                                     val p = items[current.size].movie
                                     current.add(createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[current.size].listed_at))
                                 }
                                 current[index] = uiItem
-                                _uiState.value = _uiState.value.copy(movies = current)
+                                state.copy(movies = current)
                             }
                         }
                         uiItem
@@ -164,7 +165,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingShows = !silent,
                 showsError = if (silent) _uiState.value.showsError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage) }
+            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage, forceRefresh = forceReload) }
             result.onSuccess { (items, totalPages) ->
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
@@ -192,14 +193,14 @@ class WatchlistViewModel @Inject constructor(
                             listedAt = item.listed_at, isMovie = false
                         )
                         if (!silent) {
-                            synchronized(_uiState) {
-                                val current = _uiState.value.shows.toMutableList()
+                            _uiState.update { state ->
+                                val current = state.shows.toMutableList()
                                 while (current.size <= index) {
                                     val s = items[current.size].show
                                     current.add(createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[current.size].listed_at))
                                 }
                                 current[index] = uiItem
-                                _uiState.value = _uiState.value.copy(shows = current)
+                                state.copy(shows = current)
                             }
                         }
                         uiItem

@@ -27,6 +27,9 @@ class ViewedItemStorage @Inject constructor(
     @Volatile
     private var cachedUrls: Set<String>? = null
 
+    // 内存缓存锁，防止 markViewed 并发时 read-modify-write 丢更新
+    private val cacheLock = Any()
+
     val viewedUrls: Flow<Set<String>> = context.viewedDataStore.data.map { prefs ->
         prefs[KEY_VIEWED_URLS] ?: emptySet()
     }.distinctUntilChanged()
@@ -34,7 +37,7 @@ class ViewedItemStorage @Inject constructor(
     suspend fun getViewedUrls(): Set<String> {
         cachedUrls?.let { return it }
         val urls = context.viewedDataStore.data.map { it[KEY_VIEWED_URLS] ?: emptySet() }.first()
-        cachedUrls = urls
+        synchronized(cacheLock) { cachedUrls = urls }
         return urls
     }
 
@@ -47,6 +50,9 @@ class ViewedItemStorage @Inject constructor(
             val current = prefs[KEY_VIEWED_URLS] ?: emptySet()
             prefs[KEY_VIEWED_URLS] = current + url
         }
-        cachedUrls = (cachedUrls ?: emptySet()) + url
+        // 同步更新内存缓存，避免并发 markViewed 时丢更新
+        synchronized(cacheLock) {
+            cachedUrls = (cachedUrls ?: emptySet()) + url
+        }
     }
 }

@@ -129,27 +129,34 @@ class DiscoverViewModel @Inject constructor(
     private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
 
     init {
-        loadVisibleSections()
+        // 首屏优先加载：豆瓣 + TMDB（国内用户首屏最常看到）
+        // Trakt 栏目延迟加载，由 loadRemainingSections() 在用户滚动到底部附近时触发
+        loadInitialSections()
     }
 
-    /** 根据栏目可见性设置，按需加载各栏目数据 */
-    private fun loadVisibleSections() {
+    /** 首屏优先加载：豆瓣热榜 + TMDB 热门/即将上映 */
+    private fun loadInitialSections() {
         val configs = sectionConfigs.value
         val visibleIds = configs.filter { it.visible }.map { it.id }.toSet()
-
-        // 豆瓣热榜：任一豆瓣栏目可见则加载
         if (DOUBAN_CATEGORIES.any { it in visibleIds }) loadDoubanHot()
-        // TMDB 热门电影（使用趋势榜 API）
         if ("tmdb-popular" in visibleIds) loadTmdbPopular()
-        // TMDB 即将上映
         if ("tmdb-upcoming" in visibleIds) loadTmdbUpcoming()
-        // Trakt 推荐电影
+    }
+
+    /** 延迟加载剩余栏目：Trakt 推荐/趋势/列表等，进入发现页后或滚动时调用 */
+    fun loadRemainingSections() {
+        val configs = sectionConfigs.value
+        val visibleIds = configs.filter { it.visible }.map { it.id }.toSet()
         if ("trakt-recommendations" in visibleIds) loadTraktRecommendations()
-        // 社区热门列表
         if ("trakt-lists" in visibleIds) loadTraktLists()
-        // Trakt 数据（趋势/期待/剧集推荐）
         val traktSectionIds = listOf("trakt-trending-movies", "trakt-trending-shows", "trakt-anticipated", "trakt-show-recommendations")
         if (traktSectionIds.any { it in visibleIds }) loadTraktData()
+    }
+
+    /** 根据栏目可见性设置，按需加载各栏目数据（完整加载，供下拉刷新用） */
+    private fun loadVisibleSections() {
+        loadInitialSections()
+        loadRemainingSections()
     }
 
     fun loadDoubanHot() {

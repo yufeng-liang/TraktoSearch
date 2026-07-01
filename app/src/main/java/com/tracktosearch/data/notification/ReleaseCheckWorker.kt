@@ -14,6 +14,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
@@ -36,6 +38,9 @@ class ReleaseCheckWorker @AssistedInject constructor(
     companion object {
         const val WORK_NAME = "release_check_work"
     }
+
+    // 限制 TMDB API 并发请求数，避免触发限流
+    private val apiSemaphore = Semaphore(5)
 
     private fun createDateParser(): SimpleDateFormat {
         return SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
@@ -91,7 +96,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                 val traktId = item.movie.ids.trakt
                 async {
                     try {
-                        val response = tmdbApiService.getMovieDetail(tmdbId)
+                        val response = apiSemaphore.withPermit { tmdbApiService.getMovieDetail(tmdbId) }
                         if (!response.isSuccessful) return@async
                         val detail = response.body() ?: return@async
                         val releaseDateStr = detail.release_date.takeIf { it.isNotBlank() } ?: return@async
@@ -148,7 +153,7 @@ class ReleaseCheckWorker @AssistedInject constructor(
                 val traktId = item.show.ids.trakt
                 async {
                     try {
-                        val response = tmdbApiService.getTvDetail(tmdbId)
+                        val response = apiSemaphore.withPermit { tmdbApiService.getTvDetail(tmdbId) }
                         if (!response.isSuccessful) return@async
                         val detail = response.body() ?: return@async
                         val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: return@async
@@ -199,52 +204,56 @@ class ReleaseCheckWorker @AssistedInject constructor(
         today: Calendar,
         startDate: Calendar
     ) {
-        // TMDB TV 详情不直接返回季列表，需要额外请求 /tv/{id}/season/{season_number}
-        // 这里简化处理：仅检查首播日期作为新季开播的近似（适用于想看列表中的剧集）
-        // 完整的新季检测需要调用 Trakt 的 seasons API，此处先实现基础版本
+        // 通过 Trakt seasons API 检测真正的新季开播（每季的 first_aired）
         coroutineScope {
             watchlist.mapNotNull { item ->
-                val tmdbId = item.show.ids.tmdb.takeIf { it > 0 } ?: return@mapNotNull null
                 val traktId = item.show.ids.trakt
+                val tmdbId = item.show.ids.tmdb.takeIf { it > 0 }
+                if (traktId <= 0) return@mapNotNull null
                 async {
                     try {
-                        val response = tmdbApiService.getTvDetail(tmdbId)
-                        if (!response.isSuccessful) return@async
-                        val detail = response.body() ?: return@async
-                        val airDateStr = detail.first_air_date.takeIf { it.isNotBlank() } ?: return@async
-
-                        val airDate = try {
-                            createDateParser().parse(airDateStr) ?: return@async
-                        } catch (_: Exception) {
-                            return@async
+                        val seasonsResult = apiSemaphore.withPermit {
+                            traktRepository.getShowSeasons(traktId)
                         }
+                        val seasons = seasonsResult.getOrNull() ?: return@async
 
-                        val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                            time = airDate
-                        }
+                        for (season in seasons) {
+                            // 跳过第 0 季（特集）和第 1 季（已由 release 通知覆盖）
+                            if (season.number <= 1) continue
+                            val airDateStr = season.first_aired.takeIf { it.isNotBlank() } ?: continue
 
-                        // 如果首播日期在过去 30 天内，视为"新季开播"（简化逻辑）
-                        if (airCal.after(startDate) && !airCal.after(today)) {
-                            val payload = "season_1_$airDateStr"
-                            val existing = notificationRecordDao.find(traktId, "new_season", payload)
-                            if (existing == null) {
-                                notificationHelper.showNewSeasonNotification(
-                                    title = item.show.title,
-                                    seasonNumber = 1,
-                                    airDate = airDateStr,
-                                    traktId = traktId,
-                                    tmdbId = tmdbId
-                                )
-                                notificationRecordDao.insert(
-                                    com.tracktosearch.data.local.db.NotificationRecordEntity(
-                                        traktId = traktId,
-                                        tmdbId = tmdbId,
-                                        mediaType = "show",
+                            val airDate = try {
+                                createDateParser().parse(airDateStr) ?: continue
+                            } catch (_: Exception) {
+                                continue
+                            }
+
+                            val airCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                                time = airDate
+                            }
+
+                            if (airCal.after(startDate) && !airCal.after(today)) {
+                                val payload = "season_${season.number}_$airDateStr"
+                                val existing = notificationRecordDao.find(traktId, "new_season", payload)
+                                if (existing == null) {
+                                    notificationHelper.showNewSeasonNotification(
                                         title = item.show.title,
-                                        type = "new_season",
-                                        payload = payload
+                                        seasonNumber = season.number,
+                                        airDate = airDateStr,
+                                        traktId = traktId,
+                                        tmdbId = tmdbId ?: 0
                                     )
-                                )
+                                    notificationRecordDao.insert(
+                                        com.tracktosearch.data.local.db.NotificationRecordEntity(
+                                            traktId = traktId,
+                                            tmdbId = tmdbId ?: 0,
+                                            mediaType = "show",
+                                            title = item.show.title,
+                                            type = "new_season",
+                                            payload = payload
+                                        )
+                                    )
+                                }
                             }
                         }
                     } catch (_: Exception) {

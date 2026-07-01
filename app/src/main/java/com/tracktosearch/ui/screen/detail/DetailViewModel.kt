@@ -240,6 +240,7 @@ class DetailViewModel @Inject constructor(
     private var ratingsJob: Job? = null
     private var commentsJob: Job? = null
     private var seasonsJob: Job? = null
+    private var delayedLoadJob: Job? = null
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
@@ -359,7 +360,9 @@ class DetailViewModel @Inject constructor(
             if (visibility.myRating) fetchUserRating()
 
             // 非首屏数据延迟加载，降低进入详情页时的网络请求峰值
-            viewModelScope.launch {
+            // 用 delayedLoadJob 持有，loadDetail 重入（如快速返回再进入新详情）时取消旧的延迟任务
+            delayedLoadJob?.cancel()
+            delayedLoadJob = viewModelScope.launch {
                 delay(1500)
                 if (visibility.recommendations) fetchRecommendations()
                 if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)

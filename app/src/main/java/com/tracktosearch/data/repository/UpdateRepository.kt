@@ -48,7 +48,10 @@ class UpdateRepository @Inject constructor(
         cachedChangelog?.let { return it }
         val info = checkForUpdate()
         val changelog = info?.changelog ?: ""
-        cachedChangelog = changelog
+        // 仅缓存非空结果，避免网络错误时缓存空字符串导致后续不再重试
+        if (changelog.isNotBlank()) {
+            cachedChangelog = changelog
+        }
         if (info != null) cachedLatestVersion = info.latestVersion
         return changelog
     }

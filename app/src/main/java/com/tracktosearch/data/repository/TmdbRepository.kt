@@ -37,6 +37,9 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存 */
+    private suspend fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
+
     /** 根据当前语言设置返回 TMDB alternative_titles 的 country 参数 */
     private suspend fun getTmdbCountry(): String {
         val lang = languageStorage.language.first()
@@ -55,22 +58,22 @@ class TmdbRepository @Inject constructor(
         val hasMore: Boolean
     )
 
-    // 带 TTL 的缓存
-    private val movieDetailCache = TtlCache<TmdbMovieDetail>(TTL_DETAIL)
-    private val tvDetailCache = TtlCache<TmdbTvDetail>(TTL_DETAIL)
-    private val movieTitleCache = TtlCache<String>(TTL_DETAIL)
-    private val tvTitleCache = TtlCache<String>(TTL_DETAIL)
-    private val creditsCache = TtlCache<TmdbCreditsResponse>(TTL_CREDITS)
-    private val searchMovieCache = TtlCache<TmdbSearchResult>(TTL_SEARCH)
-    private val personDetailCache = TtlCache<TmdbPerson>(TTL_PERSON)
+    // 带 TTL 的缓存（maxSize 防止无上限增长）
+    private val movieDetailCache = TtlCache<TmdbMovieDetail>(TTL_DETAIL, maxSize = 50)
+    private val tvDetailCache = TtlCache<TmdbTvDetail>(TTL_DETAIL, maxSize = 50)
+    private val movieTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
+    private val tvTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
+    private val creditsCache = TtlCache<TmdbCreditsResponse>(TTL_CREDITS, maxSize = 50)
+    private val searchMovieCache = TtlCache<TmdbSearchResult>(TTL_SEARCH, maxSize = 100)
+    private val personDetailCache = TtlCache<TmdbPerson>(TTL_PERSON, maxSize = 50)
     // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
-    private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON)
-    private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON)
-    private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS)
-    private val popularMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
-    private val upcomingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
-    private val topRatedMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
-    private val trendingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS)
+    private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON, maxSize = 30)
+    private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON, maxSize = 30)
+    private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS, maxSize = 50)
+    private val popularMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
+    private val upcomingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
+    private val topRatedMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
+    private val trendingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
 
     data class MovieEnrichment(
         val posterUrl: String?,
@@ -99,7 +102,7 @@ class TmdbRepository @Inject constructor(
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
-        val key = tmdbId.toString()
+        val key = langKey(tmdbId)
         val tmdbLang = getTmdbLanguage()
         val cached = movieDetailCache.get(key)
         if (cached != null) {
@@ -149,7 +152,7 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun enrichTv(tmdbId: Int, originalName: String, year: Int?): TvEnrichment {
-        val key = tmdbId.toString()
+        val key = langKey(tmdbId)
         val tmdbLang = getTmdbLanguage()
         val cached = tvDetailCache.get(key)
         if (cached != null) {
@@ -251,7 +254,7 @@ class TmdbRepository @Inject constructor(
     )
 
     suspend fun getCredits(tmdbId: Int, mediaType: MediaType): TmdbCreditsResponse? {
-        val key = tmdbId.toString()
+        val key = langKey(tmdbId)
         creditsCache.get(key)?.let { return it }
         return try {
             val response = when (mediaType) {
@@ -269,7 +272,7 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getReviews(tmdbId: Int, mediaType: MediaType, page: Int = 1): TmdbReviewsResponse? {
-        val key = "${tmdbId}_${mediaType.name}_$page"
+        val key = langKey("${tmdbId}_${mediaType.name}_$page")
         reviewsCache.get(key)?.let { return it }
         return try {
             val response = when (mediaType) {
@@ -287,7 +290,7 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getPersonDetail(personId: Int): TmdbPerson? {
-        val key = personId.toString()
+        val key = langKey(personId)
         personDetailCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getPersonDetail(personId, language = getTmdbLanguage())
@@ -300,7 +303,7 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getPersonMovieCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonMovieCredit> {
-        val key = personId.toString()
+        val key = langKey(personId)
         val full = try {
             personMovieCreditsCache.get(key) ?: run {
                 val response = tmdbApiService.getPersonMovieCredits(personId, language = getTmdbLanguage(), page = 1)
@@ -318,7 +321,7 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getPersonTvCredits(personId: Int, page: Int = 1): PersonCreditsPage<TmdbPersonTvCredit> {
-        val key = personId.toString()
+        val key = langKey(personId)
         val full = try {
             personTvCreditsCache.get(key) ?: run {
                 val response = tmdbApiService.getPersonTvCredits(personId, language = getTmdbLanguage(), page = 1)
@@ -359,7 +362,7 @@ class TmdbRepository @Inject constructor(
 
     // 通过标题搜索电影，返回第一个匹配结果
     suspend fun searchMovie(query: String): TmdbSearchResult? {
-        val key = query.trim()
+        val key = langKey(query.trim())
         searchMovieCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.searchMovie(query = query, language = getTmdbLanguage())
@@ -397,7 +400,8 @@ class TmdbRepository @Inject constructor(
 
     /** 趋势电影（今日/本周） */
     suspend fun getTrendingMovies(timeWindow: String = "day"): List<TmdbSearchResult> {
-        trendingMoviesCache.get(timeWindow)?.let { return it }
+        val key = langKey(timeWindow)
+        trendingMoviesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getTrendingMovies(
                 timeWindow = timeWindow,
@@ -405,7 +409,7 @@ class TmdbRepository @Inject constructor(
             )
             if (response.isSuccessful) {
                 val results = response.body()?.results ?: emptyList()
-                trendingMoviesCache.put(timeWindow, results)
+                trendingMoviesCache.put(key, results)
                 results
             } else emptyList()
         } catch (_: Exception) {
@@ -415,12 +419,13 @@ class TmdbRepository @Inject constructor(
 
     /** 热门电影 */
     suspend fun getPopularMovies(): List<TmdbSearchResult> {
-        popularMoviesCache.get("default")?.let { return it }
+        val key = langKey("default")
+        popularMoviesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getPopularMovies(language = getTmdbLanguage())
             if (response.isSuccessful) {
                 val results = response.body()?.results ?: emptyList()
-                popularMoviesCache.put("default", results)
+                popularMoviesCache.put(key, results)
                 results
             } else emptyList()
         } catch (_: Exception) {
@@ -442,12 +447,13 @@ class TmdbRepository @Inject constructor(
 
     /** 即将上映 */
     suspend fun getUpcomingMovies(): List<TmdbSearchResult> {
-        upcomingMoviesCache.get("default")?.let { return it }
+        val key = langKey("default")
+        upcomingMoviesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getUpcomingMovies(language = getTmdbLanguage())
             if (response.isSuccessful) {
                 val results = response.body()?.results ?: emptyList()
-                upcomingMoviesCache.put("default", results)
+                upcomingMoviesCache.put(key, results)
                 results
             } else emptyList()
         } catch (_: Exception) {
@@ -469,12 +475,13 @@ class TmdbRepository @Inject constructor(
 
     /** 高分电影（未登录时的推荐降级） */
     suspend fun getTopRatedMovies(): List<TmdbSearchResult> {
-        topRatedMoviesCache.get("default")?.let { return it }
+        val key = langKey("default")
+        topRatedMoviesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getTopRatedMovies(language = getTmdbLanguage())
             if (response.isSuccessful) {
                 val results = response.body()?.results ?: emptyList()
-                topRatedMoviesCache.put("default", results)
+                topRatedMoviesCache.put(key, results)
                 results
             } else emptyList()
         } catch (_: Exception) {

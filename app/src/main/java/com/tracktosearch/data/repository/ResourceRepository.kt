@@ -94,7 +94,8 @@ class ResourceRepository @Inject constructor(
         val timestamp: Long
     )
 
-    private val cache = ConcurrentHashMap<String, KeywordCache>()
+    // 搜索关键词结果缓存，LRU 限制 50 条防内存增长
+    private val cache = android.util.LruCache<String, KeywordCache>(50)
 
     /**
      * 搜索接口：
@@ -121,7 +122,7 @@ class ResourceRepository @Inject constructor(
             val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow)
             // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
             if (fetched.isNotEmpty()) {
-                cache[keyword] = KeywordCache(fetched, now)
+                cache.put(keyword, KeywordCache(fetched, now))
             }
             fetched
         }
@@ -203,7 +204,7 @@ class ResourceRepository @Inject constructor(
         if (sourceList.size == 1) {
             val (source, deferred) = sourceList.first()
             val items = deferred.await()
-            if (items.isNotEmpty()) cache[keyword] = KeywordCache(items, now)
+            if (items.isNotEmpty()) cache.put(keyword, KeywordCache(items, now))
             onSourceComplete?.invoke(source)
             send(items)
             return@channelFlow
@@ -230,10 +231,10 @@ class ResourceRepository @Inject constructor(
 
         // 缓存最终合并结果
         if (accumulated.isNotEmpty()) {
-            cache[keyword] = KeywordCache(
+            cache.put(keyword, KeywordCache(
                 accumulated.distinctBy { it.url }.sortedWith(resourceComparator(isShow)),
                 System.currentTimeMillis()
-            )
+            ))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -387,7 +388,7 @@ class ResourceRepository @Inject constructor(
             .distinctBy { it.url }
             .sortedWith(resourceComparator(isShow))
         if (merged.isNotEmpty()) {
-            cache[keyword] = KeywordCache(merged, System.currentTimeMillis())
+            cache.put(keyword, KeywordCache(merged, System.currentTimeMillis()))
         }
         return merged
     }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -178,8 +179,9 @@ fun ResourceItemCard(
 
                 // 日期（右对齐）
                 if (item.fileDate.isNotEmpty()) {
+                    val formattedDate = remember(item.fileDate) { formatFileDate(item.fileDate) }
                     Text(
-                        text = formatFileDate(item.fileDate),
+                        text = formattedDate,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

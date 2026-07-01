@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringSetPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -22,17 +22,24 @@ class SearchHistoryStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     private companion object {
-        val KEY_HISTORY = stringSetPreferencesKey("search_keywords")
+        // 用 String 存储有序历史（换行符分隔），避免 Set 无序导致历史顺序丢失
+        val KEY_HISTORY = stringPreferencesKey("search_keywords_joined")
         const val MAX_HISTORY = 30
+        const val SEPARATOR = "\n"
     }
 
     val history: Flow<List<SearchHistoryItem>> = context.searchHistoryDataStore.data.map { prefs ->
-        (prefs[KEY_HISTORY] ?: emptySet()).map { raw ->
-            if (raw.contains("::")) {
-                val parts = raw.split("::", limit = 2)
-                SearchHistoryItem(keyword = parts[1], type = parts[0])
-            } else {
-                SearchHistoryItem(keyword = raw, type = "disk")
+        val joined = prefs[KEY_HISTORY] ?: ""
+        if (joined.isBlank()) {
+            emptyList()
+        } else {
+            joined.split(SEPARATOR).filter { it.isNotBlank() }.map { raw ->
+                if (raw.contains("::")) {
+                    val parts = raw.split("::", limit = 2)
+                    SearchHistoryItem(keyword = parts[1], type = parts[0])
+                } else {
+                    SearchHistoryItem(keyword = raw, type = "disk")
+                }
             }
         }
     }.distinctUntilChanged()
@@ -41,22 +48,27 @@ class SearchHistoryStorage @Inject constructor(
         if (keyword.isBlank()) return
         val encoded = "$type::$keyword"
         context.searchHistoryDataStore.edit { prefs ->
-            val current = (prefs[KEY_HISTORY] ?: emptySet()).toMutableList()
+            val current = (prefs[KEY_HISTORY] ?: "")
+                .split(SEPARATOR)
+                .filter { it.isNotBlank() }
+                .toMutableList()
+            // 移除同类型同关键词的旧记录
             current.removeAll { it.endsWith("::$keyword") && it.startsWith("$type::") }
             current.remove(keyword)
+            // 新记录置顶
             current.add(0, encoded)
-            if (current.size > MAX_HISTORY) {
-                prefs[KEY_HISTORY] = current.take(MAX_HISTORY).toSet()
-            } else {
-                prefs[KEY_HISTORY] = current.toSet()
-            }
+            prefs[KEY_HISTORY] = current.take(MAX_HISTORY).joinToString(SEPARATOR)
         }
     }
 
     suspend fun remove(keyword: String) {
         context.searchHistoryDataStore.edit { prefs ->
-            val current = prefs[KEY_HISTORY] ?: emptySet()
-            prefs[KEY_HISTORY] = current.filter { !it.endsWith("::$keyword") && it != keyword }.toSet()
+            val current = (prefs[KEY_HISTORY] ?: "")
+                .split(SEPARATOR)
+                .filter { it.isNotBlank() }
+            prefs[KEY_HISTORY] = current
+                .filter { !it.endsWith("::$keyword") && it != keyword }
+                .joinToString(SEPARATOR)
         }
     }
 

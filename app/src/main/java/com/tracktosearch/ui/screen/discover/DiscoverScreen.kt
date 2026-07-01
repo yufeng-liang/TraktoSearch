@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -52,7 +53,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -93,6 +96,11 @@ fun DiscoverScreen(
         viewModel.toastEvent.collect { resId ->
             context.showToast(context.getString(resId))
         }
+    }
+    // 延迟加载 Trakt 栏目，避免与首屏豆瓣/TMDB 竞争网络带宽
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(800)
+        viewModel.loadRemainingSections()
     }
     var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
     var showPopularAll by remember { mutableStateOf(false) }
@@ -201,12 +209,26 @@ fun DiscoverScreen(
                                         val isDay = uiState.trendingTimeWindow == "day"
                                         val dayLabel = stringResource(R.string.discover_trending_day)
                                         val weekLabel = stringResource(R.string.discover_trending_week)
-                                        var dayTextWidth by remember { mutableStateOf(0f) }
-                                        var weekTextWidth by remember { mutableStateOf(0f) }
                                         val tabPadding = 12.dp
                                         val tabHeight = 30.dp
-                                        val dayTabWidthDp = with(LocalDensity.current) { dayTextWidth.toDp() + tabPadding * 2 }
-                                        val weekTabWidthDp = with(LocalDensity.current) { weekTextWidth.toDp() + tabPadding * 2 }
+                                        // 用 TextMeasurer 同步测量文字宽度，避免 onTextLayout 异步回调导致切回页面时宽度跳变
+                                        val textMeasurer = rememberTextMeasurer()
+                                        val dayTextWidthPx = remember(dayLabel) {
+                                            textMeasurer.measure(
+                                                text = dayLabel,
+                                                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                            ).size.width
+                                        }
+                                        val weekTextWidthPx = remember(weekLabel) {
+                                            textMeasurer.measure(
+                                                text = weekLabel,
+                                                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                            ).size.width
+                                        }
+                                        val density = LocalDensity.current
+                                        val dayTabWidthDp = with(density) { dayTextWidthPx.toDp() + tabPadding * 2 }
+                                        val weekTabWidthDp = with(density) { weekTextWidthPx.toDp() + tabPadding * 2 }
+                                        val capsuleWidth = dayTabWidthDp + weekTabWidthDp
                                         val indicatorOffset by animateDpAsState(
                                             targetValue = if (isDay) 0.dp else dayTabWidthDp,
                                             animationSpec = tween(200),
@@ -220,6 +242,7 @@ fun DiscoverScreen(
                                         Box(
                                             modifier = Modifier
                                                 .height(tabHeight)
+                                                .width(capsuleWidth)
                                                 .clip(RoundedCornerShape(7.dp))
                                                 .background(MaterialTheme.colorScheme.surfaceVariant)
                                         ) {
@@ -227,8 +250,8 @@ fun DiscoverScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .offset(x = indicatorOffset)
-                                                    .fillMaxSize()
                                                     .width(indicatorWidth)
+                                                    .fillMaxHeight()
                                                     .padding(3.dp)
                                                     .clip(RoundedCornerShape(5.dp))
                                                     .background(MaterialTheme.colorScheme.primary)
@@ -237,12 +260,12 @@ fun DiscoverScreen(
                                             Row {
                                                 Box(
                                                     modifier = Modifier
-                                                        .fillMaxSize()
+                                                        .width(dayTabWidthDp)
+                                                        .fillMaxHeight()
                                                         .clickable(
                                                             interactionSource = remember { MutableInteractionSource() },
                                                             indication = null
-                                                        ) { viewModel.switchTrendingTimeWindow("day") }
-                                                        .padding(horizontal = tabPadding),
+                                                        ) { viewModel.switchTrendingTimeWindow("day") },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text(
@@ -252,18 +275,17 @@ fun DiscoverScreen(
                                                         color = if (isDay)
                                                             MaterialTheme.colorScheme.onPrimary
                                                         else
-                                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        onTextLayout = { dayTextWidth = it.size.width.toFloat() }
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                                 Box(
                                                     modifier = Modifier
-                                                        .fillMaxSize()
+                                                        .width(weekTabWidthDp)
+                                                        .fillMaxHeight()
                                                         .clickable(
                                                             interactionSource = remember { MutableInteractionSource() },
                                                             indication = null
-                                                        ) { viewModel.switchTrendingTimeWindow("week") }
-                                                        .padding(horizontal = tabPadding),
+                                                        ) { viewModel.switchTrendingTimeWindow("week") },
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text(
@@ -273,8 +295,7 @@ fun DiscoverScreen(
                                                         color = if (!isDay)
                                                             MaterialTheme.colorScheme.onPrimary
                                                         else
-                                                            MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        onTextLayout = { weekTextWidth = it.size.width.toFloat() }
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
                                                     )
                                                 }
                                             }

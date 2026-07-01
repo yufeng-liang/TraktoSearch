@@ -78,15 +78,24 @@ import javax.inject.Inject
 import kotlin.math.pow
 
 // 全局共享的 OAuth 结果，供 MainActivity 传递给 LoginViewModel
+// 用 StateFlow 替代 @Volatile var，避免 LoginScreen 轮询 300ms 延迟
 object OAuthCallback {
-    @Volatile
-    var pendingCode: String? = null
-    @Volatile
-    var authDenied: Boolean = false
+    private val _pendingCodeFlow = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val pendingCodeFlow: kotlinx.coroutines.flow.StateFlow<String?> = _pendingCodeFlow
+
+    private val _authDeniedFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val authDeniedFlow: kotlinx.coroutines.flow.StateFlow<Boolean> = _authDeniedFlow
+
+    // 兼容旧代码的同步访问
+    val pendingCode: String? get() = _pendingCodeFlow.value
+    val authDenied: Boolean get() = _authDeniedFlow.value
+
+    fun setPendingCode(code: String?) { _pendingCodeFlow.value = code }
+    fun setAuthDenied(denied: Boolean) { _authDeniedFlow.value = denied }
 
     fun clear() {
-        pendingCode = null
-        authDenied = false
+        _pendingCodeFlow.value = null
+        _authDeniedFlow.value = false
     }
 }
 
@@ -94,7 +103,8 @@ object OAuthCallback {
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val MIN_SPLASH_DURATION_MS = 1700L
+        // 最小 splash 显示时间（动画时长），实际切换条件 = max(最小时间, 预取数据就绪)
+        private const val MIN_SPLASH_DURATION_MS = 800L
     }
 
     @Inject
@@ -153,6 +163,7 @@ class MainActivity : AppCompatActivity() {
         var initialTab by mutableStateOf(0)
 
         lifecycleScope.launch {
+            val splashStartTime = System.currentTimeMillis()
             val isValid = tokenStorage.isTokenValid()
             val isGuest = guestModeStorage.isGuestMode.first()
             startDest = when {
@@ -170,22 +181,32 @@ class MainActivity : AppCompatActivity() {
             val language = languageStorage.language.first()
             applyLanguage(language)
 
-            // Splash delay 期间并行预取默认首页数据
+            // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
+            val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
             if (isValid) {
-                launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 50) } }
+                prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 50) } })
             }
-            launch { runCatching { tmdbRepository.getPopularMovies() } }
-            launch { runCatching { tmdbRepository.getUpcomingMovies() } }
+            prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
+            prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
 
-            // 自定义 splash 显示 1.7 秒（动画时间）
-            delay(MIN_SPLASH_DURATION_MS)
+            // 等待最小 splash 时间 + 预取数据就绪（双条件，避免无谓等待）
+            val elapsed = System.currentTimeMillis() - splashStartTime
+            val remaining = MIN_SPLASH_DURATION_MS - elapsed
+            if (remaining > 0) delay(remaining)
+            // 不强制等待所有预取完成，最多再等 500ms（避免个别慢请求阻塞首屏）
+            kotlinx.coroutines.withTimeoutOrNull(500L) {
+                prefetchJobs.forEach { it.join() }
+            }
 
             // 切换到主界面
             isReady = true
         }
 
         handleIntent(intent)
-        checkCrashAndPrompt()
+        // 移到 IO 线程，避免同步读 SharedPreferences + 崩溃日志文件阻塞主线程
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            checkCrashAndPrompt()
+        }
 
         // 监听状态栏点击，触发 scrollToTop
         setupStatusBarTapListener()
@@ -303,14 +324,14 @@ class MainActivity : AppCompatActivity() {
                             // 图标 + 光晕
                             Box(
                                 contentAlignment = Alignment.Center,
-                                modifier = Modifier.size(200.dp)
+                                modifier = Modifier.size(260.dp)
                             ) {
                                 // 光晕层
                                 val density = LocalDensity.current
-                                val glowRadiusPx = with(density) { 120.dp.toPx() }
+                                val glowRadiusPx = with(density) { 156.dp.toPx() }
                                 Box(
                                     modifier = Modifier
-                                        .size(162.dp)
+                                        .size(211.dp)
                                         .scale(glowScale.value)
                                         .alpha(glowAlpha.value)
                                         .background(
@@ -337,7 +358,7 @@ class MainActivity : AppCompatActivity() {
                                         bitmap = launcherBitmap,
                                         contentDescription = "App Icon",
                                         modifier = Modifier
-                                            .size(162.dp)
+                                            .size(211.dp)
                                             .scale(iconScale.value)
                                             .alpha(iconAlpha.value)
                                             .clip(RoundedCornerShape(24.dp)),
@@ -420,11 +441,11 @@ class MainActivity : AppCompatActivity() {
             if (uri.scheme == "tracktosearch" && uri.host == "oauth") {
                 val error = uri.getQueryParameter("error")
                 if (!error.isNullOrEmpty()) {
-                    OAuthCallback.authDenied = true
+                    OAuthCallback.setAuthDenied(true)
                 } else {
                     val code = uri.getQueryParameter("code")
                     if (!code.isNullOrEmpty()) {
-                        OAuthCallback.pendingCode = code
+                        OAuthCallback.setPendingCode(code)
                     }
                 }
             }
@@ -460,9 +481,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkCrashAndPrompt() {
+        // IO 线程读取崩溃次数和日志
         val crashCount = CrashHandler.getAndResetCrashCount(this)
-        if (crashCount >= 2) {
-            val logs = CrashHandler.getCrashLogs(this)
+        if (crashCount < 2) return
+        val logs = CrashHandler.getCrashLogs(this)
+        // 回到主线程显示 Dialog
+        runOnUiThread {
             AlertDialog.Builder(this)
                 .setTitle(getString(R.string.crash_dialog_title))
                 .setMessage(getString(R.string.crash_dialog_message, crashCount))

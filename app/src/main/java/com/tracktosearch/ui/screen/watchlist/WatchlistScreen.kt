@@ -159,7 +159,7 @@ fun WatchlistScreen(
     // 根据 selectedMode 选择对应的 gridState
     val currentGridState = if (selectedMode == 0) singleModeGridState else historyModeGridState
 
-    DisposableEffect(Unit) {
+    DisposableEffect(selectedMode) {
         scrollToTopProvider.register {
             gridCoroutineScope.launch {
                 currentGridState.animateScrollToItem(0)

@@ -1,6 +1,8 @@
 package com.tracktosearch
 
+import android.app.ActivityManager
 import android.app.Application
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil.ImageLoader
@@ -9,6 +11,7 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.tracktosearch.di.NetworkModule
+import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.Interceptor
@@ -20,16 +23,31 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var baseOkHttpClient: OkHttpClient
+    @Inject lateinit var notificationScheduler: NotificationScheduler
 
-    override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
+    // 缓存 Configuration，避免每次 get() 都新建实例
+    override val workManagerConfiguration: Configuration by lazy {
+        Configuration.Builder()
             .setWorkerFactory(workerFactory)
             .build()
+    }
 
     override fun onCreate() {
         super.onCreate()
-        CrashHandler.init(this)
-        Thread { JPushHelper.init(this) }.start()
+        // 只在主进程初始化，避免 :pushcore 子进程重复初始化 Hilt 注入依赖、CrashHandler、JPush
+        if (isMainProcess()) {
+            CrashHandler.init(this)
+            Thread { JPushHelper.init(this) }.start()
+            // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
+            Thread { notificationScheduler.schedulePeriodicCheck() }.start()
+        }
+    }
+
+    private fun isMainProcess(): Boolean {
+        val pid = android.os.Process.myPid()
+        val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return true
+        val processName = am.runningAppProcesses?.firstOrNull { it.pid == pid }?.processName
+        return processName == null || processName == packageName
     }
 
     override fun newImageLoader(): ImageLoader {

@@ -50,20 +50,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalHazeMaterialsApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpScreen(
     onBack: () -> Unit
 ) {
     var expandedIndex by remember { mutableIntStateOf(0) }
-    val hazeState = remember { HazeState() }
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
@@ -88,8 +82,7 @@ fun HelpScreen(
             LazyColumn(
                 state = lazyListState,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .hazeSource(state = hazeState),
+                    .fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = 64.dp + statusBarHeight,
                     bottom = 80.dp
@@ -256,12 +249,11 @@ fun HelpScreen(
                 }
             }
 
-            // Haze模糊TopAppBar
+            // TopAppBar（移除 Haze 模糊，使用纯色背景）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .background(MaterialTheme.colorScheme.surface)
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())

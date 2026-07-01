@@ -18,8 +18,8 @@ class CommentTranslator @Inject constructor() {
 
     private val jsonDecoder = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
-    // 翻译结果缓存（相同评论的翻译不会变，永久缓存）
-    private val translationCache = java.util.concurrent.ConcurrentHashMap<Int, String>()
+    // 翻译结果缓存（相同评论的翻译不会变，LRU 限制 200 条防内存增长）
+    private val translationCache = android.util.LruCache<Int, String>(200)
 
     // 百度翻译 API 配置（来自 local.properties）
     private val BAIDU_APP_ID = com.tracktosearch.BuildConfig.BAIDU_APP_ID
@@ -47,7 +47,7 @@ class CommentTranslator @Inject constructor() {
                     if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                     if (!result.isNullOrEmpty() && result != comment.comment) {
-                        translationCache[comment.id] = result
+                        translationCache.put(comment.id, result)
                         comment.copy(comment = result)
                     } else {
                         comment
@@ -83,7 +83,7 @@ class CommentTranslator @Inject constructor() {
                         if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
 
                         if (!result.isNullOrEmpty() && result != comment.comment) {
-                            translationCache[comment.id] = result
+                            translationCache.put(comment.id, result)
                             comment.copy(comment = result)
                         } else {
                             comment

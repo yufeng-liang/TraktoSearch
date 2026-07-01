@@ -215,7 +215,7 @@ fun MainScreen(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = false,
-                beyondViewportPageCount = 3,
+                beyondViewportPageCount = 0,
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(state = hazeState)

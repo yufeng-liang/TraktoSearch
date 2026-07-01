@@ -8,6 +8,7 @@ import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
+import com.tracktosearch.data.remote.trakt.TraktAuthenticator
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import com.tracktosearch.data.remote.weather.OpenMeteoApi
@@ -72,7 +73,7 @@ object NetworkModule {
     @Singleton
     fun provideBaseOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder()
-            .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+            .connectionPool(ConnectionPool(10, 5, TimeUnit.MINUTES))
             .dns(object : okhttp3.Dns {
                 override fun lookup(hostname: String): List<java.net.InetAddress> {
                     val addrs = okhttp3.Dns.SYSTEM.lookup(hostname)
@@ -93,7 +94,8 @@ object NetworkModule {
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
         tokenStorage: TokenStorage,
-        cache: Cache
+        cache: Cache,
+        traktAuthenticator: TraktAuthenticator
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
@@ -114,6 +116,7 @@ object NetworkModule {
             })
             .addInterceptor(RetryInterceptor(maxRetries = 2))
             .addInterceptor(loggingInterceptor)
+            .authenticator(traktAuthenticator)
             .build()
     }
 
@@ -431,8 +434,11 @@ class RetryInterceptor(
         var retries = 0
 
         while (shouldRetry(response) && retries < maxRetries) {
+            // 优先读 Retry-After header（429 响应通常携带，单位秒），否则用指数退避
+            val retryAfterSec = response.header("Retry-After")?.toLongOrNull()
             response.close()
-            val delayMs = baseDelayMs * 2.0.pow(retries.toDouble()).toLong()
+            val delayMs = retryAfterSec?.let { it * 1000 }
+                ?: baseDelayMs * 2.0.pow(retries.toDouble()).toLong()
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {

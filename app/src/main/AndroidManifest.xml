@@ -32,8 +32,6 @@
         android:theme="@style/Theme.TraktToSearch"
         android:usesCleartextTraffic="false">
 
-        <profileable android:shell="true" />
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

@@ -160,10 +160,15 @@ fun AppNavigation(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
                                 onLoginSuccess()
-                                mainInitialTab = 2  // 登录成功后默认进入"我的"页
-                                currentStartDest = Routes.MAIN
-                                navController.navigate(Routes.MAIN) {
-                                    popUpTo(0) { inclusive = true }
+                                // 新用户（未完成新手引导）登录后默认进搜索页(0)，避免我的页无谓加载 watchlist
+                                // 老用户默认进我的页(2)查看 watchlist
+                                scope.launch {
+                                    val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
+                                    mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    currentStartDest = Routes.MAIN
+                                    navController.navigate(Routes.MAIN) {
+                                        popUpTo(0) { inclusive = true }
+                                    }
                                 }
                             },
                             onGuestMode = {

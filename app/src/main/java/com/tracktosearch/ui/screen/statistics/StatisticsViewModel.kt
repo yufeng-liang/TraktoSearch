@@ -11,7 +11,6 @@ import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tracktosearch.R
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -77,25 +76,34 @@ class StatisticsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
         loadJob = viewModelScope.launch {
             try {
-                // 三个 API 并行请求，耗时取决于最慢的那个
-                val movieDeferred = async { traktRepository.getAllMovieHistory() }
-                val showDeferred = async { traktRepository.getAllShowHistory() }
+                // 5 个 API 并行请求，耗时取决于最慢的那个
+                // 优化点：
+                // 1. getUserStats 替代本地时长/集数求和（服务端已汇总）
+                // 2. show history 降级 extended=min（仅需时间戳，episode 级数据量大）
+                // 3. ratings 并行而非串行在最后
+                // 4. 删除 N+1 getShowWatchedProgress（watchedShows 已有 completed 字段）
+                val movieHistoryDeferred = async { traktRepository.getAllMovieHistory(extended = "full") }
+                val showHistoryDeferred = async { traktRepository.getAllShowHistory(extended = "min") }
                 val watchedShowsDeferred = async { traktRepository.getWatchedShowsWithEpisodes() }
+                val userStatsDeferred = async { traktRepository.getUserStats() }
+                val ratingsDeferred = async { traktRepository.getAllUserRatings() }
 
-                val results = awaitAll(movieDeferred, showDeferred, watchedShowsDeferred)
-
-                val movies = (results[0] as Result<List<TraktWatchlistMovieItem>>).getOrElse {
+                val movies = movieHistoryDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
-                val shows = (results[1] as Result<List<TraktWatchlistShowItem>>).getOrElse {
+                val shows = showHistoryDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
-                val watchedShows = (results[2] as Result<List<com.tracktosearch.data.remote.trakt.dto.TraktWatchedShow>>).getOrElse {
+                val watchedShows = watchedShowsDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))
                     return@launch
                 }
+                // userStats 失败时降级为本地计算
+                val userStats = userStatsDeferred.await().getOrNull()
+                // ratings 失败时空列表降级
+                val allRatings = ratingsDeferred.await().getOrDefault(emptyList())
 
                 // 合并所有观看记录的时间戳（history 端点用 watched_at，watchlist 端点用 listed_at）
                 val allDates = mutableListOf<Date>()
@@ -109,21 +117,22 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 val totalWatched = movies.size + shows.size
-                val totalEpisodeCount = watchedShows.sumOf { show ->
-                    show.seasons.sumOf { season ->
-                        season.episodes.count { it.completed > 0 }
+
+                // 总集数：优先用 userStats 服务端数据，降级为本地 watchedShows 求和
+                val totalEpisodeCount = userStats?.episodes?.watched?.takeIf { it > 0 }
+                    ?: watchedShows.sumOf { show ->
+                        show.seasons.sumOf { season ->
+                            season.episodes.count { it.completed > 0 }
+                        }
                     }
-                }
 
-                // 并行获取每部剧的观看进度，判断是否有整季看完
-                val showProgressResults = watchedShows.map { show ->
-                    async { traktRepository.getShowWatchedProgress(show.show.ids.trakt) }
-                }.awaitAll()
-
-                val totalShowCount = showProgressResults.count { result ->
-                    result.getOrNull()?.seasons?.any { season ->
-                        season.number > 0 && season.episodes.isNotEmpty() && season.episodes.all { it.completed }
-                    } ?: false
+                // 整季看完的剧集数：直接用 watchedShows 的 completed 字段判断，不再调 N 次 progress API
+                val totalShowCount = watchedShows.count { show ->
+                    show.seasons.any { season ->
+                        season.number > 0 &&
+                            season.episodes.isNotEmpty() &&
+                            season.episodes.all { it.completed > 0 }
+                    }
                 }
 
                 // 本月/本年统计
@@ -143,27 +152,26 @@ class StatisticsViewModel @Inject constructor(
                     }
                 }
 
-                // 类型分布
+                // 类型分布：电影从 history 的 movie.genres，剧集从 watchedShows 的 show.genres
+                // （show history 降级为 min 后无 genres，改用 watchedShows 提供剧集类型，按剧集计数更合理）
                 val genreCount = mutableMapOf<String, Int>()
                 movies.forEach { item ->
                     item.movie.genres.forEach { genre ->
                         genreCount[genre] = (genreCount[genre] ?: 0) + 1
                     }
                 }
-                shows.forEach { item ->
+                watchedShows.forEach { item ->
                     item.show.genres.forEach { genre ->
                         genreCount[genre] = (genreCount[genre] ?: 0) + 1
                     }
                 }
 
-                // 总观影时长（分钟）
-                val movieMinutes = movies.sumOf { it.movie.runtime.toLong() }
-                val showMinutes = shows.sumOf { it.show.runtime.toLong() }
-                val totalWatchMinutes = movieMinutes + showMinutes
+                // 总观影时长：优先用 userStats 服务端数据（分钟），降级为本地 movie runtime 求和
+                val totalWatchMinutes = userStats?.let {
+                    it.movies.minutes.toLong() + it.episodes.minutes.toLong()
+                }?.takeIf { it > 0 } ?: movies.sumOf { it.movie.runtime.toLong() }
 
                 // 用户评分统计
-                val ratingsResult = traktRepository.getAllUserRatings()
-                val allRatings = ratingsResult.getOrElse { emptyList() }
                 val totalRatings = allRatings.size
                 val averageRating = if (totalRatings > 0) allRatings.map { it.rating }.average() else 0.0
                 val ratingDistribution = allRatings.groupBy { it.rating }.mapValues { it.value.size }

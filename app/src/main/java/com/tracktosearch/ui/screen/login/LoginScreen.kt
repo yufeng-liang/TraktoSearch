@@ -41,6 +41,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -113,19 +115,25 @@ fun LoginScreen(
         }
     }
 
-    // 监听 OAuth 回调 code 或拒绝授权
+    // 监听 OAuth 回调 code 或拒绝授权（用 StateFlow 替代轮询，延迟接近 0）
     LaunchedEffect(Unit) {
-        while (true) {
-            val code = OAuthCallback.pendingCode
-            if (code != null) {
-                OAuthCallback.pendingCode = null
-                viewModel.exchangeCodeForToken(code)
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                OAuthCallback.pendingCodeFlow
+                    .filterNotNull()
+                    .collect { code ->
+                        OAuthCallback.setPendingCode(null)
+                        viewModel.exchangeCodeForToken(code)
+                    }
             }
-            if (OAuthCallback.authDenied) {
-                OAuthCallback.authDenied = false
-                viewModel.onAuthDenied()
+            launch {
+                OAuthCallback.authDeniedFlow
+                    .filter { it }
+                    .collect {
+                        OAuthCallback.setAuthDenied(false)
+                        viewModel.onAuthDenied()
+                    }
             }
-            kotlinx.coroutines.delay(300)
         }
     }
 

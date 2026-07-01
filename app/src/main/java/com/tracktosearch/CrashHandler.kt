@@ -77,7 +77,7 @@ class CrashHandler private constructor(
         // 递增崩溃计数
         val prefs = context.getSharedPreferences(CRASH_COUNT_PREFS, Context.MODE_PRIVATE)
         val count = prefs.getInt(KEY_CRASH_COUNT, 0)
-        prefs.edit().putInt(KEY_CRASH_COUNT, count + 1).apply()
+        prefs.edit().putInt(KEY_CRASH_COUNT, count + 1).commit()
 
         // 写入崩溃日志文件
         try {
@@ -93,11 +93,11 @@ class CrashHandler private constructor(
         val dir = File(context.filesDir, CRASH_DIR)
         if (!dir.exists()) dir.mkdirs()
 
-        // 清理旧日志，保留最近 MAX_LOG_FILES 个
+        // 清理旧日志，保留最近 MAX_LOG_FILES-1 个（即将写入新日志，凑够 MAX_LOG_FILES 个）
         dir.listFiles()
             ?.filter { it.name.endsWith(".log") }
-            ?.sortedBy { it.lastModified() }
-            ?.dropLast(MAX_LOG_FILES - 1)
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(MAX_LOG_FILES - 1)
             ?.forEach { it.delete() }
 
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())

@@ -1,5 +1,6 @@
 package com.tracktosearch.data.repository
 
+import android.util.Log
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.TtlCache
@@ -17,14 +18,24 @@ class TraktRepository @Inject constructor(
         private const val TTL_COMMENTS = 10 * 60 * 1000L     // 评论 10 分钟
         private const val TTL_RELATED = 30 * 60 * 1000L      // 相关推荐 30 分钟
         private const val TTL_RECOMMENDATIONS = 60 * 60 * 1000L // 个性化推荐 1 小时
+        private const val TTL_STATS = 5 * 60 * 1000L         // 统计数据 5 分钟
     }
 
-    // 带 TTL 的缓存
-    private val searchByTmdbCache = TtlCache<List<TraktSearchResult>>(TTL_ID_MAPPING)
-    private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS)
-    private val relatedMoviesCache = TtlCache<List<TraktMovie>>(TTL_RELATED)
-    private val relatedShowsCache = TtlCache<List<TraktShow>>(TTL_RELATED)
-    private val recommendationsCache = TtlCache<List<TraktMovie>>(TTL_RECOMMENDATIONS)
+    // 带 TTL 的缓存（maxSize 防止无上限增长）
+    private val searchByTmdbCache = TtlCache<List<TraktSearchResult>>(TTL_ID_MAPPING, maxSize = 100)
+    private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS, maxSize = 50)
+    private val relatedMoviesCache = TtlCache<List<TraktMovie>>(TTL_RELATED, maxSize = 50)
+    private val relatedShowsCache = TtlCache<List<TraktShow>>(TTL_RELATED, maxSize = 50)
+    private val recommendationsCache = TtlCache<List<TraktMovie>>(TTL_RECOMMENDATIONS, maxSize = 30)
+    // 统计页专用缓存：频繁进出页面时避免重复全量拉取
+    private val movieHistoryCache = TtlCache<List<TraktWatchlistMovieItem>>(TTL_STATS, maxSize = 5)
+    private val showHistoryCache = TtlCache<List<TraktWatchlistShowItem>>(TTL_STATS, maxSize = 5)
+    private val watchedShowsCache = TtlCache<List<TraktWatchedShow>>(TTL_STATS, maxSize = 5)
+    private val userRatingsCache = TtlCache<List<TraktRatingItem>>(TTL_STATS, maxSize = 5)
+    private val userStatsCache = TtlCache<TraktUserStatsResponse>(TTL_STATS, maxSize = 5)
+    // Watchlist 首页缓存：splash 预取的结果供 MainScreen 复用，避免重复请求
+    private val movieWatchlistCache = TtlCache<Pair<List<TraktWatchlistMovieItem>, Int>>(TTL_STATS, maxSize = 5)
+    private val showWatchlistCache = TtlCache<Pair<List<TraktWatchlistShowItem>, Int>>(TTL_STATS, maxSize = 5)
 
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
         val key = "${tmdbId}_${type.name}"
@@ -48,7 +59,11 @@ class TraktRepository @Inject constructor(
             Result.failure(e)
         }
     }
-    suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
+    suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
+        // 首页命中缓存（splash 预取复用），非首页或强制刷新不缓存
+        if (page == 1 && !forceRefresh) {
+            movieWatchlistCache.get("p1")?.let { return Result.success(it) }
+        }
         return try {
             val response = traktApiService.getWatchlist(
                 type = "movies",
@@ -59,7 +74,9 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 val items = response.body() ?: emptyList()
                 val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
-                Result.success(Pair(items, totalPages))
+                val result = Pair(items, totalPages)
+                if (page == 1) movieWatchlistCache.put("p1", result)
+                Result.success(result)
             } else {
                 Result.failure(Exception("Failed to fetch movie watchlist: ${response.code()}"))
             }
@@ -68,7 +85,10 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
+    suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
+        if (page == 1 && !forceRefresh) {
+            showWatchlistCache.get("p1")?.let { return Result.success(it) }
+        }
         return try {
             val response = traktApiService.getShowWatchlist(
                 type = "shows",
@@ -79,7 +99,9 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 val items = response.body() ?: emptyList()
                 val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
-                Result.success(Pair(items, totalPages))
+                val result = Pair(items, totalPages)
+                if (page == 1) showWatchlistCache.put("p1", result)
+                Result.success(result)
             } else {
                 Result.failure(Exception("Failed to fetch show watchlist: ${response.code()}"))
             }
@@ -88,9 +110,9 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun getMovieHistory(page: Int = 1, limit: Int = 200): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
+    suspend fun getMovieHistory(page: Int = 1, limit: Int = 200, extended: String = "full"): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         return try {
-            val response = traktApiService.getMovieHistory(page = page, limit = limit)
+            val response = traktApiService.getMovieHistory(page = page, limit = limit, extended = extended)
             if (response.isSuccessful) {
                 val items = response.body() ?: emptyList()
                 val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
@@ -103,9 +125,9 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun getShowHistory(page: Int = 1, limit: Int = 200): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
+    suspend fun getShowHistory(page: Int = 1, limit: Int = 200, extended: String = "full"): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
         return try {
-            val response = traktApiService.getShowHistory(page = page, limit = limit)
+            val response = traktApiService.getShowHistory(page = page, limit = limit, extended = extended)
             if (response.isSuccessful) {
                 val items = response.body() ?: emptyList()
                 val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
@@ -118,13 +140,15 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 获取全部电影观看历史（跨页拉取），用于统计 */
-    suspend fun getAllMovieHistory(): Result<List<TraktWatchlistMovieItem>> {
+    /** 获取全部电影观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
+    suspend fun getAllMovieHistory(extended: String = "full"): Result<List<TraktWatchlistMovieItem>> {
+        val cacheKey = "all_$extended"
+        movieHistoryCache.get(cacheKey)?.let { return Result.success(it) }
         val allItems = mutableListOf<TraktWatchlistMovieItem>()
         var page = 1
         var totalPages = 1
         while (page <= totalPages) {
-            val result = getMovieHistory(page = page, limit = 200)
+            val result = getMovieHistory(page = page, limit = 200, extended = extended)
             result.onSuccess { (items, tp) ->
                 allItems.addAll(items)
                 totalPages = tp
@@ -133,16 +157,19 @@ class TraktRepository @Inject constructor(
             }
             page++
         }
+        movieHistoryCache.put(cacheKey, allItems)
         return Result.success(allItems)
     }
 
-    /** 获取全部电视剧观看历史（跨页拉取），用于统计 */
-    suspend fun getAllShowHistory(): Result<List<TraktWatchlistShowItem>> {
+    /** 获取全部电视剧观看历史（跨页拉取），用于统计。带 5 分钟 TTL 缓存 */
+    suspend fun getAllShowHistory(extended: String = "min"): Result<List<TraktWatchlistShowItem>> {
+        val cacheKey = "all_$extended"
+        showHistoryCache.get(cacheKey)?.let { return Result.success(it) }
         val allItems = mutableListOf<TraktWatchlistShowItem>()
         var page = 1
         var totalPages = 1
         while (page <= totalPages) {
-            val result = getShowHistory(page = page, limit = 200)
+            val result = getShowHistory(page = page, limit = 200, extended = extended)
             result.onSuccess { (items, tp) ->
                 allItems.addAll(items)
                 totalPages = tp
@@ -151,25 +178,18 @@ class TraktRepository @Inject constructor(
             }
             page++
         }
+        showHistoryCache.put(cacheKey, allItems)
         return Result.success(allItems)
     }
 
-    /** 获取已看电视剧列表（含每部剧的已看集数），用于统计 */
+    /** 获取已看电视剧列表（含每部剧的已看集数），用于统计。带 5 分钟 TTL 缓存 */
     suspend fun getWatchedShowsWithEpisodes(): Result<List<TraktWatchedShow>> {
+        watchedShowsCache.get("all")?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getWatchedShows()
             if (response.isSuccessful) {
                 val shows = response.body() ?: emptyList()
-                android.util.Log.d("TraktRepo", "getWatchedShows: ${shows.size} shows")
-                shows.forEach { show ->
-                    val epCount = show.seasons.sumOf { season ->
-                        season.episodes.count { it.completed > 0 }
-                    }
-                    android.util.Log.d("TraktRepo", "  ${show.show.title}: ${show.seasons.size} seasons, $epCount completed episodes")
-                    show.seasons.forEach { season ->
-                        android.util.Log.d("TraktRepo", "    S${season.number}: ${season.episodes.size} eps, completed: ${season.episodes.map { it.completed }}")
-                    }
-                }
+                watchedShowsCache.put("all", shows)
                 Result.success(shows)
             } else {
                 Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
@@ -340,7 +360,15 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.addToHistory(request)
             if (response.isSuccessful) {
-                traktApiService.removeFromWatchlist(request)
+                // 副操作：从想看列表移除。失败时仅记录日志，不影响主操作的成功状态（已看标记已生效）
+                try {
+                    val removeResp = traktApiService.removeFromWatchlist(request)
+                    if (!removeResp.isSuccessful) {
+                        Log.w("TraktRepository", "markAsWatched 副操作 removeFromWatchlist 失败: ${removeResp.code()}, traktId=$traktId")
+                    }
+                } catch (e: Exception) {
+                    Log.w("TraktRepository", "markAsWatched 副操作 removeFromWatchlist 异常: ${e.message}, traktId=$traktId")
+                }
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to mark as watched: ${response.code()}"))
@@ -361,7 +389,15 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.removeFromHistory(request)
             if (response.isSuccessful) {
-                traktApiService.addToWatchlist(request)
+                // 副操作：加回想看列表。失败时仅记录日志，不影响主操作的成功状态（已看取消已生效）
+                try {
+                    val addResp = traktApiService.addToWatchlist(request)
+                    if (!addResp.isSuccessful) {
+                        Log.w("TraktRepository", "removeWatched 副操作 addToWatchlist 失败: ${addResp.code()}, traktId=$traktId")
+                    }
+                } catch (e: Exception) {
+                    Log.w("TraktRepository", "removeWatched 副操作 addToWatchlist 异常: ${e.message}, traktId=$traktId")
+                }
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove watched: ${response.code()}"))
@@ -841,11 +877,16 @@ class TraktRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    // 用户统计
+    // 用户统计。带 5 分钟 TTL 缓存
     suspend fun getUserStats(): Result<TraktUserStatsResponse> {
+        userStatsCache.get("me")?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getUserStats()
-            if (response.isSuccessful) Result.success(response.body() ?: TraktUserStatsResponse())
+            if (response.isSuccessful) {
+                val stats = response.body() ?: TraktUserStatsResponse()
+                userStatsCache.put("me", stats)
+                Result.success(stats)
+            }
             else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -868,15 +909,18 @@ class TraktRepository @Inject constructor(
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    // 合并全量评分（并行请求）
+    // 合并全量评分（并行请求）。带 5 分钟 TTL 缓存
     suspend fun getAllUserRatings(): Result<List<TraktRatingItem>> {
+        userRatingsCache.get("all")?.let { return Result.success(it) }
         return try {
             coroutineScope {
                 val movieDeferred = async { getAllMovieRatings() }
                 val showDeferred = async { getAllShowRatings() }
                 val movieRatings = movieDeferred.await().getOrDefault(emptyList())
                 val showRatings = showDeferred.await().getOrDefault(emptyList())
-                Result.success(movieRatings + showRatings)
+                val combined = movieRatings + showRatings
+                userRatingsCache.put("all", combined)
+                Result.success(combined)
             }
         } catch (e: Exception) { Result.failure(e) }
     }

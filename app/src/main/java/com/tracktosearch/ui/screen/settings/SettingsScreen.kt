@@ -233,6 +233,10 @@ fun SettingsScreen(
         }
         onDispose {
             scrollToTopProvider.unregister()
+            // 页面销毁（如导航到帮助页）时立即保存滚动位置，
+            // 避免 LaunchedEffect 的 debounce(150) 被取消导致最后位置丢失
+            savedScrollIndex.intValue = settingsListState.firstVisibleItemIndex
+            savedScrollOffset.intValue = settingsListState.firstVisibleItemScrollOffset
         }
     }
 
