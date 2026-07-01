@@ -137,6 +137,11 @@ fun MainScreen(
     LaunchedEffect(onboardingCompleted) {
         if (onboardingCompleted == false) {
             showOnboarding = true
+            // 重置到搜索页，确保新手引导从搜索页开始
+            scope.launch {
+                pagerState.scrollToPage(0)
+                selectedTab = 0
+            }
         }
     }
 
@@ -223,7 +228,6 @@ fun MainScreen(
                                 SearchSourceType.SHOW -> MediaType.SHOW
                                 SearchSourceType.PERSON -> MediaType.PERSON
                                 SearchSourceType.DISK -> MediaType.DISK
-                                else -> MediaType.MOVIE
                             }
                             key(traktSearchType, traktSearchQuery) {
                                 val viewModel: TraktSearchViewModel = hiltViewModel()
@@ -409,9 +413,9 @@ fun MainScreen(
                     onComplete = {
                         showOnboarding = false
                         scope.launch { onboardingStorage.setCompleted(true) }
-                        // 新手引导完成 0.8s 后弹出位置权限提示（仅当未授权且未取消过时）
+                        // 新手引导完成 1.5s 后弹出位置权限提示（仅当未授权且未取消过时）
                         scope.launch {
-                            delay(800)
+                            delay(1500)
                             val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
                                 android.content.pm.PackageManager.PERMISSION_GRANTED
                             val dismissed = cloudPermissionStorage.isDismissed.first()

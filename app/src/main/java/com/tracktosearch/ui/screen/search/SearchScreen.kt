@@ -66,6 +66,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -312,34 +316,70 @@ fun SearchScreen(
 
             // 权限提示弹窗
             if (showPermissionDialog) {
-                AlertDialog(
+                ModalBottomSheet(
                     onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
-                    text = {
-                        Text("想知道白云会变身吗？授权位置后，它会随天气和节日悄悄变化哦~")
-                    },
-                    confirmButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                cloudThemeManager.onPermissionDismissed()
-                                locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                            }
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                    ) {
+                        // 猫咪动画 + 标题
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 16.dp)
                         ) {
-                            Text("去授权")
+                            // Lottie 猫咪动画
+                            val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
+                            LottieAnimation(
+                                composition = composition,
+                                iterations = LottieConstants.IterateForever,
+                                modifier = Modifier.size(80.dp)
+                            )
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = "想知道白云会变身吗？",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                    },
-                    dismissButton = {
-                        androidx.compose.material3.TextButton(
-                            onClick = {
-                                cloudThemeManager.onPermissionDismissed()
-                                scope.launch(Dispatchers.IO) {
-                                    cloudPermissionStorage.setDismissed(true)
-                                }
-                            }
+
+                        // 文案
+                        Text(
+                            text = "授权位置后，它会随您所在城市的实时天气和节日主题变化哦~",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 24.dp)
+                        )
+
+                        // 按钮行
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
                         ) {
-                            Text("取消")
+                            TextButton(
+                                onClick = {
+                                    cloudThemeManager.onPermissionDismissed()
+                                    scope.launch(Dispatchers.IO) {
+                                        cloudPermissionStorage.setDismissed(true)
+                                    }
+                                }
+                            ) {
+                                Text("取消")
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            TextButton(
+                                onClick = {
+                                    cloudThemeManager.onPermissionDismissed()
+                                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                                }
+                            ) {
+                                Text("去授权")
+                            }
                         }
                     }
-                )
+                }
             }
 
             // Spacer between icon and search box
