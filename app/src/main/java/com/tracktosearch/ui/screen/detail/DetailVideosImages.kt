@@ -302,7 +302,8 @@ internal fun FullVideosImagesSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        dragHandle = null
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏

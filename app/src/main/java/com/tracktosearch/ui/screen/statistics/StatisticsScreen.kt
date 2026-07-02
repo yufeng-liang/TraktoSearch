@@ -361,16 +361,35 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
 @Composable
 private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 第一行：电影部数 / 电视剧剧数 / 集数
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             AnimatedStatCard(
                 modifier = Modifier.weight(1f),
-                title = stringResource(R.string.statistics_total),
-                targetValue = uiState.totalWatched,
+                title = stringResource(R.string.statistics_movies),
+                targetValue = uiState.totalMovieCount,
                 isVisible = isVisible
             )
+            AnimatedStatCard(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.statistics_shows),
+                targetValue = uiState.totalShowCount,
+                isVisible = isVisible
+            )
+            AnimatedStatCard(
+                modifier = Modifier.weight(1f),
+                title = stringResource(R.string.statistics_episodes),
+                targetValue = uiState.totalEpisodeCount,
+                isVisible = isVisible
+            )
+        }
+        // 第二行：本月 / 本年
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             AnimatedStatCard(
                 modifier = Modifier.weight(1f),
                 title = stringResource(R.string.statistics_this_month),
@@ -383,65 +402,6 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
                 targetValue = uiState.thisYearWatched,
                 isVisible = isVisible
             )
-        }
-        // 电视剧统计：X部 / Y集
-        if (uiState.totalShowCount > 0) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val animatedShows by animateIntAsState(
-                            targetValue = if (isVisible) uiState.totalShowCount else 0,
-                            animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
-                            label = "showCount"
-                        )
-                        Text(
-                            text = "$animatedShows",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.statistics_shows),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Text(
-                        text = "/",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        val animatedEpisodes by animateIntAsState(
-                            targetValue = if (isVisible) uiState.totalEpisodeCount else 0,
-                            animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
-                            label = "episodeCount"
-                        )
-                        Text(
-                            text = "$animatedEpisodes",
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = stringResource(R.string.statistics_episodes),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
         }
     }
 }

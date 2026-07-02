@@ -396,6 +396,26 @@ data class TraktListUser(
 )
 
 @Serializable
+data class TraktUserProfileResponse(
+    val username: String = "",
+    val name: String = "",
+    val private: Boolean = false,
+    val vip: Boolean = false,
+    val vip_ep: Boolean = false,
+    val images: TraktUserImages = TraktUserImages()
+)
+
+@Serializable
+data class TraktUserImages(
+    val avatar: TraktAvatar = TraktAvatar()
+)
+
+@Serializable
+data class TraktAvatar(
+    val full: String = ""
+)
+
+@Serializable
 data class TraktUserStatsResponse(
     val movies: TraktStatsDetail = TraktStatsDetail(),
     val shows: TraktStatsDetail = TraktStatsDetail(),

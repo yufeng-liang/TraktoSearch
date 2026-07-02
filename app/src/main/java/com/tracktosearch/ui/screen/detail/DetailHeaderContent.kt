@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -99,55 +101,67 @@ internal fun DetailHeaderContent(
             verticalAlignment = Alignment.Top
         ) {
             // 海报（2:3 比例，高度跟随右侧固定信息区域，宽度按比例计算不跳变）
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
+            Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .aspectRatio(2f / 3f)
-                    .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
             ) {
-                if (uiState.posterUrl != null) {
-                    var posterScale by remember { mutableFloatStateOf(1f) }
-                    val sharedTransitionScope = LocalSharedTransitionScope.current
-                    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-                    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .sharedElement(
-                                    rememberSharedContentState(key = "poster-$tmdbId"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                                .fillMaxSize()
-                        }
-                    } else {
-                        Modifier.fillMaxSize()
-                    }
-                    AsyncImage(
-                        model = remember(uiState.posterUrl) {
-                            ImageRequest.Builder(context)
-                                .data(uiState.posterUrl)
-                                .size(264)
-                                .build()
-                        },
-                        contentDescription = uiState.displayTitle,
-                        contentScale = ContentScale.Crop,
-                        modifier = posterModifier
-                            .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
-                            .pointerInput(Unit) {
-                                detectTransformGestures { _, _, zoom, _ ->
-                                    posterScale = (posterScale * zoom).coerceIn(1f, 4f)
-                                }
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (uiState.posterUrl != null) Modifier.clickable { onPosterClick() } else Modifier)
+                ) {
+                    if (uiState.posterUrl != null) {
+                        var posterScale by remember { mutableFloatStateOf(1f) }
+                        val sharedTransitionScope = LocalSharedTransitionScope.current
+                        val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+                        val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Modifier
+                                    .sharedElement(
+                                        rememberSharedContentState(key = "poster-$tmdbId"),
+                                        animatedVisibilityScope = animatedVisibilityScope
+                                    )
+                                    .fillMaxSize()
                             }
-                    )
-                } else {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
+                        AsyncImage(
+                            model = remember(uiState.posterUrl) {
+                                ImageRequest.Builder(context)
+                                    .data(uiState.posterUrl)
+                                    .size(264)
+                                    .build()
+                            },
+                            contentDescription = uiState.displayTitle,
+                            contentScale = ContentScale.Crop,
+                            modifier = posterModifier
+                                .graphicsLayer(scaleX = posterScale, scaleY = posterScale)
+                                .pointerInput(Unit) {
+                                    detectTransformGestures { _, _, zoom, _ ->
+                                        posterScale = (posterScale * zoom).coerceIn(1f, 4f)
+                                    }
+                                }
                         )
+                    } else {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                }
+                // 状态标签：右下角圆角矩形
+                if (uiState.status.isNotEmpty()) {
+                    StatusRibbon(
+                        status = uiState.status,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
                 }
             }
 
@@ -290,7 +304,7 @@ internal fun DetailHeaderContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
                 ) {
                     // 左半区：想看按钮
                     Box(
@@ -315,9 +329,9 @@ internal fun DetailHeaderContent(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 if (isMarkingWatchlist) {
                                     CircularProgressIndicator(
@@ -374,9 +388,9 @@ internal fun DetailHeaderContent(
                             modifier = Modifier.height(32.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 10.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 if (isMarkingWatched) {
                                     CircularProgressIndicator(
@@ -635,4 +649,42 @@ internal fun ExpandableText(text: String, maxLines: Int = 3) {
                 if (isOverflowing || expanded) expanded = !expanded
             }
     )
+}
+
+// ==================== 状态绑带 ====================
+
+/** 状态绑带颜色 */
+private fun getStatusColor(status: String): Color {
+    return when (status) {
+        "Released" -> Color(0xFF4CAF50)
+        "Returning Series" -> Color(0xFF4CAF50)
+        "In Production" -> Color(0xFFFF9800)
+        "Post Production" -> Color(0xFFFF9800)
+        "Pilot" -> Color(0xFFFF9800)
+        "Planned" -> Color(0xFF2196F3)
+        "Rumored" -> Color(0xFF9C27B0)
+        "Canceled" -> Color(0xFFF44336)
+        "Ended" -> Color(0xFF9E9E9E)
+        else -> Color(0xFF757575)
+    }
+}
+
+/** 状态标签：右下角圆角矩形 */
+@Composable
+private fun StatusRibbon(status: String, modifier: Modifier = Modifier) {
+    val backgroundColor = getStatusColor(status)
+    Surface(
+        modifier = modifier.padding(4.dp),
+        shape = RoundedCornerShape(4.dp),
+        color = backgroundColor.copy(alpha = 0.9f)
+    ) {
+        Text(
+            text = status,
+            color = Color.White,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
 }

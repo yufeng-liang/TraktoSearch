@@ -117,7 +117,7 @@ fun PersonScreen(
                             .fillMaxSize()
                             .statusBarsPadding()
                             .hazeSource(state = hazeState),
-                        contentPadding = PaddingValues(bottom = 16.dp)
+                        contentPadding = PaddingValues(bottom = 80.dp)
                     ) {
                         item(key = "person_header") {
                             PersonHeaderContent(

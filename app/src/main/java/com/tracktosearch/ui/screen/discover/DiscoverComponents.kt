@@ -17,13 +17,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +54,8 @@ internal fun MovieCard(
     rating: String?,
     subtitle: String? = null,
     isResolving: Boolean,
+    isInWatchlist: Boolean = false,
+    isWatched: Boolean = false,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -102,6 +106,48 @@ internal fun MovieCard(
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
+                    }
+                }
+                // 想看/已看角标（海报左上角）
+                if (isWatched || isInWatchlist) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(4.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                color = if (isWatched) Color(0xCC000000)
+                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (isWatched) {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(12.dp),
+                                tint = Color.White
+                            )
+                            Text(
+                                text = stringResource(R.string.cd_watched_badge),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Bookmark,
+                                contentDescription = null,
+                                modifier = Modifier.size(10.dp),
+                                tint = Color.White
+                            )
+                            Text(
+                                text = stringResource(R.string.cd_watchlist_badge),
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                        }
                     }
                 }
                 if (rating != null) {

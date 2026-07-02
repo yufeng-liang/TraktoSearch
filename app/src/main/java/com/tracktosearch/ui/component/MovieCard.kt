@@ -99,11 +99,11 @@ fun MovieCard(
                     fallback = null
                 )
 
-                // 海报右上角状态角标
+                // 海报左上角状态角标
                 if (isWatched || isInWatchlist) {
                     Row(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
+                            .align(Alignment.TopStart)
                             .padding(4.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .background(

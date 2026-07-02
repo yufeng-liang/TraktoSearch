@@ -21,6 +21,151 @@ class TraktRepository @Inject constructor(
         private const val TTL_STATS = 5 * 60 * 1000L         // 统计数据 5 分钟
     }
 
+    /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
+    data class WatchlistWatchedIds(
+        val movieWatchlistTraktIds: Set<Int> = emptySet(),
+        val movieWatchlistTmdbIds: Set<Int> = emptySet(),
+        val showWatchlistTraktIds: Set<Int> = emptySet(),
+        val showWatchlistTmdbIds: Set<Int> = emptySet(),
+        val movieWatchedTraktIds: Set<Int> = emptySet(),
+        val movieWatchedTmdbIds: Set<Int> = emptySet(),
+        val showWatchedTraktIds: Set<Int> = emptySet(),
+        val showWatchedTmdbIds: Set<Int> = emptySet()
+    ) {
+        fun isInWatchlist(traktId: Int?, tmdbId: Int?, type: MediaType): Boolean = when (type) {
+            MediaType.MOVIE -> movieWatchlistTraktIds.contains(traktId) || movieWatchlistTmdbIds.contains(tmdbId)
+            MediaType.SHOW -> showWatchlistTraktIds.contains(traktId) || showWatchlistTmdbIds.contains(tmdbId)
+            else -> false
+        }
+
+        fun isWatched(traktId: Int?, tmdbId: Int?, type: MediaType): Boolean = when (type) {
+            MediaType.MOVIE -> movieWatchedTraktIds.contains(traktId) || movieWatchedTmdbIds.contains(tmdbId)
+            MediaType.SHOW -> showWatchedTraktIds.contains(traktId) || showWatchedTmdbIds.contains(tmdbId)
+            else -> false
+        }
+    }
+
+    @Volatile
+    private var watchlistWatchedIds: WatchlistWatchedIds? = null
+
+    /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次） */
+    suspend fun loadWatchlistWatchedIds(): WatchlistWatchedIds {
+        watchlistWatchedIds?.let { return it }
+        return try {
+            coroutineScope {
+                val movieWatchlistDef = async { getAllMovieWatchlist() }
+                val showWatchlistDef = async { getAllShowWatchlist() }
+                val movieHistoryDef = async { getAllMovieHistory(extended = "min") }
+                val showHistoryDef = async { getAllShowHistory(extended = "min") }
+                val movieWatchlist = movieWatchlistDef.await().getOrDefault(emptyList())
+                val showWatchlist = showWatchlistDef.await().getOrDefault(emptyList())
+                val movieHistory = movieHistoryDef.await().getOrDefault(emptyList())
+                val showHistory = showHistoryDef.await().getOrDefault(emptyList())
+                val ids = WatchlistWatchedIds(
+                    movieWatchlistTraktIds = movieWatchlist.map { it.movie.ids.trakt }.toSet(),
+                    movieWatchlistTmdbIds = movieWatchlist.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
+                    showWatchlistTraktIds = showWatchlist.map { it.show.ids.trakt }.toSet(),
+                    showWatchlistTmdbIds = showWatchlist.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
+                    movieWatchedTraktIds = movieHistory.map { it.movie.ids.trakt }.toSet(),
+                    movieWatchedTmdbIds = movieHistory.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
+                    showWatchedTraktIds = showHistory.map { it.show.ids.trakt }.toSet(),
+                    showWatchedTmdbIds = showHistory.map { it.show.ids.tmdb }.filter { it > 0 }.toSet()
+                )
+                watchlistWatchedIds = ids
+                ids
+            }
+        } catch (e: Exception) {
+            Log.w("TraktRepo", "loadWatchlistWatchedIds failed: ${e.message}")
+            WatchlistWatchedIds()
+        }
+    }
+
+    /** 获取当前缓存（可能为 null，需先调用 loadWatchlistWatchedIds） */
+    fun getWatchlistWatchedIds(): WatchlistWatchedIds? = watchlistWatchedIds
+
+    /** 清除全局想看/已看缓存（退出登录时调用） */
+    fun clearWatchlistWatchedCache() {
+        watchlistWatchedIds = null
+    }
+
+    /** 缓存已加载时，添加想看 ID 到缓存 */
+    private fun addToWatchlistCache(traktId: Int, tmdbId: Int, type: MediaType) {
+        watchlistWatchedIds?.let { current ->
+            watchlistWatchedIds = when (type) {
+                MediaType.MOVIE -> current.copy(
+                    movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
+                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
+                )
+                MediaType.SHOW -> current.copy(
+                    showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
+                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
+                )
+                else -> current
+            }
+        }
+    }
+
+    /** 缓存已加载时，从想看缓存移除 ID */
+    private fun removeFromWatchlistCache(traktId: Int, tmdbId: Int, type: MediaType) {
+        watchlistWatchedIds?.let { current ->
+            watchlistWatchedIds = when (type) {
+                MediaType.MOVIE -> current.copy(
+                    movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
+                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
+                )
+                MediaType.SHOW -> current.copy(
+                    showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
+                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
+                )
+                else -> current
+            }
+        }
+    }
+
+    /** 缓存已加载时，添加已看 ID 到缓存 */
+    private fun addToWatchedCache(traktId: Int, tmdbId: Int, type: MediaType) {
+        watchlistWatchedIds?.let { current ->
+            watchlistWatchedIds = when (type) {
+                MediaType.MOVIE -> current.copy(
+                    movieWatchedTraktIds = current.movieWatchedTraktIds + traktId,
+                    movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds + tmdbId else current.movieWatchedTmdbIds,
+                    // 标记已看后从想看缓存移除
+                    movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
+                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
+                )
+                MediaType.SHOW -> current.copy(
+                    showWatchedTraktIds = current.showWatchedTraktIds + traktId,
+                    showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds + tmdbId else current.showWatchedTmdbIds,
+                    showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
+                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
+                )
+                else -> current
+            }
+        }
+    }
+
+    /** 缓存已加载时，从已看缓存移除 ID */
+    private fun removeFromWatchedCache(traktId: Int, tmdbId: Int, type: MediaType) {
+        watchlistWatchedIds?.let { current ->
+            watchlistWatchedIds = when (type) {
+                MediaType.MOVIE -> current.copy(
+                    movieWatchedTraktIds = current.movieWatchedTraktIds - traktId,
+                    movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds - tmdbId else current.movieWatchedTmdbIds,
+                    // 取消已看后加回想看缓存
+                    movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
+                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
+                )
+                MediaType.SHOW -> current.copy(
+                    showWatchedTraktIds = current.showWatchedTraktIds - traktId,
+                    showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds - tmdbId else current.showWatchedTmdbIds,
+                    showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
+                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
+                )
+                else -> current
+            }
+        }
+    }
+
     // 带 TTL 的缓存（maxSize 防止无上限增长）
     private val searchByTmdbCache = TtlCache<List<TraktSearchResult>>(TTL_ID_MAPPING, maxSize = 100)
     private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS, maxSize = 50)
@@ -60,53 +205,44 @@ class TraktRepository @Inject constructor(
         }
     }
     suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
-        // 首页命中缓存（splash 预取复用），非首页或强制刷新不缓存
-        if (page == 1 && !forceRefresh) {
-            movieWatchlistCache.get("p1")?.let { return Result.success(it) }
-        }
-        return try {
-            val response = traktApiService.getWatchlist(
-                type = "movies",
-                extended = "full",
-                page = page,
-                limit = limit
-            )
-            if (response.isSuccessful) {
-                val items = response.body() ?: emptyList()
-                val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
-                val result = Pair(items, totalPages)
-                if (page == 1) movieWatchlistCache.put("p1", result)
-                Result.success(result)
-            } else {
-                Result.failure(Exception("Failed to fetch movie watchlist: ${response.code()}"))
+        val cacheKey = "p${page}_$limit"
+        return runCatching {
+            movieWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
+                val response = traktApiService.getWatchlist(
+                    type = "movies",
+                    extended = "full",
+                    page = page,
+                    limit = limit
+                )
+                if (response.isSuccessful) {
+                    val items = response.body() ?: emptyList()
+                    val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                    Pair(items, totalPages)
+                } else {
+                    throw Exception("Failed to fetch movie watchlist: ${response.code()}")
+                }
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
     suspend fun getShowWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistShowItem>, Int>> {
-        if (page == 1 && !forceRefresh) {
-            showWatchlistCache.get("p1")?.let { return Result.success(it) }
-        }
-        return try {
-            val response = traktApiService.getShowWatchlist(
-                type = "shows",
-                extended = "full",
-                page = page,
-                limit = limit
-            )
-            if (response.isSuccessful) {
-                val items = response.body() ?: emptyList()
-                val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
-                val result = Pair(items, totalPages)
-                if (page == 1) showWatchlistCache.put("p1", result)
-                Result.success(result)
-            } else {
-                Result.failure(Exception("Failed to fetch show watchlist: ${response.code()}"))
+        val cacheKey = "p${page}_$limit"
+        return runCatching {
+            showWatchlistCache.getOrAwait(cacheKey, skipCache = forceRefresh) {
+                val response = traktApiService.getShowWatchlist(
+                    type = "shows",
+                    extended = "full",
+                    page = page,
+                    limit = limit
+                )
+                if (response.isSuccessful) {
+                    val items = response.body() ?: emptyList()
+                    val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                    Pair(items, totalPages)
+                } else {
+                    throw Exception("Failed to fetch show watchlist: ${response.code()}")
+                }
             }
-        } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
@@ -349,7 +485,7 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun markAsWatched(traktId: Int, type: MediaType): Result<TraktSyncResponse> {
+    suspend fun markAsWatched(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -360,6 +496,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.addToHistory(request)
             if (response.isSuccessful) {
+                addToWatchedCache(traktId, tmdbId, type)
                 // 副操作：从想看列表移除。失败时仅记录日志，不影响主操作的成功状态（已看标记已生效）
                 try {
                     val removeResp = traktApiService.removeFromWatchlist(request)
@@ -378,7 +515,7 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    suspend fun removeWatched(traktId: Int, type: MediaType): Result<TraktSyncResponse> {
+    suspend fun removeWatched(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -389,6 +526,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.removeFromHistory(request)
             if (response.isSuccessful) {
+                removeFromWatchedCache(traktId, tmdbId, type)
                 // 副操作：加回想看列表。失败时仅记录日志，不影响主操作的成功状态（已看取消已生效）
                 try {
                     val addResp = traktApiService.addToWatchlist(request)
@@ -538,7 +676,7 @@ class TraktRepository @Inject constructor(
     }
 
     /** 添加到想看列表 */
-    suspend fun addToWatchlist(traktId: Int, type: MediaType): Result<TraktSyncResponse> {
+    suspend fun addToWatchlist(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -549,6 +687,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.addToWatchlist(request)
             if (response.isSuccessful) {
+                addToWatchlistCache(traktId, tmdbId, type)
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to add to watchlist: ${response.code()}"))
@@ -559,7 +698,7 @@ class TraktRepository @Inject constructor(
     }
 
     /** 从想看列表移除 */
-    suspend fun removeFromWatchlist(traktId: Int, type: MediaType): Result<TraktSyncResponse> {
+    suspend fun removeFromWatchlist(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -570,6 +709,7 @@ class TraktRepository @Inject constructor(
             }
             val response = traktApiService.removeFromWatchlist(request)
             if (response.isSuccessful) {
+                removeFromWatchlistCache(traktId, tmdbId, type)
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove from watchlist: ${response.code()}"))
@@ -866,18 +1006,38 @@ class TraktRepository @Inject constructor(
 
     // 列表详情条目
     suspend fun getListItems(
-        slug: String,
+        listId: Int,
         limit: Int = 20,
         page: Int = 1
     ): Result<List<TraktListItemResponse>> {
         return try {
-            val response = traktApiService.getListItems(slug, limit, page)
+            val response = traktApiService.getListItems(listId, limit, page)
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     // 用户统计。带 5 分钟 TTL 缓存
+    // 用户资料缓存（登录后只请求一次，直到退出登录才清除）
+    @Volatile
+    private var userProfileCache: TraktUserProfileResponse? = null
+
+    suspend fun getUserProfile(): Result<TraktUserProfileResponse> {
+        userProfileCache?.let { return Result.success(it) }
+        return try {
+            val response = traktApiService.getUserProfile()
+            if (response.isSuccessful) {
+                val profile = response.body() ?: TraktUserProfileResponse()
+                userProfileCache = profile
+                Result.success(profile)
+            } else Result.failure(Exception("HTTP ${response.code()}"))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    fun clearUserProfileCache() {
+        userProfileCache = null
+    }
+
     suspend fun getUserStats(): Result<TraktUserStatsResponse> {
         userStatsCache.get("me")?.let { return Result.success(it) }
         return try {

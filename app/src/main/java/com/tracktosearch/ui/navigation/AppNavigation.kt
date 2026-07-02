@@ -48,7 +48,6 @@ import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
-import com.tracktosearch.ui.screen.webview.WebViewScreen
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -66,17 +65,15 @@ object Routes {
     const val MAIN = "main"
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
     const val SEARCH = "search/{keyword}"
-    const val WEBVIEW = "webview/{url}/{title}"
     const val PERSON = "person/{personId}/{personName}/{profileUrl}"
     const val STATISTICS = "statistics"
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
     const val HELP = "help"
-    const val LIST_DETAIL = "listDetail/{slug}/{listName}"
+    const val LIST_DETAIL = "listDetail/{listId}/{listName}"
 
-    fun listDetailRoute(slug: String, listName: String): String {
-        val encodedSlug = java.net.URLEncoder.encode(slug, "UTF-8")
+    fun listDetailRoute(listId: Int, listName: String): String {
         val encodedName = java.net.URLEncoder.encode(listName, "UTF-8")
-        return "listDetail/$encodedSlug/$encodedName"
+        return "listDetail/$listId/$encodedName"
     }
 
     fun traktSearchRoute(type: String, query: String): String {
@@ -100,12 +97,6 @@ object Routes {
     fun searchRoute(keyword: String): String {
         val encodedKeyword = java.net.URLEncoder.encode(keyword, "UTF-8")
         return "search/$encodedKeyword"
-    }
-
-    fun webViewRoute(url: String, title: String): String {
-        val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
-        val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
-        return "webview/$encodedUrl/$encodedTitle"
     }
 
     fun personRoute(personId: Int, personName: String, profileUrl: String): String {
@@ -250,9 +241,6 @@ fun AppNavigation(
                             onSearchClick = { keyword ->
                                 navController.navigate(Routes.searchRoute(keyword))
                             },
-                            onOpenWebView = { url ->
-                                navController.navigate(Routes.webViewRoute(url, "Trakt"))
-                            },
                             onNavigateToLogin = {
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(Routes.MAIN) { inclusive = false }
@@ -267,8 +255,8 @@ fun AppNavigation(
                             onPersonClick = { tmdbId, name, profileUrl ->
                                 navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
                             },
-                            onListClick = { slug, listName ->
-                                navController.navigate(Routes.listDetailRoute(slug, listName))
+                            onListClick = { listId, listName ->
+                                navController.navigate(Routes.listDetailRoute(listId, listName))
                             },
                             onLogout = {
                                 onLogout()
@@ -376,31 +364,6 @@ fun AppNavigation(
                 }
 
                 composable(
-                    route = Routes.WEBVIEW,
-                    arguments = listOf(
-                        navArgument("url") { type = NavType.StringType },
-                        navArgument("title") { type = NavType.StringType; defaultValue = "" }
-                    )
-                ) { backStackEntry ->
-                    val url = java.net.URLDecoder.decode(
-                        backStackEntry.arguments?.getString("url") ?: "", "UTF-8"
-                    )
-                    val title = java.net.URLDecoder.decode(
-                        backStackEntry.arguments?.getString("title") ?: "", "UTF-8"
-                    )
-                    // 从 WebView 返回时触发想看列表刷新（用户可能在 Trakt 网站上添加了新内容）
-                    val previousEntry = navController.previousBackStackEntry
-                    WebViewScreen(
-                        url = url,
-                        title = title,
-                        onBack = {
-                            previousEntry?.savedStateHandle?.set("watchlist_changed", true)
-                            navController.popBackStack()
-                        }
-                    )
-                }
-
-                composable(
                     route = Routes.PERSON,
                     arguments = listOf(
                         navArgument("personId") { type = NavType.IntType },
@@ -434,14 +397,12 @@ fun AppNavigation(
                 composable(
                     route = Routes.LIST_DETAIL,
                     arguments = listOf(
-                        navArgument("slug") { type = NavType.StringType },
+                        navArgument("listId") { type = NavType.IntType },
                         navArgument("listName") { type = NavType.StringType; defaultValue = "" }
                     )
                 ) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val slug = java.net.URLDecoder.decode(
-                            backStackEntry.arguments?.getString("slug") ?: "", "UTF-8"
-                        )
+                        val listId = backStackEntry.arguments?.getInt("listId") ?: 0
                         val listName = java.net.URLDecoder.decode(
                             backStackEntry.arguments?.getString("listName") ?: "", "UTF-8"
                         )

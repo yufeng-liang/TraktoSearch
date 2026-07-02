@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import javax.inject.Named
 
 @Immutable
 data class DoubanHotCategory(
@@ -56,8 +57,10 @@ class SearchViewModel @Inject constructor(
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
     private val doubanHotApi: DoubanHotApiService,
+    @Named("backup") private val backupDoubanHotApi: DoubanHotApiService,
     private val tmdbRepository: TmdbRepository,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    private val sharedDoubanHotCache: TtlCache<DoubanHotData>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -86,8 +89,6 @@ class SearchViewModel @Inject constructor(
 
     // 搜索结果缓存
     private val searchResultCache = TtlCache<List<ResourceItem>>(TTL_SEARCH)
-    // 豆瓣热榜缓存
-    private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
 
     // 搜索历史 - 使用 stateIn 预加载，避免异步延迟
     private val searchHistoryFlow = searchHistoryStorage.history.stateIn(
@@ -111,19 +112,23 @@ class SearchViewModel @Inject constructor(
 
     private fun loadHotSearches() {
         viewModelScope.launch {
-            // 先检查缓存
-            val cached = hotSearchCache.get("hot_searches_v2")
-            if (cached != null) {
-                _hotSearches.value = cached
+            // 先检查热门搜索缓存（纯标题列表，本地即可命中）
+            val hotCached = hotSearchCache.get("hot_searches_v2")
+            if (hotCached != null) {
+                _hotSearches.value = hotCached
                 return@launch
             }
+            // 共享缓存 + 飞行中去重：并发时只发一次网络请求
+            val cacheKey = "douban-movie_1_10"
             try {
-                val response = doubanHotApi.getDoubanHot(category = "douban-movie", limit = 10)
-                val titles = response.data.items.mapNotNull { item ->
+                val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
+                    doubanHotApi.getDoubanHot(category = "douban-movie", limit = 10).data
+                }
+                val titles = data.items.mapNotNull { item ->
                     item.title.replace(Regex("【\\d+\\.?\\d*】\\s*"), "").ifEmpty { null }
                 }.take(8)
                 _hotSearches.value = titles
-                hotSearchCache.put("hot_searches", titles)
+                hotSearchCache.put("hot_searches_v2", titles)
             } catch (_: Exception) {
                 // 加载失败时保持空列表
             }
@@ -141,16 +146,29 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private fun loadDoubanCategory(index: Int, categoryId: String) {
+    private fun loadDoubanCategory(index: Int, categoryId: String, skipCache: Boolean = false) {
         viewModelScope.launch {
             val current = _uiState.value.doubanHotCategories.toMutableList()
             if (index < current.size) {
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
-            // 10 分钟内用缓存
+            // Top250 主备切换逻辑
+            val isTop250 = categoryId == "douban-top250"
             val cacheKey = "${categoryId}_1_10"
-            doubanHotCache.get(cacheKey)?.let { data ->
+            try {
+                val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
+                    try {
+                        doubanHotApi.getDoubanHot(category = categoryId, limit = 10).data
+                    } catch (e: Exception) {
+                        if (isTop250) {
+                            // 主 API 失败，尝试备选 API
+                            backupDoubanHotApi.getDoubanHot(category = categoryId, limit = 10).data
+                        } else {
+                            throw e
+                        }
+                    }
+                }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
@@ -161,21 +179,6 @@ class SearchViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
-                return@launch
-            }
-            try {
-                val response = doubanHotApi.getDoubanHot(category = categoryId, limit = 10)
-                val updated = _uiState.value.doubanHotCategories.toMutableList()
-                if (index < updated.size) {
-                    updated[index] = updated[index].copy(
-                        items = response.data.items,
-                        isLoading = false,
-                        error = null,
-                        total = response.data.total
-                    )
-                    _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
-                }
-                doubanHotCache.put(cacheKey, response.data)
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -192,7 +195,7 @@ class SearchViewModel @Inject constructor(
     fun retryDoubanCategory(categoryId: String) {
         val index = DOUBAN_CATEGORIES.indexOfFirst { it.first == categoryId }
         if (index >= 0) {
-            loadDoubanCategory(index, categoryId)
+            loadDoubanCategory(index, categoryId, skipCache = true)
         }
     }
 
@@ -219,7 +222,7 @@ class SearchViewModel @Inject constructor(
             // 1 小时内用缓存（仅首页）
             val cacheKey = "${categoryId}_${page}_$limit"
             if (page == 1) {
-                doubanHotCache.get(cacheKey)?.let { data ->
+                sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
                     if (idx >= 0) {
                         updated[idx] = updated[idx].copy(
@@ -254,7 +257,7 @@ class SearchViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
                 if (page == 1) {
-                    doubanHotCache.put(cacheKey, response.data)
+                    sharedDoubanHotCache.put(cacheKey, response.data)
                 }
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()

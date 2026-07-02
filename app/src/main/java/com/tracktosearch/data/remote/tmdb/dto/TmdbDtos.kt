@@ -15,7 +15,8 @@ data class TmdbMovieDetail(
     val vote_average: Double = 0.0,
     val runtime: Int? = null,
     val production_countries: List<TmdbProductionCountry> = emptyList(),
-    val belongs_to_collection: TmdbBelongsToCollection? = null
+    val belongs_to_collection: TmdbBelongsToCollection? = null,
+    val status: String = ""
 )
 
 @Serializable
@@ -29,7 +30,8 @@ data class TmdbTvDetail(
     val first_air_date: String = "",
     val vote_average: Double = 0.0,
     val episode_run_time: List<Int>? = null,
-    val origin_country: List<String> = emptyList()
+    val origin_country: List<String> = emptyList(),
+    val status: String = ""
 )
 
 @Serializable

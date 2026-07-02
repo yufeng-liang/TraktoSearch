@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -82,13 +83,13 @@ import kotlinx.coroutines.launch
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    onOpenWebView: (url: String) -> Unit,
-    onListClick: (slug: String, listName: String) -> Unit = { _, _ -> },
+    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val sectionConfigs by viewModel.sectionConfigs.collectAsStateWithLifecycle()
+    val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
 
@@ -322,6 +323,7 @@ fun DiscoverScreen(
                                         isLoading = uiState.isLoadingPopular,
                                         error = uiState.popularError,
                                         resolvingItemId = uiState.resolvingTmdbId,
+                                        watchlistWatchedIds = watchlistWatchedIds,
                                         onItemClick = { movie ->
                                             viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                                 onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -342,6 +344,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingUpcoming,
                                     error = uiState.upcomingError,
                                     resolvingItemId = uiState.resolvingTmdbId,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { movie ->
                                         viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -361,6 +364,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingRecommendations,
                                     error = uiState.recommendationsError,
                                     resolvingItemId = uiState.resolvingTmdbId,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -379,6 +383,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktTrendingMovies.size,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -396,6 +401,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktTrendingShows.size,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { show ->
                                         viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onShowClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -414,6 +420,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktAnticipatedMovies.size + uiState.traktAnticipatedShows.size,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onMovieClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -436,6 +443,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktShowRecommendations.size,
+                                    watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { show ->
                                         viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
                                             onShowClick(traktId, tmdbId, title, imdbId, traktRating)
@@ -469,7 +477,10 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEach { listResponse ->
-                                                Card(modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.slug, listResponse.list.name) }) {
+                                                Card(
+    modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
+    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+) {
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                                                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -577,13 +588,11 @@ fun DiscoverScreen(
             isLoading = uiState.isLoadingPopularAll,
             hasMore = uiState.popularAllHasMore,
             currentPage = uiState.popularAllPage,
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { movie ->
-                showPopularAll = false
-                coroutineScope.launch {
-                    delay(300)
-                    viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
-                        onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
-                    }
+                viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showPopularAll = false
+                    onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
             onLoadMore = { viewModel.loadPopularAll(page = uiState.popularAllPage + 1) },
@@ -599,8 +608,10 @@ fun DiscoverScreen(
             isLoading = uiState.isLoadingUpcomingAll,
             hasMore = uiState.upcomingAllHasMore,
             currentPage = uiState.upcomingAllPage,
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { movie ->
                 viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showUpcomingAll = false
                     onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -617,8 +628,10 @@ fun DiscoverScreen(
             isLoading = uiState.isLoadingRecommendationsAll,
             hasMore = uiState.recommendationsAllHasMore,
             currentPage = uiState.recommendationsAllPage,
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { movie ->
                 viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showRecommendationsAll = false
                     onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -635,8 +648,10 @@ fun DiscoverScreen(
             isLoading = false,
             hasMore = false,
             currentPage = 1,
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { movie ->
                 viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showTrendingMoviesAll = false
                     onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -650,8 +665,10 @@ fun DiscoverScreen(
         TraktShowAllSheet(
             title = stringResource(R.string.discover_trakt_trending_shows),
             items = uiState.traktTrendingShows.map { it.show },
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { show ->
                 viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showTrendingShowsAll = false
                     onShowClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -664,13 +681,16 @@ fun DiscoverScreen(
         TraktAnticipatedAllSheet(
             anticipatedMovies = uiState.traktAnticipatedMovies,
             anticipatedShows = uiState.traktAnticipatedShows,
+            watchlistWatchedIds = watchlistWatchedIds,
             onMovieClick = { movie ->
                 viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showAnticipatedAll = false
                     onMovieClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
             onShowClick = { show ->
                 viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showAnticipatedAll = false
                     onShowClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -683,8 +703,10 @@ fun DiscoverScreen(
         TraktShowAllSheet(
             title = stringResource(R.string.discover_trakt_recommendations_shows),
             items = uiState.traktShowRecommendations.map { it.show },
+            watchlistWatchedIds = watchlistWatchedIds,
             onItemClick = { show ->
                 viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating ->
+                    showShowRecsAll = false
                     onShowClick(traktId, tmdbId, title, imdbId, traktRating)
                 }
             },
@@ -696,9 +718,9 @@ fun DiscoverScreen(
     if (showTrendingListsAll) {
         TrendingListsAllSheet(
             lists = uiState.trendingLists,
-            onListClick = { slug, listName ->
+            onListClick = { listId, listName ->
                 showTrendingListsAll = false
-                onListClick(slug, listName)
+                onListClick(listId, listName)
             },
             onDismiss = { showTrendingListsAll = false }
         )

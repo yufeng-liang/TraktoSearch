@@ -23,6 +23,7 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.custom.CustomSearchService
+import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.MediaType
@@ -557,6 +558,25 @@ class SettingsViewModel @Inject constructor(
 
     private val _cacheInfo = MutableStateFlow("0 B")
     val cacheInfo: StateFlow<String> = _cacheInfo.asStateFlow()
+
+    // ========== 用户资料 ==========
+
+    private val _userProfile = MutableStateFlow<TraktUserProfileResponse?>(null)
+    val userProfile: StateFlow<TraktUserProfileResponse?> = _userProfile.asStateFlow()
+
+    fun loadUserProfile() {
+        if (_userProfile.value != null) return
+        viewModelScope.launch {
+            traktRepository.getUserProfile()
+                .onSuccess { _userProfile.value = it }
+        }
+    }
+
+    fun clearUserProfile() {
+        _userProfile.value = null
+        traktRepository.clearUserProfileCache()
+        traktRepository.clearWatchlistWatchedCache()
+    }
 
     init {
         refreshCacheInfo()

@@ -100,12 +100,11 @@ fun MainScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
-    onOpenWebView: (url: String) -> Unit,
     onNavigateToLogin: () -> Unit,
     onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onPersonClick: (tmdbId: Int, name: String, profileUrl: String) -> Unit = { _, _, _ -> },
-    onListClick: (slug: String, listName: String) -> Unit = { _, _ -> },
+    onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
     onRestartOnboarding: () -> Unit
@@ -215,7 +214,7 @@ fun MainScreen(
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = false,
-                beyondViewportPageCount = 0,
+                beyondViewportPageCount = 3,
                 modifier = Modifier
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
@@ -265,7 +264,6 @@ fun MainScreen(
                                     traktSearchQuery = query
                                     showTraktSearch = true
                                 },
-                                onOpenWebView = onOpenWebView,
                                 onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
@@ -276,7 +274,6 @@ fun MainScreen(
                     1 -> DiscoverScreen(
                         onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
                         onShowClick = { traktId, tmdbId, title, imdbId, traktRating -> onShowClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
-                        onOpenWebView = onOpenWebView,
                         onListClick = onListClick,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -286,7 +283,6 @@ fun MainScreen(
                                 onMovieClick = onMovieClick,
                                 onShowClick = onShowClick,
                                 onSearchClick = onSearchClick,
-                                onOpenWebView = onOpenWebView,
                                 onStatisticsClick = onStatisticsClick,
                                 onTraktSearch = onTraktSearch,
                                 modifier = Modifier.fillMaxSize()
@@ -413,9 +409,14 @@ fun MainScreen(
                     onComplete = {
                         showOnboarding = false
                         scope.launch { onboardingStorage.setCompleted(true) }
-                        // 新手引导完成 1.5s 后弹出位置权限提示（仅当未授权且未取消过时）
+                        // 完成后跳转到搜索页
                         scope.launch {
-                            delay(1500)
+                            pagerState.scrollToPage(0)
+                            selectedTab = 0
+                        }
+                        // 新手引导完成 1.2s 后弹出位置权限提示（仅当未授权且未取消过时）
+                        scope.launch {
+                            delay(1200)
                             val hasPermission = context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
                                 android.content.pm.PackageManager.PERMISSION_GRANTED
                             val dismissed = cloudPermissionStorage.isDismissed.first()

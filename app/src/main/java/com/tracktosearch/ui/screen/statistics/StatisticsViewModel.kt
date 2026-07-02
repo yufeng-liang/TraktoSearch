@@ -24,7 +24,7 @@ import javax.inject.Inject
 
 @Immutable
 data class StatisticsUiState(
-    val totalWatched: Int = 0,
+    val totalMovieCount: Int = 0,
     val totalShowCount: Int = 0,
     val totalEpisodeCount: Int = 0,
     val thisMonthWatched: Int = 0,
@@ -116,7 +116,7 @@ class StatisticsViewModel @Inject constructor(
                     parseDate(dateStr)?.let { allDates.add(it) }
                 }
 
-                val totalWatched = movies.size + shows.size
+                val totalMovieCount = movies.size
 
                 // 总集数：优先用 userStats 服务端数据，降级为本地 watchedShows 求和
                 val totalEpisodeCount = userStats?.episodes?.watched?.takeIf { it > 0 }
@@ -186,7 +186,7 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 _uiState.value = StatisticsUiState(
-                    totalWatched = totalWatched,
+                    totalMovieCount = totalMovieCount,
                     totalShowCount = totalShowCount,
                     totalEpisodeCount = totalEpisodeCount,
                     thisMonthWatched = thisMonthWatched,

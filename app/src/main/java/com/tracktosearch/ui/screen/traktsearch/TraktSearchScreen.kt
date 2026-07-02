@@ -42,6 +42,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -53,11 +54,11 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -87,6 +88,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -97,9 +99,8 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.data.remote.dto.ResourceType
-import com.tracktosearch.data.remote.dto.inferResourceType
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
@@ -117,6 +118,14 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
+
+/** 计算网盘tab筛选后的结果数（用于Tab标签显示） */
+private fun getFilteredDiskCount(diskState: DiskSearchState): Int {
+    return diskState.resources
+        .filter { it.source in diskState.enabledSources }
+        .filter { it.diskType in diskState.enabledDiskTypes }
+        .size
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -213,8 +222,8 @@ fun TraktSearchScreen(
                 isDiskTab -> {
                     DiskSearchContent(
                         diskState = uiState.diskState,
-                        onTypeFilterChange = { viewModel.setDiskResourceTypeFilter(it) },
-                        onDiskTypeFilterChange = { viewModel.setDiskTypeFilter(it) },
+                        onToggleSource = { viewModel.toggleDiskSource(it) },
+                        onToggleDiskType = { viewModel.toggleDiskType(it) },
                         onItemClick = { openResourceLink(context, it) },
                         listState = diskListState,
                         hazeState = hazeState,
@@ -402,24 +411,16 @@ fun TraktSearchScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
                     }
-                    OutlinedTextField(
+                    val searchInteractionSource = remember { MutableInteractionSource() }
+                    BasicTextField(
                         value = searchQuery,
                         onValueChange = { searchQuery = it },
                         modifier = Modifier
                             .weight(1f)
+                            .height(45.dp)
                             .focusRequester(focusRequester),
-                        placeholder = {
-                            Text(
-                                when (uiState.selectedTab) {
-                                    MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
-                                    MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
-                                    MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
-                                    MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
-                                }
-                            )
-                        },
                         singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
+                        textStyle = MaterialTheme.typography.bodyMedium,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
                             onSearch = {
@@ -428,14 +429,45 @@ fun TraktSearchScreen(
                                 }
                             }
                         ),
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                if (searchQuery.isNotBlank()) {
-                                    viewModel.search(searchQuery)
+                        interactionSource = searchInteractionSource,
+                        decorationBox = { innerTextField ->
+                            OutlinedTextFieldDefaults.DecorationBox(
+                                value = searchQuery,
+                                innerTextField = innerTextField,
+                                enabled = true,
+                                singleLine = true,
+                                visualTransformation = VisualTransformation.None,
+                                interactionSource = searchInteractionSource,
+                                placeholder = {
+                                    Text(
+                                        when (uiState.selectedTab) {
+                                            MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
+                                            MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
+                                            MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
+                                            MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
+                                        }
+                                    )
+                                },
+                                trailingIcon = {
+                                    IconButton(onClick = {
+                                        if (searchQuery.isNotBlank()) {
+                                            viewModel.search(searchQuery)
+                                        }
+                                    }) {
+                                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                                    }
+                                },
+                                contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
+                                container = {
+                                    OutlinedTextFieldDefaults.Container(
+                                        enabled = true,
+                                        isError = false,
+                                        interactionSource = searchInteractionSource,
+                                        colors = OutlinedTextFieldDefaults.colors(),
+                                        shape = RoundedCornerShape(22.dp)
+                                    )
                                 }
-                            }) {
-                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
-                            }
+                            )
                         }
                     )
                 }
@@ -455,48 +487,52 @@ fun TraktSearchScreen(
                         selected = uiState.selectedTab == MediaType.MOVIE,
                         onClick = { view.performHaptic(HapticType.TICK); viewModel.switchTab(MediaType.MOVIE) },
                         text = {
-                            val count = uiState.movieState.totalCount
-                            val label = if (count > 0 && uiState.movieState.hasSearched)
-                                stringResource(R.string.trakt_search_tab_movies_count, count)
-                            else
-                                stringResource(R.string.trakt_search_tab_movies)
-                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.trakt_search_tab_movies), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                                val count = uiState.movieState.totalCount
+                                if (count > 0 && uiState.movieState.hasSearched) {
+                                    Text("($count)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.SHOW,
                         onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.SHOW) },
                         text = {
-                            val count = uiState.showState.totalCount
-                            val label = if (count > 0 && uiState.showState.hasSearched)
-                                stringResource(R.string.trakt_search_tab_shows_count, count)
-                            else
-                                stringResource(R.string.trakt_search_tab_shows)
-                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.trakt_search_tab_shows), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                                val count = uiState.showState.totalCount
+                                if (count > 0 && uiState.showState.hasSearched) {
+                                    Text("($count)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.PERSON,
                         onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.PERSON) },
                         text = {
-                            val count = uiState.personState.totalCount
-                            val label = if (count > 0 && uiState.personState.hasSearched)
-                                stringResource(R.string.trakt_search_tab_persons_count, count)
-                            else
-                                stringResource(R.string.trakt_search_tab_persons)
-                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.trakt_search_tab_persons), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                                val count = uiState.personState.totalCount
+                                if (count > 0 && uiState.personState.hasSearched) {
+                                    Text("($count)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     )
                     Tab(
                         selected = uiState.selectedTab == MediaType.DISK,
                         onClick = { view.performHaptic(HapticType.CLICK); viewModel.switchTab(MediaType.DISK) },
                         text = {
-                            val count = uiState.diskState.resources.size
-                            val label = if (count > 0 && uiState.diskState.hasSearched)
-                                stringResource(R.string.trakt_search_tab_disk_count, count)
-                            else
-                                stringResource(R.string.trakt_search_tab_disk)
-                            Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.trakt_search_tab_disk), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium)
+                                val filteredCount = getFilteredDiskCount(uiState.diskState)
+                                if (filteredCount > 0 && uiState.diskState.hasSearched) {
+                                    Text("($filteredCount)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
                         }
                     )
                 }
@@ -551,8 +587,8 @@ fun TraktSearchScreen(
 @Composable
 private fun DiskSearchContent(
     diskState: com.tracktosearch.ui.screen.traktsearch.DiskSearchState,
-    onTypeFilterChange: (ResourceType) -> Unit,
-    onDiskTypeFilterChange: (DiskType?) -> Unit,
+    onToggleSource: (String) -> Unit,
+    onToggleDiskType: (DiskType) -> Unit,
     onItemClick: (ResourceItem) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
     hazeState: HazeState = remember { HazeState() },
@@ -561,22 +597,18 @@ private fun DiskSearchContent(
     val view = LocalView.current
     val context = LocalContext.current
 
-    val filteredResources = remember(diskState.resources, diskState.diskTypeFilter, diskState.typeFilter) {
+    val filteredResources = remember(diskState.resources, diskState.enabledSources, diskState.enabledDiskTypes) {
         diskState.resources
-            .let { rs ->
-                if (diskState.typeFilter != ResourceType.ALL) {
-                    rs.filter { inferResourceType(it.name) == diskState.typeFilter }
-                } else rs
-            }
-            .let { rs ->
-                if (diskState.diskTypeFilter != null) {
-                    rs.filter { it.diskType == diskState.diskTypeFilter }
-                } else rs
-            }
+            .filter { it.source in diskState.enabledSources }
+            .filter { it.diskType in diskState.enabledDiskTypes }
     }
 
+    // 还没搜索过
+    if (!diskState.hasSearched) return
+
     when {
-        diskState.isLoading -> {
+        // 搜索中且无结果：显示全屏加载动画
+        diskState.isLoading && diskState.resources.isEmpty() -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -604,7 +636,8 @@ private fun DiskSearchContent(
                 }
             }
         }
-        diskState.error != null -> {
+        // 出错且无结果
+        diskState.error != null && diskState.resources.isEmpty() -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -616,7 +649,8 @@ private fun DiskSearchContent(
                 }
             }
         }
-        diskState.resources.isEmpty() && diskState.hasSearched -> {
+        // 搜索完成但筛选后无结果
+        !diskState.isLoading && filteredResources.isEmpty() && diskState.hasSearched -> {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -632,6 +666,7 @@ private fun DiskSearchContent(
                 )
             }
         }
+        // 有结果（搜索中或搜索完成）：先到先显示
         else -> {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
@@ -640,49 +675,69 @@ private fun DiskSearchContent(
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.hazeSource(state = hazeState)
                 ) {
+                    // 搜索中时顶部显示紧凑进度条
+                    if (diskState.isLoading && diskState.resources.isNotEmpty()) {
+                        item(key = "searching_progress") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = stringResource(R.string.search_loading_disk_progress, diskState.completedSources, diskState.totalSources),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    // 筛选条（吸顶）
                     stickyHeader {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(MaterialTheme.colorScheme.background)
                         ) {
-                            // 影视类型筛选
+                            // 搜索源筛选
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 2.dp),
+                                    .padding(start = 14.dp, end = 14.dp, top = 0.dp, bottom = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = stringResource(R.string.search_filter_type),
+                                    text = stringResource(R.string.detail_filter_sources),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(64.dp)
                                 )
                                 LazyRow(
                                     modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    item {
+                                    items(
+                                        items = diskState.availableSources,
+                                        key = { it }
+                                    ) { source ->
+                                        val label = when (source) {
+                                            "pansou" -> "PanSou"
+                                            "panhub" -> "PanHub"
+                                            "zreso" -> "Zreso"
+                                            else -> diskState.customSourceNames[source] ?: source
+                                        }
                                         FilterChip(
-                                            selected = diskState.typeFilter == ResourceType.ALL,
-                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.ALL) },
-                                            label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = diskState.typeFilter == ResourceType.MOVIE,
-                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.MOVIE) },
-                                            label = { Text(stringResource(R.string.search_filter_movie), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = diskState.typeFilter == ResourceType.SHOW,
-                                            onClick = { view.performHaptic(HapticType.TICK); onTypeFilterChange(ResourceType.SHOW) },
-                                            label = { Text(stringResource(R.string.search_filter_show), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                                            selected = source in diskState.enabledSources,
+                                            onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
+                                            label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                            modifier = Modifier.height(28.dp)
                                         )
                                     }
                                 }
@@ -691,44 +746,38 @@ private fun DiskSearchContent(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
+                                    .padding(start = 14.dp, end = 14.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = stringResource(R.string.search_filter_disk),
+                                    text = stringResource(R.string.detail_filter_disk_types),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.width(64.dp)
                                 )
                                 LazyRow(
                                     modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    item {
+                                    items(
+                                        items = ResourceRepository.ALL_DISK_TYPES.toList(),
+                                        key = { it.name }
+                                    ) { type ->
+                                        val label = when (type) {
+                                            DiskType.QUARK -> stringResource(R.string.detail_disk_type_quark)
+                                            DiskType.BAIDU -> stringResource(R.string.detail_disk_type_baidu)
+                                            DiskType.ALI -> stringResource(R.string.detail_disk_type_ali)
+                                            DiskType.XUNLEI -> stringResource(R.string.detail_disk_type_xunlei)
+                                            DiskType.UC -> stringResource(R.string.detail_disk_type_uc)
+                                            DiskType.ONEONEFIVE -> stringResource(R.string.detail_disk_type_115)
+                                            DiskType.MAGNET -> stringResource(R.string.detail_disk_type_magnet)
+                                            DiskType.OTHER -> stringResource(R.string.detail_disk_type_other)
+                                        }
                                         FilterChip(
-                                            selected = diskState.diskTypeFilter == null,
-                                            onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(null) },
-                                            label = { Text(stringResource(R.string.search_filter_all), maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                                        )
-                                    }
-                                    items(DiskType.entries.filter { it != DiskType.OTHER }) { type ->
-                                        FilterChip(
-                                            selected = diskState.diskTypeFilter == type,
-                                            onClick = { view.performHaptic(HapticType.TICK); onDiskTypeFilterChange(type) },
-                                            label = {
-                                                val label = when (type) {
-                                                    DiskType.QUARK -> stringResource(R.string.disk_quark)
-                                                    DiskType.BAIDU -> stringResource(R.string.disk_baidu)
-                                                    DiskType.ALI -> stringResource(R.string.disk_ali)
-                                                    DiskType.XUNLEI -> stringResource(R.string.disk_xunlei)
-                                                    DiskType.UC -> stringResource(R.string.disk_uc)
-                                                    DiskType.ONEONEFIVE -> stringResource(R.string.disk_115)
-                                                    DiskType.MAGNET -> stringResource(R.string.disk_magnet)
-                                                    DiskType.OTHER -> stringResource(R.string.disk_other)
-                                                }
-                                                Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            }
+                                            selected = type in diskState.enabledDiskTypes,
+                                            onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
+                                            label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                            modifier = Modifier.height(28.dp)
                                         )
                                     }
                                 }

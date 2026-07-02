@@ -95,11 +95,16 @@ class DiscoverViewModel @Inject constructor(
     private val viewedItemStorage: ViewedItemStorage,
     private val discoverSectionStorage: DiscoverSectionStorage,
     private val tokenStorage: TokenStorage,
+    private val sharedDoubanHotCache: TtlCache<DoubanHotData>,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
+
+    /** 全局想看/已看 ID 缓存，登录后加载一次 */
+    private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
+    val watchlistWatchedIds: StateFlow<TraktRepository.WatchlistWatchedIds?> = _watchlistWatchedIds.asStateFlow()
 
     private val _toastEvent = MutableSharedFlow<Int>()
     val toastEvent = _toastEvent.asSharedFlow()
@@ -125,38 +130,56 @@ class DiscoverViewModel @Inject constructor(
         )
     }
 
-    // 豆瓣热榜缓存
-    private val doubanHotCache = TtlCache<DoubanHotData>(TTL_DOUBAN)
-
     init {
         // 首屏优先加载：豆瓣 + TMDB（国内用户首屏最常看到）
         // Trakt 栏目延迟加载，由 loadRemainingSections() 在用户滚动到底部附近时触发
         loadInitialSections()
+        // 登录后加载全局想看/已看 ID 缓存
+        loadWatchlistWatchedIds()
+    }
+
+    /** 加载全局想看/已看 ID 缓存 */
+    private fun loadWatchlistWatchedIds() {
+        viewModelScope.launch {
+            traktRepository.loadWatchlistWatchedIds()
+            _watchlistWatchedIds.value = traktRepository.getWatchlistWatchedIds()
+        }
     }
 
     /** 首屏优先加载：豆瓣热榜 + TMDB 热门/即将上映 */
     private fun loadInitialSections() {
         val configs = sectionConfigs.value
         val visibleIds = configs.filter { it.visible }.map { it.id }.toSet()
-        if (DOUBAN_CATEGORIES.any { it in visibleIds }) loadDoubanHot()
-        if ("tmdb-popular" in visibleIds) loadTmdbPopular()
-        if ("tmdb-upcoming" in visibleIds) loadTmdbUpcoming()
+        if (DOUBAN_CATEGORIES.any { it in visibleIds }) {
+            // 豆瓣热榜已有数据则跳过
+            if (_uiState.value.doubanHotCategories.none { it.items.isNotEmpty() }) loadDoubanHot()
+        }
+        if ("tmdb-popular" in visibleIds && !_uiState.value.isLoadingPopular && _uiState.value.tmdbPopularMovies.isEmpty() && _uiState.value.popularError == null) loadTmdbPopular()
+        if ("tmdb-upcoming" in visibleIds && !_uiState.value.isLoadingUpcoming && _uiState.value.tmdbUpcomingMovies.isEmpty() && _uiState.value.upcomingError == null) loadTmdbUpcoming()
     }
 
     /** 延迟加载剩余栏目：Trakt 推荐/趋势/列表等，进入发现页后或滚动时调用 */
-    fun loadRemainingSections() {
+    fun loadRemainingSections(force: Boolean = false) {
         val configs = sectionConfigs.value
         val visibleIds = configs.filter { it.visible }.map { it.id }.toSet()
-        if ("trakt-recommendations" in visibleIds) loadTraktRecommendations()
-        if ("trakt-lists" in visibleIds) loadTraktLists()
+        val s = _uiState.value
+        if ("trakt-recommendations" in visibleIds && (force || !s.isLoadingRecommendations && s.traktRecommendations.isEmpty() && s.recommendationsError == null)) loadTraktRecommendations()
+        if ("trakt-lists" in visibleIds && (force || !s.isLoadingTraktLists && s.trendingLists.isEmpty())) loadTraktLists()
         val traktSectionIds = listOf("trakt-trending-movies", "trakt-trending-shows", "trakt-anticipated", "trakt-show-recommendations")
-        if (traktSectionIds.any { it in visibleIds }) loadTraktData()
+        if (traktSectionIds.any { it in visibleIds } && (force || !s.isLoadingTrakt && s.traktTrendingMovies.isEmpty())) loadTraktData()
     }
 
     /** 根据栏目可见性设置，按需加载各栏目数据（完整加载，供下拉刷新用） */
     private fun loadVisibleSections() {
-        loadInitialSections()
-        loadRemainingSections()
+        loadDoubanHot()
+        loadTmdbPopular()
+        loadTmdbUpcoming()
+        loadRemainingSections(force = true)
+    }
+
+    /** 强制刷新所有栏目（清除缓存后重新加载） */
+    fun forceRefreshAll() {
+        loadVisibleSections()
     }
 
     fun loadDoubanHot() {
@@ -177,9 +200,12 @@ class DiscoverViewModel @Inject constructor(
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
-            // 1 小时内用缓存
+            // 共享缓存 + 飞行中去重：与搜索页共享同一请求
             val cacheKey = "${categoryId}_1_10"
-            doubanHotCache.get(cacheKey)?.let { data ->
+            try {
+                val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
+                    doubanHotApi.getDoubanHot(category = categoryId, limit = 10).data
+                }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
@@ -190,21 +216,6 @@ class DiscoverViewModel @Inject constructor(
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
-                return@launch
-            }
-            try {
-                val response = doubanHotApi.getDoubanHot(category = categoryId, limit = 10)
-                val updated = _uiState.value.doubanHotCategories.toMutableList()
-                if (index < updated.size) {
-                    updated[index] = updated[index].copy(
-                        items = response.data.items,
-                        isLoading = false,
-                        error = null,
-                        total = response.data.total
-                    )
-                    _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
-                }
-                doubanHotCache.put(cacheKey, response.data)
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (index < updated.size) {
@@ -239,7 +250,7 @@ class DiscoverViewModel @Inject constructor(
             // 1 小时内用缓存（仅首页）
             val cacheKey = "${categoryId}_${page}_$limit"
             if (page == 1) {
-                doubanHotCache.get(cacheKey)?.let { data ->
+                sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
                     if (idx >= 0) {
                         updated[idx] = updated[idx].copy(
@@ -274,7 +285,7 @@ class DiscoverViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
                 if (page == 1) {
-                    doubanHotCache.put(cacheKey, response.data)
+                    sharedDoubanHotCache.put(cacheKey, response.data)
                 }
             } catch (e: Exception) {
                 val updated = _uiState.value.doubanHotCategories.toMutableList()

@@ -184,7 +184,7 @@ class MainActivity : AppCompatActivity() {
             // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
             val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
             if (isValid) {
-                prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 50) } })
+                prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) } })
             }
             prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
             prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
@@ -483,7 +483,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkCrashAndPrompt() {
         // IO 线程读取崩溃次数和日志
         val crashCount = CrashHandler.getAndResetCrashCount(this)
-        if (crashCount < 2) return
+        if (crashCount < 1) return
         val logs = CrashHandler.getCrashLogs(this)
         // 回到主线程显示 Dialog
         runOnUiThread {

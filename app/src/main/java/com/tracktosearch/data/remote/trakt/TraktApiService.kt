@@ -207,12 +207,18 @@ interface TraktApiService {
         @Query("page") page: Int = 1
     ): Response<List<TraktTrendingListResponse>>
 
-    @GET("lists/{slug}/items")
+    @GET("lists/{id}/items")
     suspend fun getListItems(
-        @Path("slug") slug: String,
+        @Path("id") id: Int,
         @Query("limit") limit: Int = 20,
         @Query("page") page: Int = 1
     ): Response<List<TraktListItemResponse>>
+
+    // 用户资料
+    @GET("users/me")
+    suspend fun getUserProfile(
+        @Query("extended") extended: String = "full"
+    ): Response<TraktUserProfileResponse>
 
     // 用户统计
     @GET("users/{id}/stats")

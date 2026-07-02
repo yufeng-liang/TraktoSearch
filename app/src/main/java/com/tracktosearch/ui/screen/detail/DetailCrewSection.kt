@@ -31,11 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -249,16 +245,6 @@ internal fun FullCastCrewSheet(
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
 
-    // 延迟导航：先关闭弹窗，再延迟导航
-    var pendingPersonClick by remember { mutableStateOf<Triple<Int, String, String?>?>(null) }
-    LaunchedEffect(pendingPersonClick) {
-        pendingPersonClick?.let { (id, name, url) ->
-            kotlinx.coroutines.delay(300)
-            onPersonClick(id, name, url)
-            pendingPersonClick = null
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -300,7 +286,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
                         )
                     }
                 }
@@ -315,7 +301,7 @@ internal fun FullCastCrewSheet(
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
                         )
                     }
                 }
@@ -330,7 +316,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
                         )
                     }
                 }
@@ -345,7 +331,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onDismiss(); pendingPersonClick = Triple(person.id, person.name, profileUrl) }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
                         )
                     }
                 }

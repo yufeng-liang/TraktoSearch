@@ -86,6 +86,7 @@
     <string name="watchlist_search_no_shows">No TV shows match your search</string>
     <string name="watchlist_logout">Logout</string>
     <string name="watchlist_mode_watchlist">Watchlist</string>
+    <string name="watchlist_mode_watched">Watched</string>
     <string name="watchlist_tab_history">History</string>
     <string name="watchlist_search_watchlist">Search my watchlist</string>
     <string name="watchlist_search_history">Search my history</string>
@@ -95,7 +96,14 @@
     <string name="watchlist_selected_count">Selected %d</string>
     <string name="watchlist_remove_watchlist">Remove from watchlist</string>
     <string name="watchlist_remove_history">Remove from history</string>
+    <string name="watchlist_pull_to_refresh">Pull down to refresh</string>
+    <string name="watchlist_release_to_refresh">Release to refresh</string>
+    <string name="watchlist_refreshing">Refreshing…</string>
     <string name="common_cancel">Cancel</string>
+    <string name="permission_cloud_title">Want to see clouds transform?</string>
+    <string name="permission_cloud_message">After granting location permission, it will change with your city\'s real-time weather and holiday themes!</string>
+    <string name="permission_cancel">Cancel</string>
+    <string name="permission_authorize">Authorize</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Search movies on Trakt</string>
@@ -522,6 +530,7 @@ Config:
     <!-- Statistics -->
     <string name="statistics_title">Statistics</string>
     <string name="statistics_total">Total</string>
+    <string name="statistics_movies">Movies</string>
     <string name="statistics_this_month">This Month</string>
     <string name="statistics_this_year">This Year</string>
     <string name="statistics_shows">Shows</string>

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
+import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.MediaType
 
 /** TMDB 电影全部弹窗（分页加载） */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,6 +57,7 @@ internal fun TmdbAllSheet(
     isLoading: Boolean,
     hasMore: Boolean,
     currentPage: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TmdbSearchResult) -> Unit,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
@@ -110,6 +114,8 @@ internal fun TmdbAllSheet(
                         year = movie.release_date.take(4),
                         rating = null,
                         isResolving = false,
+                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
+                        isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
                         onClick = { onItemClick(movie) }
                     )
                 }
@@ -139,6 +145,7 @@ internal fun TraktMovieAllSheet(
     isLoading: Boolean,
     hasMore: Boolean,
     currentPage: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktMovie) -> Unit,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
@@ -195,6 +202,8 @@ internal fun TraktMovieAllSheet(
                         rating = if (movie.rating > 0)
                             String.format("%.1f", movie.rating) else null,
                         isResolving = false,
+                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                        isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
                         onClick = { onItemClick(movie) }
                     )
                 }
@@ -221,6 +230,7 @@ internal fun TraktMovieAllSheet(
 internal fun TraktShowAllSheet(
     title: String,
     items: List<TraktShow>,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktShow) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -264,6 +274,8 @@ internal fun TraktShowAllSheet(
                         rating = if (show.rating > 0)
                             String.format("%.1f", show.rating) else null,
                         isResolving = false,
+                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(show.ids.trakt, show.ids.tmdb, MediaType.SHOW) == true,
+                        isWatched = watchlistWatchedIds?.isWatched(show.ids.trakt, show.ids.tmdb, MediaType.SHOW) == true,
                         onClick = { onItemClick(show) }
                     )
                 }
@@ -278,6 +290,7 @@ internal fun TraktShowAllSheet(
 internal fun TraktAnticipatedAllSheet(
     anticipatedMovies: List<TraktAnticipatedMovieResponse>,
     anticipatedShows: List<TraktAnticipatedShowResponse>,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onMovieClick: (TraktMovie) -> Unit,
     onShowClick: (TraktShow) -> Unit,
     onDismiss: () -> Unit
@@ -323,6 +336,8 @@ internal fun TraktAnticipatedAllSheet(
                         rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
                         subtitle = stringResource(R.string.discover_list_count, item.list_count),
                         isResolving = false,
+                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                        isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                         onClick = { onMovieClick(item.movie) }
                     )
                 }
@@ -334,6 +349,8 @@ internal fun TraktAnticipatedAllSheet(
                         rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
                         subtitle = stringResource(R.string.discover_list_count, item.list_count),
                         isResolving = false,
+                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                        isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                         onClick = { onShowClick(item.show) }
                     )
                 }
@@ -347,12 +364,13 @@ internal fun TraktAnticipatedAllSheet(
 @Composable
 internal fun TrendingListsAllSheet(
     lists: List<TraktTrendingListResponse>,
-    onListClick: (slug: String, listName: String) -> Unit,
+    onListClick: (listId: Int, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -375,7 +393,10 @@ internal fun TrendingListsAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(lists, key = { _, item -> item.list.ids.slug }, contentType = { _, _ -> "list" }) { _, listResponse ->
-                    Card(modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.slug, listResponse.list.name) }) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
                                 text = listResponse.list.name,

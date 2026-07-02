@@ -2,28 +2,25 @@ package com.tracktosearch.ui.screen.listdetail
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.calculateTopPadding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
@@ -39,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,9 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.ScrollToTopButton
 import androidx.compose.runtime.snapshotFlow
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
@@ -81,7 +77,7 @@ fun TraktListDetailScreen(
             }
     }
 
-    Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
+    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -95,7 +91,6 @@ fun TraktListDetailScreen(
                             columns = GridCells.Fixed(3),
                             modifier = Modifier
                                 .fillMaxSize()
-                                .statusBarsPadding()
                                 .hazeSource(state = hazeState),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -105,8 +100,41 @@ fun TraktListDetailScreen(
                                 MovieCardSkeleton()
                             }
                         }
-                        // 返回按钮
-                        BackButton(hazeState = hazeState, onBack = onBack)
+
+                        // Haze 模糊标题栏
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .hazeEffect(
+                                    state = hazeState,
+                                    style = HazeMaterials.thin()
+                                )
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                                .clickable(enabled = false, onClick = {})
+                        ) {
+                            Spacer(modifier = Modifier.statusBarsPadding())
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = onBack) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "返回",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Text(
+                                    text = "加载中...",
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -139,7 +167,6 @@ fun TraktListDetailScreen(
                         state = gridState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .statusBarsPadding()
                             .hazeSource(state = hazeState),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -170,21 +197,48 @@ fun TraktListDetailScreen(
                         }
                     }
 
-                    // 返回按钮
-                    BackButton(hazeState = hazeState, onBack = onBack)
+                    // 快速回顶按钮
+                    ScrollToTopButton(
+                        gridState = gridState,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 16.dp, end = 16.dp),
+                        hazeState = hazeState
+                    )
 
-                    // 列表名标题
-                    if (uiState.listName.isNotBlank()) {
-                        Text(
-                            text = uiState.listName,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface,
+                    // Haze 模糊标题栏
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeMaterials.thin()
+                            )
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                            .clickable(enabled = false, onClick = {})
+                    ) {
+                        Spacer(modifier = Modifier.statusBarsPadding())
+                        Row(
                             modifier = Modifier
-                                .statusBarsPadding()
-                                .padding(start = 64.dp, top = 10.dp, end = 16.dp)
-                        )
+                                .fillMaxWidth()
+                                .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "返回",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            Text(
+                                text = uiState.listName,
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
@@ -192,47 +246,4 @@ fun TraktListDetailScreen(
     }
 }
 
-@Composable
-private fun BackButton(
-    hazeState: HazeState,
-    onBack: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .statusBarsPadding()
-            .padding(start = 12.dp, top = 4.dp)
-            .size(40.dp)
-            .clip(CircleShape)
-            .hazeEffect(
-                state = hazeState,
-                style = HazeStyle(
-                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                    blurRadius = 20.dp,
-                    noiseFactor = 0f,
-                    tint = null
-                )
-            )
-            .background(
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
-                shape = CircleShape
-            )
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                shape = CircleShape
-            )
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onBack
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "返回",
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp)
-        )
-    }
-}
+

@@ -80,7 +80,7 @@ class PersonViewModel @Inject constructor(
         movieCreditsPage = 1
         tvCreditsPage = 1
 
-        _uiState.value = PersonUiState(isLoading = true, isLoadingMovies = true, isLoadingTvShows = true)
+        _uiState.value = PersonUiState(isLoading = true, isLoadingMovies = true, isLoadingTvShows = true, isLoadingPersonImages = true)
 
         viewModelScope.launch {
             try {

@@ -74,6 +74,7 @@
     <string name="watchlist_retry">재시도</string>
     <string name="watchlist_loading">로딩 중…</string>
     <string name="watchlist_mode_watchlist">관심목록</string>
+    <string name="watchlist_mode_watched">시청</string>
     <string name="watchlist_tab_history">기록</string>
 
     <!-- Detail Screen -->
@@ -162,6 +163,7 @@
     <!-- Statistics -->
     <string name="statistics_title">통계</string>
     <string name="statistics_total">전체</string>
+    <string name="statistics_movies">영화</string>
     <string name="statistics_this_month">이번 달</string>
     <string name="statistics_this_year">올해</string>
     <string name="statistics_shows">작품</string>
@@ -198,7 +200,14 @@
     <string name="watchlist_selected_count">%d개 선택됨</string>
     <string name="watchlist_remove_watchlist">관심목록에서 삭제</string>
     <string name="watchlist_remove_history">기록에서 삭제</string>
+    <string name="watchlist_pull_to_refresh">당겨서 새로고침</string>
+    <string name="watchlist_release_to_refresh">놓아서 새로고침</string>
+    <string name="watchlist_refreshing">새로고침 중…</string>
     <string name="common_cancel">취소</string>
+    <string name="permission_cloud_title">구름이 변신하는 걸 보고 싶으신가요?</string>
+    <string name="permission_cloud_message">위치 권한을 허용하면 도시의 실시간 날씨와 명절 테마에 따라 변화합니다!</string>
+    <string name="permission_cancel">취소</string>
+    <string name="permission_authorize">허용하기</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Trakt에서 영화 검색</string>

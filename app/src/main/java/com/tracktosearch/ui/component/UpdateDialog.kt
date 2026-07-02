@@ -375,7 +375,7 @@ fun UpdateDialog(
                         }
                         is DownloadState.Completed -> {
                             Text(
-                                text = stringResource(R.string.common_save_success),
+                                text = stringResource(R.string.common_saved_path, state.file.parentFile?.name ?: "", state.file.name),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )

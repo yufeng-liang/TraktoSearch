@@ -27,7 +27,9 @@ import com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
+import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
+import com.tracktosearch.data.repository.MediaType
 
 @Composable
 internal fun TmdbMovieSection(
@@ -36,6 +38,7 @@ internal fun TmdbMovieSection(
     isLoading: Boolean,
     error: String?,
     resolvingItemId: Int?,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TmdbSearchResult) -> Unit,
     onRetry: () -> Unit,
     onViewAll: () -> Unit
@@ -90,6 +93,8 @@ internal fun TmdbMovieSection(
                             year = movie.release_date.take(4),
                             rating = null,
                             isResolving = resolvingItemId == movie.id,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
                             onClick = { onItemClick(movie) }
                         )
                     }
@@ -106,6 +111,7 @@ internal fun TraktRecommendationSection(
     isLoading: Boolean,
     error: String?,
     resolvingItemId: Int?,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktMovie) -> Unit,
     onRetry: () -> Unit,
     onViewAll: () -> Unit
@@ -159,6 +165,8 @@ internal fun TraktRecommendationSection(
                             rating = if (movie.rating > 0)
                                 String.format("%.1f", movie.rating) else null,
                             isResolving = resolvingItemId == movie.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
                             onClick = { onItemClick(movie) }
                         )
                     }
@@ -175,6 +183,7 @@ internal fun TraktTrendingMovieSection(
     isLoading: Boolean,
     resolvingItemId: Int?,
     totalCount: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktMovie) -> Unit,
     onViewAll: () -> Unit
 ) {
@@ -222,6 +231,8 @@ internal fun TraktTrendingMovieSection(
                             rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
                             subtitle = stringResource(R.string.discover_watchers, item.watchers),
                             isResolving = resolvingItemId == item.movie.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                             onClick = { onItemClick(item.movie) }
                         )
                     }
@@ -238,6 +249,7 @@ internal fun TraktTrendingShowSection(
     isLoading: Boolean,
     resolvingItemId: Int?,
     totalCount: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit
 ) {
@@ -285,6 +297,8 @@ internal fun TraktTrendingShowSection(
                             rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
                             subtitle = stringResource(R.string.discover_watchers, item.watchers),
                             isResolving = resolvingItemId == item.show.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             onClick = { onItemClick(item.show) }
                         )
                     }
@@ -302,6 +316,7 @@ internal fun TraktAnticipatedSection(
     isLoading: Boolean,
     resolvingItemId: Int?,
     totalCount: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onMovieClick: (TraktMovie) -> Unit,
     onShowClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit
@@ -351,6 +366,8 @@ internal fun TraktAnticipatedSection(
                             rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
                             subtitle = stringResource(R.string.discover_list_count, item.list_count),
                             isResolving = resolvingItemId == item.movie.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                             onClick = { onMovieClick(item.movie) }
                         )
                     }
@@ -362,6 +379,8 @@ internal fun TraktAnticipatedSection(
                             rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
                             subtitle = stringResource(R.string.discover_list_count, item.list_count),
                             isResolving = resolvingItemId == item.show.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             onClick = { onShowClick(item.show) }
                         )
                     }
@@ -378,6 +397,7 @@ internal fun TraktShowRecommendationSection(
     isLoading: Boolean,
     resolvingItemId: Int?,
     totalCount: Int,
+    watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit
 ) {

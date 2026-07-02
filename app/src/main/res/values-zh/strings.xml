@@ -86,6 +86,7 @@
     <string name="watchlist_search_no_shows">没有匹配的电视剧</string>
     <string name="watchlist_logout">退出登录</string>
     <string name="watchlist_mode_watchlist">想看</string>
+    <string name="watchlist_mode_watched">已看</string>
     <string name="watchlist_tab_history">已看历史</string>
     <string name="watchlist_search_watchlist">搜索我的想看</string>
     <string name="watchlist_search_history">搜索我的已看历史</string>
@@ -95,7 +96,14 @@
     <string name="watchlist_selected_count">已选%d项</string>
     <string name="watchlist_remove_watchlist">移除想看</string>
     <string name="watchlist_remove_history">移除记录</string>
+    <string name="watchlist_pull_to_refresh">继续下拉触发刷新</string>
+    <string name="watchlist_release_to_refresh">释放触发刷新</string>
+    <string name="watchlist_refreshing">刷新中…</string>
     <string name="common_cancel">取消</string>
+    <string name="permission_cloud_title">想知道白云会变身吗？</string>
+    <string name="permission_cloud_message">授权位置后，它会随您所在城市的实时天气和节日主题变化哦~</string>
+    <string name="permission_cancel">取消</string>
+    <string name="permission_authorize">去授权</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">在 Trakt 上搜索电影</string>
@@ -106,12 +114,12 @@
     <string name="trakt_search_result_count_shows">共 %d 部电视剧</string>
     <string name="trakt_search_tab_movies">电影</string>
     <string name="trakt_search_tab_shows">电视剧</string>
-    <string name="trakt_search_tab_movies_count">电影 (%d)</string>
-    <string name="trakt_search_tab_shows_count">电视剧 (%d)</string>
+    <string name="trakt_search_tab_movies_count">电影(%d)</string>
+    <string name="trakt_search_tab_shows_count">电视剧(%d)</string>
     <string name="trakt_search_tab_persons">人物</string>
-    <string name="trakt_search_tab_persons_count">人物 (%d)</string>
+    <string name="trakt_search_tab_persons_count">人物(%d)</string>
     <string name="trakt_search_tab_disk">网盘</string>
-    <string name="trakt_search_tab_disk_count">网盘 (%d)</string>
+    <string name="trakt_search_tab_disk_count">网盘(%d)</string>
     <string name="trakt_search_hint_disk">搜索网盘资源</string>
     <string name="trakt_search_hint_persons">在 Trakt 上搜索人物</string>
     <string name="trakt_search_no_persons">在 Trakt 上未找到人物</string>
@@ -522,6 +530,7 @@
     <!-- Statistics -->
     <string name="statistics_title">观看统计</string>
     <string name="statistics_total">总计</string>
+    <string name="statistics_movies">部电影</string>
     <string name="statistics_this_month">本月</string>
     <string name="statistics_this_year">本年</string>
     <string name="statistics_shows">部剧</string>

@@ -81,6 +81,33 @@ internal fun PersonSkeletonContent() {
                                 .clip(textShape)
                                 .background(skeletonColor)
                         )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(0.4f)
+                                .height(16.dp)
+                                .clip(textShape)
+                                .background(skeletonColor)
+                        )
+                        // 社交媒体图标骨架
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .width(80.dp)
+                                    .height(16.dp)
+                                    .clip(textShape)
+                                    .background(skeletonColor)
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(90.dp)
+                                    .height(16.dp)
+                                    .clip(textShape)
+                                    .background(skeletonColor)
+                            )
+                        }
                     }
                 }
 
@@ -144,7 +171,7 @@ internal fun PersonSkeletonContent() {
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
-                    items(5) {
+                    items(4) {
                         Box(
                             modifier = Modifier
                                 .width(110.dp)

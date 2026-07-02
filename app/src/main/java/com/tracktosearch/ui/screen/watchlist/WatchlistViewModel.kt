@@ -85,7 +85,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingMovies = !silent,
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, forceRefresh = forceReload) }
+            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (items, totalPages) ->
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
@@ -165,7 +165,7 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingShows = !silent,
                 showsError = if (silent) _uiState.value.showsError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage, forceRefresh = forceReload) }
+            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (items, totalPages) ->
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
@@ -470,7 +470,7 @@ class WatchlistViewModel @Inject constructor(
         if (_uiState.value.isLoadingMovies || !_uiState.value.hasMoreMovies) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingMovies = true)
-            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage) }
+            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200) }
             result.onSuccess { (items, totalPages) ->
                 val uiItems = items.map { item ->
                     async {

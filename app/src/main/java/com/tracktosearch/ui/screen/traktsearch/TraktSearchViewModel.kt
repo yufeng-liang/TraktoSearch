@@ -62,8 +62,10 @@ data class DiskSearchState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val hasSearched: Boolean = false,
-    val typeFilter: ResourceType = ResourceType.ALL,
-    val diskTypeFilter: com.tracktosearch.data.remote.dto.DiskType? = null,
+    val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES,
+    val enabledDiskTypes: Set<com.tracktosearch.data.remote.dto.DiskType> = ResourceRepository.ALL_DISK_TYPES,
+    val availableSources: List<String> = emptyList(),
+    val customSourceNames: Map<String, String> = emptyMap(),
     val completedSources: Int = 0,
     val totalSources: Int = 0
 )
@@ -203,7 +205,7 @@ class TraktSearchViewModel @Inject constructor(
                 result.onSuccess { (searchResults, totalCount) ->
                     val traktItems = searchResults.map { item ->
                         async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
-                    }.awaitAll().filterNotNull()
+                    }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
                     // 收集已有的 tmdbId
                     val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
                     // TMDB 独有的结果：通过 TMDB ID 反查 Trakt
@@ -223,13 +225,13 @@ class TraktSearchViewModel @Inject constructor(
                                 )
                             }
                         }
-                    }.awaitAll().filterNotNull()
+                    }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
                     val merged = traktItems + tmdbOnlyItems
-                    val mergedTotal = totalCount + tmdbOnlyItems.size
+                    val effectiveTotal = if (merged.isEmpty()) 0 else totalCount + tmdbOnlyItems.size
                     updateTabState(searchType, SearchTabState(
                         results = merged,
                         isLoading = false,
-                        totalCount = mergedTotal,
+                        totalCount = effectiveTotal,
                         currentPage = 1,
                         hasMore = traktItems.size < totalCount,
                         hasSearched = true
@@ -297,11 +299,12 @@ class TraktSearchViewModel @Inject constructor(
                                     )
                                 }
                             }
-                        }.awaitAll().filterNotNull()
+                        }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                        val effectiveTotal = if (tmdbItems.isEmpty()) 0 else tmdbResults.size
                         updateTabState(searchType, SearchTabState(
                             results = tmdbItems,
                             isLoading = false,
-                            totalCount = tmdbResults.size,
+                            totalCount = effectiveTotal,
                             currentPage = 1,
                             hasMore = false,
                             hasSearched = true
@@ -318,13 +321,15 @@ class TraktSearchViewModel @Inject constructor(
                 result.onSuccess { (searchResults, totalCount) ->
                     val uiItems = searchResults.map { item ->
                         async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
-                    }.awaitAll().filterNotNull()
+                    }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                    // totalCount 与实际结果同步：enrich 超时或无效项导致结果为空时，总数也应为 0
+                    val effectiveTotal = if (uiItems.isEmpty()) 0 else totalCount
                     updateTabState(searchType, SearchTabState(
                         results = uiItems,
                         isLoading = false,
-                        totalCount = totalCount,
+                        totalCount = effectiveTotal,
                         currentPage = 1,
-                        hasMore = uiItems.size < totalCount,
+                        hasMore = uiItems.size < effectiveTotal,
                         hasSearched = true
                     ))
                 }.onFailure { e ->
@@ -383,7 +388,7 @@ class TraktSearchViewModel @Inject constructor(
                     result.onSuccess { (searchResults, totalCount) ->
                         val traktItems = searchResults.map { item ->
                             async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
-                        }.awaitAll().filterNotNull()
+                        }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
                         val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
                         val tmdbOnlyItems = tmdbResults.filter { it.id !in existingTmdbIds }.map { person ->
                             async {
@@ -401,13 +406,13 @@ class TraktSearchViewModel @Inject constructor(
                                     )
                                 }
                             }
-                        }.awaitAll().filterNotNull()
+                        }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
                         val merged = traktItems + tmdbOnlyItems
-                        val mergedTotal = totalCount + tmdbOnlyItems.size
+                        val effectiveTotal = if (merged.isEmpty()) 0 else totalCount + tmdbOnlyItems.size
                         updateTabState(searchType, SearchTabState(
                             results = merged,
                             isLoading = false,
-                            totalCount = mergedTotal,
+                            totalCount = effectiveTotal,
                             currentPage = 1,
                             hasMore = traktItems.size < totalCount,
                             hasSearched = true
@@ -430,11 +435,12 @@ class TraktSearchViewModel @Inject constructor(
                                         )
                                     }
                                 }
-                            }.awaitAll().filterNotNull()
+                            }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                            val effectiveTotal = if (tmdbItems.isEmpty()) 0 else tmdbResults.size
                             updateTabState(searchType, SearchTabState(
                                 results = tmdbItems,
                                 isLoading = false,
-                                totalCount = tmdbResults.size,
+                                totalCount = effectiveTotal,
                                 currentPage = 1,
                                 hasMore = false,
                                 hasSearched = true
@@ -452,13 +458,14 @@ class TraktSearchViewModel @Inject constructor(
                     result.onSuccess { (searchResults, totalCount) ->
                         val uiItems = searchResults.map { item ->
                             async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
-                        }.awaitAll().filterNotNull()
+                        }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                        val effectiveTotal = if (uiItems.isEmpty()) 0 else totalCount
                         updateTabState(searchType, SearchTabState(
                             results = uiItems,
                             isLoading = false,
-                            totalCount = totalCount,
+                            totalCount = effectiveTotal,
                             currentPage = 1,
-                            hasMore = uiItems.size < totalCount,
+                            hasMore = uiItems.size < effectiveTotal,
                             hasSearched = true
                         ))
                     }.onFailure { e ->
@@ -494,14 +501,16 @@ class TraktSearchViewModel @Inject constructor(
             result.onSuccess { (searchResults, totalCount) ->
                 val newItems = searchResults.map { item ->
                     async { withTimeoutOrNull(8_000) { enrichSearchResult(item, current.selectedTab) } }
-                }.awaitAll().filterNotNull()
+                }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
                 val updatedState = _uiState.value.currentTabState
+                val mergedResults = updatedState.results + newItems
+                val effectiveTotal = if (mergedResults.isEmpty()) 0 else totalCount
                 updateTabState(current.selectedTab, updatedState.copy(
-                    results = updatedState.results + newItems,
+                    results = mergedResults,
                     isLoadingMore = false,
-                    totalCount = totalCount,
+                    totalCount = effectiveTotal,
                     currentPage = nextPage,
-                    hasMore = (updatedState.results.size + newItems.size) < totalCount
+                    hasMore = mergedResults.size < effectiveTotal
                 ))
             }.onFailure {
                 val updatedState = _uiState.value.currentTabState
@@ -608,11 +617,17 @@ class TraktSearchViewModel @Inject constructor(
         if (diskState.isLoading) return
 
         viewModelScope.launch {
-            val totalSources = resourceRepository.getEnabledSources().size
+            val storageEnabledSources = resourceRepository.getEnabledSources()
+            val customSources = resourceRepository.getEnabledCustomSources()
+            val customNames = customSources.associate { it.id to it.name }
+            val totalSources = storageEnabledSources.size
             _uiState.value = _uiState.value.copy(
                 diskState = diskState.copy(
                     isLoading = true, hasSearched = true, error = null,
-                    totalSources = totalSources, completedSources = 0
+                    totalSources = totalSources, completedSources = 0,
+                    availableSources = storageEnabledSources.toList(),
+                    enabledSources = storageEnabledSources,
+                    customSourceNames = customNames
                 )
             )
 
@@ -640,15 +655,19 @@ class TraktSearchViewModel @Inject constructor(
         }
     }
 
-    fun setDiskTypeFilter(filter: com.tracktosearch.data.remote.dto.DiskType?) {
+    fun toggleDiskSource(source: String) {
+        val current = _uiState.value.diskState.enabledSources
+        val newSources = if (source in current) current - source else current + source
         _uiState.value = _uiState.value.copy(
-            diskState = _uiState.value.diskState.copy(diskTypeFilter = filter)
+            diskState = _uiState.value.diskState.copy(enabledSources = newSources)
         )
     }
 
-    fun setDiskResourceTypeFilter(type: ResourceType) {
+    fun toggleDiskType(type: com.tracktosearch.data.remote.dto.DiskType) {
+        val current = _uiState.value.diskState.enabledDiskTypes
+        val newTypes = if (type in current) current - type else current + type
         _uiState.value = _uiState.value.copy(
-            diskState = _uiState.value.diskState.copy(typeFilter = type)
+            diskState = _uiState.value.diskState.copy(enabledDiskTypes = newTypes)
         )
     }
 }

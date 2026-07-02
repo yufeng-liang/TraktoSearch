@@ -74,6 +74,7 @@
     <string name="watchlist_retry">再試行</string>
     <string name="watchlist_loading">読み込み中…</string>
     <string name="watchlist_mode_watchlist">ウォッチリスト</string>
+    <string name="watchlist_mode_watched">視聴済</string>
     <string name="watchlist_tab_history">履歴</string>
 
     <!-- Detail Screen -->
@@ -162,6 +163,7 @@
     <!-- Statistics -->
     <string name="statistics_title">統計</string>
     <string name="statistics_total">合計</string>
+    <string name="statistics_movies">映画</string>
     <string name="statistics_this_month">今月</string>
     <string name="statistics_this_year">今年</string>
     <string name="statistics_shows">作品</string>
@@ -198,7 +200,14 @@
     <string name="watchlist_selected_count">%d件選択中</string>
     <string name="watchlist_remove_watchlist">ウォッチリストから削除</string>
     <string name="watchlist_remove_history">履歴から削除</string>
+    <string name="watchlist_pull_to_refresh">下に引っ張って更新</string>
+    <string name="watchlist_release_to_refresh">離して更新</string>
+    <string name="watchlist_refreshing">更新中…</string>
     <string name="common_cancel">キャンセル</string>
+    <string name="permission_cloud_title">雲が変身するのを見たいですか？</string>
+    <string name="permission_cloud_message">位置情報を許可すると、あなたの都市のリアルタイムの天気や祝日テーマに合わせて変化します！</string>
+    <string name="permission_cancel">キャンセル</string>
+    <string name="permission_authorize">許可する</string>
 
     <!-- Trakt Search Screen -->
     <string name="trakt_search_hint_movies">Traktで映画を検索</string>

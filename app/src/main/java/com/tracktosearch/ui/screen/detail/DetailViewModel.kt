@@ -123,6 +123,8 @@ data class DetailUiState(
     val isLoadingRecommendations: Boolean = false,
     // 系列信息
     val collectionInfo: TmdbCollectionResponse? = null,
+    // 影视状态（Released, In Production, Returning Series, Ended 等）
+    val status: String = "",
     // 各模块加载错误提示
     val ratingsError: Boolean = false,
     val commentsError: Boolean = false,
@@ -312,12 +314,12 @@ class DetailViewModel @Inject constructor(
                             val movieDetail = tmdbRepository.getMovieDetail(tmdbId)
                             collectionId = movieDetail?.belongs_to_collection?.id ?: 0
                             currentCollectionId = collectionId
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country, e.status)
                         }
                         MediaType.SHOW -> {
                             val e = tmdbRepository.enrichTv(tmdbId, title, year)
                             tmdbRating = e.rating
-                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country)
+                            EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country, e.status)
                         }
                         MediaType.PERSON -> null
                         MediaType.DISK -> null
@@ -341,7 +343,8 @@ class DetailViewModel @Inject constructor(
                     posterUrl = enrichment?.posterUrl,
                     year = enrichment?.year ?: year,
                     releaseDate = enrichment?.releaseDate ?: "",
-                    runtime = enrichment?.runtime
+                    runtime = enrichment?.runtime,
+                    status = enrichment?.status ?: ""
                 )
                 detailLoaded = true
                 saveToCache()
@@ -776,26 +779,23 @@ class DetailViewModel @Inject constructor(
                 val filtered = enriched.filter { it.tmdbId > 0 }
 
                 if (tokenStorage.getCachedAccessToken() != null) {
-                    // 已登录：批量检查想看/已看状态（同时检查当前影视，避免重复 API 调用）
-                    val allIdsToCheck = filtered.map { it.traktId } + currentTraktId
-                    val statusMap = traktRepository.batchCheckStatus(allIdsToCheck, currentMediaType)
-
-                    // 更新推荐项状态
+                    // 已登录：使用全局想看/已看 ID 缓存检查状态（避免重复 API 调用）
+                    var cachedIds = traktRepository.getWatchlistWatchedIds()
+                    if (cachedIds == null) {
+                        // 缓存未加载：先加载
+                        cachedIds = traktRepository.loadWatchlistWatchedIds()
+                    }
                     val withStatus = filtered.map { item ->
-                        val status = statusMap[item.traktId]
                         item.copy(
-                            isInWatchlist = status?.first ?: false,
-                            isWatched = status?.second ?: false
+                            isInWatchlist = cachedIds.isInWatchlist(item.traktId, item.tmdbId, currentMediaType),
+                            isWatched = cachedIds.isWatched(item.traktId, item.tmdbId, currentMediaType)
                         )
                     }
-
-                    // 更新当前影视的想看/已看状态
-                    val currentStatus = statusMap[currentTraktId]
                     _uiState.value = _uiState.value.copy(
                         recommendations = withStatus,
                         isLoadingRecommendations = false,
-                        isMarkedWatchlist = currentStatus?.first ?: false,
-                        isMarkedWatched = currentStatus?.second ?: false
+                        isMarkedWatchlist = cachedIds.isInWatchlist(currentTraktId, currentTmdbId, currentMediaType),
+                        isMarkedWatched = cachedIds.isWatched(currentTraktId, currentTmdbId, currentMediaType)
                     )
                 } else {
                     // 未登录：跳过状态查询，直接展示推荐列表
@@ -1221,7 +1221,7 @@ class DetailViewModel @Inject constructor(
         if (current.isMarkedWatched) {
             _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true)
             viewModelScope.launch {
-                traktRepository.removeWatched(currentTraktId, currentMediaType)
+                traktRepository.removeWatched(currentTraktId, currentMediaType, currentTmdbId)
                     .onSuccess {
                         _uiState.value = _uiState.value.copy(
                             isMarkedWatched = false,
@@ -1322,9 +1322,9 @@ class DetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             val result = if (targetState) {
-                traktRepository.addToWatchlist(currentTraktId, currentMediaType)
+                traktRepository.addToWatchlist(currentTraktId, currentMediaType, currentTmdbId)
             } else {
-                traktRepository.removeFromWatchlist(currentTraktId, currentMediaType)
+                traktRepository.removeFromWatchlist(currentTraktId, currentMediaType, currentTmdbId)
             }
             if (result.isSuccess) {
                 _uiState.value = _uiState.value.copy(
@@ -1362,7 +1362,8 @@ class DetailViewModel @Inject constructor(
         val rating: Double,
         val runtime: Int? = null,
         val releaseDate: String = "",
-        val country: String = ""
+        val country: String = "",
+        val status: String = ""
     )
 
     /** 获取系列信息 */

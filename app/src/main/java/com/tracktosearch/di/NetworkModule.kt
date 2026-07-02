@@ -3,6 +3,8 @@ package com.tracktosearch.di
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -259,6 +261,13 @@ object NetworkModule {
             .create(PanHubApiService::class.java)
     }
 
+    /** 豆瓣热榜共享缓存（搜索页与发现页复用） */
+    @Provides
+    @Singleton
+    fun provideDoubanHotCache(): TtlCache<DoubanHotData> {
+        return TtlCache(60 * 60 * 1000L) // 1 小时
+    }
+
     @Provides
     @Singleton
     fun provideDoubanHotApiService(
@@ -266,6 +275,21 @@ object NetworkModule {
     ): DoubanHotApiService {
         return Retrofit.Builder()
             .baseUrl("https://panhubshenzjdcom-beta-indol.vercel.app/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(DoubanHotApiService::class.java)
+    }
+
+    /** 备选豆瓣热榜 API（主 API 超时时切换） */
+    @Provides
+    @Singleton
+    @Named("backup")
+    fun provideBackupDoubanHotApiService(
+        @Named("panhub") okHttpClient: OkHttpClient
+    ): DoubanHotApiService {
+        return Retrofit.Builder()
+            .baseUrl("https://panhub.shenzjd.com/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

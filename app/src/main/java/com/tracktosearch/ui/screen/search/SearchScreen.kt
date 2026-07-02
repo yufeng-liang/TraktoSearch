@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -85,6 +86,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -97,6 +99,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -141,7 +144,6 @@ fun SearchScreen(
     onBack: (() -> Unit)? = null,
     onSearchClick: ((String) -> Unit)? = null,
     onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
-    onOpenWebView: (url: String) -> Unit = {},
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -322,61 +324,78 @@ fun SearchScreen(
                 ModalBottomSheet(
                     onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
                     sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    dragHandle = null
                 ) {
-                    Column(
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 16.dp)
+                            .fillMaxHeight(0.28f)
+                            .graphicsLayer { clip = false }
                     ) {
-                        // 猫咪动画
+                        // 猫咪坐在弹窗上边框左上角，部分溢出
                         val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
                         LottieAnimation(
                             composition = composition,
                             iterations = LottieConstants.IterateForever,
                             modifier = Modifier
-                                .size(120.dp)
-                                .padding(start = 0.dp)
+                                .size(160.dp)
+                                .offset(x = (-20).dp, y = (-23).dp)
+                                .graphicsLayer { clip = false }
                         )
-
-                        // 标题
-                        Text(
-                            text = "想知道白云会变身吗？",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-                        )
-
-                        // 文案
-                        Text(
-                            text = "授权位置后，它会随您所在城市的实时天气和节日主题变化哦~",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 24.dp)
-                        )
-
-                        // 按钮行
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
                         ) {
-                            TextButton(
-                                onClick = {
-                                    cloudThemeManager.onPermissionDismissed()
-                                    scope.launch(Dispatchers.IO) {
-                                        cloudPermissionStorage.setDismissed(true)
-                                    }
-                                }
+                            // 标题（水平居中）
+                            Text(
+                                text = stringResource(R.string.permission_cloud_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 36.dp)
+                            )
+
+                            // 文案
+                            Text(
+                                text = stringResource(R.string.permission_cloud_message),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(bottom = 42.dp)
+                            )
+
+                            // 按钮行
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Text("取消")
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Button(
-                                onClick = {
-                                    cloudThemeManager.onPermissionDismissed()
-                                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                                TextButton(
+                                    onClick = {
+                                        cloudThemeManager.onPermissionDismissed()
+                                        scope.launch(Dispatchers.IO) {
+                                            cloudPermissionStorage.setDismissed(true)
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.permission_cancel),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
                                 }
-                            ) {
-                                Text("去授权")
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Button(
+                                    onClick = {
+                                        cloudThemeManager.onPermissionDismissed()
+                                        locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.permission_authorize),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                }
                             }
                         }
                     }

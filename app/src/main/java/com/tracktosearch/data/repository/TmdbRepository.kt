@@ -85,7 +85,8 @@ class TmdbRepository @Inject constructor(
         val rating: Double,
         val runtime: Int? = null,
         val releaseDate: String = "",
-        val country: String = ""
+        val country: String = "",
+        val status: String = ""
     )
 
     data class TvEnrichment(
@@ -98,7 +99,8 @@ class TmdbRepository @Inject constructor(
         val rating: Double,
         val episodeRunTime: Int? = null,
         val releaseDate: String = "",
-        val country: String = ""
+        val country: String = "",
+        val status: String = ""
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -119,7 +121,8 @@ class TmdbRepository @Inject constructor(
                 rating = cached.vote_average,
                 runtime = cached.runtime,
                 releaseDate = cached.release_date ?: "",
-                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · ")
+                country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
+                status = cached.status
             )
         }
 
@@ -140,7 +143,8 @@ class TmdbRepository @Inject constructor(
                     rating = detail.vote_average,
                     runtime = detail.runtime,
                     releaseDate = detail.release_date ?: "",
-                    country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · ")
+                    country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
+                    status = detail.status
                 )
             } else {
                 fallbackMovie(originalTitle, year)
@@ -190,7 +194,8 @@ class TmdbRepository @Inject constructor(
                     rating = detail.vote_average,
                     episodeRunTime = detail.episode_run_time?.firstOrNull(),
                     releaseDate = detail.first_air_date ?: "",
-                    country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · ")
+                    country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
+                    status = detail.status
                 )
             } else {
                 fallbackTv(originalName, year)

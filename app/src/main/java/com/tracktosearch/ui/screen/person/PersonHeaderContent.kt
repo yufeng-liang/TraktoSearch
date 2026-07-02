@@ -234,102 +234,15 @@ internal fun PersonHeaderContent(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // 社交媒体图标
-                if (isLoadingTrakt && traktPerson == null) {
-                    // Trakt 数据未加载时显示单行骨架屏，减少加载后高度跳变
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .width(80.dp)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(90.dp)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
-                        )
-                    }
-                } else if (!facebookId.isNullOrEmpty() || !instagramId.isNullOrEmpty() || !twitterId.isNullOrEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (!facebookId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_facebook,
-                                label = facebookId,
-                                tint = Color(0xFF1877F2),
-                                labelColor = Color(0xFF1877F2),
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
-                        if (!instagramId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_instagram,
-                                label = instagramId,
-                                tint = Color(0xFFE4405F),
-                                labelColor = Color(0xFFE4405F),
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
-                        if (!twitterId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_x_twitter,
-                                label = twitterId,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                labelColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
-                    }
-                }
                 // 主页链接 + 维基百科链接
                 if (isLoadingTrakt && traktPerson == null) {
-                    // Trakt 数据未加载时显示骨架屏
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.4f)
-                                .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .width(70.dp)
-                                .height(14.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
-                        )
-                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(0.6f)
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(skeletonColor)
+                    )
                 } else if (!traktHomepage.isNullOrEmpty() || !wikipediaUrl.isNullOrEmpty()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -456,6 +369,80 @@ internal fun PersonHeaderContent(
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+                // 社交媒体图标
+                if (isLoadingTrakt && traktPerson == null) {
+                    // Trakt 数据未加载时显示单行骨架屏，减少加载后高度跳变
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(80.dp)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .width(90.dp)
+                                .height(16.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(skeletonColor)
+                        )
+                    }
+                } else if (!facebookId.isNullOrEmpty() || !instagramId.isNullOrEmpty() || !twitterId.isNullOrEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (!facebookId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_facebook,
+                                label = facebookId,
+                                tint = Color(0xFF1877F2),
+                                labelColor = Color(0xFF1877F2),
+                                modifier = Modifier.weight(1f, fill = false),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                        if (!instagramId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_instagram,
+                                label = instagramId,
+                                tint = Color(0xFFE4405F),
+                                labelColor = Color(0xFFE4405F),
+                                modifier = Modifier.weight(1f, fill = false),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                        if (!twitterId.isNullOrEmpty()) {
+                            SocialMediaIcon(
+                                iconRes = R.drawable.ic_x_twitter,
+                                label = twitterId,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                labelColor = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false),
+                                onClick = {
+                                    try {
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) { }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

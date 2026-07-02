@@ -10,6 +10,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,12 +34,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
@@ -70,6 +74,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -598,7 +603,14 @@ fun SettingsScreen(
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_account)) }
                 item {
-                    LogoutItem(onClick = { showLogoutDialog = true })
+                    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+                    LaunchedEffect(Unit) { viewModel.loadUserProfile() }
+                    UserProfileItem(
+                        username = userProfile?.username,
+                        avatarUrl = userProfile?.images?.avatar?.full ?: "",
+                        isVip = userProfile?.vip == true,
+                        onLogout = { showLogoutDialog = true }
+                    )
                 }
             }
         }
@@ -681,6 +693,7 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutDialog = false
+                    viewModel.clearUserProfile()
                     onLogout()
                 }) {
                     Text(stringResource(R.string.settings_logout_button))
@@ -1127,7 +1140,8 @@ private fun AccentColorDialog(
                                         modifier = Modifier.width(72.dp),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                         maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
+                                        overflow = TextOverflow.Ellipsis,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
                             }
@@ -1325,6 +1339,112 @@ fun CacheItem(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
         ) {
             Text(stringResource(R.string.settings_cache_clear))
+        }
+    }
+}
+
+/** 用户资料项：头像 + 用户名 + VIP标识 + 右侧退出登录按钮 */
+@Composable
+fun UserProfileItem(
+    username: String?,
+    avatarUrl: String,
+    isVip: Boolean,
+    onLogout: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 头像：SubcomposeAsyncImage 自带 loading/error 状态
+        SubcomposeAsyncImage(
+            model = avatarUrl,
+            contentDescription = null,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentScale = ContentScale.Crop,
+            loading = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            error = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            if (username == null) {
+                // 用户名骨架
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                )
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = username,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (isVip) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ) {
+                            Text(
+                                text = "VIP",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        // 右侧退出登录按钮
+        val view = LocalView.current
+        Button(
+            onClick = {
+                view.performHaptic(HapticType.HEAVY_CLICK)
+                onLogout()
+            },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.error,
+                contentColor = MaterialTheme.colorScheme.onError
+            ),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+        ) {
+            Text(stringResource(R.string.settings_logout_button))
         }
     }
 }
