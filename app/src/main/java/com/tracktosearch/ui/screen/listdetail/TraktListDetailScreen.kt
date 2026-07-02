@@ -99,7 +99,7 @@ fun TraktListDetailScreen(
                                 .hazeSource(state = hazeState),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 60.dp, bottom = 16.dp)
+                            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
                         ) {
                             items(6) {
                                 MovieCardSkeleton()
@@ -143,7 +143,7 @@ fun TraktListDetailScreen(
                             .hazeSource(state = hazeState),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 60.dp, bottom = 16.dp)
+                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
                     ) {
                         itemsIndexed(uiState.items, key = { _, item -> "${item.type}-${item.traktId}" }) { _, item ->
                             MovieCard(
