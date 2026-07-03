@@ -1,8 +1,11 @@
 package com.tracktosearch.data.remote.custom
 
+import android.content.Context
+import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -23,23 +26,25 @@ import javax.inject.Singleton
  */
 @Singleton
 class CustomSearchService @Inject constructor(
-    @Named("custom_search") private val okHttpClient: OkHttpClient
+    @Named("custom_search") private val okHttpClient: OkHttpClient,
+    @ApplicationContext private val context: Context
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * 测试搜索源连接：用示例关键字发送请求，返回解析到的资源数量或错误信息
      */
-    suspend fun testSource(source: CustomSearchSource, keyword: String = "流浪地球"): TestResult {
+    suspend fun testSource(source: CustomSearchSource, keyword: String? = null): TestResult {
+        val actualKeyword = keyword ?: context.getString(R.string.search_test_keyword)
         return try {
-            val items = search(source, keyword)
+            val items = search(source, actualKeyword)
             if (items.isNotEmpty()) {
                 TestResult.Success(count = items.size, sampleName = items.first().name)
             } else {
                 TestResult.Success(count = 0, sampleName = null)
             }
         } catch (e: Exception) {
-            TestResult.Error(e.message ?: "未知错误")
+            TestResult.Error(e.message ?: context.getString(R.string.error_unknown))
         }
     }
 

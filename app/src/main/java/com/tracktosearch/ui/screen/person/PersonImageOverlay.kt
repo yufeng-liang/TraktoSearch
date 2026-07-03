@@ -197,7 +197,7 @@ internal fun PersonImagePagerOverlay(
             ) {
                 Icon(
                     if (isSaved) Icons.Filled.Check else Icons.Default.Download,
-                    contentDescription = if (isSaved) "已保存" else "保存",
+                    contentDescription = if (isSaved) stringResource(R.string.cd_saved) else stringResource(R.string.cd_save),
                     tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
                     modifier = Modifier.size(24.dp)
                 )

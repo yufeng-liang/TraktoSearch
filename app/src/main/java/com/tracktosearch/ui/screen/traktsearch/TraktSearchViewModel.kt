@@ -116,6 +116,17 @@ class TraktSearchViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(TraktSearchUiState(selectedTab = _initialTab))
     val uiState: StateFlow<TraktSearchUiState> = _uiState.asStateFlow()
 
+    // 全局想看/已看缓存
+    private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
+    val watchlistWatchedIds: StateFlow<TraktRepository.WatchlistWatchedIds?> = _watchlistWatchedIds.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            traktRepository.getWatchlistWatchedIds()?.let { _watchlistWatchedIds.value = it }
+            traktRepository.loadWatchlistWatchedIds().let { _watchlistWatchedIds.value = it }
+        }
+    }
+
     /**
      * 初始化搜索：从 Composable 传入正确的 type 和 query。
      * inline 模式下 savedStateHandle 中没有 type，需要通过此方法同步正确的类型。

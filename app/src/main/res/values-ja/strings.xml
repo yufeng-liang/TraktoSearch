@@ -561,4 +561,15 @@
     <!-- Content Descriptions (Badge) -->
     <string name="cd_watched_badge">視聴済み</string>
     <string name="cd_watchlist_badge">ウォッチリスト</string>
+
+    <!-- 空リストガイド -->
+    <string name="watchlist_empty_title">Traktプラットフォームでまだウォッチリストに追加していません</string>
+    <string name="watched_empty_title">まだ視聴済みとしてマークしていません</string>
+    <string name="watchlist_empty_hint_prefix">こちらを試す：</string>
+    <string name="watchlist_empty_go_trakt">Trakt</string>
+    <string name="watchlist_empty_hint_middle">でウォッチリストに追加、</string>
+    <string name="watchlist_empty_go_discover">発見ページ</string>
+    <string name="watchlist_empty_hint_suffix">でさらに探索</string>
+    <string name="watched_empty_hint_prefix">こちらを試す：</string>
+    <string name="watched_empty_hint_middle">で視聴済みにマーク、</string>
 </resources>

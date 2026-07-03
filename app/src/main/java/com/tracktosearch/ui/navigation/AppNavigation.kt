@@ -356,8 +356,8 @@ fun AppNavigation(
                         SearchScreen(
                             initialKeyword = keyword,
                             onBack = { navController.popBackStack() },
-                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             }
                         )
                     }
@@ -408,11 +408,11 @@ fun AppNavigation(
                         )
                         TraktListDetailScreen(
                             onBack = { navController.popBackStack() },
-                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
-                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
-                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             }
                         )
                     }

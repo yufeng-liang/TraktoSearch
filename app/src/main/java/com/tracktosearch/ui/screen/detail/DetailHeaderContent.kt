@@ -673,13 +673,14 @@ private fun getStatusColor(status: String): Color {
 @Composable
 private fun StatusRibbon(status: String, modifier: Modifier = Modifier) {
     val backgroundColor = getStatusColor(status)
+    val displayText = getStatusDisplayText(status)
     Surface(
         modifier = modifier.padding(4.dp),
         shape = RoundedCornerShape(4.dp),
         color = backgroundColor.copy(alpha = 0.9f)
     ) {
         Text(
-            text = status,
+            text = displayText,
             color = Color.White,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -687,4 +688,22 @@ private fun StatusRibbon(status: String, modifier: Modifier = Modifier) {
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
         )
     }
+}
+
+/** 将 TMDB 英文状态映射为本地化显示文本 */
+@Composable
+private fun getStatusDisplayText(status: String): String {
+    val resId = when (status) {
+        "Released" -> R.string.status_released
+        "Returning Series" -> R.string.status_returning_series
+        "In Production" -> R.string.status_in_production
+        "Post Production" -> R.string.status_post_production
+        "Pilot" -> R.string.status_pilot
+        "Planned" -> R.string.status_planned
+        "Rumored" -> R.string.status_rumored
+        "Canceled" -> R.string.status_canceled
+        "Ended" -> R.string.status_ended
+        else -> return status
+    }
+    return stringResource(resId)
 }

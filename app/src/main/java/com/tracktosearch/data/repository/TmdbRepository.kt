@@ -173,7 +173,8 @@ class TmdbRepository @Inject constructor(
                 rating = cached.vote_average,
                 episodeRunTime = cached.episode_run_time?.firstOrNull(),
                 releaseDate = cached.first_air_date ?: "",
-                country = cached.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · ")
+                country = cached.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
+                status = cached.status
             )
         }
 

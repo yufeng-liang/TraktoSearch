@@ -445,6 +445,8 @@ internal fun TraktShowRecommendationSection(
                             year = if (item.show.year > 0) item.show.year.toString() else "",
                             rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
                             isResolving = resolvingItemId == item.show.ids.tmdb,
+                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             onClick = { onItemClick(item.show) }
                         )
                     }

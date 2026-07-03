@@ -264,7 +264,7 @@ fun MainScreen(
                                     traktSearchQuery = query
                                     showTraktSearch = true
                                 },
-                                onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
+                                onMovieClick = onMovieClick,
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
                                 modifier = Modifier.fillMaxSize()
@@ -272,8 +272,8 @@ fun MainScreen(
                         }
                     }
                     1 -> DiscoverScreen(
-                        onMovieClick = { traktId, tmdbId, title, imdbId, traktRating -> onMovieClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
-                        onShowClick = { traktId, tmdbId, title, imdbId, traktRating -> onShowClick(traktId, tmdbId, title, imdbId, traktRating, false, false) },
+                        onMovieClick = onMovieClick,
+                        onShowClick = onShowClick,
                         onListClick = onListClick,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -285,6 +285,7 @@ fun MainScreen(
                                 onSearchClick = onSearchClick,
                                 onStatisticsClick = onStatisticsClick,
                                 onTraktSearch = onTraktSearch,
+                                onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {

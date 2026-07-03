@@ -20,8 +20,6 @@ class NotificationHelper @Inject constructor(
     companion object {
         const val CHANNEL_ID_RELEASE = "release_reminder"
         const val CHANNEL_ID_NEW_SEASON = "new_season_reminder"
-        const val CHANNEL_NAME_RELEASE = "上映提醒"
-        const val CHANNEL_NAME_NEW_SEASON = "新季提醒"
     }
 
     fun createChannels() {
@@ -29,18 +27,18 @@ class NotificationHelper @Inject constructor(
             val manager = context.getSystemService(NotificationManager::class.java) ?: return
             val releaseChannel = NotificationChannel(
                 CHANNEL_ID_RELEASE,
-                CHANNEL_NAME_RELEASE,
+                context.getString(R.string.notification_channel_release),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "想看列表中的影视上映/上线时提醒"
+                description = context.getString(R.string.notification_channel_release_desc)
                 enableVibration(true)
             }
             val newSeasonChannel = NotificationChannel(
                 CHANNEL_ID_NEW_SEASON,
-                CHANNEL_NAME_NEW_SEASON,
+                context.getString(R.string.notification_channel_new_season),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "想看的电视剧新一季开播时提醒"
+                description = context.getString(R.string.notification_channel_new_season_desc)
                 enableVibration(true)
             }
             manager.createNotificationChannels(listOf(releaseChannel, newSeasonChannel))

@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import android.util.Log
+import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.TtlCache
@@ -11,10 +12,11 @@ import javax.inject.Singleton
 
 @Singleton
 class TraktRepository @Inject constructor(
-    private val traktApiService: TraktApiService
+    private val traktApiService: TraktApiService,
+    private val userProfileStorage: UserProfileStorage
 ) {
     companion object {
-        private const val TTL_ID_MAPPING = 60 * 60 * 1000L   // ID 转换 1 小时
+        private const val TTL_ID_MAPPING = Long.MAX_VALUE    // ID 转换永不过期（tmdb↔trakt 映射不会变）
         private const val TTL_COMMENTS = 10 * 60 * 1000L     // 评论 10 分钟
         private const val TTL_RELATED = 30 * 60 * 1000L      // 相关推荐 30 分钟
         private const val TTL_RECOMMENDATIONS = 60 * 60 * 1000L // 个性化推荐 1 小时
@@ -30,7 +32,10 @@ class TraktRepository @Inject constructor(
         val movieWatchedTraktIds: Set<Int> = emptySet(),
         val movieWatchedTmdbIds: Set<Int> = emptySet(),
         val showWatchedTraktIds: Set<Int> = emptySet(),
-        val showWatchedTmdbIds: Set<Int> = emptySet()
+        val showWatchedTmdbIds: Set<Int> = emptySet(),
+        /** TMDB ID → Trakt ID 映射（来自想看+已看数据） */
+        val movieTmdbToTrakt: Map<Int, Int> = emptyMap(),
+        val showTmdbToTrakt: Map<Int, Int> = emptyMap()
     ) {
         fun isInWatchlist(traktId: Int?, tmdbId: Int?, type: MediaType): Boolean = when (type) {
             MediaType.MOVIE -> movieWatchlistTraktIds.contains(traktId) || movieWatchlistTmdbIds.contains(tmdbId)
@@ -42,6 +47,13 @@ class TraktRepository @Inject constructor(
             MediaType.MOVIE -> movieWatchedTraktIds.contains(traktId) || movieWatchedTmdbIds.contains(tmdbId)
             MediaType.SHOW -> showWatchedTraktIds.contains(traktId) || showWatchedTmdbIds.contains(tmdbId)
             else -> false
+        }
+
+        /** 通过 TMDB ID 查找 Trakt ID（想看/已看命中时可直接跳转） */
+        fun traktIdByTmdb(tmdbId: Int, type: MediaType): Int? = when (type) {
+            MediaType.MOVIE -> movieTmdbToTrakt[tmdbId]
+            MediaType.SHOW -> showTmdbToTrakt[tmdbId]
+            else -> null
         }
     }
 
@@ -69,7 +81,9 @@ class TraktRepository @Inject constructor(
                     movieWatchedTraktIds = movieHistory.map { it.movie.ids.trakt }.toSet(),
                     movieWatchedTmdbIds = movieHistory.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
                     showWatchedTraktIds = showHistory.map { it.show.ids.trakt }.toSet(),
-                    showWatchedTmdbIds = showHistory.map { it.show.ids.tmdb }.filter { it > 0 }.toSet()
+                    showWatchedTmdbIds = showHistory.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
+                    movieTmdbToTrakt = (movieWatchlist + movieHistory).associate { it.movie.ids.tmdb to it.movie.ids.trakt }.filterKeys { it > 0 },
+                    showTmdbToTrakt = (showWatchlist + showHistory).associate { it.show.ids.tmdb to it.show.ids.trakt }.filterKeys { it > 0 }
                 )
                 watchlistWatchedIds = ids
                 ids
@@ -181,6 +195,18 @@ class TraktRepository @Inject constructor(
     // Watchlist 首页缓存：splash 预取的结果供 MainScreen 复用，避免重复请求
     private val movieWatchlistCache = TtlCache<Pair<List<TraktWatchlistMovieItem>, Int>>(TTL_STATS, maxSize = 5)
     private val showWatchlistCache = TtlCache<Pair<List<TraktWatchlistShowItem>, Int>>(TTL_STATS, maxSize = 5)
+
+    /** 同步查询 ID 转换缓存（不触发网络请求），用于秒进判断 */
+    fun getCachedTraktId(tmdbId: Int, type: MediaType): Int? {
+        val key = "${tmdbId}_${type.name}"
+        val cached = searchByTmdbCache.get(key) ?: return null
+        val first = cached.firstOrNull() ?: return null
+        return when (type) {
+            MediaType.MOVIE -> first.movie?.ids?.trakt
+            MediaType.SHOW -> first.show?.ids?.trakt
+            else -> null
+        }
+    }
 
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
         val key = "${tmdbId}_${type.name}"
@@ -1018,24 +1044,34 @@ class TraktRepository @Inject constructor(
     }
 
     // 用户统计。带 5 分钟 TTL 缓存
-    // 用户资料缓存（登录后只请求一次，直到退出登录才清除）
+    // 用户资料缓存（获取一次后永久缓存，登出才清除）
     @Volatile
     private var userProfileCache: TraktUserProfileResponse? = null
 
     suspend fun getUserProfile(): Result<TraktUserProfileResponse> {
+        // 1. 内存缓存
         userProfileCache?.let { return Result.success(it) }
+        // 2. DataStore 持久化缓存（重启 app 后仍可用）
+        val persisted = userProfileStorage.getProfile()
+        if (persisted != null) {
+            userProfileCache = persisted
+            return Result.success(persisted)
+        }
+        // 3. 网络请求
         return try {
             val response = traktApiService.getUserProfile()
             if (response.isSuccessful) {
                 val profile = response.body() ?: TraktUserProfileResponse()
                 userProfileCache = profile
+                userProfileStorage.saveProfile(profile)
                 Result.success(profile)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
-    fun clearUserProfileCache() {
+    suspend fun clearUserProfileCache() {
         userProfileCache = null
+        userProfileStorage.clear()
     }
 
     suspend fun getUserStats(): Result<TraktUserStatsResponse> {

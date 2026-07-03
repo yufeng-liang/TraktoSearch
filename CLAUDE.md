@@ -1,147 +1,84 @@
-# 全局 Claude Code 指令
+# 全局指令
 
 ## 语言偏好
 
-- 所有面向用户的输出、解释说明、注释均使用**中文**
-- 代码中的注释使用中文
-- Git commit message 使用中文
-- 生成的文档使用中文
+- 面向用户的输出、解释说明、注释均使用中文
+- 代码注释使用中文，Git commit message 使用中文
+- ViewModel 中的 error 信息用英文（非 UI 展示文字）
+
+## 项目架构概览
+
+- Android Jetpack Compose + Hilt + MVVM 架构
+- 仓库层：TraktRepository（Trakt API）、TmdbRepository（TMDB API）、ResourceRepository（资源搜索）
+- 全局缓存：TtlCache（带过期时间和容量上限的线程安全内存缓存，支持飞行中去重 getOrAwait）
+- WatchlistWatchedIds 全局缓存：登录后加载一次，包含 traktId/tmdbId 集合和 tmdb→trakt 映射
+- ID 转换缓存（searchByTmdbCache）：永不过期，tmdb↔trakt 映射不会变
+
+## 缓存使用规范
+
+- 缓存优先：先查内存缓存，命中则同步返回（不转圈），未命中再走网络
+- WatchlistWatchedIds.traktIdByTmdb() → 想看/已看中已有的影视秒进
+- TraktRepository.getCachedTraktId() → ID 转换缓存秒进（之前转换过的）
+- 缓存同步查询必须在协程启动之前，避免不必要的转圈 UI
+- 详情页/发现页/社区列表的 MovieCard 必须传递真实的 isInWatchlist/isWatched 状态，不能硬编码 false
+- 影视卡片想看/已看标记必须从 WatchlistWatchedIds 缓存计算，不能依赖路由参数中的 inWatchlist/isWatched（这些只是初始值）
+
+## 国际化规范
+
+- 所有用户可见文字必须使用 stringResource，不能硬编码
+- strings.xml 同步添加：values/(英文)、values-zh/(中文)、values-ja/(日文)、values-ko/(韩文)
+- 非 Composable 中用 context.getString(R.string.xxx)
 
 ## 编码风格
 
-- 优先使用项目已有的约定和模式
-- 遵循项目的 Checkstyle 规则（如有）
-- 修改代码前先了解现有架构，避免破坏一致性
-- 输出注释时不需要写出顺序，直接写具体的操作
+- 优先使用项目已有的约定和模式，修改前先了解现有架构
+- 项目依赖统一用 gradle/libs.versions.toml 管理
+- 涉及 API、库/框架时，先用 Context7 查明用法，保证 API 使用正确
 
 ## 工作方式
 
-- 重要修改前先说明计划，获得确认后再执行
-- 遇到不确定的情况时主动询问
+- 重要修改和涉及功能性损失的，先说明计划，获得确认后再执行
+- 修复 bug + 修改/增加功能 + 修改 UI 合计超过三个，构建验证后先本地提交一次
+- 涉及大量原代码删除的改动，必须在改动前本地提交一次，方便回滚
+- 多步任务在最后统一完成后构建 debug 验证一次即可
 - 完成任务后简要总结改动内容
-- 使用 Context7 查询最新的库/框架文档
-- 安装软件/程序后，自动清理下载的压缩包、解压临时目录等临时文件
-- 有不清楚的地方要记得用brainstorming随时问我，涉及UI设计的最好启动可视化伴侣展现设计效果
+- 有不确定的地方主动用 brainstorming 问清楚（添加新功能时必须调用头脑风暴技能）
+- 涉及 UI 设计时，使用 PureShowWidget 工具展示设计效果，前端新页面用 web-dev 技能生成实时预览
+- 安装软件后自动清理临时文件
+- 增加/修改/删除功能后，及时更新 App 内帮助与说明页，确保帮助与说明与实际情况一致
+- 发布流程参考 `.trae/rules/project_rules.md`
 
+## Bug 修复工作流
+
+1. **复现**：确认 bug 可复现，记录复现步骤
+2. **定位**：从 UI 层反向追踪到数据层，找到根因
+3. **修复**：最小改动，不引入新问题
+4. **验证**：构建 debug 包验证修复效果
+5. **总结经验**：有价值的教训写入本文件
+
+## 常见陷阱与经验
+
+- TtlCache 缓存命中但 UI 仍转圈：缓存查询必须在 viewModelScope.launch 之前，否则协程启动后才设 resolving 状态
+- 回调签名与实际状态不同步：新增状态字段后必须同步更新所有回调签名和调用点，不能在中间层硬编码默认值
+- 数据类缓存路径遗漏字段：所有缓存路径必须与网络请求路径字段一致（如 TvEnrichment 缓存漏 status 字段导致二次打开无状态信息）
+- 深色模式下 BasicTextField 文字不可见：textStyle 必须显式设置 color = MaterialTheme.colorScheme.onSurface
+- Gitee Release 上传 APK 必须用 curl.exe（PowerShell multipart 会 UTF-8 重编码导致 APK 损坏）
+- Gitee Release body 不能含 markdown 格式符号（#/-），创建时用纯文本，创建后 PATCH 补回
 
 ## Git 规范
 
-- 不主动 commit，除非用户明确要求
-- 不主动 push，除非用户明确要求
-- 建议的 commit 格式：`<type>: <描述>`
-  - feat: 新功能
-  - fix: 修复
-  - refactor: 重构
-  - docs: 文档
-  - style: 格式
-  - test: 测试
-  - chore: 构建/工具
-
-## 配置同步
-
-- 当用户提到「同步配置」、「备份配置」、「上传配置」、「恢复配置」等语句时，使用 `cc-config-sync` 处理
-- 常用命令：
-  - `cc-config-sync pull` — 将本地配置同步到仓库
-  - `cc-config-sync push` — 将仓库配置同步到本地
-  - `cc-config-sync status` — 查看本地与仓库的差异
-  - `cc-config-sync list` — 列出所有跟踪的路径
-- 仓库路径通过 `cc-config-sync config show` 查看
-- 同步到仓库后需手动 `git add`、`git commit`、`git push` 推送到远程
-- **注意**：`settings.json` 中的 `ANTHROPIC_AUTH_TOKEN` 和 `ANTHROPIC_BASE_URL` 是敏感信息，提交前需脱敏处理
+- commit 格式：`<type>: <描述>`
+  - feat: 新功能 / fix: 修复 / refactor: 重构 / docs: 文档 / style: 格式 / test: 测试 / chore: 构建/工具
 
 ## 安全意识
 
-- 不在代码中硬编码密码、密钥等敏感信息
-- 配置文件中的敏感信息需要提醒用户注意保护
+- 不硬编码密码、密钥等敏感信息
+- 配置文件中的敏感信息需提醒用户注意保护
 
-## 安全审计（自动激活）
+## 想清楚再写
 
-当用户提到以下关键词或场景时，**自动激活 Java 审计 skills**：
-- 关键词：`审计`、`安全审计`、`代码审计`、`漏洞扫描`、`安全检测`
-- 场景：分析 Java 项目的安全性、查找漏洞、检查 SQL 注入/文件上传/反序列化等
+不要瞎猜，把权衡讲出来。假设要明说，不确定就问。多种理解都摆出来，别悄悄选一个。有更简单的做法直说，该反对时反对。
 
-**激活后的行为**：
-1. 根据用户需求选择合适的 skill 调用
-2. 完整审计流程使用 `/java-audit-pipeline <项目路径>`
-3. 单项审计按需调用：
-   - 路由分析：`/java-route-mapper`
-   - 调用链追踪：`/java-route-tracer`
-   - SQL 注入审计：`/java-sql-audit`
-   - 鉴权审计：`/java-auth-audit`
-   - 文件上传审计：`/java-file-upload-audit`
-   - 文件读取审计：`/java-file-read-audit`
-   - XXE 审计：`/java-xxe-audit`
-   - 反序列化审计：`/java-deserialization-audit`
-   - 组件漏洞检测：`/java-vuln-scanner`
+## 外科手术式改动
 
-**使用前提**：
-- 需要提供 Java 项目路径（源码或编译文件）
-- 完整审计需开启 Agent Teams（Claude Code >= 2.1.32）
-
-## 1. 想清楚再写
-不要瞎猜，不要藏着困惑，把权衡讲出来。
--把你的假设明确说出来。不确定就问我。
--如果有多种理解，都摆出来，别自己悄悄选一个。
--如果有更简单的做法，直说。该反对的时候反对。
--如果哪里不清楚，停下来，说清楚卡在哪，然后问。
-
-## 2. 简单优先
-用最少的东西把问题解决，不做任何多余的事。
--不加我没要求的功能。
--不给一次性的活儿搭一套通用框架。
--不加我没要求的「灵活性」或「可配置」。
--不为不可能发生的情况提前操心。
--如果你交付的东西明显比需要的多，砍到刚好够用，重来。
--问自己一句：一个资深的人会不会觉得这过度复杂了？会的话，就简化。
-
-## 3. 外科手术式改动
-只动你必须动的，只收拾你自己制造的乱。
--不要去「改进」旁边没让你碰的内容、格式。
--不要翻新没坏的东西。
--跟着原本的风格走，哪怕你自己会用别的写法。
--看到无关的、原本就有的多余内容，提一句就行，别删。
--只收拾你这次改动产生的多余东西；原本就有的旧内容，不让你删就别删。
--一条判据：每一处改动，都要能直接追溯到我的需求。
-
-## 4. 目标驱动执行
-先定清楚「做到什么算成功」，然后对着标准跑到达标。
--「把这份资料整理好」→「按这三个维度分类（是什么、做什么、怎么做），每条梳理内容配一句出处」。
--（写代码的话）「加个校验」→「先写针对非法输入的测试，再让它们通过」。
--（写代码的话）「修复这个 bug」→「先写一个能复现 bug 的测试，再让它通过」。
--多步任务，先说一个简短计划，每一步对应一个验证点。
--成功标准给得够强，你才能自己对答案；标准太虚（比如「弄好就行」），就只能不停来问我。
-
----
-
-
-## 工作流集成
-
-### 典型开发流程
-
-1. **需求阶段**：/grilling → /domain-modeling → /to-prd
-2. **规划阶段**：/to-issues → /decision-mapping（如需多会话）
-3. **实现阶段**：/implement（内含 /tdd）
-4. **审查阶段**：/review
-5. **交接阶段**：/handoff
-
-### Bug 修复流程
-
-1. **诊断**：/diagnosing-bugs
-2. **修复**：遵循诊断技能的六阶段
-3. **验证**：回归测试 + /review
-
-### 架构改进流程
-
-1. **扫描**：/improve-codebase-architecture
-2. **选择**：查看 HTML 报告
-3. **深入**：/grilling + /domain-modeling
-4. **实现**：/implement
-
-## 注意事项
-
-1. **CONTEXT.md 维护**：领域建模技能会主动更新，确保术语一致
-2. **ADR 记录**：重要架构决策需记录到 `docs/adr/`
-3. **Issue Tracker 配置**：首次使用需运行 /setup-matt-pocock-skills
-4. **技能组合**：技能可串联使用，如 /triage 会调用 /grilling 和 /domain-modeling
-5. **用户确认**：关键决策点需等待用户确认后再继续
-
+只动必须动的，只收拾自己制造的乱。不去"改进"没让你碰的内容，不翻新没坏的东西。跟着原有风格走。每一处改动都要能直接追溯到需求。

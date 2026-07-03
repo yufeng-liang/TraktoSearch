@@ -100,6 +100,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.MovieCard
@@ -139,6 +140,7 @@ fun TraktSearchScreen(
     viewModel: TraktSearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
     val focusRequester = remember { FocusRequester() }
@@ -372,6 +374,8 @@ fun TraktSearchScreen(
                                     genres = item.genres,
                                     posterUrl = item.posterUrl,
                                     tmdbId = item.tmdbId,
+                                    isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, uiState.selectedTab) == true,
+                                    isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, uiState.selectedTab) == true,
                                     onClick = {
                                         onItemClick(uiState.selectedTab, item.traktId, item.tmdbId, item.displayTitle, item.imdbId, item.traktRating)
                                     }
@@ -420,7 +424,7 @@ fun TraktSearchScreen(
                             .height(45.dp)
                             .focusRequester(focusRequester),
                         singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(
                             onSearch = {

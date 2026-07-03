@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -94,7 +95,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
@@ -127,6 +133,7 @@ fun WatchlistScreen(
     onSearchClick: (keyword: String) -> Unit,
     onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
+    onDiscoverClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -302,6 +309,14 @@ fun WatchlistScreen(
         else -> filteredHistoryShows
     }
 
+    // 当前列表是否正在加载
+    val isCurrentLoading = when {
+        selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
+        selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
+        selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
+        else -> uiState.isLoadingHistoryShows
+    }
+
     // 监听列表变化，移除完成后关闭多选模式
     LaunchedEffect(currentItems.size, isRemoving) {
         if (isRemoving) {
@@ -350,14 +365,69 @@ fun WatchlistScreen(
                 }
             }
 
-            // 内容区域 - LazyVerticalGrid 直接作为 hazeSource
+            // 空列表引导 UI
+            if (currentItems.isEmpty() && !isCurrentLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Movie,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = if (selectedMode == 0)
+                                stringResource(R.string.watchlist_empty_title)
+                            else
+                                stringResource(R.string.watched_empty_title),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            buildAnnotatedString {
+                                append(if (selectedMode == 0)
+                                    stringResource(R.string.watchlist_empty_hint_prefix)
+                                else
+                                    stringResource(R.string.watched_empty_hint_prefix)
+                                )
+                                withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
+                                }) {
+                                    append(stringResource(R.string.watchlist_empty_go_trakt))
+                                }
+                                append(stringResource(R.string.watchlist_empty_hint_middle))
+                                withLink(LinkAnnotation.Url("discover") {
+                                    onDiscoverClick()
+                                }) {
+                                    append(stringResource(R.string.watchlist_empty_go_discover))
+                                }
+                                append(stringResource(R.string.watchlist_empty_hint_suffix))
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
             LazyVerticalGrid(
                 state = currentGridState,
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(
                     start = 8.dp,
                     end = 8.dp,
-                    top = 112.dp + statusBarHeight,
+                    top = 110.dp + statusBarHeight,
                     bottom = if (isMultiSelectMode) 80.dp else 80.dp
                 ),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -446,6 +516,7 @@ fun WatchlistScreen(
                         }
                     }
                 }
+            }
 
             ScrollToTopButton(
                 gridState = currentGridState,
@@ -490,7 +561,7 @@ fun WatchlistScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable(enabled = false, onClick = {})
-                                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 3.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -531,7 +602,7 @@ fun WatchlistScreen(
                                     .height(45.dp)
                                     .focusRequester(focusRequester),
                                 singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                 keyboardActions = KeyboardActions(
                                     onSearch = {
@@ -632,7 +703,10 @@ fun WatchlistScreen(
                                         modifier = Modifier
                                             .width(watchlistTabWidthDp)
                                             .fillMaxHeight()
-                                            .clickable {
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) {
                                                 view.performHaptic(HapticType.CLICK)
                                                 selectedMode = 0
                                             },
@@ -651,7 +725,10 @@ fun WatchlistScreen(
                                         modifier = Modifier
                                             .width(watchedTabWidthDp)
                                             .fillMaxHeight()
-                                            .clickable {
+                                            .clickable(
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                indication = null
+                                            ) {
                                                 view.performHaptic(HapticType.CLICK)
                                                 selectedMode = 1
                                             },
@@ -805,7 +882,7 @@ fun WatchlistScreen(
                 WatchlistSkeletonGrid(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 114.dp + statusBarHeight)
+                        .padding(top = 112.dp + statusBarHeight)
                 )
             }
         }

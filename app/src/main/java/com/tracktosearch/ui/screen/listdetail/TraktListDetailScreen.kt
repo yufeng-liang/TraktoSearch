@@ -36,6 +36,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
 import androidx.compose.runtime.snapshotFlow
 import dev.chrisbanes.haze.HazeState
@@ -56,11 +58,12 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 @Composable
 fun TraktListDetailScreen(
     onBack: () -> Unit,
-    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
+    onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
+    onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     viewModel: TraktListDetailViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
     val hazeState = remember { HazeState() }
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -122,12 +125,12 @@ fun TraktListDetailScreen(
                                 IconButton(onClick = onBack) {
                                     Icon(
                                         Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "返回",
+                                        contentDescription = stringResource(R.string.search_back),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
                                 Text(
-                                    text = "加载中...",
+                                    text = stringResource(R.string.common_loading),
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
@@ -154,7 +157,7 @@ fun TraktListDetailScreen(
                                 onClick = { viewModel.retry() },
                                 modifier = Modifier.padding(top = 12.dp)
                             ) {
-                                Text("重试")
+                                Text(stringResource(R.string.common_retry))
                             }
                         }
                     }
@@ -173,16 +176,20 @@ fun TraktListDetailScreen(
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
                     ) {
                         itemsIndexed(uiState.items, key = { _, item -> "${item.type}-${item.traktId}" }) { _, item ->
+                            val isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.traktId, item.tmdbId, item.type) == true
+                            val isWatched = watchlistWatchedIds?.isWatched(item.traktId, item.tmdbId, item.type) == true
                             MovieCard(
                                 title = item.title,
                                 year = item.year,
                                 genres = "",
                                 posterUrl = item.posterUrl?.let { "https://image.tmdb.org/t/p/w500$it" },
                                 tmdbId = item.tmdbId,
+                                isInWatchlist = isInWatchlist,
+                                isWatched = isWatched,
                                 onClick = {
                                     when (item.type) {
-                                        MediaType.MOVIE -> onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
-                                        MediaType.SHOW -> onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating)
+                                        MediaType.MOVIE -> onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
+                                        MediaType.SHOW -> onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, isInWatchlist, isWatched)
                                         else -> {}
                                     }
                                 }

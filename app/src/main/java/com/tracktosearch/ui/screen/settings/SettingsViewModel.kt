@@ -574,8 +574,10 @@ class SettingsViewModel @Inject constructor(
 
     fun clearUserProfile() {
         _userProfile.value = null
-        traktRepository.clearUserProfileCache()
-        traktRepository.clearWatchlistWatchedCache()
+        viewModelScope.launch {
+            traktRepository.clearUserProfileCache()
+            traktRepository.clearWatchlistWatchedCache()
+        }
     }
 
     init {

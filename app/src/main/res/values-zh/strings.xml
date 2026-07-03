@@ -724,4 +724,46 @@
     <!-- Content Descriptions (Badge) -->
     <string name="cd_watched_badge">已看过</string>
     <string name="cd_watchlist_badge">已想看</string>
+
+    <!-- 影视状态 -->
+    <string name="status_released">已上映</string>
+    <string name="status_returning_series">续订中</string>
+    <string name="status_in_production">制作中</string>
+    <string name="status_post_production">后期制作</string>
+    <string name="status_pilot">试播</string>
+    <string name="status_planned">已计划</string>
+    <string name="status_rumored">传闻</string>
+    <string name="status_canceled">已取消</string>
+    <string name="status_ended">已完结</string>
+
+    <!-- Widget -->
+    <string name="widget_quick_search_hint">点击打开应用搜索</string>
+
+    <!-- 通知渠道 -->
+    <string name="notification_channel_release">上映提醒</string>
+    <string name="notification_channel_new_season">新季提醒</string>
+    <string name="notification_channel_release_desc">想看列表中的影视上映/上线时提醒</string>
+    <string name="notification_channel_new_season_desc">想看的电视剧新一季开播时提醒</string>
+    <string name="notification_channel_apk_download">APK 下载</string>
+    <string name="notification_channel_apk_download_desc">应用更新下载进度</string>
+
+    <!-- 下载 -->
+    <string name="download_preparing">准备下载…</string>
+    <string name="download_failed_both">主URL和备用URL均下载失败</string>
+    <string name="download_failed">下载失败</string>
+
+    <!-- 搜索服务 -->
+    <string name="search_test_keyword">流浪地球</string>
+    <string name="error_unknown">未知错误</string>
+
+    <!-- 空列表引导 -->
+    <string name="watchlist_empty_title">在Trakt平台上还没有标记想看的影视</string>
+    <string name="watched_empty_title">还没有标记已看过的影视</string>
+    <string name="watchlist_empty_hint_prefix">你可以尝试：去</string>
+    <string name="watchlist_empty_go_trakt">Trakt</string>
+    <string name="watchlist_empty_hint_middle">标记想看的影视，去</string>
+    <string name="watchlist_empty_go_discover">发现页</string>
+    <string name="watchlist_empty_hint_suffix">探索更多影视</string>
+    <string name="watched_empty_hint_prefix">你可以尝试：去</string>
+    <string name="watched_empty_hint_middle">标记已看过的影视，去</string>
 </resources>

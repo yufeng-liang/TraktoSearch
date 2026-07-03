@@ -5,6 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
@@ -79,12 +80,21 @@ class TraktListDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ListDetailUiState(listName = listName))
     val uiState: StateFlow<ListDetailUiState> = _uiState
 
+    // 全局想看/已看缓存
+    private val _watchlistWatchedIds = MutableStateFlow<WatchlistWatchedIds?>(null)
+    val watchlistWatchedIds: StateFlow<WatchlistWatchedIds?> = _watchlistWatchedIds
+
     // 增强缓存：traktId → 已增强的 ListDetailItem
     private val enhanceCache = mutableMapOf<Int, ListDetailItem>()
 
     private val json = Json { ignoreUnknownKeys = true }
 
     init {
+        // 加载全局想看/已看缓存
+        viewModelScope.launch {
+            traktRepository.getWatchlistWatchedIds()?.let { _watchlistWatchedIds.value = it }
+            traktRepository.loadWatchlistWatchedIds().let { _watchlistWatchedIds.value = it }
+        }
         if (listId > 0) {
             // 先尝试从磁盘缓存加载
             val cached = loadDiskCache()

@@ -724,4 +724,46 @@ Config:
     <!-- Content Descriptions (Badge) -->
     <string name="cd_watched_badge">Watched</string>
     <string name="cd_watchlist_badge">Want to Watch</string>
+
+    <!-- Movie/Show Status -->
+    <string name="status_released">Released</string>
+    <string name="status_returning_series">Returning</string>
+    <string name="status_in_production">In Production</string>
+    <string name="status_post_production">Post-Prod</string>
+    <string name="status_pilot">Pilot</string>
+    <string name="status_planned">Planned</string>
+    <string name="status_rumored">Rumored</string>
+    <string name="status_canceled">Canceled</string>
+    <string name="status_ended">Ended</string>
+
+    <!-- Widget -->
+    <string name="widget_quick_search_hint">Tap to open app search</string>
+
+    <!-- Notification Channel -->
+    <string name="notification_channel_release">Release Reminders</string>
+    <string name="notification_channel_new_season">New Season Reminders</string>
+    <string name="notification_channel_release_desc">Notify when watchlist items are released</string>
+    <string name="notification_channel_new_season_desc">Notify when a new season of a show airs</string>
+    <string name="notification_channel_apk_download">APK Download</string>
+    <string name="notification_channel_apk_download_desc">App update download progress</string>
+
+    <!-- Download -->
+    <string name="download_preparing">Preparing download…</string>
+    <string name="download_failed_both">Both primary and fallback URLs failed to download</string>
+    <string name="download_failed">Download failed</string>
+
+    <!-- Search Service -->
+    <string name="search_test_keyword">The Wandering Earth</string>
+    <string name="error_unknown">Unknown error</string>
+
+    <!-- Empty List Guide -->
+    <string name="watchlist_empty_title">No watchlisted movies or shows yet</string>
+    <string name="watched_empty_title">No watched movies or shows yet</string>
+    <string name="watchlist_empty_hint_prefix">You can try: go to </string>
+    <string name="watchlist_empty_go_trakt">Trakt</string>
+    <string name="watchlist_empty_hint_middle"> to add to watchlist, </string>
+    <string name="watchlist_empty_go_discover">Discover</string>
+    <string name="watchlist_empty_hint_suffix"> to explore more</string>
+    <string name="watched_empty_hint_prefix">You can try: go to </string>
+    <string name="watched_empty_hint_middle"> to mark as watched, </string>
 </resources>

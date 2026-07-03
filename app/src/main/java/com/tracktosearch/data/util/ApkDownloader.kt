@@ -67,9 +67,9 @@ object ApkDownloader {
                 tryDownload(client, fallbackUrl, context, fileName) { progress ->
                     onProgress(progress)
                     showDownloadNotification(context, progress, indeterminate = false)
-                } ?: throw Exception("主URL和备用URL均下载失败")
+                } ?: throw Exception(context.getString(R.string.download_failed_both))
             } else if (result == null) {
-                throw Exception("下载失败")
+                throw Exception(context.getString(R.string.download_failed))
             } else {
                 result
             }
@@ -143,10 +143,10 @@ object ApkDownloader {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "APK 下载",
+                context.getString(R.string.notification_channel_apk_download),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "应用更新下载进度"
+                description = context.getString(R.string.notification_channel_apk_download_desc)
                 setShowBadge(false)
             }
             val manager = context.getSystemService(NotificationManager::class.java)
@@ -158,7 +158,7 @@ object ApkDownloader {
         val percent = (progress * 100).toInt().coerceIn(0, 100)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.update_download_builtin))
-            .setContentText(if (indeterminate) "准备下载..." else "$percent%")
+            .setContentText(if (indeterminate) context.getString(R.string.download_preparing) else "$percent%")
             .setProgress(100, percent, indeterminate)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

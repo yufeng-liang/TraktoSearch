@@ -80,10 +80,10 @@ class SearchViewModel @Inject constructor(
         private const val TTL_DOUBAN = 60 * 60 * 1000L      // 豆瓣热榜 1 小时
 
         private val DOUBAN_CATEGORIES = listOf(
-            "douban-movie" to "新片榜",
-            "douban-weekly" to "口碑榜",
+            "douban-movie" to "New Movies",
+            "douban-weekly" to "Weekly Best",
             "douban-top250" to "Top250",
-            "douban-us-box" to "北美票房榜"
+            "douban-us-box" to "US Box Office"
         )
     }
 
@@ -184,7 +184,7 @@ class SearchViewModel @Inject constructor(
                 if (index < updated.size) {
                     updated[index] = updated[index].copy(
                         isLoading = false,
-                        error = e.message ?: "加载失败"
+                        error = e.message ?: "Failed to load"
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -264,7 +264,7 @@ class SearchViewModel @Inject constructor(
                 if (idx >= 0) {
                     updated[idx] = updated[idx].copy(
                         isLoading = false,
-                        error = e.message ?: "加载失败"
+                        error = e.message ?: "Failed to load"
                     )
                     _uiState.value = _uiState.value.copy(doubanHotCategories = updated)
                 }
@@ -313,7 +313,7 @@ class SearchViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = e.message ?: "加载失败"
+                    error = e.message ?: "Failed to load"
                 )
             }
         }

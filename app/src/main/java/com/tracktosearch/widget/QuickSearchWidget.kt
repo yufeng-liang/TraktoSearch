@@ -23,6 +23,7 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import com.tracktosearch.MainActivity
+import com.tracktosearch.R
 
 class QuickSearchWidget : GlanceAppWidget() {
 
@@ -50,7 +51,7 @@ class QuickSearchWidget : GlanceAppWidget() {
                         )
                         Spacer(modifier = GlanceModifier.height(4.dp))
                         Text(
-                            text = "点击打开应用搜索",
+                            text = context.getString(R.string.widget_quick_search_hint),
                             style = TextStyle(
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center
