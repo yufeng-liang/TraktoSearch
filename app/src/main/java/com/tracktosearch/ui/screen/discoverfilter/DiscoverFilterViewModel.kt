@@ -220,6 +220,13 @@ class DiscoverFilterViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showAdvanced = !_uiState.value.showAdvanced)
     }
 
+    /** 收起高级筛选面板（滚动结果列表时调用） */
+    fun collapseAdvanced() {
+        if (_uiState.value.showAdvanced) {
+            _uiState.value = _uiState.value.copy(showAdvanced = false)
+        }
+    }
+
     fun resetFilters() {
         lastSearchSnapshot = null
         _uiState.value = _uiState.value.copy(

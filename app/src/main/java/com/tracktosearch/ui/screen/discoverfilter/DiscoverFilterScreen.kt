@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -62,6 +63,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +77,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
@@ -115,6 +118,16 @@ fun DiscoverFilterScreen(
             }
     }
 
+    // 滚动结果列表时自动收起高级面板
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .collect { scrolling ->
+                if (scrolling && uiState.showAdvanced) {
+                    viewModel.collapseAdvanced()
+                }
+            }
+    }
+
     // 首次进入自动搜索
     LaunchedEffect(Unit) {
         if (!uiState.hasSearched) viewModel.search()
@@ -130,7 +143,7 @@ fun DiscoverFilterScreen(
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,
-                top = statusBarHeight + 180.dp,  // 为吸顶栏留空间
+                top = statusBarHeight + 148.dp,  // 为吸顶栏留空间（标题+Tab+筛选条）
                 bottom = 16.dp
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -217,7 +230,7 @@ fun DiscoverFilterScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+                    .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBack) {
@@ -266,7 +279,7 @@ fun DiscoverFilterScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(horizontal = 12.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -335,13 +348,17 @@ fun DiscoverFilterScreen(
                 }
             }
 
-            // 高级筛选展开区
+            // 高级筛选展开区（阻断滑动穿透：用 pointerInput 吞掉垂直拖拽，不转发到吸顶栏的 scrollable）
             if (uiState.showAdvanced) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .pointerInput(Unit) {
+                            // 故意空实现：拦截并消费垂直拖拽手势，阻止冒泡到父级 scrollable，避免结果列表跟着动
+                            detectVerticalDragGestures { _, _ -> }
+                        },
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     // 评分标题 + 滑动条同一行
                     Row(
@@ -351,9 +368,9 @@ fun DiscoverFilterScreen(
                     ) {
                         Text(
                             text = stringResource(R.string.discover_filter_rating_label),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.width(40.dp)
+                            modifier = Modifier.width(36.dp)
                         )
                         // 评分双滑块（步长 1，触感反馈）
                         var localMin by remember { mutableFloatStateOf(uiState.voteAverageMin) }
@@ -384,12 +401,12 @@ fun DiscoverFilterScreen(
                     ) {
                         Text(
                             text = stringResource(R.string.discover_filter_sort_by),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             TmdbRepository.DiscoverSort.entries.forEach { sort ->
                                 FilterChip(
@@ -420,12 +437,12 @@ fun DiscoverFilterScreen(
                     ) {
                         Text(
                             text = stringResource(R.string.discover_filter_decade),
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold
                         )
                         FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                            verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             viewModel.decadeOptions.forEach { opt ->
                                 FilterChip(
@@ -447,10 +464,14 @@ fun DiscoverFilterScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(stringResource(R.string.discover_filter_hide_watched))
+                            Text(
+                                text = stringResource(R.string.discover_filter_hide_watched),
+                                style = MaterialTheme.typography.labelMedium
+                            )
                             Switch(
                                 checked = uiState.hideWatched,
-                                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.toggleHideWatched() }
+                                onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.toggleHideWatched() },
+                                colors = appSwitchColors()
                             )
                         }
                     }

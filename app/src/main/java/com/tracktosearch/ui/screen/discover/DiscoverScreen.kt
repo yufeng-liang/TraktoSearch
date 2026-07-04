@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -104,6 +105,11 @@ fun DiscoverScreen(
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(800)
         viewModel.loadRemainingSections()
+    }
+    // 页面恢复可见时刷新想看/已看缓存快照（从详情页标记后返回时触发）
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshWatchlistWatchedIds()
+        onPauseOrDispose { }
     }
     var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }
     var showPopularAll by remember { mutableStateOf(false) }

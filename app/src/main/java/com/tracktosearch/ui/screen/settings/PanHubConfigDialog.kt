@@ -23,6 +23,7 @@ import com.tracktosearch.data.remote.panhub.PanHubChannel
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.remote.panhub.PanHubPlugin
 import com.tracktosearch.R
+import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.HapticType
 
@@ -132,11 +133,7 @@ fun PanHubConfigDialog(
                                         enabledPlugins = updated
                                         onEnabledPluginsChange(updated)
                                     },
-                                    colors = androidx.compose.material3.SwitchDefaults.colors(
-                                        uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                        uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                        uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                    )
+                                    colors = appSwitchColors()
                                 )
                             }
                         }
@@ -202,11 +199,7 @@ fun PanHubConfigDialog(
                                     enabledChannels = updated
                                     onEnabledChannelsChange(updated)
                                 },
-                                colors = androidx.compose.material3.SwitchDefaults.colors(
-                                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                )
+                                colors = appSwitchColors()
                             )
                         }
 
@@ -231,11 +224,7 @@ fun PanHubConfigDialog(
                                                 enabledChannels = updated
                                                 onEnabledChannelsChange(updated)
                                             },
-                                            colors = androidx.compose.material3.SwitchDefaults.colors(
-                                                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                                                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                                                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                            )
+                                            colors = appSwitchColors()
                                         )
                                     }
                                 }

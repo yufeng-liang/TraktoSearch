@@ -4,6 +4,8 @@ import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -15,6 +17,18 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+/**
+ * 统一的 Switch 颜色配置：关闭态轨道/边框用主题色透明度，确保关闭态颜色统一跟随主题色。
+ * 所有 Switch 都应使用此函数，避免每处重复声明。
+ * 使用方式：Switch(..., colors = appSwitchColors())
+ */
+@Composable
+fun appSwitchColors(): SwitchColors = SwitchDefaults.colors(
+    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
+    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+)
 
 private val DarkColorScheme = darkColorScheme(
     primary = Red500,

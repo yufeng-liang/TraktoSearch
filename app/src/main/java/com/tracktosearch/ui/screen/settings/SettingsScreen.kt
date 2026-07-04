@@ -111,6 +111,7 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
@@ -882,11 +883,7 @@ fun SearchSourceItem(
         Switch(
             checked = checked,
             onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
-            colors = androidx.compose.material3.SwitchDefaults.colors(
-                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
+            colors = appSwitchColors()
         )
     }
 }
@@ -930,11 +927,7 @@ fun PanHubSettingsItem(
             Switch(
                 checked = enabled,
                 onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
-                colors = androidx.compose.material3.SwitchDefaults.colors(
-                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                )
+                colors = appSwitchColors()
             )
         }
         Text(
@@ -981,11 +974,7 @@ fun SwitchSettingsItem(
             checked = checked,
             enabled = enabled,
             onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
-            colors = androidx.compose.material3.SwitchDefaults.colors(
-                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
+            colors = appSwitchColors()
         )
     }
 }
@@ -1634,11 +1623,7 @@ private fun DiscoverSectionRow(
         Switch(
             checked = visible,
             onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
-            colors = androidx.compose.material3.SwitchDefaults.colors(
-                uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-            )
+            colors = appSwitchColors()
         )
     }
 }
@@ -1702,11 +1687,7 @@ fun DetailSectionsDialog(
                                 view.performHaptic(HapticType.CLICK)
                                 viewModel.setDetailSectionVisible(section.id, it)
                             },
-                colors = androidx.compose.material3.SwitchDefaults.colors(
-                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                )
+                colors = appSwitchColors()
                         )
                     }
                 }
@@ -1782,11 +1763,7 @@ fun CustomSearchSourceItem(
             Switch(
                 checked = source.enabled,
                 onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
-                colors = androidx.compose.material3.SwitchDefaults.colors(
-                    uncheckedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-                    uncheckedThumbColor = MaterialTheme.colorScheme.surface,
-                    uncheckedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                )
+                colors = appSwitchColors()
             )
         }
         // 测试结果

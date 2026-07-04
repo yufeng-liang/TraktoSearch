@@ -235,7 +235,7 @@ fun TraktSearchScreen(
                 currentTabState.isLoading -> {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
-                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 130.dp + statusBarHeight, bottom = 80.dp),
+                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
@@ -323,7 +323,7 @@ fun TraktSearchScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             state = currentGridState,
-                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 130.dp + statusBarHeight, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
@@ -359,7 +359,7 @@ fun TraktSearchScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             state = currentGridState,
-                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 130.dp + statusBarHeight, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
@@ -675,7 +675,7 @@ private fun DiskSearchContent(
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(start = 8.dp, top = 130.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
+                    contentPadding = PaddingValues(start = 8.dp, top = 127.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.hazeSource(state = hazeState)
                 ) {

@@ -146,6 +146,15 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 页面恢复可见时刷新想看/已看缓存快照。
+     * TraktRepository 内部的 @Volatile var 在详情页标记后会就地替换，
+     * 但本 ViewModel 持有的 StateFlow 仍是旧引用，需要重新读取以触发 UI 更新。
+     */
+    fun refreshWatchlistWatchedIds() {
+        _watchlistWatchedIds.value = traktRepository.getWatchlistWatchedIds()
+    }
+
     /** 首屏优先加载：豆瓣热榜 + TMDB 热门/即将上映 */
     private fun loadInitialSections() {
         val configs = sectionConfigs.value
