@@ -353,6 +353,7 @@
     <string name="help_notification">通知提醒</string>
     <string name="help_data">数据管理</string>
     <string name="help_detail">详情页</string>
+    <string name="help_discover_filter">影视筛选</string>
     <string name="help_tips">更多技巧</string>
     <string name="help_search_b1">输入影视名称关键词即可搜索网盘资源</string>
     <string name="help_search_b2">支持夸克、百度、阿里云盘、迅雷、UC、115等网盘及磁力链接</string>
@@ -450,6 +451,12 @@
   diskTypePath = $.type</string>
     <string name="help_detail_custom">自定义详情页：在设置中可以控制详情页各模块（演职员、预告片与截图、简介、我的评分、评论、推荐）的显示与隐藏</string>
     <string name="help_videos_images">预告片与截图：详情页展示预告片和剧照，点击预告片可在浏览器中播放，点击截图可查看大图并保存到相册</string>
+    <string name="help_discover_filter_b1">影视筛选：在发现页标题栏点击筛选图标，或底部"去影视筛选页"卡片，可进入筛选页</string>
+    <string name="help_discover_filter_b2">支持按类型、地区、标签、评分区间、年代筛选，可按热度、上映时间或评分排序</string>
+    <string name="help_discover_filter_b3">电影与电视剧的筛选条件互相独立，切换 Tab 会保留各自的筛选选择</string>
+    <string name="help_discover_filter_b4">筛选条件未变化时不刷新结果（关闭弹窗或点应用时如条件未变会跳过重复请求）</string>
+    <string name="help_discover_filter_b5">吸顶筛选栏支持穿透滑动，在标题栏区域拖动可直接滚动下方列表</string>
+    <string name="help_discover_filter_b6">高级筛选中开启"仅展示未标看过"可过滤掉已标记看过的影视（需登录）</string>
     <string name="help_tips_b1">点击状态栏可快速回到页面顶部</string>
     <string name="help_tips_b2">评分支持半星选择（点击星星左右两侧），再次点击已选区域可取消评分</string>
     <string name="help_tips_b3">电视剧详情页可展开全部季信息查看进度</string>
@@ -680,6 +687,34 @@
     <string name="discover_list_meta">%d部 · @%s · ❤%d</string>
     <string name="discover_list_empty">暂无社区热门列表，稍后再来看看吧~</string>
     <string name="common_view_all">查看全部</string>
+
+    <!-- 发现页筛选 -->
+    <string name="discover_filter_title">发现</string>
+    <string name="discover_filter_tab_movie">电影</string>
+    <string name="discover_filter_tab_show">电视剧</string>
+    <string name="discover_filter_genre">类型</string>
+    <string name="discover_filter_region">地区</string>
+    <string name="discover_filter_rating">评分</string>
+    <string name="discover_filter_advanced">高级</string>
+    <string name="discover_filter_sort_by">排序方式</string>
+    <string name="discover_filter_sort_popularity">热门程度</string>
+    <string name="discover_filter_sort_release_date">上线时间</string>
+    <string name="discover_filter_sort_vote_average">评分</string>
+    <string name="discover_filter_hide_watched">仅展示未标看过</string>
+    <string name="discover_filter_apply">应用</string>
+    <string name="discover_filter_reset">重置</string>
+    <string name="discover_filter_clear">清除</string>
+    <string name="discover_filter_empty">没有找到结果，试试调整筛选条件</string>
+    <string name="discover_filter_select_genres">选择类型</string>
+    <string name="discover_filter_select_regions">选择地区</string>
+    <string name="discover_filter_select_tags">选择标签</string>
+    <string name="discover_filter_select_decades">选择年代</string>
+    <string name="discover_filter_tag">标签</string>
+    <string name="discover_filter_decade">年代</string>
+    <string name="discover_filter_rating_label">评分</string>
+    <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <string name="discover_filter_more_title">想发现更多影视？</string>
+    <string name="discover_filter_more_button">去影视筛选页</string>
 
     <!-- Search Source Type -->
     <string name="search_type_disk">网盘资源</string>

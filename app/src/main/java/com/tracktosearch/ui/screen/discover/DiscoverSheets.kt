@@ -7,12 +7,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -77,10 +80,12 @@ internal fun TmdbAllSheet(
             }
     }
 
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -102,8 +107,9 @@ internal fun TmdbAllSheet(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
-                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                // 底部留出导航栏高度，使最后一行内容可滚动过小白条
+                modifier = Modifier.fillMaxHeight(0.8f).padding(bottom = navBarHeight),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -164,10 +170,12 @@ internal fun TraktMovieAllSheet(
             }
     }
 
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -189,8 +197,9 @@ internal fun TraktMovieAllSheet(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
-                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                // 底部留出导航栏高度，使最后一行内容可滚动过小白条
+                modifier = Modifier.fillMaxHeight(0.8f).padding(bottom = navBarHeight),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -236,10 +245,12 @@ internal fun TraktShowAllSheet(
 ) {
     val listState = rememberLazyGridState()
 
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -261,8 +272,9 @@ internal fun TraktShowAllSheet(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
-                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                // 底部留出导航栏高度，使最后一行内容可滚动过小白条
+                modifier = Modifier.fillMaxHeight(0.8f).padding(bottom = navBarHeight),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -297,10 +309,12 @@ internal fun TraktAnticipatedAllSheet(
 ) {
     val listState = rememberLazyGridState()
 
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -322,8 +336,9 @@ internal fun TraktAnticipatedAllSheet(
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 state = listState,
-                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                // 底部留出导航栏高度，使最后一行内容可滚动过小白条
+                modifier = Modifier.fillMaxHeight(0.8f).padding(bottom = navBarHeight),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -367,10 +382,12 @@ internal fun TrendingListsAllSheet(
     onListClick: (listId: Int, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
@@ -388,7 +405,7 @@ internal fun TrendingListsAllSheet(
                 }
             }
             LazyColumn(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp).padding(bottom = navBarHeight),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {

@@ -2,6 +2,7 @@ package com.tracktosearch.data.repository
 
 import android.util.Log
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.local.ChangelogStorage
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import java.text.SimpleDateFormat
@@ -20,7 +21,8 @@ data class UpdateInfo(
 @Singleton
 class UpdateRepository @Inject constructor(
     private val gitHubApi: GitHubUpdateApiService,
-    private val giteeApi: GiteeUpdateApiService
+    private val giteeApi: GiteeUpdateApiService,
+    private val changelogStorage: ChangelogStorage
 ) {
     companion object {
         private const val TAG = "UpdateRepository"
@@ -56,14 +58,22 @@ class UpdateRepository @Inject constructor(
         return changelog
     }
 
-    /** 获取所有版本的更新日志（带缓存），按版本从新到旧排列 */
+    /** 获取所有版本的更新日志（带缓存），按版本从新到旧排列。优先内存缓存 → 磁盘缓存 → 网络 */
     suspend fun fetchAllChangelogs(): String {
         cachedFullChangelog?.let { return it }
 
-        // 优先从 GitHub 获取所有 releases
+        // 磁盘缓存：app 重启后仍可用，避免每次打开设置页都走网络
+        val diskCached = changelogStorage.getChangelog()
+        if (!diskCached.isNullOrBlank()) {
+            cachedFullChangelog = diskCached
+            return diskCached
+        }
+
+        // 网络获取
         val result = tryFetchAllFromGitHub() ?: tryFetchAllFromGitee()
         if (result != null) {
             cachedFullChangelog = result
+            changelogStorage.saveChangelog(result)
             return result
         }
         return ""
@@ -135,6 +145,8 @@ class UpdateRepository @Inject constructor(
             cachedChangelog = gitHubResult.changelog
             cachedLatestVersion = gitHubResult.latestVersion
             if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
+                // 有新版本：将该版本 changelog 追加到完整日志缓存，设置页打开时直接用缓存
+                appendToFullChangelog(gitHubResult.latestVersion, gitHubResult.changelog)
                 val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
                 if (downloadUrl.isEmpty()) return null
                 return gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
@@ -149,6 +161,7 @@ class UpdateRepository @Inject constructor(
             cachedChangelog = giteeResult.changelog
             cachedLatestVersion = giteeResult.latestVersion
             if (isNewerVersion(giteeResult.latestVersion, currentVersion)) {
+                appendToFullChangelog(giteeResult.latestVersion, giteeResult.changelog)
                 val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
                 if (downloadUrl.isEmpty()) return null
                 return giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
@@ -157,6 +170,21 @@ class UpdateRepository @Inject constructor(
         }
 
         return null
+    }
+
+    /**
+     * 将新版本的 changelog 追加到完整更新日志缓存（磁盘 + 内存）开头。
+     * 如果该版本已存在则跳过。这样设置页打开更新日志时直接用缓存，无需再次请求网络。
+     */
+    private suspend fun appendToFullChangelog(version: String, changelog: String) {
+        if (changelog.isBlank()) return
+        val entry = "## v$version 更新内容\n\n$changelog"
+        val existing = cachedFullChangelog ?: changelogStorage.getChangelog() ?: ""
+        // 检查是否已包含该版本
+        if (existing.contains("## v$version 更新内容")) return
+        val updated = if (existing.isBlank()) entry else "$entry\n\n---\n\n$existing"
+        cachedFullChangelog = updated
+        changelogStorage.saveChangelog(updated)
     }
 
     /**

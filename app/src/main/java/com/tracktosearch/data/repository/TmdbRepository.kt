@@ -523,6 +523,16 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /** 获取电视剧详情（用于补全 imdb_id 等） */
+    suspend fun getTvDetail(tvId: Int): TmdbTvDetail? {
+        return try {
+            val response = tmdbApiService.getTvDetail(tvId, language = getTmdbLanguage())
+            if (response.isSuccessful) response.body() else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     suspend fun getMovieVideos(id: Int): List<TmdbVideo> {
         return try {
             val lang = getTmdbLanguage()
@@ -609,5 +619,87 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getTvSeasonDetail(tvId, seasonNumber, language = getTmdbLanguage())
             if (response.isSuccessful) response.body() else null
         } catch (_: Exception) { null }
+    }
+
+    // ========== Discover API：按维度筛选影视 ==========
+
+    /** Discover 筛选条件 */
+    data class DiscoverFilter(
+        val type: DiscoverType,             // 电影/电视剧
+        val genreIds: List<Int>,            // 类型（多选，TMDB OR 逻辑）
+        val originCountries: List<String>,  // 地区（多选，TMDB OR 逻辑）
+        val keywordIds: List<Int>,          // 标签/关键词（多选，TMDB OR 逻辑）
+        val voteAverageMin: Float,          // 评分下限 0-10
+        val voteAverageMax: Float,          // 评分上限 0-10
+        val releaseDateStart: String?,      // 年代起始日期 yyyy-MM-dd
+        val releaseDateEnd: String?,        // 年代结束日期 yyyy-MM-dd
+        val sortBy: DiscoverSort,           // 排序方式
+        val hideWatched: Boolean            // 仅展示未标看过
+    )
+
+    enum class DiscoverType { MOVIE, SHOW }
+
+    enum class DiscoverSort(val value: String) {
+        POPULARITY_DESC("popularity.desc"),
+        RELEASE_DATE_DESC("primary_release_date.desc"),
+        VOTE_AVERAGE_DESC("vote_average.desc")
+    }
+
+    /** Discover 分页结果 */
+    data class DiscoverPage(
+        val items: List<TmdbSearchResult>,
+        val totalPages: Int,
+        val totalResults: Int
+    )
+
+    /** 按筛选条件发现影视（分页） */
+    suspend fun discover(filter: DiscoverFilter, page: Int): DiscoverPage {
+        return try {
+            val genres = filter.genreIds.joinToString(",").ifEmpty { null }
+            val countries = filter.originCountries.joinToString(",").ifEmpty { null }
+            val keywords = filter.keywordIds.joinToString(",").ifEmpty { null }
+            // 评分下限/上限：边界值不传，避免过滤掉恰好 0 分或 10 分的条目
+            val voteMin = if (filter.voteAverageMin <= 0f) null else filter.voteAverageMin
+            val voteMax = if (filter.voteAverageMax >= 10f) null else filter.voteAverageMax
+            // 评分筛选配合最低投票数，避免低投票数的高分片污染结果
+            val voteCountGte = if (filter.voteAverageMin > 0f || filter.voteAverageMax < 10f) 50 else null
+
+            val response = when (filter.type) {
+                DiscoverType.MOVIE -> tmdbApiService.discoverMovie(
+                    language = getTmdbLanguage(),
+                    page = page,
+                    withGenres = genres,
+                    withOriginCountry = countries,
+                    withKeywords = keywords,
+                    voteAverageGte = voteMin,
+                    voteAverageLte = voteMax,
+                    voteCountGte = voteCountGte,
+                    releaseDateGte = filter.releaseDateStart,
+                    releaseDateLte = filter.releaseDateEnd,
+                    sortBy = filter.sortBy.value,
+                    includeAdult = true
+                )
+                DiscoverType.SHOW -> tmdbApiService.discoverTv(
+                    language = getTmdbLanguage(),
+                    page = page,
+                    withGenres = genres,
+                    withOriginCountry = countries,
+                    withKeywords = keywords,
+                    voteAverageGte = voteMin,
+                    voteAverageLte = voteMax,
+                    voteCountGte = voteCountGte,
+                    airDateGte = filter.releaseDateStart,
+                    airDateLte = filter.releaseDateEnd,
+                    sortBy = filter.sortBy.value,
+                    includeAdult = true
+                )
+            }
+            if (response.isSuccessful) {
+                val body = response.body() ?: TmdbSearchResponse()
+                DiscoverPage(body.results, body.total_pages, body.total_results)
+            } else DiscoverPage(emptyList(), 0, 0)
+        } catch (_: Exception) {
+            DiscoverPage(emptyList(), 0, 0)
+        }
     }
 }

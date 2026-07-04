@@ -16,7 +16,8 @@ data class TmdbMovieDetail(
     val runtime: Int? = null,
     val production_countries: List<TmdbProductionCountry> = emptyList(),
     val belongs_to_collection: TmdbBelongsToCollection? = null,
-    val status: String = ""
+    val status: String = "",
+    val imdb_id: String? = null
 )
 
 @Serializable
@@ -31,7 +32,8 @@ data class TmdbTvDetail(
     val vote_average: Double = 0.0,
     val episode_run_time: List<Int>? = null,
     val origin_country: List<String> = emptyList(),
-    val status: String = ""
+    val status: String = "",
+    val imdb_id: String? = null
 )
 
 @Serializable
@@ -205,7 +207,14 @@ data class TmdbSearchResult(
     val title: String = "",
     val overview: String = "",
     val poster_path: String? = null,
-    val release_date: String = ""
+    val release_date: String = "",
+    // Discover API 额外返回的字段（其他接口不返回时取默认值，向后兼容）
+    val vote_average: Double = 0.0,
+    val genre_ids: List<Int> = emptyList(),
+    val origin_country: List<String> = emptyList(),
+    val original_language: String = "",  // 原始语言（discover/movie 不返回 origin_country 时用此推断）
+    val name: String? = null,          // TV 节目标题
+    val first_air_date: String? = null  // TV 首播日期
 )
 
 @Serializable

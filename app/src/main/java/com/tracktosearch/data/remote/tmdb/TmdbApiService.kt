@@ -182,4 +182,38 @@ interface TmdbApiService {
         @Path("season_number") seasonNumber: Int,
         @Query("language") language: String = "zh-CN"
     ): Response<TmdbTvSeasonDetail>
+
+    // ========== Discover API：按类型/地区/评分等维度筛选影视 ==========
+
+    @GET("discover/movie")
+    suspend fun discoverMovie(
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1,
+        @Query("with_genres") withGenres: String? = null,
+        @Query("with_origin_country") withOriginCountry: String? = null,
+        @Query("with_keywords") withKeywords: String? = null,
+        @Query("vote_average.gte") voteAverageGte: Float? = null,
+        @Query("vote_average.lte") voteAverageLte: Float? = null,
+        @Query("vote_count.gte") voteCountGte: Int? = null,
+        @Query("primary_release_date.gte") releaseDateGte: String? = null,
+        @Query("primary_release_date.lte") releaseDateLte: String? = null,
+        @Query("sort_by") sortBy: String = "popularity.desc",
+        @Query("include_adult") includeAdult: Boolean = false
+    ): Response<TmdbSearchResponse>
+
+    @GET("discover/tv")
+    suspend fun discoverTv(
+        @Query("language") language: String = "zh-CN",
+        @Query("page") page: Int = 1,
+        @Query("with_genres") withGenres: String? = null,
+        @Query("with_origin_country") withOriginCountry: String? = null,
+        @Query("with_keywords") withKeywords: String? = null,
+        @Query("vote_average.gte") voteAverageGte: Float? = null,
+        @Query("vote_average.lte") voteAverageLte: Float? = null,
+        @Query("vote_count.gte") voteCountGte: Int? = null,
+        @Query("first_air_date.gte") airDateGte: String? = null,
+        @Query("first_air_date.lte") airDateLte: String? = null,
+        @Query("sort_by") sortBy: String = "popularity.desc",
+        @Query("include_adult") includeAdult: Boolean = false
+    ): Response<TmdbSearchResponse>
 }

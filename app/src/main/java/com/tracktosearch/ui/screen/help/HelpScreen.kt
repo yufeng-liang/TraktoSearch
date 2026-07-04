@@ -216,12 +216,28 @@ fun HelpScreen(
                     }
                 }
 
+                // 影视筛选
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_discover_filter),
+                        isExpanded = expandedIndex == 7,
+                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_discover_filter_b1))
+                        HelpBullet(stringResource(R.string.help_discover_filter_b2))
+                        HelpBullet(stringResource(R.string.help_discover_filter_b3))
+                        HelpBullet(stringResource(R.string.help_discover_filter_b4))
+                        HelpBullet(stringResource(R.string.help_discover_filter_b5))
+                        HelpBullet(stringResource(R.string.help_discover_filter_b6))
+                    }
+                }
+
                 // 更多技巧
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_tips),
-                        isExpanded = expandedIndex == 7,
-                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 }
+                        isExpanded = expandedIndex == 8,
+                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
                     ) {
                         HelpBullet(stringResource(R.string.help_tips_b1))
                         HelpBullet(stringResource(R.string.help_tips_b2))
@@ -240,8 +256,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_vpn),
-                        isExpanded = expandedIndex == 8,
-                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
+                        isExpanded = expandedIndex == 9,
+                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 }
                     ) {
                         HelpBullet(stringResource(R.string.help_vpn_b1))
                         HelpBullet(stringResource(R.string.help_vpn_b2))

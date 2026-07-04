@@ -196,16 +196,27 @@ class TraktRepository @Inject constructor(
     private val movieWatchlistCache = TtlCache<Pair<List<TraktWatchlistMovieItem>, Int>>(TTL_STATS, maxSize = 5)
     private val showWatchlistCache = TtlCache<Pair<List<TraktWatchlistShowItem>, Int>>(TTL_STATS, maxSize = 5)
 
-    /** 同步查询 ID 转换缓存（不触发网络请求），用于秒进判断 */
+    /** 已搜索但未找到有效 Trakt ID 的 tmdbId 集合（负缓存，避免重复请求和转圈） */
+    private val notFoundTmdbIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** 同步查询 ID 转换缓存（不触发网络请求），用于秒进判断。扫描所有结果找有效 ID */
     fun getCachedTraktId(tmdbId: Int, type: MediaType): Int? {
         val key = "${tmdbId}_${type.name}"
+        // 负缓存命中：之前搜过没找到，直接返回 0（表示已搜过但无有效 ID，调用方据此跳过转圈）
+        if (notFoundTmdbIds.contains(key)) return 0
         val cached = searchByTmdbCache.get(key) ?: return null
-        val first = cached.firstOrNull() ?: return null
-        return when (type) {
-            MediaType.MOVIE -> first.movie?.ids?.trakt
-            MediaType.SHOW -> first.show?.ids?.trakt
-            else -> null
+        // 扫描所有结果找有效 trakt ID（第一个结果可能 trakt <= 0）
+        for (result in cached) {
+            val traktId = when (type) {
+                MediaType.MOVIE -> result.movie?.ids?.trakt
+                MediaType.SHOW -> result.show?.ids?.trakt
+                else -> null
+            }
+            if (traktId != null && traktId > 0) return traktId
         }
+        // 缓存有数据但无有效 ID → 记入负缓存
+        notFoundTmdbIds.add(key)
+        return 0
     }
 
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
@@ -222,6 +233,16 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 val body = response.body() ?: emptyList()
                 searchByTmdbCache.put(key, body)
+                // 如果无有效结果，记入负缓存
+                val hasValid = body.any { r ->
+                    val id = when (type) {
+                        MediaType.MOVIE -> r.movie?.ids?.trakt
+                        MediaType.SHOW -> r.show?.ids?.trakt
+                        else -> null
+                    }
+                    id != null && id > 0
+                }
+                if (!hasValid) notFoundTmdbIds.add(key)
                 Result.success(body)
             } else {
                 Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))

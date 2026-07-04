@@ -65,10 +65,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
@@ -82,7 +85,10 @@ import com.tracktosearch.ui.screen.watchlist.WatchlistScreen
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -91,6 +97,13 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+/** EntryPoint 用于在非 ViewModel 场景获取 TraktRepository（读取用户头像缓存） */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface TraktRepositoryEntryPoint {
+    fun traktRepository(): TraktRepository
+}
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -107,7 +120,8 @@ fun MainScreen(
     onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
-    onRestartOnboarding: () -> Unit
+    onRestartOnboarding: () -> Unit,
+    onFilterDiscoverClick: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
@@ -131,6 +145,21 @@ fun MainScreen(
     }
     val cloudPermissionStorage = remember {
         CloudPermissionStorage(context.applicationContext)
+    }
+
+    // 用户头像：登录后从 TraktRepository 获取（带永久缓存，仅登出才清除）
+    var userAvatarUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            val traktRepository = EntryPointAccessors.fromApplication(
+                context.applicationContext, TraktRepositoryEntryPoint::class.java
+            ).traktRepository()
+            traktRepository.getUserProfile().onSuccess { profile ->
+                userAvatarUrl = profile.images.avatar.full.takeIf { it.isNotBlank() }
+            }
+        } else {
+            userAvatarUrl = null
+        }
     }
 
     LaunchedEffect(onboardingCompleted) {
@@ -275,6 +304,7 @@ fun MainScreen(
                         onMovieClick = onMovieClick,
                         onShowClick = onShowClick,
                         onListClick = onListClick,
+                        onFilterDiscoverClick = onFilterDiscoverClick,
                         modifier = Modifier.fillMaxSize()
                     )
                     2 -> {
@@ -361,11 +391,14 @@ fun MainScreen(
                 ) {
                     tabs.forEachIndexed { index, tab ->
                         val isSelected = selectedTab == index
+                        // "我的"tab(index=2)登录后显示用户头像
+                        val avatarUrl = if (index == 2 && isLoggedIn) userAvatarUrl else null
                         NavTabItem(
                             icon = tab.icon,
                             labelRes = tab.labelRes,
                             selected = isSelected,
                             weight = 1f,
+                            avatarUrl = avatarUrl,
                             onClick = {
                                 if (selectedTab != index) {
                                     view.performHaptic(HapticType.CLICK)
@@ -455,10 +488,12 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     selected: Boolean,
     weight: Float,
     onClick: () -> Unit,
+    avatarUrl: String? = null,
     onPositioned: (Rect) -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val density = LocalDensity.current
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .weight(weight)
@@ -475,15 +510,34 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = stringResource(labelRes),
-            tint = if (selected) MaterialTheme.colorScheme.primary
-                   else MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .size(24.dp)
-                .offset(y = 3.dp)
-        )
+        if (avatarUrl != null) {
+            // 登录后"我的"tab 显示用户头像（选中态加主色边框）
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
+                contentDescription = stringResource(labelRes),
+                modifier = Modifier
+                    .size(24.dp)
+                    .offset(y = 3.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(
+                        if (selected) Modifier.border(
+                            width = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(12.dp)
+                        ) else Modifier
+                    )
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = stringResource(labelRes),
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(24.dp)
+                    .offset(y = 3.dp)
+            )
+        }
         Spacer(modifier = Modifier.height(0.dp))
         Text(
             text = stringResource(labelRes),

@@ -41,6 +41,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.help.HelpScreen
+import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
@@ -70,6 +71,7 @@ object Routes {
     const val TRAKT_SEARCH = "traktSearch/{type}/{query}"
     const val HELP = "help"
     const val LIST_DETAIL = "listDetail/{listId}/{listName}"
+    const val DISCOVER_FILTER = "discoverFilter"
 
     fun listDetailRoute(listId: Int, listName: String): String {
         val encodedName = java.net.URLEncoder.encode(listName, "UTF-8")
@@ -273,6 +275,9 @@ fun AppNavigation(
                                 scope.launch {
                                     OnboardingStorage(context).setCompleted(false)
                                 }
+                            },
+                            onFilterDiscoverClick = {
+                                navController.navigate(Routes.DISCOVER_FILTER)
                             }
                         )
                     }
@@ -470,6 +475,22 @@ fun AppNavigation(
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         HelpScreen(
                             onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.DISCOVER_FILTER) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        DiscoverFilterScreen(
+                            onBack = { navController.popBackStack() },
+                            onMovieClick = { tmdbId, title ->
+                                val routeType = "movie"
+                                navController.navigate(Routes.detailRoute(routeType, 0, tmdbId, title))
+                            },
+                            onShowClick = { tmdbId, title ->
+                                val routeType = "show"
+                                navController.navigate(Routes.detailRoute(routeType, 0, tmdbId, title))
+                            }
                         )
                     }
                 }

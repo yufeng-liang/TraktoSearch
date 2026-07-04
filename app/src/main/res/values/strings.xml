@@ -353,6 +353,7 @@
     <string name="help_notification">Notifications</string>
     <string name="help_data">Data Management</string>
     <string name="help_detail">Detail Page</string>
+    <string name="help_discover_filter">Discover Filter</string>
     <string name="help_tips">More Tips</string>
     <string name="help_search_b1">Enter a movie or show name to search for cloud drive resources</string>
     <string name="help_search_b2">Supports Quark, Baidu, Aliyun, Xunlei, UC, 115 cloud drives and magnet links</string>
@@ -450,6 +451,12 @@ Config:
   diskTypePath = $.type</string>
     <string name="help_detail_custom">Custom Detail Page: In settings you can control the visibility of each detail page module (cast, videos &amp; screenshots, overview, my rating, comments, recommendations)</string>
     <string name="help_videos_images">Videos &amp; Screenshots: The detail page shows trailers and stills. Tap a trailer to play it in the browser, tap a screenshot to view fullscreen and save to gallery</string>
+    <string name="help_discover_filter_b1">Discover Filter: Tap the filter icon in the discover page toolbar (or the \"Go to Discover Filter\" card at the bottom) to enter the filter page</string>
+    <string name="help_discover_filter_b2">Filter by genre, region, tag, rating range, decade, and sort by popularity, release date, or rating</string>
+    <string name="help_discover_filter_b3">Movie and TV show filters are independent — switching tabs keeps each type\'s previous filter selections</string>
+    <string name="help_discover_filter_b4">Filter conditions unchanged will not refresh results (closing a dialog or tapping Apply with no changes skips redundant requests)</string>
+    <string name="help_discover_filter_b5">The sticky filter bar supports scroll-through — drag on the header to scroll the list beneath it</string>
+    <string name="help_discover_filter_b6">Enable \"Hide Watched\" in advanced filters to exclude items you\'ve already marked as watched (requires login)</string>
     <string name="help_tips_b1">Tap status bar to quickly scroll to top</string>
     <string name="help_tips_b2">Rating supports half-star selection (tap left/right side), tap again to cancel</string>
     <string name="help_tips_b3">Expand all seasons in TV show detail page to view progress</string>
@@ -680,6 +687,34 @@ Config:
     <string name="discover_list_meta">%d items · @%s · ❤%d</string>
     <string name="discover_list_empty">No community lists yet, check back later~</string>
     <string name="common_view_all">View all</string>
+
+    <!-- Discover Filter -->
+    <string name="discover_filter_title">Discover</string>
+    <string name="discover_filter_tab_movie">Movie</string>
+    <string name="discover_filter_tab_show">TV Show</string>
+    <string name="discover_filter_genre">Genre</string>
+    <string name="discover_filter_region">Region</string>
+    <string name="discover_filter_rating">Rating</string>
+    <string name="discover_filter_advanced">Advanced</string>
+    <string name="discover_filter_sort_by">Sort by</string>
+    <string name="discover_filter_sort_popularity">Popularity</string>
+    <string name="discover_filter_sort_release_date">Release Date</string>
+    <string name="discover_filter_sort_vote_average">Rating</string>
+    <string name="discover_filter_hide_watched">Hide watched</string>
+    <string name="discover_filter_apply">Apply</string>
+    <string name="discover_filter_reset">Reset</string>
+    <string name="discover_filter_clear">Clear</string>
+    <string name="discover_filter_empty">No results found, try adjusting filters</string>
+    <string name="discover_filter_select_genres">Select genres</string>
+    <string name="discover_filter_select_regions">Select regions</string>
+    <string name="discover_filter_select_tags">Select tags</string>
+    <string name="discover_filter_select_decades">Select decades</string>
+    <string name="discover_filter_tag">Tag</string>
+    <string name="discover_filter_decade">Decade</string>
+    <string name="discover_filter_rating_label">Rating</string>
+    <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <string name="discover_filter_more_title">Want to discover more?</string>
+    <string name="discover_filter_more_button">Go to Discover Filter</string>
 
     <!-- Search Source Type -->
     <string name="search_type_disk">Cloud Resources</string>

@@ -32,7 +32,8 @@ class TtlCache<T>(
 
     fun get(key: String): T? {
         val entry = cache[key] ?: return null
-        if (System.currentTimeMillis() > entry.expireAt) {
+        // Long.MAX_VALUE 表示永不过期，跳过过期检查
+        if (entry.expireAt != Long.MAX_VALUE && System.currentTimeMillis() > entry.expireAt) {
             cache.remove(key)
             return null
         }
@@ -43,7 +44,9 @@ class TtlCache<T>(
 
     fun put(key: String, value: T) {
         val now = System.currentTimeMillis()
-        cache[key] = Entry(value, now + ttlMillis, accessCounter.incrementAndGet())
+        // 防止 now + ttlMillis 溢出（Long.MAX_VALUE 作为"永不过期"时会导致溢出为负数，缓存立即失效）
+        val expireAt = if (ttlMillis >= Long.MAX_VALUE - now) Long.MAX_VALUE else now + ttlMillis
+        cache[key] = Entry(value, expireAt, accessCounter.incrementAndGet())
         trimToSize()
     }
 

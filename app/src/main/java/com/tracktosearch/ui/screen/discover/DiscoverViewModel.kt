@@ -578,6 +578,11 @@ class DiscoverViewModel @Inject constructor(
             onNavigate(idCached, tmdbId, title, "", 0.0, inWl, isW)
             return
         }
+        // 负缓存命中（idCached == 0）：之前搜过没找到，不转圈直接提示
+        if (idCached == 0) {
+            viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+            return
+        }
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
             try {
@@ -643,6 +648,11 @@ class DiscoverViewModel @Inject constructor(
                 onNavigate(idCached, tmdbId, show.title, show.ids.imdb, show.rating, inWl, isW)
                 return
             }
+            // 负缓存命中（idCached == 0）：之前搜过没找到，不转圈直接提示
+            if (idCached == 0) {
+                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                return
+            }
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
                 try {
@@ -703,6 +713,11 @@ class DiscoverViewModel @Inject constructor(
                 onNavigate(idCached, cachedTmdb.id, cachedTmdb.title, "", 0.0, inWl, isW)
                 return
             }
+            // 负缓存命中：之前搜过没找到，不转圈直接提示
+            if (idCached == 0) {
+                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                return
+            }
         }
 
         viewModelScope.launch {
@@ -737,6 +752,12 @@ class DiscoverViewModel @Inject constructor(
                     val inWl = _watchlistWatchedIds.value?.isInWatchlist(idCached, searchResult.id, MediaType.MOVIE) == true
                     val isW = _watchlistWatchedIds.value?.isWatched(idCached, searchResult.id, MediaType.MOVIE) == true
                     onNavigate(idCached, searchResult.id, searchResult.title, "", 0.0, inWl, isW)
+                    _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                    return@launch
+                }
+                // 负缓存命中：之前搜过没找到
+                if (idCached == 0) {
+                    _toastEvent.emit(R.string.card_resolve_not_found)
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)
                     return@launch
                 }

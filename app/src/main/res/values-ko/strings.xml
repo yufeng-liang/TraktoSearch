@@ -518,6 +518,34 @@
     <string name="discover_list_meta">%d편 · @%s · ❤%d</string>
     <string name="common_view_all">모두 보기</string>
 
+    <!-- 발견 필터 -->
+    <string name="discover_filter_title">발견</string>
+    <string name="discover_filter_tab_movie">영화</string>
+    <string name="discover_filter_tab_show">TV 프로그램</string>
+    <string name="discover_filter_genre">장르</string>
+    <string name="discover_filter_region">지역</string>
+    <string name="discover_filter_rating">평점</string>
+    <string name="discover_filter_advanced">고급</string>
+    <string name="discover_filter_sort_by">정렬 기준</string>
+    <string name="discover_filter_sort_popularity">인기도</string>
+    <string name="discover_filter_sort_release_date">개봉일</string>
+    <string name="discover_filter_sort_vote_average">평점</string>
+    <string name="discover_filter_hide_watched">미시청만</string>
+    <string name="discover_filter_apply">적용</string>
+    <string name="discover_filter_reset">초기화</string>
+    <string name="discover_filter_clear">지우기</string>
+    <string name="discover_filter_empty">결과가 없습니다. 필터를 조정해 보세요</string>
+    <string name="discover_filter_select_genres">장르 선택</string>
+    <string name="discover_filter_select_regions">지역 선택</string>
+    <string name="discover_filter_select_tags">태그 선택</string>
+    <string name="discover_filter_select_decades">연대 선택</string>
+    <string name="discover_filter_tag">태그</string>
+    <string name="discover_filter_decade">연대</string>
+    <string name="discover_filter_rating_label">평점</string>
+    <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
+    <string name="discover_filter_more_title">더 많은 작품을 발견하고 싶나요?</string>
+    <string name="discover_filter_more_button">필터 페이지로 이동</string>
+
     <!-- Search Source Type -->
     <string name="search_type_disk">클라우드 리소스</string>
     <string name="search_type_movie">영화</string>
