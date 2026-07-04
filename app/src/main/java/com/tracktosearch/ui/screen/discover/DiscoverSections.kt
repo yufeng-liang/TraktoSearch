@@ -95,6 +95,7 @@ internal fun TmdbMovieSection(
                             isResolving = resolvingItemId == movie.id,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
                             isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
+                            tmdbId = movie.id,
                             onClick = { onItemClick(movie) }
                         )
                     }
@@ -167,6 +168,7 @@ internal fun TraktRecommendationSection(
                             isResolving = resolvingItemId == movie.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
                             isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                            tmdbId = movie.ids.tmdb,
                             onClick = { onItemClick(movie) }
                         )
                     }
@@ -233,6 +235,7 @@ internal fun TraktTrendingMovieSection(
                             isResolving = resolvingItemId == item.movie.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                             isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                            tmdbId = item.movie.ids.tmdb,
                             onClick = { onItemClick(item.movie) }
                         )
                     }
@@ -299,6 +302,7 @@ internal fun TraktTrendingShowSection(
                             isResolving = resolvingItemId == item.show.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            tmdbId = item.show.ids.tmdb,
                             onClick = { onItemClick(item.show) }
                         )
                     }
@@ -368,6 +372,7 @@ internal fun TraktAnticipatedSection(
                             isResolving = resolvingItemId == item.movie.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
                             isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                            tmdbId = item.movie.ids.tmdb,
                             onClick = { onMovieClick(item.movie) }
                         )
                     }
@@ -381,6 +386,7 @@ internal fun TraktAnticipatedSection(
                             isResolving = resolvingItemId == item.show.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            tmdbId = item.show.ids.tmdb,
                             onClick = { onShowClick(item.show) }
                         )
                     }
@@ -447,6 +453,7 @@ internal fun TraktShowRecommendationSection(
                             isResolving = resolvingItemId == item.show.ids.tmdb,
                             isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
                             isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                            tmdbId = item.show.ids.tmdb,
                             onClick = { onItemClick(item.show) }
                         )
                     }

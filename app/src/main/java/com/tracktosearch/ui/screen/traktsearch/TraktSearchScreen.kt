@@ -64,9 +64,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -103,6 +105,8 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.EmptyView
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -143,6 +147,8 @@ fun TraktSearchScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
+    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
+    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
@@ -204,6 +210,10 @@ fun TraktSearchScreen(
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
+    CompositionLocalProvider(
+        LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+    ) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
@@ -235,7 +245,7 @@ fun TraktSearchScreen(
                 currentTabState.isLoading -> {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
-                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
+                        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 124.dp + statusBarHeight, bottom = 80.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier
@@ -323,7 +333,7 @@ fun TraktSearchScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             state = currentGridState,
-                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 124.dp + statusBarHeight, bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
@@ -359,7 +369,7 @@ fun TraktSearchScreen(
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
                             state = currentGridState,
-                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 127.dp + statusBarHeight, bottom = 80.dp),
+                            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 124.dp + statusBarHeight, bottom = 80.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier
@@ -586,6 +596,7 @@ fun TraktSearchScreen(
             }
         }
     }
+    } // CompositionLocalProvider
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -675,7 +686,7 @@ private fun DiskSearchContent(
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
                     state = listState,
-                    contentPadding = PaddingValues(start = 8.dp, top = 127.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
+                    contentPadding = PaddingValues(start = 8.dp, top = 124.dp + statusBarHeight, end = 8.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                     modifier = Modifier.hazeSource(state = hazeState)
                 ) {

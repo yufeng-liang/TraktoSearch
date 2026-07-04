@@ -264,21 +264,43 @@ object NetworkModule {
     /** 豆瓣热榜共享缓存（搜索页与发现页复用） */
     @Provides
     @Singleton
-    fun provideDoubanHotCache(): TtlCache<DoubanHotData> {
+    fun provideDoubanHotCache(): TtlCache<com.tracktosearch.data.remote.douban.dto.DoubanHotData> {
         return TtlCache(60 * 60 * 1000L) // 1 小时
     }
 
     @Provides
     @Singleton
     fun provideDoubanHotApiService(
-        @Named("panhub") okHttpClient: OkHttpClient
+        @Named("douban") okHttpClient: OkHttpClient
     ): DoubanHotApiService {
         return Retrofit.Builder()
-            .baseUrl("https://panhubshenzjdcom-beta-indol.vercel.app/")
+            .baseUrl("https://douban-movie-api.douban-movie-api-peak.workers.dev/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(DoubanHotApiService::class.java)
+    }
+
+    /** 豆瓣热榜专用 OkHttpClient（带 API Key） */
+    @Provides
+    @Singleton
+    @Named("douban")
+    fun provideDoubanOkHttpClient(
+        baseClient: OkHttpClient,
+        cache: Cache
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .cache(cache)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("User-Agent", USER_AGENT)
+                    .addHeader("X-API-Key", BuildConfig.DOUBAN_API_KEY)
+                    .build()
+                chain.proceed(request)
+            })
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
     }
 
     /** 备选豆瓣热榜 API（主 API 超时时切换） */
@@ -286,10 +308,10 @@ object NetworkModule {
     @Singleton
     @Named("backup")
     fun provideBackupDoubanHotApiService(
-        @Named("panhub") okHttpClient: OkHttpClient
+        @Named("douban") okHttpClient: OkHttpClient
     ): DoubanHotApiService {
         return Retrofit.Builder()
-            .baseUrl("https://panhub.shenzjd.com/")
+            .baseUrl("https://douban-movie-api.pages.dev/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

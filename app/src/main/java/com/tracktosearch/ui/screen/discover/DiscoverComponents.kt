@@ -28,6 +28,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -44,8 +45,14 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalIsCurrentTab
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun MovieCard(
     title: String,
@@ -56,9 +63,18 @@ internal fun MovieCard(
     isResolving: Boolean,
     isInWatchlist: Boolean = false,
     isWatched: Boolean = false,
+    tmdbId: Int = 0,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    // 当前活跃海报 tmdbId（-1=都不启用 / 具体值=只有匹配的启用）
+    val activePosterTmdbId = LocalActivePosterTmdbId.current
+    val setActivePosterTmdbId = LocalActivePosterTmdbIdSetter.current
+    // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
+    val isCurrentTab = LocalIsCurrentTab.current
+    val enableShared = tmdbId > 0 && tmdbId == activePosterTmdbId && isCurrentTab
     val posterUrl = posterPath?.let {
         if (it.startsWith("http")) it
         else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
@@ -68,7 +84,11 @@ internal fun MovieCard(
     Card(
         modifier = Modifier
             .width(105.dp)
-            .clickable(enabled = !isResolving) { onClick() },
+            .clickable(enabled = !isResolving) {
+                // 点击时记录当前海报为活跃状态，确保只有这个卡片参与转场
+                if (tmdbId > 0) setActivePosterTmdbId(tmdbId)
+                onClick()
+            },
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -76,11 +96,26 @@ internal fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            Box(
-                modifier = Modifier
+            // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
+            val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .sharedElement(
+                            rememberSharedContentState(key = "poster-$tmdbId"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                        .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                }
+            } else {
+                Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
                     .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+            }
+            Box(
+                modifier = posterBoxModifier
             ) {
                 if (posterUrl != null) {
                     val imageRequest = remember(posterUrl) {
@@ -278,6 +313,6 @@ internal fun doubanCategoryLabel(categoryId: String): String = when (categoryId)
     "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
     "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
     "douban-top250" -> stringResource(R.string.discover_douban_top250)
-    "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+    "douban-nowplaying" -> stringResource(R.string.discover_douban_nowplaying)
     else -> categoryId
 }

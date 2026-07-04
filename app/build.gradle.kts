@@ -24,8 +24,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 37
-        versionName = "2.21.0"
+        versionCode = 38
+        versionName = "2.22.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -33,6 +33,7 @@ android {
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"${properties.getProperty("trakt.client.secret", "")}\"")
         buildConfigField("String", "TRAKT_REDIRECT_URI", "\"${properties.getProperty("trakt.redirect.uri", "tracktosearch://oauth/callback")}\"")
         buildConfigField("String", "TMDB_API_KEY", "\"${properties.getProperty("tmdb.api.key", "")}\"")
+        buildConfigField("String", "DOUBAN_API_KEY", "\"${properties.getProperty("douban.api.key", "")}\"")
         buildConfigField("String", "OMDB_API_KEY", "\"${properties.getProperty("omdb.api.key", "")}\"")
         buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")

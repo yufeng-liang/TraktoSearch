@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.discover
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -47,13 +48,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.text.TextStyle
@@ -65,6 +67,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -80,7 +86,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
@@ -94,7 +100,13 @@ fun DiscoverScreen(
     val sectionConfigs by viewModel.sectionConfigs.collectAsStateWithLifecycle()
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val view = LocalView.current
+    // 共享元素转场 scope（用于底部入口卡片和右上角筛选图标与影视筛选页配对）
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    // 记录进入影视筛选页的入口来源（"card"=底部卡片 / "icon"=右上角图标），返回时据此决定哪个入口参与转场
+    var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
+    // 当前活跃的海报 tmdbId（-1=初始无活跃 / 具体值=被点击的海报），确保同页面多栏目相同海报只有被点击的参与转场
+    var activePosterTmdbId by rememberSaveable { mutableStateOf(-1) }
 
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { resId ->
@@ -157,6 +169,10 @@ fun DiscoverScreen(
         }
     }
 
+    CompositionLocalProvider(
+        LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+    ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
@@ -183,7 +199,7 @@ fun DiscoverScreen(
                 sectionConfigs.filter { it.visible }.forEach { config ->
                     when (config.id) {
                         // 豆瓣热榜各榜单
-                        "douban-movie", "douban-weekly", "douban-top250", "douban-us-box" -> {
+                        "douban-movie", "douban-weekly", "douban-top250", "douban-nowplaying" -> {
                             val category = uiState.doubanHotCategories.find { it.id == config.id }
                             if (category != null) {
                                 item(key = config.id) {
@@ -529,10 +545,25 @@ fun DiscoverScreen(
                 }
                 // 底部：去影视筛选页入口卡片
                 item(key = "discover_filter_entry") {
+                    // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
+                    val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card") {
+                        with(sharedTransitionScope) {
+                            Modifier
+                                .fillMaxWidth()
+                                .sharedElement(
+                                    rememberSharedContentState(key = "discover-filter-entry-card"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                        }
+                    } else {
+                        Modifier.fillMaxWidth()
+                    }
                     Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onFilterDiscoverClick() },
+                        modifier = cardModifier
+                            .clickable {
+                                activeFilterEntry = "card"
+                                onFilterDiscoverClick()
+                            },
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
                         ),
@@ -587,7 +618,24 @@ fun DiscoverScreen(
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onFilterDiscoverClick) {
+                        // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
+                        val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon") {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedElement(
+                                    rememberSharedContentState(key = "discover-filter-entry-icon"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                        IconButton(
+                            onClick = {
+                                activeFilterEntry = "icon"
+                                onFilterDiscoverClick()
+                            },
+                            modifier = iconModifier
+                        ) {
                             Icon(
                                 Icons.Default.FilterList,
                                 contentDescription = stringResource(R.string.discover_filter_title),
@@ -606,6 +654,7 @@ fun DiscoverScreen(
             }
         }
     }
+    } // CompositionLocalProvider
 
     // 豆瓣热榜全量弹窗
     showDoubanAllDialog?.let { catId ->

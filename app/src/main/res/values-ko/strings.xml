@@ -509,7 +509,7 @@
     <string name="discover_douban_new_movies">신작 영화</string>
     <string name="discover_douban_weekly">이번 주 베스트</string>
     <string name="discover_douban_top250">Top 250</string>
-    <string name="discover_douban_us_box">미국 박스오피스</string>
+    <string name="discover_douban_nowplaying">상영중</string>
     <string name="discover_view_all">전체(%d) ></string>
     <string name="discover_trending">트렌드 영화</string>
     <string name="discover_trending_day">오늘</string>
@@ -519,7 +519,7 @@
     <string name="common_view_all">모두 보기</string>
 
     <!-- 발견 필터 -->
-    <string name="discover_filter_title">발견</string>
+    <string name="discover_filter_title">필터</string>
     <string name="discover_filter_tab_movie">영화</string>
     <string name="discover_filter_tab_show">TV 프로그램</string>
     <string name="discover_filter_genre">장르</string>

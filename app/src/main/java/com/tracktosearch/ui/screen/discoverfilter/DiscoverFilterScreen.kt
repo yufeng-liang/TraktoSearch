@@ -80,6 +80,9 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -87,7 +90,7 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.flow.collectLatest
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DiscoverFilterScreen(
     onBack: () -> Unit,
@@ -99,6 +102,8 @@ fun DiscoverFilterScreen(
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
     val hazeState = remember { HazeState() }
     val listState = rememberLazyListState()
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val view = LocalView.current
     val statusBarHeight = WindowInsets.statusBars
         .asPaddingValues().calculateTopPadding()
@@ -106,7 +111,6 @@ fun DiscoverFilterScreen(
     var showGenreDialog by remember { mutableStateOf(false) }
     var showRegionDialog by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
-    var showDecadeDialog by remember { mutableStateOf(false) }
 
     // 滚动到底部加载更多
     LaunchedEffect(listState) {
@@ -133,7 +137,22 @@ fun DiscoverFilterScreen(
         if (!uiState.hasSearched) viewModel.search()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-card"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         // ========== 列表内容（hazeSource） ==========
         LazyColumn(
             state = listState,
@@ -233,20 +252,35 @@ fun DiscoverFilterScreen(
                     .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.search_back),
-                        tint = MaterialTheme.colorScheme.primary
+                // 「返回箭头 + 标题」作为整体与发现页右上角筛选图标配对（sharedBounds）
+                val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "discover-filter-entry-icon"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
+                } else {
+                    Modifier
+                }
+                Row(
+                    modifier = headerModifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.search_back),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        text = stringResource(R.string.discover_filter_title),
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(
-                    text = stringResource(R.string.discover_filter_title),
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
                 TextButton(onClick = { viewModel.resetFilters(); viewModel.search() }) {
                     Text(stringResource(R.string.discover_filter_reset))
                 }
@@ -542,6 +576,7 @@ fun DiscoverFilterScreen(
 /**
  * 列表项：海报 + 标题 + 评分 + 年份 + 类型 + 地区
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DiscoverFilterListItem(
     item: TmdbSearchResult,
@@ -549,6 +584,8 @@ private fun DiscoverFilterListItem(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
     val year = if (isMovie) {
         item.release_date.takeIf { it.length >= 4 }?.substring(0, 4)
@@ -558,6 +595,25 @@ private fun DiscoverFilterListItem(
     val posterUrl = if (!item.poster_path.isNullOrBlank()) {
         "https://image.tmdb.org/t/p/w200${item.poster_path}"
     } else null
+
+    // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
+    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            Modifier
+                .width(80.dp)
+                .height(120.dp)
+                .sharedElement(
+                    rememberSharedContentState(key = "poster-${item.id}"),
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+                .clip(RoundedCornerShape(8.dp))
+        }
+    } else {
+        Modifier
+            .width(80.dp)
+            .height(120.dp)
+            .clip(RoundedCornerShape(8.dp))
+    }
 
     Row(
         modifier = Modifier
@@ -571,18 +627,12 @@ private fun DiscoverFilterListItem(
             AsyncImage(
                 model = ImageRequest.Builder(context).data(posterUrl).size(150).build(),
                 contentDescription = title,
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                modifier = posterModifier,
                 contentScale = ContentScale.Crop
             )
         } else {
             Box(
-                modifier = Modifier
-                    .width(80.dp)
-                    .height(120.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                modifier = posterModifier
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {

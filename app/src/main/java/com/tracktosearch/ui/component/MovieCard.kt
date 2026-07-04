@@ -44,6 +44,13 @@ fun MovieCard(
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    // 当前活跃海报 tmdbId（-1=都不启用 / 具体值=只有匹配的启用）
+    val activePosterTmdbId = LocalActivePosterTmdbId.current
+    val setActivePosterTmdbId = LocalActivePosterTmdbIdSetter.current
+    // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
+    // isCurrentTab 避免 HorizontalPager 常驻的非当前 tab 同 tmdbId 海报参与匹配
+    val isCurrentTab = LocalIsCurrentTab.current
+    val enableShared = tmdbId == activePosterTmdbId && isCurrentTab
     val context = LocalContext.current
     val imageRequest = remember(posterUrl) {
         ImageRequest.Builder(context)
@@ -53,14 +60,20 @@ fun MovieCard(
             .build()
     }
 
+    // 包装点击回调：点击时记录当前海报为活跃状态
+    val wrappedOnClick = {
+        if (tmdbId > 0) setActivePosterTmdbId(tmdbId)
+        onClick()
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                    Modifier.combinedClickable(onClick = wrappedOnClick, onLongClick = onLongClick)
                 } else {
-                    Modifier.clickable(onClick = onClick)
+                    Modifier.clickable(onClick = wrappedOnClick)
                 }
             ),
         shape = RoundedCornerShape(12.dp),
@@ -70,7 +83,7 @@ fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null) {
                 with(sharedTransitionScope) {
                     Modifier
                         .sharedElement(

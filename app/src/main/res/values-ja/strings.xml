@@ -509,7 +509,7 @@
     <string name="discover_douban_new_movies">新作映画</string>
     <string name="discover_douban_weekly">今週のベスト</string>
     <string name="discover_douban_top250">トップ250</string>
-    <string name="discover_douban_us_box">全米興行収入</string>
+    <string name="discover_douban_nowplaying">上映中</string>
     <string name="discover_view_all">すべて(%d) ></string>
     <string name="discover_trending">トレンド映画</string>
     <string name="discover_trending_day">今日</string>
@@ -519,7 +519,7 @@
     <string name="common_view_all">すべて見る</string>
 
     <!-- ディスカバーフィルター -->
-    <string name="discover_filter_title">ディスカバー</string>
+    <string name="discover_filter_title">フィルター</string>
     <string name="discover_filter_tab_movie">映画</string>
     <string name="discover_filter_tab_show">TVドラマ</string>
     <string name="discover_filter_genre">ジャンル</string>

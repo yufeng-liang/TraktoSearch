@@ -45,6 +45,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -67,6 +68,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -104,6 +107,8 @@ fun DetailScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
+    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的推荐卡片参与共享元素转场
+    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     var showRatingDialog by remember { mutableStateOf(false) }
 
     // 拦截系统返回手势/返回键，统一走 onBack 回调以传递变更状态
@@ -169,6 +174,10 @@ fun DetailScreen(
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
 
+    CompositionLocalProvider(
+        LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+    ) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
             .fillMaxSize()
@@ -762,6 +771,7 @@ fun DetailScreen(
                 )
             }
         }
+    }
     }
 }
 

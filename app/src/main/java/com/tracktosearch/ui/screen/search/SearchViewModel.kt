@@ -83,7 +83,7 @@ class SearchViewModel @Inject constructor(
             "douban-movie" to "New Movies",
             "douban-weekly" to "Weekly Best",
             "douban-top250" to "Top250",
-            "douban-us-box" to "US Box Office"
+            "douban-nowplaying" to "Now Playing"
         )
     }
 
@@ -122,7 +122,21 @@ class SearchViewModel @Inject constructor(
             val cacheKey = "douban-movie_1_10"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
-                    doubanHotApi.getDoubanHot(category = "douban-movie", limit = 10).data
+                    val response = doubanHotApi.getChart()
+                    com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                        items = response.data.map { item ->
+                            val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                            com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                id = item.id.hashCode(),
+                                title = "$ratingText${item.title}",
+                                cover = item.poster,
+                                desc = item.ratingCount,
+                                rating = item.rating,
+                                url = item.url
+                            )
+                        },
+                        total = response.total
+                    )
                 }
                 val titles = data.items.mapNotNull { item ->
                     item.title.replace(Regex("【\\d+\\.?\\d*】\\s*"), "").ifEmpty { null }
@@ -159,11 +173,94 @@ class SearchViewModel @Inject constructor(
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
                     try {
-                        doubanHotApi.getDoubanHot(category = categoryId, limit = 10).data
+                        when (categoryId) {
+                            "douban-movie" -> {
+                                val response = doubanHotApi.getChart()
+                                com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                    items = response.data.map { item ->
+                                        val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                        com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                            id = item.id.hashCode(),
+                                            title = "$ratingText${item.title}",
+                                            cover = item.poster,
+                                            desc = item.ratingCount,
+                                            rating = item.rating,
+                                            url = item.url
+                                        )
+                                    },
+                                    total = response.total
+                                )
+                            }
+                            "douban-weekly" -> {
+                                val response = doubanHotApi.getWeekly()
+                                com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                    items = response.data.map { item ->
+                                        val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                        com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                            id = item.id.hashCode(),
+                                            title = "$ratingText${item.title}",
+                                            cover = item.poster,
+                                            desc = item.ratingCount,
+                                            rating = item.rating,
+                                            url = item.url
+                                        )
+                                    },
+                                    total = response.total
+                                )
+                            }
+                            "douban-top250" -> {
+                                val response = doubanHotApi.getTop250(page = 1)
+                                com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                    items = response.data.map { item ->
+                                        val ratingText = if (item.rating.isNotBlank()) "【${item.rating}】" else ""
+                                        com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                            id = item.id.hashCode(),
+                                            title = "$ratingText${item.title}",
+                                            cover = item.poster,
+                                            desc = item.ratingCount,
+                                            rating = item.rating,
+                                            url = item.url
+                                        )
+                                    },
+                                    total = response.total
+                                )
+                            }
+                            "douban-nowplaying" -> {
+                                val response = doubanHotApi.getNowPlaying()
+                                com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                    items = response.data.take(10).map { item ->
+                                        val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                        com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                            id = item.id.hashCode(),
+                                            title = "$ratingText${item.title}",
+                                            cover = item.poster,
+                                            desc = item.ratingCount,
+                                            rating = item.rating,
+                                            url = item.url
+                                        )
+                                    },
+                                    total = response.total
+                                )
+                            }
+                            else -> com.tracktosearch.data.remote.douban.dto.DoubanHotData()
+                        }
                     } catch (e: Exception) {
                         if (isTop250) {
                             // 主 API 失败，尝试备选 API
-                            backupDoubanHotApi.getDoubanHot(category = categoryId, limit = 10).data
+                            val response = backupDoubanHotApi.getTop250(page = 1)
+                            com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                items = response.data.map { item ->
+                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                        id = item.id.hashCode(),
+                                        title = item.title,
+                                        cover = item.poster,
+                                        desc = item.rating,
+                                        rating = item.rating,
+                                        url = item.url
+                                    )
+                                },
+                                total = response.total
+                            )
                         } else {
                             throw e
                         }
@@ -239,7 +336,101 @@ class SearchViewModel @Inject constructor(
                 }
             }
             try {
-                val response = doubanHotApi.getDoubanHot(category = categoryId, page = page, limit = limit)
+                val response = when (categoryId) {
+                    "douban-movie" -> {
+                        val chartResponse = doubanHotApi.getChart()
+                        com.tracktosearch.data.remote.douban.dto.DoubanHotResponse(
+                            code = chartResponse.code,
+                            data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                items = chartResponse.data.map { item ->
+                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                        id = item.id.hashCode(),
+                                        title = "$ratingText${item.title}",
+                                        cover = item.poster,
+                                        desc = item.ratingCount,
+                                        rating = item.rating,
+                                        url = item.url
+                                    )
+                                },
+                                total = chartResponse.total,
+                                hasMore = false,
+                                page = page,
+                                limit = limit
+                            )
+                        )
+                    }
+                    "douban-weekly" -> {
+                        val weeklyResponse = doubanHotApi.getWeekly()
+                        com.tracktosearch.data.remote.douban.dto.DoubanHotResponse(
+                            code = weeklyResponse.code,
+                            data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                items = weeklyResponse.data.map { item ->
+                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                        id = item.id.hashCode(),
+                                        title = "$ratingText${item.title}",
+                                        cover = item.poster,
+                                        desc = item.ratingCount,
+                                        rating = item.rating,
+                                        url = item.url
+                                    )
+                                },
+                                total = weeklyResponse.total,
+                                hasMore = false,
+                                page = page,
+                                limit = limit
+                            )
+                        )
+                    }
+                    "douban-top250" -> {
+                        val top250Response = doubanHotApi.getTop250(page = page)
+                        com.tracktosearch.data.remote.douban.dto.DoubanHotResponse(
+                            code = top250Response.code,
+                            data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                items = top250Response.data.map { item ->
+                                    val ratingText = if (item.rating.isNotBlank()) "【${item.rating}】" else ""
+                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                        id = item.id.hashCode(),
+                                        title = "$ratingText${item.title}",
+                                        cover = item.poster,
+                                        desc = item.ratingCount,
+                                        rating = item.rating,
+                                        url = item.url
+                                    )
+                                },
+                                total = top250Response.total,
+                                hasMore = page * limit < top250Response.total,
+                                page = page,
+                                limit = limit
+                            )
+                        )
+                    }
+                    "douban-nowplaying" -> {
+                        val nowPlayingResponse = doubanHotApi.getNowPlaying()
+                        com.tracktosearch.data.remote.douban.dto.DoubanHotResponse(
+                            code = nowPlayingResponse.code,
+                            data = com.tracktosearch.data.remote.douban.dto.DoubanHotData(
+                                items = nowPlayingResponse.data.map { item ->
+                                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") "【${item.rating}】" else ""
+                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
+                                        id = item.id.hashCode(),
+                                        title = "$ratingText${item.title}",
+                                        cover = item.poster,
+                                        desc = item.ratingCount,
+                                        rating = item.rating,
+                                        url = item.url
+                                    )
+                                },
+                                total = nowPlayingResponse.total,
+                                hasMore = false,
+                                page = page,
+                                limit = limit
+                            )
+                        )
+                    }
+                    else -> com.tracktosearch.data.remote.douban.dto.DoubanHotResponse()
+                }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()
                 if (idx >= 0) {
                     val existingItems = if (page > 1) updated[idx].items else emptyList()

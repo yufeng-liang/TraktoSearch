@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -109,6 +110,8 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -127,7 +130,7 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, kotlinx.coroutines.FlowPreview::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -142,6 +145,9 @@ fun SettingsScreen(
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
+    // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshCacheInfo()
@@ -565,13 +571,24 @@ fun SettingsScreen(
                 )
             }
             item {
-                @Suppress("DEPRECATION")
-                SettingsItem(
-                    icon = Icons.Outlined.HelpOutline,
-                    title = stringResource(R.string.settings_help),
-                    subtitle = "",
-                    onClick = { onHelpClick() }
-                )
+                // 「帮助与说明」入口整栏与帮助页「标题+返回箭头」整体配对（sharedBounds）
+                val helpEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "settings-help-entry"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
+                } else { Modifier }
+                Box(modifier = Modifier.fillMaxWidth().then(helpEntryModifier)) {
+                    @Suppress("DEPRECATION")
+                    SettingsItem(
+                        icon = Icons.Outlined.HelpOutline,
+                        title = stringResource(R.string.settings_help),
+                        subtitle = "",
+                        onClick = { onHelpClick() }
+                    )
+                }
             }
             item {
                 SettingsItem(
@@ -1635,7 +1652,7 @@ private fun getSectionDisplayName(id: String): String {
         "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
         "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
         "douban-top250" -> stringResource(R.string.discover_douban_top250)
-        "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+        "douban-nowplaying" -> stringResource(R.string.discover_douban_nowplaying)
         "tmdb-popular" -> stringResource(R.string.discover_trending)
         "tmdb-upcoming" -> stringResource(R.string.discover_upcoming)
         "trakt-trending-movies" -> stringResource(R.string.discover_trakt_trending_movies)

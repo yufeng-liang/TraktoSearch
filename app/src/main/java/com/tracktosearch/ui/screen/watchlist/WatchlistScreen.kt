@@ -68,6 +68,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -113,6 +114,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
@@ -140,6 +143,8 @@ fun WatchlistScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val view = LocalView.current
+    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
+    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
     // 用外置浏览器打开 Trakt，共享外置浏览器登录态（内置 WebView 有独立 CookieJar 不共享）
     val openTraktExternal: () -> Unit = {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://trakt.tv/watchlist")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -329,6 +334,10 @@ fun WatchlistScreen(
         }
     }
 
+    CompositionLocalProvider(
+        LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+    ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
@@ -887,6 +896,7 @@ fun WatchlistScreen(
             }
         }
     }
+    } // CompositionLocalProvider
 }
 
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */

@@ -672,7 +672,7 @@ Config:
     <string name="discover_douban_new_movies">New Movies</string>
     <string name="discover_douban_weekly">Weekly Best</string>
     <string name="discover_douban_top250">Top 250</string>
-    <string name="discover_douban_us_box">US Box Office</string>
+    <string name="discover_douban_nowplaying">Now Playing</string>
     <string name="discover_view_all">View all (%d)</string>
     <string name="discover_trakt_trending_movies">Trakt Trending Movies</string>
     <string name="discover_trakt_trending_shows">Trakt Trending Shows</string>
@@ -689,7 +689,7 @@ Config:
     <string name="common_view_all">View all</string>
 
     <!-- Discover Filter -->
-    <string name="discover_filter_title">Discover</string>
+    <string name="discover_filter_title">Filter</string>
     <string name="discover_filter_tab_movie">Movie</string>
     <string name="discover_filter_tab_show">TV Show</string>
     <string name="discover_filter_genre">Genre</string>

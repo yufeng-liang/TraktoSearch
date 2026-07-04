@@ -64,6 +64,7 @@
 - 深色模式下 BasicTextField 文字不可见：textStyle 必须显式设置 color = MaterialTheme.colorScheme.onSurface
 - Gitee Release 上传 APK 必须用 curl.exe（PowerShell multipart 会 UTF-8 重编码导致 APK 损坏）
 - Gitee Release body 不能含 markdown 格式符号（#/-），创建时用纯文本，创建后 PATCH 补回
+- Gitee Release body PATCH 同步 markdown 更新日志时，PowerShell 的 Invoke-RestMethod 对 PATCH 方法在本环境会卡住（GET/POST 正常），改用 curl.exe --data-binary @file 从 UTF-8 无 BOM 的 JSON 文件读取 body 可成功；JSON 文件用 Write 工具直接生成避免 PowerShell 编码问题
 
 ## Git 规范
 

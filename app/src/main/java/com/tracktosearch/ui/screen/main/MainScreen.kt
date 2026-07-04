@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -73,6 +74,7 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
@@ -248,6 +250,8 @@ fun MainScreen(
                     .fillMaxSize()
                     .hazeSource(state = hazeState)
             ) { page ->
+                // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
+                CompositionLocalProvider(LocalIsCurrentTab provides (page == pagerState.currentPage)) {
                 when (page) {
                     0 -> {
                         if (showTraktSearch) {
@@ -334,6 +338,7 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+                } // CompositionLocalProvider
             }
 
             // 悬浮底部导航（4 Tab 毛玻璃 + 选中背景高亮动效）

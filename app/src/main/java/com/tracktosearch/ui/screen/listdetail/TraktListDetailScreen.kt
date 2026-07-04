@@ -31,9 +31,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -43,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.R
@@ -67,6 +73,8 @@ fun TraktListDetailScreen(
     val gridState = rememberLazyGridState()
     val hazeState = remember { HazeState() }
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
+    var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
 
     BackHandler(enabled = true) { onBack() }
 
@@ -80,6 +88,10 @@ fun TraktListDetailScreen(
             }
     }
 
+    CompositionLocalProvider(
+        LocalActivePosterTmdbId provides activePosterTmdbId,
+        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+    ) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(
             modifier = Modifier
@@ -250,6 +262,7 @@ fun TraktListDetailScreen(
                 }
             }
         }
+    }
     }
 }
 

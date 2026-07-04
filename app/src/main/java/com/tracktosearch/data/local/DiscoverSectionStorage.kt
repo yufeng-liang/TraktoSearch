@@ -33,7 +33,7 @@ class DiscoverSectionStorage @Inject constructor(
             "douban-movie",
             "douban-weekly",
             "douban-top250",
-            "douban-us-box",
+            "douban-nowplaying",
             "tmdb-popular",
             "tmdb-upcoming",
             "trakt-trending-movies",

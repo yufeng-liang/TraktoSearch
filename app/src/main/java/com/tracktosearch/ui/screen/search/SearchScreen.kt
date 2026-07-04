@@ -1203,7 +1203,7 @@ private fun doubanCategoryLabel(categoryId: String): String = when (categoryId) 
     "douban-movie" -> stringResource(R.string.discover_douban_new_movies)
     "douban-weekly" -> stringResource(R.string.discover_douban_weekly)
     "douban-top250" -> stringResource(R.string.discover_douban_top250)
-    "douban-us-box" -> stringResource(R.string.discover_douban_us_box)
+    "douban-nowplaying" -> stringResource(R.string.discover_douban_nowplaying)
     else -> categoryId
 }
 
