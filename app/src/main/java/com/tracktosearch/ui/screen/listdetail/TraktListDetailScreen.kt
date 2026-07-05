@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.listdetail
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +50,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.R
@@ -60,7 +63,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun TraktListDetailScreen(
     onBack: () -> Unit,
@@ -75,6 +78,9 @@ fun TraktListDetailScreen(
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
+    // 共享元素转场 scope（标题栏整体与发现页社区列表卡片配对）
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     BackHandler(enabled = true) { onBack() }
 
@@ -116,10 +122,19 @@ fun TraktListDetailScreen(
                             }
                         }
 
-                        // Haze 模糊标题栏
+                        // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
+                        val loadingHeaderModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0) {
+                            with(sharedTransitionScope) {
+                                Modifier.sharedBounds(
+                                    sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                            }
+                        } else { Modifier }
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(loadingHeaderModifier)
                                 .hazeEffect(
                                     state = hazeState,
                                     style = HazeMaterials.thin()
@@ -225,10 +240,19 @@ fun TraktListDetailScreen(
                         hazeState = hazeState
                     )
 
-                    // Haze 模糊标题栏
+                    // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
+                    val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else { Modifier }
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(headerModifier)
                             .hazeEffect(
                                 state = hazeState,
                                 style = HazeMaterials.thin()
@@ -246,13 +270,14 @@ fun TraktListDetailScreen(
                             IconButton(onClick = onBack) {
                                 Icon(
                                     Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "返回",
+                                    contentDescription = stringResource(R.string.content_desc_back),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
                             Text(
                                 text = uiState.listName,
                                 style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)

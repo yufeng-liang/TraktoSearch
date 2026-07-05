@@ -25,6 +25,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -67,6 +68,11 @@ data class DiscoverUiState(
     val popularError: String? = null,
     val upcomingError: String? = null,
     val recommendationsError: String? = null,
+    val traktTrendingMoviesError: String? = null,
+    val traktTrendingShowsError: String? = null,
+    val traktAnticipatedError: String? = null,
+    val traktShowRecommendationsError: String? = null,
+    val trendingListsError: String? = null,
     val resolvingItemId: Int? = null,
     val resolvingTmdbId: Int? = null,
     val isLoading: Boolean = false,
@@ -95,7 +101,7 @@ class DiscoverViewModel @Inject constructor(
     private val viewedItemStorage: ViewedItemStorage,
     private val discoverSectionStorage: DiscoverSectionStorage,
     private val tokenStorage: TokenStorage,
-    private val sharedDoubanHotCache: TtlCache<DoubanHotData>,
+    private val sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -120,7 +126,7 @@ class DiscoverViewModel @Inject constructor(
         )
 
     companion object {
-        private const val TTL_DOUBAN = 60 * 60 * 1000L // 豆瓣热榜 1 小时
+        private const val TTL_DOUBAN = 6 * 60 * 60 * 1000L // 豆瓣热榜 6 小时
 
         private val DOUBAN_CATEGORIES = listOf(
             "douban-movie",
@@ -210,7 +216,8 @@ class DiscoverViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
             // 共享缓存 + 飞行中去重：与搜索页共享同一请求
-            val cacheKey = "${categoryId}_1_10"
+            // 缓存 key 带版本号 v2：豆瓣 API 修复口碑榜海报+tmdbId / 正在热映海报后，让旧缓存自动失效
+            val cacheKey = "${categoryId}_1_10_v2"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     when (categoryId) {
@@ -242,7 +249,8 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId
                                     )
                                 },
                                 total = response.total
@@ -327,7 +335,8 @@ class DiscoverViewModel @Inject constructor(
                 }
             }
             // 1 小时内用缓存（仅首页）
-            val cacheKey = "${categoryId}_${page}_$limit"
+            // 缓存 key 带版本号 v2：与 loadDoubanCategory 保持一致，让旧缓存自动失效
+            val cacheKey = "${categoryId}_${page}_${limit}_v2"
             if (page == 1) {
                 sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -383,7 +392,8 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId
                                     )
                                 },
                                 total = weeklyResponse.total,
@@ -547,7 +557,13 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadTraktData() {
-        _uiState.value = _uiState.value.copy(isLoadingTrakt = true)
+        _uiState.value = _uiState.value.copy(
+            isLoadingTrakt = true,
+            traktTrendingMoviesError = null,
+            traktTrendingShowsError = null,
+            traktAnticipatedError = null,
+            traktShowRecommendationsError = null
+        )
         viewModelScope.launch {
             try {
                 val isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
@@ -612,36 +628,64 @@ class DiscoverViewModel @Inject constructor(
                     }
                 })
 
+                // 记录各栏目的错误信息（result 失败时记录）
+                val trendingMoviesError = trendingMoviesResult.exceptionOrNull()?.message
+                    ?: context.getString(R.string.error_load_failed).takeIf { trendingMoviesResult.isFailure }
+                val trendingShowsError = trendingShowsResult.exceptionOrNull()?.message
+                    ?: context.getString(R.string.error_load_failed).takeIf { trendingShowsResult.isFailure }
+                // 最受期待电影/剧集合并为一个 error（用电影的失败状态，或剧集的）
+                val anticipatedError = anticipatedMoviesResult.exceptionOrNull()?.message
+                    ?: anticipatedShowsResult.exceptionOrNull()?.message
+                    ?: context.getString(R.string.error_load_failed).takeIf { anticipatedMoviesResult.isFailure && anticipatedShowsResult.isFailure }
+                val showRecsError = showRecsResult?.exceptionOrNull()?.message
+                    ?: context.getString(R.string.error_load_failed).takeIf { showRecsResult != null && showRecsResult.isFailure && !isLoggedIn }
+
                 _uiState.value = _uiState.value.copy(
                     traktTrendingMovies = enhancedTrendingMovies,
                     traktTrendingShows = enhancedTrendingShows,
                     traktAnticipatedMovies = enhancedAnticipatedMovies,
                     traktAnticipatedShows = enhancedAnticipatedShows,
                     traktShowRecommendations = enhancedShowRecs,
+                    traktTrendingMoviesError = trendingMoviesError,
+                    traktTrendingShowsError = trendingShowsError,
+                    traktAnticipatedError = anticipatedError,
+                    traktShowRecommendationsError = showRecsError,
                     isLoadingTrakt = false
                 )
-            } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingTrakt = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingTrakt = false,
+                    traktTrendingMoviesError = e.message ?: context.getString(R.string.error_load_failed),
+                    traktTrendingShowsError = e.message ?: context.getString(R.string.error_load_failed),
+                    traktAnticipatedError = e.message ?: context.getString(R.string.error_load_failed)
+                )
             }
         }
     }
 
     /** 加载社区热门列表 */
     fun loadTraktLists() {
-        _uiState.value = _uiState.value.copy(isLoadingTraktLists = true)
+        _uiState.value = _uiState.value.copy(isLoadingTraktLists = true, trendingListsError = null)
         viewModelScope.launch {
             try {
                 val result = traktRepository.getTrendingLists(limit = 10)
                 result.onSuccess { lists ->
                     _uiState.value = _uiState.value.copy(
                         trendingLists = lists,
-                        isLoadingTraktLists = false
+                        isLoadingTraktLists = false,
+                        trendingListsError = null
                     )
-                }.onFailure {
-                    _uiState.value = _uiState.value.copy(isLoadingTraktLists = false)
+                }.onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingTraktLists = false,
+                        trendingListsError = e.message ?: context.getString(R.string.error_load_failed)
+                    )
                 }
-            } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isLoadingTraktLists = false)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoadingTraktLists = false,
+                    trendingListsError = e.message ?: context.getString(R.string.error_load_failed)
+                )
             }
         }
     }
@@ -867,8 +911,13 @@ class DiscoverViewModel @Inject constructor(
             .replace(Regex("^#\\d+\\s*"), "")
             .trim()
 
-        // 同步检查豆瓣标题缓存 → ID 转换缓存，命中则秒进不转圈
-        val cachedTmdb = doubanTmdbCache.get(cleanTitle)
+        // 同步检查缓存 → ID 转换缓存，命中则秒进不转圈
+        // 优先用 item.tmdbId（口碑榜等已带 tmdbId），否则查豆瓣标题缓存
+        val cachedTmdb = if (item.tmdbId > 0) {
+            TmdbSearchResult(id = item.tmdbId, title = cleanTitle)
+        } else {
+            doubanTmdbCache.get(cleanTitle)
+        }
         if (cachedTmdb != null && cachedTmdb.id > 0) {
             // 想看/已看缓存
             val wlCached = _watchlistWatchedIds.value?.traktIdByTmdb(cachedTmdb.id, MediaType.MOVIE)
@@ -897,12 +946,17 @@ class DiscoverViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(resolvingItemId = item.id)
             try {
                 // 1. 用 TMDB 搜索（优先从豆瓣标题缓存获取）
-                val searchResult = doubanTmdbCache.get(cleanTitle) ?: run {
-                    val result = tmdbRepository.searchMovie(cleanTitle)
-                    if (result != null && result.id > 0) {
-                        doubanTmdbCache.put(cleanTitle, result)
+                // 优化：口碑榜等已带 tmdbId 的条目直接复用，跳过 TMDB 标题搜索
+                val searchResult = if (item.tmdbId > 0) {
+                    TmdbSearchResult(id = item.tmdbId, title = cleanTitle)
+                } else {
+                    doubanTmdbCache.get(cleanTitle) ?: run {
+                        val result = tmdbRepository.searchMovie(cleanTitle)
+                        if (result != null && result.id > 0) {
+                            doubanTmdbCache.put(cleanTitle, result)
+                        }
+                        result
                     }
-                    result
                 }
                 if (searchResult == null || searchResult.id <= 0) {
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)

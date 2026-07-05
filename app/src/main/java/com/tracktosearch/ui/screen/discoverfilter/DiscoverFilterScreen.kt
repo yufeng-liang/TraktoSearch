@@ -277,6 +277,7 @@ fun DiscoverFilterScreen(
                     Text(
                         text = stringResource(R.string.discover_filter_title),
                         style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -404,6 +405,7 @@ fun DiscoverFilterScreen(
                             text = stringResource(R.string.discover_filter_rating_label),
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.width(36.dp)
                         )
                         // 评分双滑块（步长 1，触感反馈）
@@ -436,7 +438,8 @@ fun DiscoverFilterScreen(
                         Text(
                             text = stringResource(R.string.discover_filter_sort_by),
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
@@ -472,7 +475,8 @@ fun DiscoverFilterScreen(
                         Text(
                             text = stringResource(R.string.discover_filter_decade),
                             style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
@@ -480,12 +484,20 @@ fun DiscoverFilterScreen(
                         ) {
                             viewModel.decadeOptions.forEach { opt ->
                                 FilterChip(
-                                    selected = opt.label in uiState.selectedDecadeLabels,
+                                    selected = opt.key in uiState.selectedDecadeKeys,
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
-                                        viewModel.toggleDecade(opt.label)
+                                        viewModel.toggleDecade(opt.key)
                                     },
-                                    label = { Text(opt.label) }
+                                    label = {
+                                        Text(
+                                            if (opt.specialLabelRes != null) {
+                                                stringResource(opt.specialLabelRes)
+                                            } else {
+                                                stringResource(R.string.decade_format, opt.startYear)
+                                            }
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -500,7 +512,8 @@ fun DiscoverFilterScreen(
                         ) {
                             Text(
                                 text = stringResource(R.string.discover_filter_hide_watched),
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Switch(
                                 checked = uiState.hideWatched,
@@ -651,6 +664,7 @@ private fun DiscoverFilterListItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )

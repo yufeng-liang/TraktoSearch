@@ -48,6 +48,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
@@ -67,6 +68,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -114,6 +116,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -137,6 +140,7 @@ fun WatchlistScreen(
     onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onDiscoverClick: () -> Unit = {},
+    onNavigateToDoubanLogin: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -160,6 +164,8 @@ fun WatchlistScreen(
     // 0=想看, 1=已看
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     val tabScope = rememberCoroutineScope()
+    // 控制豆瓣同步进度弹窗显示（点击横幅重新打开）
+    var showSyncDialog by rememberSaveable { mutableStateOf(false) }
 
     // 保存每个 (mode, tab) 组合的滚动位置
     val savedScrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
@@ -775,6 +781,65 @@ fun WatchlistScreen(
                             )
                         }
 
+                        // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
+                        val syncProgress = uiState.doubanSyncProgress
+                        if (syncProgress != null) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showSyncDialog = true },
+                                color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
+                                    else MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (syncProgress.isRunning) Icons.Default.Sync else Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                            else MaterialTheme.colorScheme.onPrimaryContainer,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (syncProgress.cookieExpired) {
+                                                stringResource(R.string.douban_sync_cookie_expired_banner)
+                                            } else if (syncProgress.isComplete) {
+                                                stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
+                                            } else if (syncProgress.total > 0) {
+                                                "${syncProgress.phase} (${syncProgress.current}/${syncProgress.total})"
+                                            } else {
+                                                syncProgress.phase
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        if (syncProgress.isRunning && syncProgress.total > 0) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                    if (syncProgress.cookieExpired) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = stringResource(R.string.douban_sync_relogin),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onErrorContainer
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // TMDB 不可用提示
                         if (uiState.tmdbUnavailable) {
                             Surface(
@@ -894,6 +959,27 @@ fun WatchlistScreen(
                         .padding(top = 112.dp + statusBarHeight)
                 )
             }
+        }
+
+        // 豆瓣同步进度弹窗（点击横幅重新打开）
+        if (showSyncDialog) {
+            DoubanSyncDialog(
+                onDismiss = {
+                    // 同步运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
+                    val p = uiState.doubanSyncProgress
+                    if (p == null || !p.isRunning) {
+                        showSyncDialog = false
+                    }
+                },
+                onBackground = {
+                    // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
+                    showSyncDialog = false
+                },
+                onRelogin = {
+                    showSyncDialog = false
+                    onNavigateToDoubanLogin()
+                }
+            )
         }
     }
     } // CompositionLocalProvider

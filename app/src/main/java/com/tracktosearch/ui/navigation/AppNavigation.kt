@@ -40,6 +40,11 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
+import com.tracktosearch.ui.screen.douban.DoubanFailuresScreen
+import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
+import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
+import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
+import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
@@ -72,6 +77,11 @@ object Routes {
     const val HELP = "help"
     const val LIST_DETAIL = "listDetail/{listId}/{listName}"
     const val DISCOVER_FILTER = "discoverFilter"
+    const val DOUBAN_LOGIN = "doubanLogin"
+    const val DOUBAN_FAILURES = "doubanFailures"
+    const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
+
+    fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
     fun listDetailRoute(listId: Int, listName: String): String {
         val encodedName = java.net.URLEncoder.encode(listName, "UTF-8")
@@ -169,6 +179,9 @@ fun AppNavigation(
                                 navController.navigate(Routes.MAIN) {
                                     popUpTo(0) { inclusive = true }
                                 }
+                            },
+                            onDoubanImport = {
+                                navController.navigate(Routes.DOUBAN_LOGIN)
                             }
                         )
                     }
@@ -231,6 +244,40 @@ fun AppNavigation(
                             }
                         }
 
+                        // 豆瓣同步续传检测:App 启动时检测是否有未处理完的 pending items
+                        // 优先级:pending items 优先于 failures 重试
+                        // - 有 pending items → 弹续传对话框(继续同步/完整同步)
+                        // - 无 pending items 但有 failures → 弹失败重试对话框(由 SettingsScreen 处理)
+                        val doubanSyncManager = hiltViewModel<DoubanSyncViewModel>().doubanSyncManager
+                        var pendingCount by remember { mutableStateOf(0) }
+                        var pendingChecked by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            if (!pendingChecked) {
+                                pendingChecked = true
+                                pendingCount = doubanSyncManager.getPendingItemsCount()
+                            }
+                        }
+                        if (pendingCount > 0) {
+                            com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialog(
+                                pendingCount = pendingCount,
+                                onDismiss = { pendingCount = 0 },
+                                onContinue = {
+                                    // 继续同步:走 startResume,跳过列表爬取
+                                    pendingCount = 0
+                                    navController.navigate(Routes.DOUBAN_LOGIN)
+                                    doubanSyncManager.startResume()
+                                },
+                                onFullSync = {
+                                    // 完整同步:清空 pending items,走 startSync
+                                    pendingCount = 0
+                                    scope.launch {
+                                        doubanSyncManager.clearPendingItems()
+                                    }
+                                    navController.navigate(Routes.DOUBAN_LOGIN)
+                                }
+                            )
+                        }
+
                         MainScreen(
                             initialTab = mainInitialTab,
                             isLoggedIn = isLoggedIn,
@@ -278,6 +325,15 @@ fun AppNavigation(
                             },
                             onFilterDiscoverClick = {
                                 navController.navigate(Routes.DISCOVER_FILTER)
+                            },
+                            onDoubanResync = {
+                                navController.navigate(Routes.DOUBAN_LOGIN)
+                            },
+                            onDoubanFailures = {
+                                navController.navigate(Routes.DOUBAN_FAILURES)
+                            },
+                            onNavigateToDoubanLogin = {
+                                navController.navigate(Routes.DOUBAN_LOGIN)
                             }
                         )
                     }
@@ -493,6 +549,44 @@ fun AppNavigation(
                             }
                         )
                     }
+                }
+
+                composable(Routes.DOUBAN_LOGIN) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        DoubanLoginScreen(
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                }
+
+                composable(Routes.DOUBAN_FAILURES) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        DoubanFailuresScreen(
+                            onBack = { navController.popBackStack() },
+                            onItemClick = { doubanId ->
+                                navController.navigate(Routes.doubanItemDetailRoute(doubanId))
+                            }
+                        )
+                    }
+                }
+
+                composable(
+                    route = Routes.DOUBAN_ITEM_DETAIL,
+                    arguments = listOf(
+                        navArgument("doubanId") { type = NavType.StringType }
+                    )
+                ) { backStackEntry ->
+                    val doubanId = backStackEntry.arguments?.getString("doubanId") ?: return@composable
+                    DoubanItemDetailScreen(
+                        doubanId = doubanId,
+                        onBack = { navController.popBackStack() },
+                        onRetryStarted = {
+                            // 重试启动后跳转到豆瓣同步进度对话框页(沿用现有导航)
+                            // 实际上同步进度通过 DoubanSyncManager.progress StateFlow 暴露
+                            // 这里仅 popUp 到失败项查看页,让用户返回查看进度
+                            navController.popBackStack()
+                        }
+                    )
                 }
             }
             } // Box

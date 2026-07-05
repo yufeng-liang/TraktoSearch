@@ -1,5 +1,7 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
+import com.tracktosearch.R
+
 /**
  * TMDB Discover 筛选预设数据
  *
@@ -165,29 +167,41 @@ object DiscoverFilterConstants {
     )
 
     /**
-     * 年代选项（value = 起始年份..结束年份，0..0 表示"更早"）
+     * 年代选项（value = 起始年份..结束年份）
+     *
+     * - specialLabelRes != null：使用该字符串资源作为 label（用于"全部"、"更早"）
+     * - specialLabelRes == null：用 decade_format 格式化 startYear 作为 label（如"2020年代"）
      *
      * 注意：TMDB Discover 的日期筛选是连续范围（gte/lte），多选不连续年代时
      * 会合并为最小起始到最大结束的连续范围。
      */
-    data class DecadeOption(val label: String, val startYear: Int, val endYear: Int)
+    data class DecadeOption(
+        val startYear: Int,
+        val endYear: Int,
+        val specialLabelRes: Int? = null
+    ) {
+        /** 唯一标识符，用于选中状态存储 */
+        val key: String get() = "$startYear-$endYear"
+        /** 是否为"全部"选项（清空筛选） */
+        val isAll: Boolean get() = startYear == 0 && endYear == 0
+    }
 
     /** 生成年代选项列表，"今年"动态取当前年份 */
     fun decadeOptions(currentYear: Int): List<DecadeOption> {
         val list = mutableListOf<DecadeOption>()
-        list.add(DecadeOption("全部", 0, 0))
-        list.add(DecadeOption("2020年代", 2020, 2029))
+        list.add(DecadeOption(0, 0, specialLabelRes = R.string.discover_filter_decade_all))
+        list.add(DecadeOption(2020, 2029))
         // 2026、2025、2024、2023、2022、2021、2020、2019
         for (y in currentYear downTo 2019) {
-            list.add(DecadeOption(y.toString(), y, y))
+            list.add(DecadeOption(y, y))
         }
-        list.add(DecadeOption("2010年代", 2010, 2019))
-        list.add(DecadeOption("2000年代", 2000, 2009))
-        list.add(DecadeOption("90年代", 1990, 1999))
-        list.add(DecadeOption("80年代", 1980, 1989))
-        list.add(DecadeOption("70年代", 1970, 1979))
-        list.add(DecadeOption("60年代", 1960, 1969))
-        list.add(DecadeOption("更早", 0, 1959))
+        list.add(DecadeOption(2010, 2019))
+        list.add(DecadeOption(2000, 2009))
+        list.add(DecadeOption(1990, 1999))
+        list.add(DecadeOption(1980, 1989))
+        list.add(DecadeOption(1970, 1979))
+        list.add(DecadeOption(1960, 1969))
+        list.add(DecadeOption(0, 1959, specialLabelRes = R.string.discover_filter_decade_earlier))
         return list
     }
 

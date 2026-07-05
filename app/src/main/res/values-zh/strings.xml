@@ -192,6 +192,85 @@
     <string name="login_success">登录成功，正在加载…</string>
     <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
     <string name="login_guest">以访客身份进入</string>
+    <string name="login_douban_import">或从豆瓣导入标记</string>
+
+    <!-- Douban Sync -->
+    <string name="douban_login_title">登录豆瓣</string>
+    <string name="douban_login_hint">请在下方登录豆瓣账号，登录成功后将自动同步您的标记到 Trakt</string>
+    <string name="douban_login_privacy_short">本页用于登录豆瓣以读取你的公开标记（想看/看过）。登录凭据仅用于本次同步，不会上传到任何第三方服务器。</string>
+    <string name="douban_login_privacy_detail_title">详细说明</string>
+    <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App → Trakt，不经过任何中间服务器</string>
+    <string name="douban_login_privacy_expand">查看详细说明</string>
+    <string name="douban_login_privacy_collapse">收起</string>
+    <string name="douban_login_success_snackbar">豆瓣登录成功，正在同步标记…</string>
+    <string name="douban_login_notification_rationale">后台同步需要通知权限以显示进度，请授予</string>
+    <string name="douban_sync_title">豆瓣标记同步</string>
+    <string name="douban_sync_complete">同步完成</string>
+    <string name="douban_sync_cancel">取消</string>
+    <string name="douban_sync_background">转后台</string>
+    <string name="douban_sync_relogin">重新登录</string>
+    <string name="douban_sync_cookie_expired_banner">豆瓣登录已过期，点此重新登录</string>
+    <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
+    <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
+    <string name="douban_sync_result_format">成功 %1$d 条，失败 %2$d 条</string>
+    <string name="douban_sync_failed_list_label">失败项：</string>
+    <string name="douban_sync_failed_more_format">...共 %1$d 项失败</string>
+    <string name="douban_sync_eta_format">预计剩余 %1$s</string>
+    <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d · 失败 %4$d</string>
+
+    <!-- 豆瓣同步失败项重试 -->
+    <string name="douban_retry_title">重试豆瓣同步失败项</string>
+    <string name="douban_retry_subtitle">上次同步有 %1$d 项失败，请选择操作</string>
+    <string name="douban_retry_option_local">重试上次失败的 %1$d 项</string>
+    <string name="douban_retry_option_local_desc">可恢复 %1$d 项 · 不可恢复 %2$d 项</string>
+    <string name="douban_retry_option_incremental">增量同步新增标记</string>
+    <string name="douban_retry_option_incremental_desc">仅同步豆瓣新加的想看/已看</string>
+    <string name="douban_retry_option_json">从 JSON 文件导入失败项重试</string>
+    <string name="douban_retry_option_json_desc">从导出的失败数据文件加载</string>
+    <string name="douban_retry_select_reasons">选择要重试的失败类型</string>
+    <string name="douban_retry_reason_recoverable">%1$s (可恢复)</string>
+    <string name="douban_retry_reason_non_recoverable">%1$s (默认跳过)</string>
+    <string name="douban_retry_start">开始重试</string>
+    <string name="douban_retry_cancel">取消</string>
+    <string name="douban_retry_clear">清空失败记录</string>
+    <string name="douban_retry_clear_confirm">确定清空所有失败记录吗？此操作不可撤销。</string>
+    <string name="douban_retry_clear_confirm_yes">清空</string>
+    <string name="douban_retry_clear_confirm_no">取消</string>
+    <string name="douban_retry_max_attempt">已重试 %1$d 次，不再建议自动重试</string>
+    <string name="douban_retry_no_failures">无失败项需要重试</string>
+    <string name="douban_retry_json_import_failed">JSON 文件解析失败</string>
+    <string name="douban_retry_json_import_empty">文件中没有失败项</string>
+
+    <!-- 失败原因本地化 -->
+    <string name="douban_failure_reason_no_imdb_id">无 IMDb ID</string>
+    <string name="douban_failure_reason_detail_fetch_failed">详情页访问失败</string>
+    <string name="douban_failure_reason_trakt_not_found">Trakt 未找到此条目</string>
+    <string name="douban_failure_reason_trakt_write_timeout">Trakt 写入超时</string>
+    <string name="douban_failure_reason_trakt_write_failed">Trakt 写入失败</string>
+
+    <!-- 同步结果对话框 -->
+    <string name="douban_sync_failed_group_recoverable">可恢复 (%1$d)</string>
+    <string name="douban_sync_failed_group_non_recoverable">不可恢复 (%1$d)</string>
+    <string name="douban_sync_failed_export">导出失败项</string>
+    <string name="douban_sync_failed_export_nothing">无失败项可导出</string>
+    <string name="douban_sync_failed_export_success">已导出 %1$d 项失败数据</string>
+    <string name="douban_sync_failed_export_failed">导出失败</string>
+    <string name="douban_sync_failed_show_all">显示全部 %1$d 项</string>
+    <string name="douban_sync_failed_collapse">收起</string>
+    <string name="douban_sync_current_processing">正在处理：%1$s</string>
+    <string name="douban_sync_recent_failures">最近失败：</string>
+    <string name="douban_sync_retry_complete_banner">重试完成，成功 %1$d 项</string>
+
+    <!-- 豆瓣同步续传(取消后恢复) -->
+    <string name="douban_resume_title">继续上次同步</string>
+    <string name="douban_resume_subtitle">上次同步有 %1$d 条已爬到的列表未处理完，是否继续？</string>
+    <string name="douban_resume_continue">继续同步</string>
+    <string name="douban_resume_full">完整同步</string>
+    <string name="douban_resume_continue_desc">跳过列表爬取，直接处理已爬到的数据</string>
+    <string name="douban_resume_full_desc">清空未处理数据，从头开始</string>
+    <string name="douban_resume_cancel">取消</string>
+    <string name="douban_resume_phase">续传上次未处理完的列表</string>
+    <string name="douban_resume_complete">续传完成</string>
 
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">登录 Trakt</string>
@@ -373,23 +452,18 @@
     <string name="help_notification_b3">提醒基于你的 Trakt 想看列表</string>
     <string name="help_notification_b4">权限被拒时开关会自动关闭</string>
     <string name="help_data_export_title">数据导出</string>
-    <string name="help_data_export_b1">支持导出为 JSON 格式（包含完整数据，适合备份/迁移）</string>
-    <string name="help_data_export_b2">支持导出为 CSV 格式（兼容 Excel / 其他平台）</string>
-    <string name="help_data_export_b3">JSON 导出包含想看列表和已看历史，CSV 仅导出想看列表</string>
+    <string name="help_data_export_b1">导出为 JSON 格式,包含想看列表和已看历史,适合备份/迁移</string>
     <string name="help_data_import_title">数据导入</string>
-    <string name="help_data_import_b1">从 Letterboxd 导出的 CSV 导入已看记录，会自动同步到 Trakt 已看历史</string>
-    <string name="help_data_import_b2">从 IMDb 导出的 CSV 导入想看列表，会自动同步到 Trakt 想看列表</string>
-    <string name="help_data_import_b3">从本 App 导出的 JSON 恢复备份，会同步想看和已看数据到 Trakt</string>
+    <string name="help_data_import_b1">从 IMDb 导出的 CSV 导入想看列表,会自动同步到 Trakt 想看列表</string>
     <string name="help_data_import_sources">导入来源对照</string>
-    <string name="help_import_src_letterboxd">Letterboxd</string>
-    <string name="help_import_src_letterboxd_how">登录 Letterboxd → Settings → Data → Export 下载 CSV</string>
-    <string name="help_import_src_letterboxd_effect">通过标题搜索匹配并同步到 Trakt 已看历史</string>
     <string name="help_import_src_imdb">IMDb</string>
     <string name="help_import_src_imdb_how">登录 IMDb → Your Watchlist → 右上角菜单 → Export 下载 CSV</string>
     <string name="help_import_src_imdb_effect">通过标题搜索匹配并同步到 Trakt 想看列表</string>
-    <string name="help_import_src_appjson">本App JSON</string>
-    <string name="help_import_src_appjson_how">设置 → 导出 JSON，保存到本地后可用于恢复</string>
-    <string name="help_import_src_appjson_effect">通过 TMDB ID 精确匹配，恢复想看+已看数据到 Trakt</string>
+    <string name="help_data_douban_title">豆瓣标记同步</string>
+    <string name="help_data_douban_b1">在登录页点击「或从豆瓣导入标记」，通过 WebView 登录豆瓣账号，App 会自动爬取您的想看和看过标记并同步到 Trakt</string>
+    <string name="help_data_douban_b2">在设置 → 数据管理点击「重新同步豆瓣」可重新同步豆瓣标记</string>
+    <string name="help_data_douban_b3">冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
+    <string name="help_data_douban_b4">同步失败的条目会保存在本地。在设置 → 数据管理点击「查看同步失败项」可查看失败项,支持手动标注电影/电视剧类型、编辑子标题、搜索资源、重试同步或删除</string>
     <string name="help_custom_source">自定义搜索源</string>
     <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
     <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
@@ -492,6 +566,26 @@
     <string name="settings_licenses">开源许可证</string>
     <string name="settings_cache">缓存</string>
     <string name="settings_cache_clear">清除</string>
+    <string name="settings_cache_management">缓存管理</string>
+    <string name="settings_cache_total">总计 %1$s</string>
+    <string name="settings_cache_category_image">图片缓存</string>
+    <string name="settings_cache_category_image_desc">海报、头像等图片文件</string>
+    <string name="settings_cache_category_media_data">影视数据缓存</string>
+    <string name="settings_cache_category_media_data_desc">详情、演职员、榜单（TMDB + Trakt + 豆瓣）</string>
+    <string name="settings_cache_category_id_mapping">ID 映射缓存</string>
+    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt、豆瓣→IMDb 映射（永久）</string>
+    <string name="settings_cache_category_http">HTTP 缓存</string>
+    <string name="settings_cache_category_http_desc">网络响应临时缓存</string>
+    <string name="settings_cache_category_database">离线数据库</string>
+    <string name="settings_cache_category_database_desc">想看/已看列表 + 豆瓣同步记录</string>
+    <string name="settings_cache_clear_all">全部清除</string>
+    <string name="settings_cache_clear_category_confirm">清除此项缓存？</string>
+    <string name="settings_cache_clear_all_impact">将清除所有缓存数据。海报/头像需重新下载，影视详情和榜单需重新请求，ID 映射需重建。缓存重新积累前 App 可能稍慢。</string>
+    <string name="settings_cache_category_image_impact">海报和头像下次查看时需重新从网络下载。图片重新缓存前 App 可能稍慢。</string>
+    <string name="settings_cache_category_media_data_impact">影视详情、演职员、榜单数据需重新从网络请求。永久详情缓存（海报路径、ID）和 6 小时列表缓存都会被重置。</string>
+    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt、豆瓣→IMDb 映射被清除。下次查询需重新请求 API（较慢），之后重新永久缓存。</string>
+    <string name="settings_cache_category_http_impact">网络响应缓存被清除。后续请求直接走网络。随使用自动重建。</string>
+    <string name="settings_cache_category_database_impact">想看/已看离线数据和豆瓣同步记录被清除。下次同步前离线浏览不可用。</string>
     <string name="settings_latest_version">最新版本 v%1$s</string>
     <string name="settings_already_latest">已是最新版本 v%1$s</string>
     <string name="settings_discover_sections">发现页栏目</string>
@@ -506,14 +600,62 @@
     <string name="settings_data_management">数据管理</string>
     <string name="settings_export_json">导出数据 (JSON)</string>
     <string name="settings_export_json_desc">导出想看和历史为 JSON</string>
-    <string name="settings_export_csv">导出为 CSV</string>
-    <string name="settings_export_csv_desc">导出想看列表为 CSV</string>
-    <string name="settings_import_letterboxd">从 Letterboxd 导入</string>
-    <string name="settings_import_letterboxd_desc">从 Letterboxd CSV 导入已看记录</string>
     <string name="settings_import_imdb">从 IMDb 导入</string>
     <string name="settings_import_imdb_desc">从 IMDb CSV 导入想看列表</string>
-    <string name="settings_import_json">从 JSON 导入</string>
-    <string name="settings_import_json_desc">从本 App 导出的 JSON 恢复备份数据</string>
+    <string name="settings_douban_resync">重新同步豆瓣</string>
+    <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
+    <string name="settings_douban_retry_failures">重试上次失败项</string>
+
+    <!-- Douban sync mode picker -->
+    <string name="douban_sync_mode_picker_title">选择重新同步模式</string>
+    <string name="douban_sync_mode_a_title">仅增量同步</string>
+    <string name="douban_sync_mode_a_desc">跳过已同步的条目,只导入豆瓣新增的想看/看过标记。不处理状态变化。</string>
+    <string name="douban_sync_mode_a_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会跳过它(Trakt 仍显示为想看)。</string>
+    <string name="douban_sync_mode_b_title">增量 + 状态变化</string>
+    <string name="douban_sync_mode_b_desc">跳过状态一致的已同步条目,只同步新增标记和状态发生变化的条目。不处理删除。</string>
+    <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会移除 Trakt 上的想看并标记为看过。</string>
+    <string name="douban_sync_mode_c_title">完全重写</string>
+    <string name="douban_sync_mode_c_desc">清空所有已同步记录,从零开始重新同步所有豆瓣标记。本应用之前添加到 Trakt 的标记会被移除并重写。</string>
+    <string name="douban_sync_mode_c_example">例如:之前已同步 %1$d 条,全部会被清除并重新同步。仅当数据严重不一致时使用。</string>
+    <string name="douban_sync_mode_confirm">确认</string>
+    <string name="douban_sync_mode_warning_c">完全重写会清空所有同步记录,确定要继续吗?</string>
+
+    <!-- Douban retry dialog - export option -->
+    <string name="douban_retry_option_export">导出失败记录</string>
+    <string name="douban_retry_option_export_desc">保存为 JSON 文件,用于备份或分享</string>
+
+    <!-- Douban failures viewer -->
+    <string name="settings_douban_view_failures">查看同步失败项</string>
+    <string name="settings_douban_view_failures_desc">%1$d 项豆瓣条目同步失败</string>
+    <string name="screen_douban_failures_title">同步失败项</string>
+    <string name="screen_douban_failures_empty_wish">想看列表同步全部成功</string>
+    <string name="screen_douban_failures_empty_collect">已看列表同步全部成功</string>
+    <string name="screen_douban_failures_empty_all">没有同步失败项</string>
+    <string name="screen_douban_failures_clear_all">清空全部</string>
+    <string name="screen_douban_failures_clear_all_confirm">确定清空全部失败项?此操作不可撤销</string>
+    <string name="screen_douban_failures_mark_as_movie">标注为电影</string>
+    <string name="screen_douban_failures_mark_as_show">标注为电视剧</string>
+    <string name="screen_douban_failures_clear_mark">清除类型标注</string>
+    <string name="screen_douban_failures_delete_item">删除此条目</string>
+    <string name="screen_douban_failures_tab_uncategorized">未分类</string>
+
+    <!-- Douban item detail -->
+    <string name="screen_douban_item_detail_not_synced">此条目 Trakt 未收录,无法同步</string>
+    <string name="screen_douban_item_detail_failure_reason">失败原因:%1$s</string>
+    <string name="screen_douban_item_detail_open_douban">打开豆瓣页面</string>
+    <string name="screen_douban_item_detail_retry">重新尝试同步</string>
+    <string name="screen_douban_item_detail_delete">删除此失败记录</string>
+    <string name="screen_douban_item_detail_delete_confirm">确定删除此失败记录?</string>
+    <string name="screen_douban_item_detail_subtitle_hint">点击添加子标题(可用于资源搜索)</string>
+    <string name="screen_douban_item_detail_subtitle_edit">编辑子标题</string>
+    <string name="screen_douban_item_detail_search_with_subtitle">同时用子标题搜索</string>
+    <string name="screen_douban_item_detail_tab_resources">资源搜索</string>
+    <string name="screen_douban_item_detail_tab_info">详情信息</string>
+    <string name="screen_douban_item_detail_no_resources">未找到资源,试试子标题或更换关键词</string>
+    <string name="screen_douban_item_detail_retry_in_progress">重试进行中,请稍候…</string>
+    <string name="screen_douban_item_detail_meta_failed_at">失败时间</string>
+    <string name="screen_douban_item_detail_meta_attempt_count">尝试次数</string>
+    <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
 
     <!-- Notification -->
     <string name="settings_notification">通知提醒</string>
@@ -566,6 +708,8 @@
     <string name="common_close">关闭</string>
     <string name="common_confirm">确定</string>
     <string name="common_load_failed">加载失败</string>
+    <string name="error_detail_title">错误详情</string>
+    <string name="error_detail_close">关闭</string>
     <string name="common_no_data">暂无数据</string>
     <string name="common_loading">加载中…</string>
     <string name="common_save_success">已保存到相册</string>
@@ -587,9 +731,7 @@
     <string name="snackbar_export_failed">导出失败：未知错误</string>
     <string name="snackbar_import_no_data">未找到有效记录</string>
     <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
-    <string name="snackbar_import_done_letterboxd">Letterboxd 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
     <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
-    <string name="snackbar_import_done_json">JSON 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
     <string name="snackbar_import_failed">导入失败：未知错误</string>
     <string name="snackbar_cache_cleared">缓存已清除</string>
     <string name="snackbar_cache_clear_failed">清除缓存失败</string>
@@ -711,6 +853,9 @@
     <string name="discover_filter_select_decades">选择年代</string>
     <string name="discover_filter_tag">标签</string>
     <string name="discover_filter_decade">年代</string>
+    <string name="discover_filter_decade_all">全部</string>
+    <string name="discover_filter_decade_earlier">更早</string>
+    <string name="decade_format">%d年代</string>
     <string name="discover_filter_rating_label">评分</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_more_title">想发现更多影视？</string>
@@ -801,4 +946,33 @@
     <string name="watchlist_empty_hint_suffix">探索更多影视</string>
     <string name="watched_empty_hint_prefix">你可以尝试：去</string>
     <string name="watched_empty_hint_middle">标记已看过的影视，去</string>
+
+    <!-- 彩蛋文案（9 个动画 × 3 条文案） -->
+    <string name="easter_msg_shy_1">你戳到我了，好痒！</string>
+    <string name="easter_msg_shy_2">云朵向你比了个心</string>
+    <string name="easter_msg_shy_3">哎呀，被发现了~</string>
+    <string name="easter_msg_cat_1">喵~ 摸鱼时间到！</string>
+    <string name="easter_msg_cat_2">今天也要像猫一样慵懒</string>
+    <string name="easter_msg_cat_3">猫咪向你蹭了蹭</string>
+    <string name="easter_msg_sleepy_1">休息一下，喝杯水吧</string>
+    <string name="easter_msg_sleepy_2">困了就歇会儿~</string>
+    <string name="easter_msg_sleepy_3">午安，小憩一下</string>
+    <string name="easter_msg_dog_1">汪！陪你搜索到底</string>
+    <string name="easter_msg_dog_2">忠诚如我，永远在身边</string>
+    <string name="easter_msg_dog_3">摇摇尾巴，加油！</string>
+    <string name="easter_msg_bunny_1">蹦蹦跳跳，烦恼丢掉</string>
+    <string name="easter_msg_bunny_2">兔子送你一朵小花</string>
+    <string name="easter_msg_bunny_3">软软的，抱一下？</string>
+    <string name="easter_msg_panda_1">国宝级治愈~</string>
+    <string name="easter_msg_panda_2">慢慢来，不着急</string>
+    <string name="easter_msg_panda_3">竹子给你，别生气啦</string>
+    <string name="easter_msg_rainbow_1">雨后天晴，好事将近</string>
+    <string name="easter_msg_rainbow_2">七彩祥云来袭！</string>
+    <string name="easter_msg_rainbow_3">愿日子缤纷绚烂</string>
+    <string name="easter_msg_firework_1">庆祝一下！你发现彩蛋啦</string>
+    <string name="easter_msg_firework_2">砰！好运绽放</string>
+    <string name="easter_msg_firework_3">今天值得纪念</string>
+    <string name="easter_msg_lantern_1">照亮你的搜索之路</string>
+    <string name="easter_msg_lantern_2">许个愿吧~</string>
+    <string name="easter_msg_lantern_3">温暖相伴，夜不再黑</string>
 </resources>

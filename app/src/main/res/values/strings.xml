@@ -192,6 +192,85 @@
     <string name="login_success">Login successful, loading…</string>
     <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
     <string name="login_guest">Continue as guest</string>
+    <string name="login_douban_import">Or import from Douban</string>
+
+    <!-- Douban Sync -->
+    <string name="douban_login_title">Login to Douban</string>
+    <string name="douban_login_hint">Login to your Douban account below. Your marks will be synced to Trakt automatically.</string>
+    <string name="douban_login_privacy_short">This page is used to log in to Douban to read your public marks (wishlist/watched). Credentials are used only for this sync and are not uploaded to any third-party server.</string>
+    <string name="douban_login_privacy_detail_title">Details</string>
+    <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App → Trakt, no intermediate servers</string>
+    <string name="douban_login_privacy_expand">View details</string>
+    <string name="douban_login_privacy_collapse">Collapse</string>
+    <string name="douban_login_success_snackbar">Douban login successful, syncing marks…</string>
+    <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
+    <string name="douban_sync_title">Douban Marks Sync</string>
+    <string name="douban_sync_complete">Sync Complete</string>
+    <string name="douban_sync_cancel">Cancel</string>
+    <string name="douban_sync_background">Background</string>
+    <string name="douban_sync_relogin">Re-login</string>
+    <string name="douban_sync_cookie_expired_banner">Douban login expired, tap to re-login</string>
+    <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
+    <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
+    <string name="douban_sync_result_format">Success %1$d, Failed %2$d</string>
+    <string name="douban_sync_failed_list_label">Failed:</string>
+    <string name="douban_sync_failed_more_format">...%1$d items failed in total</string>
+    <string name="douban_sync_eta_format">about %1$s remaining</string>
+    <string name="douban_sync_summary_format">Success %1$d · Skipped %2$d · Cached %3$d · Failed %4$d</string>
+
+    <!-- Douban sync failure retry -->
+    <string name="douban_retry_title">Retry Douban Sync Failures</string>
+    <string name="douban_retry_subtitle">%1$d items failed in last sync. Choose an action</string>
+    <string name="douban_retry_option_local">Retry %1$d failed items</string>
+    <string name="douban_retry_option_local_desc">Recoverable %1$d · Non-recoverable %2$d</string>
+    <string name="douban_retry_option_incremental">Incremental sync new marks</string>
+    <string name="douban_retry_option_incremental_desc">Only sync new Douban wish/collect</string>
+    <string name="douban_retry_option_json">Import failures from JSON file</string>
+    <string name="douban_retry_option_json_desc">Load from exported failure data file</string>
+    <string name="douban_retry_select_reasons">Select failure types to retry</string>
+    <string name="douban_retry_reason_recoverable">%1$s (Recoverable)</string>
+    <string name="douban_retry_reason_non_recoverable">%1$s (Skipped by default)</string>
+    <string name="douban_retry_start">Start Retry</string>
+    <string name="douban_retry_cancel">Cancel</string>
+    <string name="douban_retry_clear">Clear failure records</string>
+    <string name="douban_retry_clear_confirm">Clear all failure records? This cannot be undone.</string>
+    <string name="douban_retry_clear_confirm_yes">Clear</string>
+    <string name="douban_retry_clear_confirm_no">Cancel</string>
+    <string name="douban_retry_max_attempt">Retried %1$d times, no longer recommended</string>
+    <string name="douban_retry_no_failures">No failures to retry</string>
+    <string name="douban_retry_json_import_failed">Failed to parse JSON file</string>
+    <string name="douban_retry_json_import_empty">No failures in the file</string>
+
+    <!-- Failure reason localization -->
+    <string name="douban_failure_reason_no_imdb_id">No IMDb ID</string>
+    <string name="douban_failure_reason_detail_fetch_failed">Detail page fetch failed</string>
+    <string name="douban_failure_reason_trakt_not_found">Trakt entry not found</string>
+    <string name="douban_failure_reason_trakt_write_timeout">Trakt write timeout</string>
+    <string name="douban_failure_reason_trakt_write_failed">Trakt write failed</string>
+
+    <!-- Sync result dialog -->
+    <string name="douban_sync_failed_group_recoverable">Recoverable (%1$d)</string>
+    <string name="douban_sync_failed_group_non_recoverable">Non-recoverable (%1$d)</string>
+    <string name="douban_sync_failed_export">Export failures</string>
+    <string name="douban_sync_failed_export_nothing">No failures to export</string>
+    <string name="douban_sync_failed_export_success">Exported %1$d failure items</string>
+    <string name="douban_sync_failed_export_failed">Export failed</string>
+    <string name="douban_sync_failed_show_all">Show all %1$d items</string>
+    <string name="douban_sync_failed_collapse">Collapse</string>
+    <string name="douban_sync_current_processing">Processing: %1$s</string>
+    <string name="douban_sync_recent_failures">Recent failures:</string>
+    <string name="douban_sync_retry_complete_banner">Retry complete, %1$d items succeeded</string>
+
+    <!-- Douban sync resume (after cancel) -->
+    <string name="douban_resume_title">Continue Last Sync</string>
+    <string name="douban_resume_subtitle">%1$d items were crawled but not processed. Continue?</string>
+    <string name="douban_resume_continue">Continue Sync</string>
+    <string name="douban_resume_full">Full Sync</string>
+    <string name="douban_resume_continue_desc">Skip list crawling, process crawled data directly</string>
+    <string name="douban_resume_full_desc">Clear unprocessed data, start from scratch</string>
+    <string name="douban_resume_cancel">Cancel</string>
+    <string name="douban_resume_phase">Resuming unprocessed list</string>
+    <string name="douban_resume_complete">Resume complete</string>
 
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">Sign in to Trakt</string>
@@ -373,23 +452,18 @@
     <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
     <string name="help_notification_b4">Toggle auto-disables if permission denied</string>
     <string name="help_data_export_title">Export</string>
-    <string name="help_data_export_b1">Export as JSON (full data, suitable for backup/migration)</string>
-    <string name="help_data_export_b2">Export as CSV (compatible with Excel / other platforms)</string>
-    <string name="help_data_export_b3">JSON export includes watchlist and history; CSV export only includes watchlist</string>
+    <string name="help_data_export_b1">Export as JSON (includes watchlist and watched history, suitable for backup/migration)</string>
     <string name="help_data_import_title">Import</string>
-    <string name="help_data_import_b1">Import watched history from Letterboxd CSV, auto-syncs to Trakt history</string>
-    <string name="help_data_import_b2">Import watchlist from IMDb CSV, auto-syncs to Trakt watchlist</string>
-    <string name="help_data_import_b3">Restore backup from app JSON export, syncs watchlist and history to Trakt</string>
+    <string name="help_data_import_b1">Import watchlist from IMDb CSV, auto-syncs to Trakt watchlist</string>
     <string name="help_data_import_sources">Import Sources</string>
-    <string name="help_import_src_letterboxd">Letterboxd</string>
-    <string name="help_import_src_letterboxd_how">Log in to Letterboxd → Settings → Data → Export to download CSV</string>
-    <string name="help_import_src_letterboxd_effect">Search by title and sync to Trakt watched history</string>
     <string name="help_import_src_imdb">IMDb</string>
     <string name="help_import_src_imdb_how">Log in to IMDb → Your Watchlist → Menu → Export to download CSV</string>
     <string name="help_import_src_imdb_effect">Search by title and sync to Trakt watchlist</string>
-    <string name="help_import_src_appjson">App JSON</string>
-    <string name="help_import_src_appjson_how">Settings → Export JSON, save locally then use for restore</string>
-    <string name="help_import_src_appjson_effect">Match by TMDB ID, restore watchlist + history to Trakt</string>
+    <string name="help_data_douban_title">Douban Marks Sync</string>
+    <string name="help_data_douban_b1">On the login page, tap \"Or import from Douban\" and log in via WebView. The app crawls your Douban wish/collect marks and syncs them to Trakt automatically.</string>
+    <string name="help_data_douban_b2">In Settings → Data Management, tap \"Re-sync Douban\" to re-sync Douban marks.</string>
+    <string name="help_data_douban_b3">Conflict strategy: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
+    <string name="help_data_douban_b4">Failed items are saved locally. In Settings → Data Management, tap \"View Sync Failures\" to review them, mark movie/show type, edit subtitle, search resources, retry sync, or delete.</string>
     <string name="help_custom_source">Custom Search Sources</string>
     <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
     <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
@@ -492,6 +566,26 @@ Config:
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>
+    <string name="settings_cache_management">Cache Management</string>
+    <string name="settings_cache_total">Total %1$s</string>
+    <string name="settings_cache_category_image">Image Cache</string>
+    <string name="settings_cache_category_image_desc">Posters, avatars (Coil disk)</string>
+    <string name="settings_cache_category_media_data">Media Data Cache</string>
+    <string name="settings_cache_category_media_data_desc">Details, credits, charts (TMDB + Trakt + Douban)</string>
+    <string name="settings_cache_category_id_mapping">ID Mapping Cache</string>
+    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt, Douban→IMDb (permanent)</string>
+    <string name="settings_cache_category_http">HTTP Cache</string>
+    <string name="settings_cache_category_http_desc">Network response cache (OkHttp)</string>
+    <string name="settings_cache_category_database">Offline Database</string>
+    <string name="settings_cache_category_database_desc">Watchlist/watched + Douban sync records</string>
+    <string name="settings_cache_clear_all">Clear All</string>
+    <string name="settings_cache_clear_category_confirm">Clear this cache?</string>
+    <string name="settings_cache_clear_all_impact">Clears all cached data. Images reload from network, movie/TV details and charts re-fetched, ID mappings rebuilt. App may feel slower until cache warms up again.</string>
+    <string name="settings_cache_category_image_impact">Posters and avatars will be re-downloaded from network on next view. App may feel slower until images re-cache.</string>
+    <string name="settings_cache_category_media_data_impact">Movie/TV details, credits, charts re-fetched from network. Permanent detail cache (poster paths, IDs) and 6h list cache both reset.</string>
+    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt and Douban→IMDb mappings cleared. Next lookup re-queries API (slower), then re-caches permanently.</string>
+    <string name="settings_cache_category_http_impact">Network response cache cleared. Next requests go to network instead of cache. Rebuilds automatically with use.</string>
+    <string name="settings_cache_category_database_impact">Watchlist/watched offline data and Douban sync records cleared. Offline browsing unavailable until next sync.</string>
     <string name="settings_latest_version">Latest version v%1$s</string>
     <string name="settings_already_latest">Already up to date v%1$s</string>
     <string name="settings_discover_sections">Discover Sections</string>
@@ -506,14 +600,62 @@ Config:
     <string name="settings_data_management">Data Management</string>
     <string name="settings_export_json">Export Data (JSON)</string>
     <string name="settings_export_json_desc">Export watchlist and history as JSON</string>
-    <string name="settings_export_csv">Export as CSV</string>
-    <string name="settings_export_csv_desc">Export watchlist as CSV</string>
-    <string name="settings_import_letterboxd">Import from Letterboxd</string>
-    <string name="settings_import_letterboxd_desc">Import watched history from Letterboxd CSV</string>
     <string name="settings_import_imdb">Import from IMDb</string>
     <string name="settings_import_imdb_desc">Import watchlist from IMDb CSV</string>
-    <string name="settings_import_json">Import from JSON</string>
-    <string name="settings_import_json_desc">Restore backup from app exported JSON</string>
+    <string name="settings_douban_resync">Re-sync from Douban</string>
+    <string name="settings_douban_resync_desc">Choose sync mode to handle Douban status changes</string>
+    <string name="settings_douban_retry_failures">Retry last failed items</string>
+
+    <!-- Douban sync mode picker -->
+    <string name="douban_sync_mode_picker_title">Choose Re-sync Mode</string>
+    <string name="douban_sync_mode_a_title">Incremental only</string>
+    <string name="douban_sync_mode_a_desc">Skip already synced items, only import new Douban wish/collect marks. Will not handle status changes.</string>
+    <string name="douban_sync_mode_a_example">Example: a movie already synced as wish, you marked it as watched on Douban, this mode will skip it (Trakt still shows wish).</string>
+    <string name="douban_sync_mode_b_title">Incremental + status changes</string>
+    <string name="douban_sync_mode_b_desc">Skip synced items with unchanged status, only sync new marks and items whose status changed. Will not handle deletions.</string>
+    <string name="douban_sync_mode_b_example">Example: a movie synced as wish, you changed it to watched on Douban, this mode will remove wish and mark as watched on Trakt.</string>
+    <string name="douban_sync_mode_c_title">Full rewrite</string>
+    <string name="douban_sync_mode_c_desc">Clear all synced records, re-sync all Douban marks from scratch. Existing Trakt marks added by this app will be removed and rewritten.</string>
+    <string name="douban_sync_mode_c_example">Example: %1$d items previously synced, all will be cleared and re-synced. Use this only when data is severely inconsistent.</string>
+    <string name="douban_sync_mode_confirm">Confirm</string>
+    <string name="douban_sync_mode_warning_c">Full rewrite will clear all sync records. Are you sure?</string>
+
+    <!-- Douban retry dialog - export option -->
+    <string name="douban_retry_option_export">Export failure records</string>
+    <string name="douban_retry_option_export_desc">Save as JSON file for backup or sharing</string>
+
+    <!-- Douban failures viewer -->
+    <string name="settings_douban_view_failures">View sync failures</string>
+    <string name="settings_douban_view_failures_desc">%1$d Douban items failed to sync</string>
+    <string name="screen_douban_failures_title">Sync failures</string>
+    <string name="screen_douban_failures_empty_wish">Wishlist sync all succeeded</string>
+    <string name="screen_douban_failures_empty_collect">Watched list sync all succeeded</string>
+    <string name="screen_douban_failures_empty_all">No sync failures</string>
+    <string name="screen_douban_failures_clear_all">Clear all</string>
+    <string name="screen_douban_failures_clear_all_confirm">Clear all failure records? This cannot be undone.</string>
+    <string name="screen_douban_failures_mark_as_movie">Mark as movie</string>
+    <string name="screen_douban_failures_mark_as_show">Mark as TV show</string>
+    <string name="screen_douban_failures_clear_mark">Clear type mark</string>
+    <string name="screen_douban_failures_delete_item">Delete this item</string>
+    <string name="screen_douban_failures_tab_uncategorized">Uncategorized</string>
+
+    <!-- Douban item detail -->
+    <string name="screen_douban_item_detail_not_synced">This item is not in Trakt, cannot sync</string>
+    <string name="screen_douban_item_detail_failure_reason">Failure reason: %1$s</string>
+    <string name="screen_douban_item_detail_open_douban">Open Douban page</string>
+    <string name="screen_douban_item_detail_retry">Retry sync</string>
+    <string name="screen_douban_item_detail_delete">Delete this failure record</string>
+    <string name="screen_douban_item_detail_delete_confirm">Delete this failure record?</string>
+    <string name="screen_douban_item_detail_subtitle_hint">Tap to add subtitle (for resource search)</string>
+    <string name="screen_douban_item_detail_subtitle_edit">Edit subtitle</string>
+    <string name="screen_douban_item_detail_search_with_subtitle">Search with subtitle</string>
+    <string name="screen_douban_item_detail_tab_resources">Resources</string>
+    <string name="screen_douban_item_detail_tab_info">Info</string>
+    <string name="screen_douban_item_detail_no_resources">No resources found, try subtitle or change keyword</string>
+    <string name="screen_douban_item_detail_retry_in_progress">Retry in progress, please wait…</string>
+    <string name="screen_douban_item_detail_meta_failed_at">Failed at</string>
+    <string name="screen_douban_item_detail_meta_attempt_count">Attempts</string>
+    <string name="screen_douban_item_detail_meta_douban_id">Douban ID</string>
 
     <!-- Notification -->
     <string name="settings_notification">Notifications</string>
@@ -566,6 +708,8 @@ Config:
     <string name="common_close">Close</string>
     <string name="common_confirm">Confirm</string>
     <string name="common_load_failed">Load failed</string>
+    <string name="error_detail_title">Error Details</string>
+    <string name="error_detail_close">Close</string>
     <string name="common_no_data">No data</string>
     <string name="common_loading">Loading…</string>
     <string name="common_save_success">Saved to album</string>
@@ -587,9 +731,7 @@ Config:
     <string name="snackbar_export_failed">Export failed: unknown error</string>
     <string name="snackbar_import_no_data">No valid records found</string>
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
-    <string name="snackbar_import_done_letterboxd">Letterboxd import done: %1$d matched, %2$d unmatched</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
-    <string name="snackbar_import_done_json">JSON import done: %1$d matched, %2$d unmatched</string>
     <string name="snackbar_import_failed">Import failed: unknown error</string>
     <string name="snackbar_cache_cleared">Cache cleared</string>
     <string name="snackbar_cache_clear_failed">Failed to clear cache</string>
@@ -711,6 +853,9 @@ Config:
     <string name="discover_filter_select_decades">Select decades</string>
     <string name="discover_filter_tag">Tag</string>
     <string name="discover_filter_decade">Decade</string>
+    <string name="discover_filter_decade_all">All</string>
+    <string name="discover_filter_decade_earlier">Earlier</string>
+    <string name="decade_format">%ds</string>
     <string name="discover_filter_rating_label">Rating</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_more_title">Want to discover more?</string>
@@ -801,4 +946,33 @@ Config:
     <string name="watchlist_empty_hint_suffix"> to explore more</string>
     <string name="watched_empty_hint_prefix">You can try: go to </string>
     <string name="watched_empty_hint_middle"> to mark as watched, </string>
+
+    <!-- Easter Egg Messages (9 animations × 3 messages) -->
+    <string name="easter_msg_shy_1">You poked me, it tickles!</string>
+    <string name="easter_msg_shy_2">The cloud blew you a heart</string>
+    <string name="easter_msg_shy_3">Oops, you found me~</string>
+    <string name="easter_msg_cat_1">Meow~ Time to slack off!</string>
+    <string name="easter_msg_cat_2">Be as lazy as a cat today</string>
+    <string name="easter_msg_cat_3">The kitty rubs against you</string>
+    <string name="easter_msg_sleepy_1">Take a break, have some water</string>
+    <string name="easter_msg_sleepy_2">Sleepy? Rest a while~</string>
+    <string name="easter_msg_sleepy_3">Good afternoon, take a nap</string>
+    <string name="easter_msg_dog_1">Woof! Search with you to the end</string>
+    <string name="easter_msg_dog_2">Loyal as always, by your side</string>
+    <string name="easter_msg_dog_3">Wag wag, cheer up!</string>
+    <string name="easter_msg_bunny_1">Hop hop, worries drop</string>
+    <string name="easter_msg_bunny_2">A bunny sends you a little flower</string>
+    <string name="easter_msg_bunny_3">So soft, wanna hug?</string>
+    <string name="easter_msg_panda_1">National-treasure-grade healing~</string>
+    <string name="easter_msg_panda_2">Take it slow, no rush</string>
+    <string name="easter_msg_panda_3">Bamboo for you, don\'t be mad</string>
+    <string name="easter_msg_rainbow_1">After rain comes sunshine, good things are near</string>
+    <string name="easter_msg_rainbow_2">Here comes the seven-color cloud!</string>
+    <string name="easter_msg_rainbow_3">May your days be colorful</string>
+    <string name="easter_msg_firework_1">Celebrate! You found the easter egg</string>
+    <string name="easter_msg_firework_2">Boom! Good luck blooms</string>
+    <string name="easter_msg_firework_3">Today is worth remembering</string>
+    <string name="easter_msg_lantern_1">Lighting up your search path</string>
+    <string name="easter_msg_lantern_2">Make a wish~</string>
+    <string name="easter_msg_lantern_3">Warm company, night no longer dark</string>
 </resources>

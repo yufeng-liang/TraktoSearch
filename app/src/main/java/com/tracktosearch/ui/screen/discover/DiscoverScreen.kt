@@ -408,12 +408,14 @@ fun DiscoverScreen(
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktTrendingMovies.size,
                                     watchlistWatchedIds = watchlistWatchedIds,
+                                    error = uiState.traktTrendingMoviesError,
                                     onItemClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                                         }
                                     },
-                                    onViewAll = { showTrendingMoviesAll = true }
+                                    onViewAll = { showTrendingMoviesAll = true },
+                                    onRetry = { viewModel.loadTraktData() }
                                 )
                             }
                         }
@@ -426,12 +428,14 @@ fun DiscoverScreen(
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktTrendingShows.size,
                                     watchlistWatchedIds = watchlistWatchedIds,
+                                    error = uiState.traktTrendingShowsError,
                                     onItemClick = { show ->
                                         viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                             onShowClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                                         }
                                     },
-                                    onViewAll = { showTrendingShowsAll = true }
+                                    onViewAll = { showTrendingShowsAll = true },
+                                    onRetry = { viewModel.loadTraktData() }
                                 )
                             }
                         }
@@ -445,6 +449,7 @@ fun DiscoverScreen(
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktAnticipatedMovies.size + uiState.traktAnticipatedShows.size,
                                     watchlistWatchedIds = watchlistWatchedIds,
+                                    error = uiState.traktAnticipatedError,
                                     onMovieClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                             onMovieClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
@@ -455,7 +460,8 @@ fun DiscoverScreen(
                                             onShowClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                                         }
                                     },
-                                    onViewAll = { showAnticipatedAll = true }
+                                    onViewAll = { showAnticipatedAll = true },
+                                    onRetry = { viewModel.loadTraktData() }
                                 )
                             }
                         }
@@ -468,12 +474,14 @@ fun DiscoverScreen(
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktShowRecommendations.size,
                                     watchlistWatchedIds = watchlistWatchedIds,
+                                    error = uiState.traktShowRecommendationsError,
                                     onItemClick = { show ->
                                         viewModel.navigateTraktShow(show) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                             onShowClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
                                         }
                                     },
-                                    onViewAll = { showShowRecsAll = true }
+                                    onViewAll = { showShowRecsAll = true },
+                                    onRetry = { viewModel.loadTraktData() }
                                 )
                             }
                         }
@@ -486,10 +494,13 @@ fun DiscoverScreen(
                                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                                         modifier = Modifier.padding(bottom = 8.dp)
                                     )
+                                    val listsError = uiState.trendingListsError
                                     if (uiState.isLoadingTraktLists) {
                                         Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                             CircularProgressIndicator(modifier = Modifier.size(24.dp))
                                         }
+                                    } else if (listsError != null) {
+                                        ErrorRetryRow(error = listsError, onRetry = { viewModel.loadTraktLists() })
                                     } else if (uiState.trendingLists.isEmpty()) {
                                         Box(modifier = Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                                             Text(
@@ -501,28 +512,39 @@ fun DiscoverScreen(
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEach { listResponse ->
-                                                Card(
+                                                // 社区列表卡片与详情页标题栏整体配对（sharedBounds 转场）
+                                                val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                                    with(sharedTransitionScope) {
+                                                        Modifier.sharedBounds(
+                                                            sharedContentState = rememberSharedContentState(key = "trakt-list-card-${listResponse.list.ids.trakt}"),
+                                                            animatedVisibilityScope = animatedVisibilityScope
+                                                        )
+                                                    }
+                                                } else { Modifier }
+                                                Box(modifier = Modifier.fillMaxWidth().then(listCardModifier)) {
+                                                    Card(
     modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
 ) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text(
-                                                                text = listResponse.list.name,
-                                                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                                                                maxLines = 1,
-                                                                overflow = TextOverflow.Ellipsis
-                                                            )
-                                                            Text(
-                                                                text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
-                                                                style = MaterialTheme.typography.bodySmall,
-                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                            )
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Column(modifier = Modifier.weight(1f)) {
+                                                                Text(
+                                                                    text = listResponse.list.name,
+                                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                                Text(
+                                                                    text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                )
+                                                            }
                                                         }
                                                     }
                                                 }

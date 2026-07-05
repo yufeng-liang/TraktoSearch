@@ -15,6 +15,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -25,7 +26,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import javax.inject.Named
 
 @Immutable
 data class DoubanHotCategory(
@@ -57,10 +57,9 @@ class SearchViewModel @Inject constructor(
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
     private val doubanHotApi: DoubanHotApiService,
-    @Named("backup") private val backupDoubanHotApi: DoubanHotApiService,
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository,
-    private val sharedDoubanHotCache: TtlCache<DoubanHotData>
+    private val sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -77,7 +76,7 @@ class SearchViewModel @Inject constructor(
 
     companion object {
         private const val TTL_SEARCH = 10 * 60 * 1000L      // 资源搜索 10 分钟
-        private const val TTL_DOUBAN = 60 * 60 * 1000L      // 豆瓣热榜 1 小时
+        private const val TTL_DOUBAN = 6 * 60 * 60 * 1000L      // 豆瓣热榜 6 小时
 
         private val DOUBAN_CATEGORIES = listOf(
             "douban-movie" to "New Movies",
@@ -167,8 +166,6 @@ class SearchViewModel @Inject constructor(
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
-            // Top250 主备切换逻辑
-            val isTop250 = categoryId == "douban-top250"
             val cacheKey = "${categoryId}_1_10"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
@@ -245,25 +242,7 @@ class SearchViewModel @Inject constructor(
                             else -> com.tracktosearch.data.remote.douban.dto.DoubanHotData()
                         }
                     } catch (e: Exception) {
-                        if (isTop250) {
-                            // 主 API 失败，尝试备选 API
-                            val response = backupDoubanHotApi.getTop250(page = 1)
-                            com.tracktosearch.data.remote.douban.dto.DoubanHotData(
-                                items = response.data.map { item ->
-                                    com.tracktosearch.data.remote.douban.dto.DoubanHotItem(
-                                        id = item.id.hashCode(),
-                                        title = item.title,
-                                        cover = item.poster,
-                                        desc = item.rating,
-                                        rating = item.rating,
-                                        url = item.url
-                                    )
-                                },
-                                total = response.total
-                            )
-                        } else {
-                            throw e
-                        }
+                        throw e
                     }
                 }
                 val updated = _uiState.value.doubanHotCategories.toMutableList()

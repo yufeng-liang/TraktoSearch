@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicLong
  * @param ttlMillis 缓存有效期，默认 10 分钟
  * @param maxSize 最大条目数，0 表示不限制
  */
-class TtlCache<T>(
+open class TtlCache<T>(
     private val ttlMillis: Long = 10 * 60 * 1000L,
     private val maxSize: Int = 0
 ) {
@@ -30,7 +30,7 @@ class TtlCache<T>(
     /** 飞行中请求追踪：同一 key 的并发调用共享同一个 CompletableDeferred */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableDeferred<T>>()
 
-    fun get(key: String): T? {
+    open fun get(key: String): T? {
         val entry = cache[key] ?: return null
         // Long.MAX_VALUE 表示永不过期，跳过过期检查
         if (entry.expireAt != Long.MAX_VALUE && System.currentTimeMillis() > entry.expireAt) {
@@ -42,7 +42,7 @@ class TtlCache<T>(
         return entry.value
     }
 
-    fun put(key: String, value: T) {
+    open fun put(key: String, value: T) {
         val now = System.currentTimeMillis()
         // 防止 now + ttlMillis 溢出（Long.MAX_VALUE 作为"永不过期"时会导致溢出为负数，缓存立即失效）
         val expireAt = if (ttlMillis >= Long.MAX_VALUE - now) Long.MAX_VALUE else now + ttlMillis

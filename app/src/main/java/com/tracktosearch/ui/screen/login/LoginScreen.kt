@@ -97,6 +97,7 @@ class LoginViewModel @Inject constructor(
 fun LoginScreen(
     onLoginSuccess: () -> Unit = {},
     onGuestMode: () -> Unit = {},
+    onDoubanImport: () -> Unit = {},
     redirectToBrowser: Boolean = false,
     modifier: Modifier = Modifier,
     viewModel: LoginViewModel = hiltViewModel()
@@ -284,6 +285,18 @@ fun LoginScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(
+                    onClick = onDoubanImport,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = stringResource(R.string.login_douban_import),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

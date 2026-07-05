@@ -23,6 +23,36 @@
 - 详情页/发现页/社区列表的 MovieCard 必须传递真实的 isInWatchlist/isWatched 状态，不能硬编码 false
 - 影视卡片想看/已看标记必须从 WatchlistWatchedIds 缓存计算，不能依赖路由参数中的 inWatchlist/isWatched（这些只是初始值）
 
+### 持久化缓存原则（重要）
+
+**核心原则：基本不变的数据用持久化缓存，省去不必要的请求。**
+
+以下数据视为"基本不变"，必须使用持久化缓存（跨 App 重启保留，TTL = 永久）：
+- **TMDB 详情**（`movieDetailCache`/`tvDetailCache`）：海报路径（`poster_path`）、`tmdbId`、`imdbId`、标题、概述等字段不会变
+- **演职员信息**（`movieCreditsCache`/`tvCreditsCache`）：演员头像、姓名、角色不会变
+- **TMDB↔Trakt ID 映射**（`searchByTmdbCache`/`searchByImdbCache`）：映射关系静态永久
+- **人物信息**（`personCache`）：演员/导演的基本信息、头像不会变
+
+以下数据使用短期缓存（6 小时，App 进程内有效即可）：
+- 豆瓣热榜（榜单排名会变）
+- Trakt 趋势/最受期待/社区列表（热度会变）
+- TMDB 热门/即将上映列表（随市场变化）
+- 评论、统计数据（频繁更新）
+- 想看/已看 ID 集合（6 小时 TTL，跨 App 重启复用，避免每次启动都发 4 个 /sync/* 请求；增删想看/已看时同步更新持久化缓存，退出登录时清除）
+
+持久化缓存实现要求：
+- 使用 DataStore 存储（key → JSON 字符串），启动时加载到内存 TtlCache
+- 写入内存缓存时同步写入 DataStore（异步，不阻塞返回）
+- 内存缓存作为一级缓存（秒进），DataStore 作为二级缓存（重启后恢复）
+- 数据格式变更时通过 key 版本号（如 `_v2` 后缀）让旧缓存自动失效
+- 缓存未命中时调用 `awaitLoaded()` 等待磁盘加载完成再查一次，避免 loadFromDisk 未完成时误判为缓存未命中导致重复网络请求
+
+## 版本更新检查策略
+
+- 启动时自动检查更新：24 小时内复用上次结果（`UpdateRepository.checkForUpdate(force=false)`），不重复请求 GitHub API
+- 设置页手动检查更新：强制走网络（`UpdateRepository.checkForUpdate(force=true)`），绕过 24 小时缓存
+- 缓存内容包括：最新版本号、changelog、是否有更新、下载链接，存储在 ChangelogStorage 的 DataStore 中
+
 ## 国际化规范
 
 - 所有用户可见文字必须使用 stringResource，不能硬编码

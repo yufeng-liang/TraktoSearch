@@ -1,27 +1,43 @@
 package com.tracktosearch.data.repository
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.tmdb.dto.*
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.data.util.persistentTtlCache
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** 持久化缓存专用 DataStore（共享一个文件，通过 key 前缀区分不同缓存类型） */
+private val Context.persistentCacheDataStore: DataStore<Preferences> by preferencesDataStore(name = "persistent_cache")
+
 @Singleton
 class TmdbRepository @Inject constructor(
     private val tmdbApiService: TmdbApiService,
-    private val languageStorage: LanguageStorage
+    private val languageStorage: LanguageStorage,
+    private val json: Json,
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
-        private const val TTL_DETAIL = 30 * 60 * 1000L       // 详情 30 分钟
-        private const val TTL_CREDITS = 60 * 60 * 1000L      // 演职员 1 小时
+        private const val TTL_DETAIL = Long.MAX_VALUE       // 详情（海报路径、tmdbId、imdbId 等不变字段）永久缓存
+        private const val TTL_CREDITS = Long.MAX_VALUE      // 演职员信息永久缓存（头像、姓名、角色不变）
         private const val TTL_SEARCH = 60 * 60 * 1000L       // 搜索/ID转换 1 小时
         private const val TTL_PERSON = 60 * 60 * 1000L       // 人物信息 1 小时
         private const val TTL_REVIEWS = 10 * 60 * 1000L      // 评论 10 分钟
-        private const val TTL_LISTS = 60 * 60 * 1000L        // 列表类 1 小时
+        private const val TTL_LISTS = 6 * 60 * 60 * 1000L   // 列表类 6 小时（榜单数据更新不频繁）
         private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
     }
 
@@ -58,22 +74,69 @@ class TmdbRepository @Inject constructor(
         val hasMore: Boolean
     )
 
-    // 带 TTL 的缓存（maxSize 防止无上限增长）
-    private val movieDetailCache = TtlCache<TmdbMovieDetail>(TTL_DETAIL, maxSize = 50)
-    private val tvDetailCache = TtlCache<TmdbTvDetail>(TTL_DETAIL, maxSize = 50)
+    // 持久化缓存作用域：IO 线程 + SupervisorJob（子协程异常不影响父级）
+    private val persistentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val persistentDataStore get() = context.persistentCacheDataStore
+
+    // 持久化缓存（永久，跨 App 重启保留）：海报路径、tmdbId、imdbId、演职员头像等不变字段
+    // 缓存 key 已含语言后缀（如 "12345_zh-CN"），不同语言的海报/标题分别存储
+    private val movieDetailCache = persistentTtlCache<TmdbMovieDetail>(
+        TTL_DETAIL, 50, persistentDataStore, json, "movie_detail", persistentScope
+    )
+    private val tvDetailCache = persistentTtlCache<TmdbTvDetail>(
+        TTL_DETAIL, 50, persistentDataStore, json, "tv_detail", persistentScope
+    )
+    private val creditsCache = persistentTtlCache<TmdbCreditsResponse>(
+        TTL_CREDITS, 50, persistentDataStore, json, "credits", persistentScope
+    )
+    private val personDetailCache = persistentTtlCache<TmdbPerson>(
+        TTL_PERSON, 50, persistentDataStore, json, "person_detail", persistentScope
+    )
+    // 别名（alternative_titles）持久化缓存：中文译名等不变字段，跨 App 重启复用，
+    // 避免每个 watchlist 条目每次启动都重新请求 alternative_titles 接口
+    private val movieAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
+        TTL_DETAIL, 100, persistentDataStore, json, "movie_alt_titles", persistentScope
+    )
+    private val tvAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
+        TTL_DETAIL, 100, persistentDataStore, json, "tv_alt_titles", persistentScope
+    )
+
+    // 持久化缓存（6 小时）：发现页 TMDB 列表类栏目，跨 App 重启保留
+    private val popularMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
+        TTL_LISTS, 10, persistentDataStore, json, "popular_movies", persistentScope
+    )
+    private val upcomingMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
+        TTL_LISTS, 10, persistentDataStore, json, "upcoming_movies", persistentScope
+    )
+    private val topRatedMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
+        TTL_LISTS, 10, persistentDataStore, json, "top_rated_movies", persistentScope
+    )
+    private val trendingMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
+        TTL_LISTS, 10, persistentDataStore, json, "trending_movies", persistentScope
+    )
+
+    // 内存缓存（短期，App 进程内有效）
     private val movieTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
     private val tvTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
-    private val creditsCache = TtlCache<TmdbCreditsResponse>(TTL_CREDITS, maxSize = 50)
     private val searchMovieCache = TtlCache<TmdbSearchResult>(TTL_SEARCH, maxSize = 100)
-    private val personDetailCache = TtlCache<TmdbPerson>(TTL_PERSON, maxSize = 50)
     // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
     private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON, maxSize = 30)
     private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON, maxSize = 30)
     private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS, maxSize = 50)
-    private val popularMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
-    private val upcomingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
-    private val topRatedMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
-    private val trendingMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 10)
+
+    /** 持久化缓存列表，供 Application 启动时批量加载 */
+    val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
+        movieDetailCache, tvDetailCache, creditsCache, personDetailCache,
+        movieAltTitlesCache, tvAltTitlesCache,
+        popularMoviesCache, upcomingMoviesCache, topRatedMoviesCache, trendingMoviesCache
+    )
+
+    /** 影视数据持久化缓存（详情/演职员/人物/别名 + 列表 6h），用于设置页按类目清除 */
+    val mediaDataCaches: List<PersistentTtlCache<*>> get() = listOf(
+        movieDetailCache, tvDetailCache, creditsCache, personDetailCache,
+        movieAltTitlesCache, tvAltTitlesCache,
+        popularMoviesCache, upcomingMoviesCache, topRatedMoviesCache, trendingMoviesCache
+    )
 
     data class MovieEnrichment(
         val posterUrl: String?,
@@ -123,6 +186,27 @@ class TmdbRepository @Inject constructor(
                 releaseDate = cached.release_date ?: "",
                 country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
                 status = cached.status
+            )
+        }
+        // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
+        movieDetailCache.awaitLoaded()
+        val cachedAfterLoad = movieDetailCache.get(key)
+        if (cachedAfterLoad != null) {
+            val chineseTitle = movieTitleCache.getOrPut(key) {
+                resolveMovieChineseTitle(tmdbId, originalTitle, cachedAfterLoad)
+            }
+            return MovieEnrichment(
+                posterUrl = cachedAfterLoad.poster_path?.let { "$IMAGE_BASE_URL$it" },
+                chineseTitle = chineseTitle,
+                originalTitle = cachedAfterLoad.original_title,
+                overview = cachedAfterLoad.overview ?: "",
+                genres = cachedAfterLoad.genres?.joinToString(" · ") { it.name } ?: "",
+                year = cachedAfterLoad.release_date?.take(4)?.toIntOrNull() ?: year,
+                rating = cachedAfterLoad.vote_average,
+                runtime = cachedAfterLoad.runtime,
+                releaseDate = cachedAfterLoad.release_date ?: "",
+                country = cachedAfterLoad.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
+                status = cachedAfterLoad.status
             )
         }
 
@@ -177,6 +261,27 @@ class TmdbRepository @Inject constructor(
                 status = cached.status
             )
         }
+        // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
+        tvDetailCache.awaitLoaded()
+        val cachedAfterLoad = tvDetailCache.get(key)
+        if (cachedAfterLoad != null) {
+            val chineseTitle = tvTitleCache.getOrPut(key) {
+                resolveTvChineseTitle(tmdbId, originalName, cachedAfterLoad)
+            }
+            return TvEnrichment(
+                posterUrl = cachedAfterLoad.poster_path?.let { "$IMAGE_BASE_URL$it" },
+                chineseTitle = chineseTitle,
+                originalTitle = cachedAfterLoad.original_name,
+                overview = cachedAfterLoad.overview ?: "",
+                genres = cachedAfterLoad.genres?.joinToString(" · ") { it.name } ?: "",
+                year = cachedAfterLoad.first_air_date?.take(4)?.toIntOrNull() ?: year,
+                rating = cachedAfterLoad.vote_average,
+                episodeRunTime = cachedAfterLoad.episode_run_time?.firstOrNull(),
+                releaseDate = cachedAfterLoad.first_air_date ?: "",
+                country = cachedAfterLoad.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
+                status = cachedAfterLoad.status
+            )
+        }
 
         return try {
             val response = tmdbApiService.getTvDetail(tmdbId, language = tmdbLang)
@@ -211,10 +316,24 @@ class TmdbRepository @Inject constructor(
         if (detail.title != detail.original_title && detail.title.isNotEmpty()) {
             return detail.title
         }
+        // 别名持久化缓存：中文译名等不变字段，跨 App 重启复用
+        val altKey = langKey(tmdbId)
+        movieAltTitlesCache.get(altKey)?.let { cached ->
+            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
+            return cnTitle ?: originalTitle
+        }
+        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判
+        movieAltTitlesCache.awaitLoaded()
+        movieAltTitlesCache.get(altKey)?.let { cached ->
+            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
+            return cnTitle ?: originalTitle
+        }
         return try {
             val altResponse = tmdbApiService.getMovieAlternativeTitles(tmdbId, country = getTmdbCountry())
             if (altResponse.isSuccessful) {
-                val cnTitle = altResponse.body()?.titles?.firstOrNull {
+                val body = altResponse.body()
+                if (body != null) movieAltTitlesCache.put(altKey, body)
+                val cnTitle = body?.titles?.firstOrNull {
                     it.iso_3166_1 == "CN" && it.title.isNotEmpty()
                 }?.title
                 cnTitle ?: originalTitle
@@ -228,10 +347,24 @@ class TmdbRepository @Inject constructor(
         if (detail.name != detail.original_name && detail.name.isNotEmpty()) {
             return detail.name
         }
+        // 别名持久化缓存：中文译名等不变字段，跨 App 重启复用
+        val altKey = langKey(tmdbId)
+        tvAltTitlesCache.get(altKey)?.let { cached ->
+            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
+            return cnTitle ?: originalName
+        }
+        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判
+        tvAltTitlesCache.awaitLoaded()
+        tvAltTitlesCache.get(altKey)?.let { cached ->
+            val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
+            return cnTitle ?: originalName
+        }
         return try {
             val altResponse = tmdbApiService.getTvAlternativeTitles(tmdbId, country = getTmdbCountry())
             if (altResponse.isSuccessful) {
-                val cnTitle = altResponse.body()?.titles?.firstOrNull {
+                val body = altResponse.body()
+                if (body != null) tvAltTitlesCache.put(altKey, body)
+                val cnTitle = body?.titles?.firstOrNull {
                     it.iso_3166_1 == "CN" && it.title.isNotEmpty()
                 }?.title
                 cnTitle ?: originalName

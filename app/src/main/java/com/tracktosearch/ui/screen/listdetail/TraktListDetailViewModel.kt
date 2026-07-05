@@ -24,6 +24,7 @@ import java.io.File
 import javax.inject.Inject
 
 data class ListDetailUiState(
+    val listId: Int = 0,
     val listName: String = "",
     val items: List<ListDetailItem> = emptyList(),
     val isLoading: Boolean = false,
@@ -77,7 +78,7 @@ class TraktListDetailViewModel @Inject constructor(
     private val listId: Int = savedStateHandle.get<Int>("listId") ?: 0
     private val listName: String = savedStateHandle.get<String>("listName") ?: ""
 
-    private val _uiState = MutableStateFlow(ListDetailUiState(listName = listName))
+    private val _uiState = MutableStateFlow(ListDetailUiState(listId = listId, listName = listName))
     val uiState: StateFlow<ListDetailUiState> = _uiState
 
     // 全局想看/已看缓存
@@ -100,6 +101,7 @@ class TraktListDetailViewModel @Inject constructor(
             val cached = loadDiskCache()
             if (cached != null) {
                 _uiState.value = ListDetailUiState(
+                    listId = listId,
                     listName = listName,
                     items = cached,
                     isLoading = false,

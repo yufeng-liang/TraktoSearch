@@ -43,7 +43,10 @@ data class DoubanChartItem(
     val url: String = "",
     val poster: String = "",
     val rating: String = "",
-    val ratingCount: String = ""
+    val ratingCount: String = "",
+    // 口碑榜专用：TMDB 搜索补全的 tmdbId（其他榜单为 0）
+    // App 端拿到后可直接调 Trakt search/tmdb/{id} 换 traktId，省一次 TMDB 搜索
+    val tmdbId: Int = 0
 )
 
 @Immutable
@@ -88,7 +91,10 @@ data class DoubanHotItem(
     val cover: String? = null,
     val desc: String = "",
     val rating: String = "",
-    val url: String = ""
+    val url: String = "",
+    // 口碑榜专用：TMDB 搜索补全的 tmdbId（其他榜单为 0）
+    // resolveAndNavigate 优先用此字段，跳过 TMDB 标题搜索
+    val tmdbId: Int = 0
 )
 
 /** 兼容旧的 DoubanHotResponse（如有引用） */

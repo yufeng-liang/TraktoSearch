@@ -119,6 +119,12 @@ interface TraktApiService {
         @Query("type") type: String
     ): Response<List<TraktSearchResult>>
 
+    @GET("search/imdb/{id}")
+    suspend fun searchByImdb(
+        @Path("id") id: String,
+        @Query("type") type: String
+    ): Response<List<TraktSearchResult>>
+
     @GET("search/movie")
     suspend fun searchMovies(
         @Query("query") query: String,

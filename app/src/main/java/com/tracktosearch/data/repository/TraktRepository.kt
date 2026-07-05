@@ -1,29 +1,50 @@
 package com.tracktosearch.data.repository
 
+import android.content.Context
 import android.util.Log
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.data.util.persistentTtlCache
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/** Trakt 持久化缓存专用 DataStore */
+private val Context.traktPersistentCacheStore: DataStore<Preferences> by preferencesDataStore(name = "trakt_persistent_cache")
 
 @Singleton
 class TraktRepository @Inject constructor(
     private val traktApiService: TraktApiService,
-    private val userProfileStorage: UserProfileStorage
+    private val userProfileStorage: UserProfileStorage,
+    private val json: Json,
+    @ApplicationContext private val context: Context
 ) {
     companion object {
-        private const val TTL_ID_MAPPING = Long.MAX_VALUE    // ID 转换永不过期（tmdb↔trakt 映射不会变）
+        private const val TTL_ID_MAPPING = Long.MAX_VALUE    // ID 转换永不过期（tmdb↔trkt 映射不会变）
         private const val TTL_COMMENTS = 10 * 60 * 1000L     // 评论 10 分钟
         private const val TTL_RELATED = 30 * 60 * 1000L      // 相关推荐 30 分钟
-        private const val TTL_RECOMMENDATIONS = 60 * 60 * 1000L // 个性化推荐 1 小时
+        private const val TTL_RECOMMENDATIONS = 6 * 60 * 60 * 1000L // 个性化推荐 6 小时
         private const val TTL_STATS = 5 * 60 * 1000L         // 统计数据 5 分钟
+        private const val TTL_TRENDING = 6 * 60 * 60 * 1000L  // 趋势/最受期待/社区列表 6 小时（榜单更新不频繁）
+        private const val TTL_WATCHLIST_IDS = 6 * 60 * 60 * 1000L // 想看/已看 ID 集合 6 小时（避免每次启动全量拉取）
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
+    @Serializable
     data class WatchlistWatchedIds(
         val movieWatchlistTraktIds: Set<Int> = emptySet(),
         val movieWatchlistTmdbIds: Set<Int> = emptySet(),
@@ -60,9 +81,17 @@ class TraktRepository @Inject constructor(
     @Volatile
     private var watchlistWatchedIds: WatchlistWatchedIds? = null
 
-    /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次） */
+    /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次）。
+     *  优先读持久化缓存（6h TTL，跨 App 重启复用），未命中或过期时走网络全量拉取并写回持久化缓存 */
     suspend fun loadWatchlistWatchedIds(): WatchlistWatchedIds {
         watchlistWatchedIds?.let { return it }
+        // 先尝试持久化缓存（避免每次启动都发 4 个 /sync/* 请求）
+        val cacheKey = "watchlist_watched_ids"
+        watchlistWatchedIdsCache.awaitLoaded()
+        watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
+            watchlistWatchedIds = cached
+            return cached
+        }
         return try {
             coroutineScope {
                 val movieWatchlistDef = async { getAllMovieWatchlist() }
@@ -86,6 +115,8 @@ class TraktRepository @Inject constructor(
                     showTmdbToTrakt = (showWatchlist + showHistory).associate { it.show.ids.tmdb to it.show.ids.trakt }.filterKeys { it > 0 }
                 )
                 watchlistWatchedIds = ids
+                // 写回持久化缓存（异步落盘，6h TTL）
+                watchlistWatchedIdsCache.put(cacheKey, ids)
                 ids
             }
         } catch (e: Exception) {
@@ -100,6 +131,18 @@ class TraktRepository @Inject constructor(
     /** 清除全局想看/已看缓存（退出登录时调用） */
     fun clearWatchlistWatchedCache() {
         watchlistWatchedIds = null
+        // 同步清除持久化缓存，避免下次登录仍读到旧账号数据
+        persistentScope.launch {
+            try { watchlistWatchedIdsCache.clearAll() } catch (_: Exception) {}
+        }
+    }
+
+    /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */
+    private fun persistWatchlistWatchedIds() {
+        val current = watchlistWatchedIds ?: return
+        persistentScope.launch {
+            try { watchlistWatchedIdsCache.put("watchlist_watched_ids", current) } catch (_: Exception) {}
+        }
     }
 
     /** 缓存已加载时，添加想看 ID 到缓存 */
@@ -116,6 +159,7 @@ class TraktRepository @Inject constructor(
                 )
                 else -> current
             }
+            persistWatchlistWatchedIds()
         }
     }
 
@@ -133,6 +177,7 @@ class TraktRepository @Inject constructor(
                 )
                 else -> current
             }
+            persistWatchlistWatchedIds()
         }
     }
 
@@ -155,6 +200,7 @@ class TraktRepository @Inject constructor(
                 )
                 else -> current
             }
+            persistWatchlistWatchedIds()
         }
     }
 
@@ -177,15 +223,70 @@ class TraktRepository @Inject constructor(
                 )
                 else -> current
             }
+            persistWatchlistWatchedIds()
         }
     }
 
-    // 带 TTL 的缓存（maxSize 防止无上限增长）
-    private val searchByTmdbCache = TtlCache<List<TraktSearchResult>>(TTL_ID_MAPPING, maxSize = 100)
+    // 持久化缓存作用域
+    private val persistentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val persistentDataStore get() = context.traktPersistentCacheStore
+
+    // 持久化缓存（永久）：tmdb↔trakt ID 映射，跨 App 重启保留
+    private val searchByTmdbCache = persistentTtlCache<List<TraktSearchResult>>(
+        TTL_ID_MAPPING, 100, persistentDataStore, json, "tmdb_search", persistentScope
+    )
+    // imdbId → Trakt 反查缓存（永不过期，imdb↔trakt 映射不会变）
+    private val searchByImdbCache = persistentTtlCache<List<TraktSearchResult>>(
+        TTL_ID_MAPPING, 100, persistentDataStore, json, "imdb_search", persistentScope
+    )
+    // 想看/已看 ID 集合持久化缓存（6 小时）：跨 App 重启复用，避免每次启动都发 4 个 /sync/* 请求
+    // 增删想看/已看时同步更新，退出登录时清除
+    private val watchlistWatchedIdsCache = persistentTtlCache<WatchlistWatchedIds>(
+        TTL_WATCHLIST_IDS, 1, persistentDataStore, json, "watchlist_watched_ids", persistentScope
+    )
+    // 持久化缓存（6 小时）：发现页栏目数据，跨 App 重启保留，避免重启后重新请求
+    private val recommendationsCache = persistentTtlCache<List<TraktMovie>>(
+        TTL_RECOMMENDATIONS, 30, persistentDataStore, json, "recommendations", persistentScope
+    )
+    private val trendingMoviesCache = persistentTtlCache<Pair<List<TraktTrendingMovieResponse>, Int>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_movies", persistentScope
+    )
+    private val trendingShowsCache = persistentTtlCache<Pair<List<TraktTrendingShowResponse>, Int>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_shows", persistentScope
+    )
+    private val anticipatedMoviesCache = persistentTtlCache<Pair<List<TraktAnticipatedMovieResponse>, Int>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_movies", persistentScope
+    )
+    private val anticipatedShowsCache = persistentTtlCache<Pair<List<TraktAnticipatedShowResponse>, Int>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_shows", persistentScope
+    )
+    private val showRecommendationsCache = persistentTtlCache<List<TraktRecommendationShowResponse>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "show_recommendations", persistentScope
+    )
+    private val trendingListsCache = persistentTtlCache<List<TraktTrendingListResponse>>(
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_lists", persistentScope
+    )
+
+    /** 持久化缓存列表，供 Application 启动时批量加载 */
+    val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
+        searchByTmdbCache, searchByImdbCache, watchlistWatchedIdsCache, recommendationsCache,
+        trendingMoviesCache, trendingShowsCache, anticipatedMoviesCache,
+        anticipatedShowsCache, showRecommendationsCache, trendingListsCache
+    )
+
+    /** ID 映射持久化缓存（tmdb↔trakt、imdb↔trakt），用于设置页按类目清除 */
+    val idMappingCaches: List<PersistentTtlCache<*>> get() = listOf(searchByTmdbCache, searchByImdbCache)
+
+    /** 影视数据持久化缓存（想看/已看 ID + 趋势/推荐/列表等 6 小时缓存），用于设置页按类目清除 */
+    val mediaDataCaches: List<PersistentTtlCache<*>> get() = listOf(
+        watchlistWatchedIdsCache, recommendationsCache, trendingMoviesCache, trendingShowsCache,
+        anticipatedMoviesCache, anticipatedShowsCache, showRecommendationsCache, trendingListsCache
+    )
+
+    // 内存缓存（短期，App 进程内有效）
     private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS, maxSize = 50)
     private val relatedMoviesCache = TtlCache<List<TraktMovie>>(TTL_RELATED, maxSize = 50)
     private val relatedShowsCache = TtlCache<List<TraktShow>>(TTL_RELATED, maxSize = 50)
-    private val recommendationsCache = TtlCache<List<TraktMovie>>(TTL_RECOMMENDATIONS, maxSize = 30)
     // 统计页专用缓存：频繁进出页面时避免重复全量拉取
     private val movieHistoryCache = TtlCache<List<TraktWatchlistMovieItem>>(TTL_STATS, maxSize = 5)
     private val showHistoryCache = TtlCache<List<TraktWatchlistShowItem>>(TTL_STATS, maxSize = 5)
@@ -198,6 +299,9 @@ class TraktRepository @Inject constructor(
 
     /** 已搜索但未找到有效 Trakt ID 的 tmdbId 集合（负缓存，避免重复请求和转圈） */
     private val notFoundTmdbIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** 已搜索但未找到有效 Trakt ID 的 imdbId 集合（负缓存，避免重复请求和转圈） */
+    private val notFoundImdbIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     /** 同步查询 ID 转换缓存（不触发网络请求），用于秒进判断。扫描所有结果找有效 ID */
     fun getCachedTraktId(tmdbId: Int, type: MediaType): Int? {
@@ -216,6 +320,23 @@ class TraktRepository @Inject constructor(
         }
         // 缓存有数据但无有效 ID → 记入负缓存
         notFoundTmdbIds.add(key)
+        return 0
+    }
+
+    /** 同步查询 imdbId → traktId 缓存（不触发网络请求）。返回值约定同 getCachedTraktId：null=未查过，0=已查无有效ID，正数=有效traktId */
+    fun getCachedTraktIdByImdb(imdbId: String, type: MediaType): Int? {
+        val key = "${imdbId}_${type.name}"
+        if (notFoundImdbIds.contains(key)) return 0
+        val cached = searchByImdbCache.get(key) ?: return null
+        for (result in cached) {
+            val traktId = when (type) {
+                MediaType.MOVIE -> result.movie?.ids?.trakt
+                MediaType.SHOW -> result.show?.ids?.trakt
+                else -> null
+            }
+            if (traktId != null && traktId > 0) return traktId
+        }
+        notFoundImdbIds.add(key)
         return 0
     }
 
@@ -251,6 +372,40 @@ class TraktRepository @Inject constructor(
             Result.failure(e)
         }
     }
+
+    /** 通过 imdbId 反查 Trakt 条目（用于豆瓣→Trakt 同步）。仅支持 movie/show */
+    suspend fun searchByImdb(imdbId: String, type: MediaType): Result<List<TraktSearchResult>> {
+        val key = "${imdbId}_${type.name}"
+        searchByImdbCache.get(key)?.let { return Result.success(it) }
+        return try {
+            val typeStr = when (type) {
+                MediaType.MOVIE -> "movie"
+                MediaType.SHOW -> "show"
+                else -> return Result.failure(IllegalArgumentException("Unsupported type for imdb search: $type"))
+            }
+            val response = traktApiService.searchByImdb(imdbId, typeStr)
+            if (response.isSuccessful) {
+                val body = response.body() ?: emptyList()
+                searchByImdbCache.put(key, body)
+                // 如果无有效结果，记入负缓存
+                val hasValid = body.any { r ->
+                    val id = when (type) {
+                        MediaType.MOVIE -> r.movie?.ids?.trakt
+                        MediaType.SHOW -> r.show?.ids?.trakt
+                        else -> null
+                    }
+                    id != null && id > 0
+                }
+                if (!hasValid) notFoundImdbIds.add(key)
+                Result.success(body)
+            } else {
+                Result.failure(Exception("Failed to search by imdb: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getMovieWatchlist(page: Int = 1, limit: Int = 50, forceRefresh: Boolean = false): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         val cacheKey = "p${page}_$limit"
         return runCatching {
@@ -788,6 +943,128 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /**
+     * 批量添加到想看列表（Trakt API 原生支持批量，一次 POST 传多个 ids）。
+     * @param movieTraktIds 电影 traktId 列表
+     * @param showTraktIds 剧集 traktId 列表
+     */
+    suspend fun batchAddToWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
+        return try {
+            val request = TraktSyncRequest(
+                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
+                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
+            )
+            val response = traktApiService.addToWatchlist(request)
+            if (response.isSuccessful) {
+                movieTraktIds.forEach { addToWatchlistCache(it, 0, MediaType.MOVIE) }
+                showTraktIds.forEach { addToWatchlistCache(it, 0, MediaType.SHOW) }
+                Result.success(response.body() ?: TraktSyncResponse())
+            } else {
+                Result.failure(Exception("batchAddToWatchlist failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量从想看列表移除。
+     */
+    suspend fun batchRemoveFromWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
+        return try {
+            val request = TraktSyncRequest(
+                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
+                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
+            )
+            val response = traktApiService.removeFromWatchlist(request)
+            if (response.isSuccessful) {
+                movieTraktIds.forEach { removeFromWatchlistCache(it, 0, MediaType.MOVIE) }
+                showTraktIds.forEach { removeFromWatchlistCache(it, 0, MediaType.SHOW) }
+                Result.success(response.body() ?: TraktSyncResponse())
+            } else {
+                Result.failure(Exception("batchRemoveFromWatchlist failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量标记已看（Trakt API 原生支持批量）。
+     * 注意：Trakt 的 addToHistory 不会自动从 watchlist 移除，需调用方显式调用 batchRemoveFromWatchlist。
+     */
+    suspend fun batchMarkAsWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
+        return try {
+            val request = TraktSyncRequest(
+                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
+                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
+            )
+            val response = traktApiService.addToHistory(request)
+            if (response.isSuccessful) {
+                movieTraktIds.forEach { addToWatchedCache(it, 0, MediaType.MOVIE) }
+                showTraktIds.forEach { addToWatchedCache(it, 0, MediaType.SHOW) }
+                Result.success(response.body() ?: TraktSyncResponse())
+            } else {
+                Result.failure(Exception("batchMarkAsWatched failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量移除已看记录(模式 B/C 状态变化时调用)。
+     * 注意:Trakt 的 removeFromHistory 不会自动加回 watchlist,如需加回需调用方显式调用 batchAddToWatchlist。
+     */
+    suspend fun batchRemoveFromWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
+        return try {
+            val request = TraktSyncRequest(
+                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
+                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
+            )
+            val response = traktApiService.removeFromHistory(request)
+            if (response.isSuccessful) {
+                movieTraktIds.forEach { removeFromWatchedCache(it, 0, MediaType.MOVIE) }
+                showTraktIds.forEach { removeFromWatchedCache(it, 0, MediaType.SHOW) }
+                Result.success(response.body() ?: TraktSyncResponse())
+            } else {
+                Result.failure(Exception("batchRemoveFromWatched failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量添加评分（1-10 分）。
+     * @param movieRatings 电影 (traktId, rating) 列表
+     * @param showRatings 剧集 (traktId, rating) 列表
+     */
+    suspend fun batchAddRatings(
+        movieRatings: List<Pair<Int, Int>>,
+        showRatings: List<Pair<Int, Int>>
+    ): Result<Unit> {
+        if (movieRatings.isEmpty() && showRatings.isEmpty()) return Result.success(Unit)
+        return try {
+            val request = RatingRequest(
+                movies = movieRatings.takeIf { it.isNotEmpty() }?.map { (id, r) -> RatingItem(TraktIds(trakt = id), r) },
+                shows = showRatings.takeIf { it.isNotEmpty() }?.map { (id, r) -> RatingItem(TraktIds(trakt = id), r) }
+            )
+            val response = traktApiService.addRating(request)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("batchAddRatings failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** 移除评分 */
     suspend fun removeRating(traktId: Int, type: MediaType): Result<Unit> {
         return try {
@@ -917,50 +1194,70 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getTrendingMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingMovieResponse>, Int>> {
+        val key = "${page}_${limit}"
+        trendingMoviesCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingMovies(page = page, limit = limit)
             if (response.isSuccessful) {
                 val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
-                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+                val result = Pair(response.body() ?: emptyList(), totalCount)
+                trendingMoviesCache.put(key, result)
+                Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getTrendingShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingShowResponse>, Int>> {
+        val key = "${page}_${limit}"
+        trendingShowsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingShows(page = page, limit = limit)
             if (response.isSuccessful) {
                 val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
-                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+                val result = Pair(response.body() ?: emptyList(), totalCount)
+                trendingShowsCache.put(key, result)
+                Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getAnticipatedMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedMovieResponse>, Int>> {
+        val key = "${page}_${limit}"
+        anticipatedMoviesCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getAnticipatedMovies(page = page, limit = limit)
             if (response.isSuccessful) {
                 val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
-                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+                val result = Pair(response.body() ?: emptyList(), totalCount)
+                anticipatedMoviesCache.put(key, result)
+                Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getAnticipatedShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedShowResponse>, Int>> {
+        val key = "${page}_${limit}"
+        anticipatedShowsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getAnticipatedShows(page = page, limit = limit)
             if (response.isSuccessful) {
                 val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
-                Result.success(Pair(response.body() ?: emptyList(), totalCount))
+                val result = Pair(response.body() ?: emptyList(), totalCount)
+                anticipatedShowsCache.put(key, result)
+                Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
+        val key = "${limit}"
+        showRecommendationsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getShowRecommendations(limit = limit)
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val result = response.body() ?: emptyList()
+                showRecommendationsCache.put(key, result)
+                Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }
@@ -1044,9 +1341,15 @@ class TraktRepository @Inject constructor(
 
     // 社区热门列表
     suspend fun getTrendingLists(limit: Int = 10, page: Int = 1): Result<List<TraktTrendingListResponse>> {
+        val key = "${limit}_${page}"
+        trendingListsCache.get(key)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getTrendingLists(limit, page)
-            if (response.isSuccessful) Result.success(response.body() ?: emptyList())
+            if (response.isSuccessful) {
+                val result = response.body() ?: emptyList()
+                trendingListsCache.put(key, result)
+                Result.success(result)
+            }
             else Result.failure(Exception("HTTP ${response.code()}"))
         } catch (e: Exception) { Result.failure(e) }
     }

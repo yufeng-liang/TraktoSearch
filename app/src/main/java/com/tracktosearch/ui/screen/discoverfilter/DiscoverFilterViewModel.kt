@@ -25,7 +25,7 @@ data class DiscoverFilterUiState(
     val selectedGenreIds: Set<Int> = emptySet(),
     val selectedCountries: Set<String> = emptySet(),
     val selectedKeywordIds: Set<Int> = emptySet(),
-    val selectedDecadeLabels: Set<String> = emptySet(),
+    val selectedDecadeKeys: Set<String> = emptySet(),
     val voteAverageMin: Float = 0f,
     val voteAverageMax: Float = 10f,
     val sortBy: TmdbRepository.DiscoverSort = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -59,7 +59,7 @@ class DiscoverFilterViewModel @Inject constructor(
         val genreIds: Set<Int>,
         val countries: Set<String>,
         val keywordIds: Set<Int>,
-        val decadeLabels: Set<String>,
+        val decadeKeys: Set<String>,
         val voteMin: Float,
         val voteMax: Float,
         val sortBy: TmdbRepository.DiscoverSort,
@@ -71,7 +71,7 @@ class DiscoverFilterViewModel @Inject constructor(
         genreIds = _uiState.value.selectedGenreIds,
         countries = _uiState.value.selectedCountries,
         keywordIds = _uiState.value.selectedKeywordIds,
-        decadeLabels = _uiState.value.selectedDecadeLabels,
+        decadeKeys = _uiState.value.selectedDecadeKeys,
         voteMin = _uiState.value.voteAverageMin,
         voteMax = _uiState.value.voteAverageMax,
         sortBy = _uiState.value.sortBy,
@@ -89,7 +89,7 @@ class DiscoverFilterViewModel @Inject constructor(
         val genreIds: Set<Int> = emptySet(),
         val countries: Set<String> = emptySet(),
         val keywordIds: Set<Int> = emptySet(),
-        val decadeLabels: Set<String> = emptySet(),
+        val decadeKeys: Set<String> = emptySet(),
         val voteMin: Float = 0f,
         val voteMax: Float = 10f,
         val sortBy: TmdbRepository.DiscoverSort = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -139,7 +139,7 @@ class DiscoverFilterViewModel @Inject constructor(
             genreIds = _uiState.value.selectedGenreIds,
             countries = _uiState.value.selectedCountries,
             keywordIds = _uiState.value.selectedKeywordIds,
-            decadeLabels = _uiState.value.selectedDecadeLabels,
+            decadeKeys = _uiState.value.selectedDecadeKeys,
             voteMin = _uiState.value.voteAverageMin,
             voteMax = _uiState.value.voteAverageMax,
             sortBy = _uiState.value.sortBy,
@@ -154,7 +154,7 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedGenreIds = saved.genreIds,
             selectedCountries = saved.countries,
             selectedKeywordIds = saved.keywordIds,
-            selectedDecadeLabels = saved.decadeLabels,
+            selectedDecadeKeys = saved.decadeKeys,
             voteAverageMin = saved.voteMin,
             voteAverageMax = saved.voteMax,
             sortBy = saved.sortBy,
@@ -190,13 +190,15 @@ class DiscoverFilterViewModel @Inject constructor(
         )
     }
 
-    fun toggleDecade(label: String) {
-        val current = _uiState.value.selectedDecadeLabels
-        if (label == "全部") {
-            _uiState.value = _uiState.value.copy(selectedDecadeLabels = emptySet())
+    fun toggleDecade(key: String) {
+        val current = _uiState.value.selectedDecadeKeys
+        // "全部"选项（key="0-0"）清空筛选
+        val allOption = decadeOptions.firstOrNull { it.isAll }
+        if (allOption != null && key == allOption.key) {
+            _uiState.value = _uiState.value.copy(selectedDecadeKeys = emptySet())
         } else {
             _uiState.value = _uiState.value.copy(
-                selectedDecadeLabels = if (label in current) current - label else current + label
+                selectedDecadeKeys = if (key in current) current - key else current + key
             )
         }
     }
@@ -233,7 +235,7 @@ class DiscoverFilterViewModel @Inject constructor(
             selectedGenreIds = emptySet(),
             selectedCountries = emptySet(),
             selectedKeywordIds = emptySet(),
-            selectedDecadeLabels = emptySet(),
+            selectedDecadeKeys = emptySet(),
             voteAverageMin = 0f,
             voteAverageMax = 10f,
             sortBy = TmdbRepository.DiscoverSort.POPULARITY_DESC,
@@ -252,9 +254,9 @@ class DiscoverFilterViewModel @Inject constructor(
      * TMDB Discover 只支持连续日期范围，多选不连续年代会合并为最小起始到最大结束。
      */
     private fun computeDateRange(): Pair<String?, String?> {
-        val labels = _uiState.value.selectedDecadeLabels
-        if (labels.isEmpty()) return null to null
-        val options = decadeOptions.filter { it.label in labels }
+        val keys = _uiState.value.selectedDecadeKeys
+        if (keys.isEmpty()) return null to null
+        val options = decadeOptions.filter { it.key in keys }
         if (options.isEmpty()) return null to null
 
         var minYear = Int.MAX_VALUE

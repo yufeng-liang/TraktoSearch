@@ -3,6 +3,8 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -59,7 +61,9 @@ data class WatchlistUiState(
     val historyMoviesError: String? = null,
     val historyShowsError: String? = null,
     val historyMoviesLoaded: Boolean = false,
-    val historyShowsLoaded: Boolean = false
+    val historyShowsLoaded: Boolean = false,
+    // 豆瓣同步进度（isRunning 时在 Tab 栏下方显示横幅，点击重新打开同步弹窗）
+    val doubanSyncProgress: DoubanSyncProgress? = null
 )
 
 @HiltViewModel
@@ -67,6 +71,7 @@ class WatchlistViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
     private val offlineCacheManager: OfflineCacheManager,
+    private val doubanSyncManager: DoubanSyncManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -74,6 +79,27 @@ class WatchlistViewModel @Inject constructor(
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
 
     private val maxRetries = 2
+
+    init {
+        // 监听豆瓣同步进度：isRunning 时显示横幅，完成且有成功条目则静默刷新
+        viewModelScope.launch {
+            doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
+                // 同步进行中或已完成（5 秒内）→ 暴露给 UI 显示横幅
+                if (progress.isRunning || progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(doubanSyncProgress = progress)
+                    // 完成且有成功条目，触发静默刷新（保留已有数据避免闪烁）
+                    if (progress.isComplete && progress.successCount > 0) {
+                        refreshIfLoaded(silent = true)
+                    }
+                    // 完成后 5 秒清除横幅（让用户看到结果）
+                    if (progress.isComplete) {
+                        delay(5000)
+                        _uiState.value = _uiState.value.copy(doubanSyncProgress = null)
+                    }
+                }
+            }
+        }
+    }
 
     fun loadMovies(forceReload: Boolean = false, silent: Boolean = false) {
         if (!forceReload && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {

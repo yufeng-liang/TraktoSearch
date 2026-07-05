@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.airbnb.lottie.compose.LottieAnimation
@@ -39,7 +40,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun CloudOverlay(
     easterEggRes: Int?,
-    message: String?,
+    messageRes: Int?,
     onDismiss: () -> Unit
 ) {
     val visible = easterEggRes != null
@@ -96,9 +97,9 @@ fun CloudOverlay(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                if (message != null) {
+                if (messageRes != null) {
                     Text(
-                        text = message,
+                        text = stringResource(messageRes),
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center

@@ -12,8 +12,16 @@ import coil.memory.MemoryCache
 import coil.request.CachePolicy
 import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.notification.NotificationScheduler
+import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.repository.TmdbRepository
+import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -24,6 +32,10 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var baseOkHttpClient: OkHttpClient
     @Inject lateinit var notificationScheduler: NotificationScheduler
+    @Inject lateinit var tmdbRepository: TmdbRepository
+    @Inject lateinit var traktRepository: TraktRepository
+    @Inject lateinit var doubanHotCache: PersistentTtlCache<DoubanHotData>
+    @Inject lateinit var doubanDetailCache: PersistentTtlCache<com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry>
 
     // 缓存 Configuration，避免每次 get() 都新建实例
     override val workManagerConfiguration: Configuration by lazy {
@@ -40,6 +52,14 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
+            // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
+            // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                tmdbRepository.persistentCaches.forEach { it.loadFromDisk() }
+                traktRepository.persistentCaches.forEach { it.loadFromDisk() }
+                doubanHotCache.loadFromDisk()
+                doubanDetailCache.loadFromDisk()
+            }
         }
     }
 
@@ -80,7 +100,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    .maxSizeBytes(50L * 1024 * 1024)
+                    // 200MB：海报图、演职员头像本身持久化缓存（跨 App 重启复用，省去重复下载）
+                    .maxSizeBytes(200L * 1024 * 1024)
                     .build()
             }
             .memoryCachePolicy(CachePolicy.ENABLED)

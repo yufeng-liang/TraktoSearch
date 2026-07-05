@@ -196,7 +196,7 @@ fun SearchScreen(
     }
     val showPermissionDialog by cloudThemeManager.showPermissionDialog.collectAsStateWithLifecycle()
     val easterEggRes by cloudThemeManager.easterEggRes.collectAsStateWithLifecycle()
-    val easterMessage by cloudThemeManager.easterMessage.collectAsStateWithLifecycle()
+    val easterMessageRes by cloudThemeManager.easterMessageRes.collectAsStateWithLifecycle()
 
     // 搜索框焦点状态，用于控制搜索历史展开
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -440,7 +440,7 @@ fun SearchScreen(
         // 全屏彩蛋 Overlay
         CloudOverlay(
             easterEggRes = easterEggRes,
-            message = easterMessage,
+            messageRes = easterMessageRes,
             onDismiss = { cloudThemeManager.onEasterDismissed() }
         )
     }

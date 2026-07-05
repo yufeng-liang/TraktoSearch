@@ -33,6 +33,8 @@ class UpdateRepository @Inject constructor(
         // 公开仓库，专门存放 release APK
         private const val RELEASE_REPO_OWNER = "yufeng-liang"
         private const val RELEASE_REPO = "TrackToSearch-release"
+        // 启动时自动检查更新的最小间隔（24 小时），避免每次启动都请求 GitHub API
+        private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
     }
 
     // 缓存上次获取的 changelog，避免重复请求
@@ -136,8 +138,32 @@ class UpdateRepository @Inject constructor(
     /** 获取缓存的最新版本号 */
     fun getCachedLatestVersion(): String? = cachedLatestVersion
 
-    suspend fun checkForUpdate(): UpdateInfo? {
+    /**
+     * 检查更新。
+     * @param force true 时强制走网络（设置页手动检查用）；false 时 24 小时内复用上次结果，避免每次启动都请求 GitHub API
+     */
+    suspend fun checkForUpdate(force: Boolean = false): UpdateInfo? {
         val currentVersion = BuildConfig.VERSION_NAME
+
+        // 非强制检查：24 小时内复用缓存结果，避免每次启动都请求 GitHub
+        if (!force) {
+            val lastTs = changelogStorage.getLastCheckTimestamp()
+            val now = System.currentTimeMillis()
+            if (lastTs > 0 && now - lastTs < UPDATE_CHECK_INTERVAL_MS) {
+                val cached = changelogStorage.getCachedUpdateInfo()
+                if (cached != null) {
+                    cachedChangelog = cached.changelog
+                    cachedLatestVersion = cached.latestVersion
+                    return UpdateInfo(
+                        latestVersion = cached.latestVersion,
+                        downloadUrl = cached.downloadUrl,
+                        changelog = cached.changelog,
+                        fileSize = 0,
+                        hasUpdate = cached.hasUpdate
+                    )
+                }
+            }
+        }
 
         // 优先尝试 GitHub（版本检测）
         val gitHubResult = tryFetchFromGitHub()
@@ -149,10 +175,18 @@ class UpdateRepository @Inject constructor(
                 appendToFullChangelog(gitHubResult.latestVersion, gitHubResult.changelog)
                 val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
                 if (downloadUrl.isEmpty()) return null
-                return gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                val info = gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                changelogStorage.saveCachedUpdateInfo(
+                    info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
+                )
+                return info
             }
             // 版本相同，返回 hasUpdate=false 的信息以便 UI 显示"已是最新"
-            return gitHubResult.copy(hasUpdate = false)
+            val info = gitHubResult.copy(hasUpdate = false)
+            changelogStorage.saveCachedUpdateInfo(
+                info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
+            )
+            return info
         }
 
         // GitHub 请求失败，降级到 Gitee
@@ -164,9 +198,17 @@ class UpdateRepository @Inject constructor(
                 appendToFullChangelog(giteeResult.latestVersion, giteeResult.changelog)
                 val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
                 if (downloadUrl.isEmpty()) return null
-                return giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                val info = giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                changelogStorage.saveCachedUpdateInfo(
+                    info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
+                )
+                return info
             }
-            return giteeResult.copy(hasUpdate = false)
+            val info = giteeResult.copy(hasUpdate = false)
+            changelogStorage.saveCachedUpdateInfo(
+                info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
+            )
+            return info
         }
 
         return null

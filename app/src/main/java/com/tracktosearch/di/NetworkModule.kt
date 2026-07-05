@@ -1,10 +1,16 @@
 package com.tracktosearch.di
 
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.data.util.persistentTtlCache
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -20,6 +26,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import okhttp3.ConnectionPool
 import okhttp3.Interceptor
@@ -34,6 +43,9 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
 import kotlin.math.pow
+
+/** 豆瓣持久化缓存 DataStore */
+private val Context.doubanPersistentCacheStore: DataStore<Preferences> by preferencesDataStore(name = "douban_persistent_cache")
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -261,11 +273,23 @@ object NetworkModule {
             .create(PanHubApiService::class.java)
     }
 
-    /** 豆瓣热榜共享缓存（搜索页与发现页复用） */
+    /** 豆瓣热榜共享缓存（搜索页与发现页复用，持久化跨 App 重启保留） */
     @Provides
     @Singleton
-    fun provideDoubanHotCache(): TtlCache<com.tracktosearch.data.remote.douban.dto.DoubanHotData> {
-        return TtlCache(60 * 60 * 1000L) // 1 小时
+    fun provideDoubanHotCache(
+        @ApplicationContext context: android.content.Context,
+        json: Json
+    ): PersistentTtlCache<com.tracktosearch.data.remote.douban.dto.DoubanHotData> {
+        val dataStore = context.doubanPersistentCacheStore
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        return persistentTtlCache(
+            ttlMillis = 6 * 60 * 60 * 1000L, // 6 小时
+            maxSize = 0,
+            dataStore = dataStore,
+            json = json,
+            keyPrefix = "douban_hot",
+            scope = scope
+        )
     }
 
     @Provides
@@ -274,7 +298,7 @@ object NetworkModule {
         @Named("douban") okHttpClient: OkHttpClient
     ): DoubanHotApiService {
         return Retrofit.Builder()
-            .baseUrl("https://douban-movie-api.douban-movie-api-peak.workers.dev/")
+            .baseUrl("https://douban-movie-api.pages.dev/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -287,6 +311,7 @@ object NetworkModule {
     @Named("douban")
     fun provideDoubanOkHttpClient(
         baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache
     ): OkHttpClient {
         return baseClient.newBuilder()
@@ -298,24 +323,10 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
+            .addInterceptor(loggingInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
-    }
-
-    /** 备选豆瓣热榜 API（主 API 超时时切换） */
-    @Provides
-    @Singleton
-    @Named("backup")
-    fun provideBackupDoubanHotApiService(
-        @Named("douban") okHttpClient: OkHttpClient
-    ): DoubanHotApiService {
-        return Retrofit.Builder()
-            .baseUrl("https://douban-movie-api.pages.dev/")
-            .client(okHttpClient)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-            .create(DoubanHotApiService::class.java)
     }
 
     @Provides

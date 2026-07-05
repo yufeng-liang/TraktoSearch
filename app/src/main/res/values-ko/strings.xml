@@ -46,6 +46,14 @@
     <string name="help_col_format">포맷</string>
     <string name="help_col_how_to_get">획득 방법</string>
     <string name="help_col_import_effect">가져오기 효과</string>
+    <string name="help_data_export_title">데이터 내보내기</string>
+    <string name="help_data_export_b1">JSON 형식으로 내보내기 (보고싶다 목록과 시청 기록 포함, 백업/이전에 적합)</string>
+    <string name="help_data_import_title">데이터 가져오기</string>
+    <string name="help_data_import_b1">IMDb에서 내보낸 CSV로 보고싶다 목록 가져오기, Trakt 보고싶다 목록에 자동 동기화</string>
+    <string name="help_data_import_sources">가져오기 소스</string>
+    <string name="help_import_src_imdb">IMDb</string>
+    <string name="help_import_src_imdb_how">IMDb 로그인 → Your Watchlist → 메뉴 → Export에서 CSV 다운로드</string>
+    <string name="help_import_src_imdb_effect">제목으로 검색하여 Trakt 보고싶다 목록에 동기화</string>
     <string name="notification_release_title">개봉 알림: %1$s</string>
     <string name="notification_release_text">%1$s 에 개봉했습니다. 확인해 보세요!</string>
     <string name="notification_new_season_text">시즌 %1$d 이 %2$s 에 방영 시작</string>
@@ -94,6 +102,85 @@
     <string name="login_failed">로그인 실패</string>
     <string name="login_retry">재시도</string>
     <string name="login_guest">게스트로 계속</string>
+    <string name="login_douban_import">또는 더우반에서 가져오기</string>
+
+    <!-- Douban Sync -->
+    <string name="douban_login_title">더우반 로그인</string>
+    <string name="douban_login_hint">아래에서 더우반 계정으로 로그인하면 마크가 Trakt에 자동 동기화됩니다</string>
+    <string name="douban_login_privacy_short">이 페이지는 공개 마크(보고싶음/봄)를 읽기 위해 더우반에 로그인합니다. 인증 정보는 이번 동기화에만 사용되며 제3자 서버에 업로드되지 않습니다.</string>
+    <string name="douban_login_privacy_detail_title">상세 정보</string>
+    <string name="douban_login_privacy_detail">• 로그인 이유: 더우반 마크(보고싶음, 봄, 평점) 읽기\n• 저장 내용: Cookie와 userId(이번 크롤링용)만 저장, 더우반 비밀번호는 저장하지 않음\n• Cookie 용도: movie.douban.com/people/{userId}/wish|collect 페이지 요청에만 사용\n• 동기화 완료 후: 설정에서 더우반 인증 정보를 언제든 삭제 가능\n• 데이터 흐름: 더우반 → 앱 → Trakt, 중간 서버 없음</string>
+    <string name="douban_login_privacy_expand">상세 정보 보기</string>
+    <string name="douban_login_privacy_collapse">접기</string>
+    <string name="douban_login_success_snackbar">더우반 로그인 성공, 마크 동기화 중…</string>
+    <string name="douban_login_notification_rationale">백그라운드 동기화에 알림 권한이 필요합니다. 부여해 주세요</string>
+    <string name="douban_sync_title">더우반 마크 동기화</string>
+    <string name="douban_sync_complete">동기화 완료</string>
+    <string name="douban_sync_cancel">취소</string>
+    <string name="douban_sync_background">백그라운드</string>
+    <string name="douban_sync_relogin">재로그인</string>
+    <string name="douban_sync_cookie_expired_banner">더우반 로그인 만료, 탭하여 재로그인</string>
+    <string name="douban_sync_complete_banner">동기화 완료, %1$d건 추가</string>
+    <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
+    <string name="douban_sync_result_format">성공 %1$d건, 실패 %2$d건</string>
+    <string name="douban_sync_failed_list_label">실패 항목:</string>
+    <string name="douban_sync_failed_more_format">...총 %1$d항목 실패</string>
+    <string name="douban_sync_eta_format">약 %1$s 남음</string>
+    <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d · 실패 %4$d</string>
+
+    <!-- Douban 동기화 실패 항목 재시도 -->
+    <string name="douban_retry_title">Douban 동기화 실패 항목 재시도</string>
+    <string name="douban_retry_subtitle">지난 동기화에서 %1$d 항목이 실패했습니다. 작업을 선택하세요</string>
+    <string name="douban_retry_option_local">지난 실패 %1$d 항목 재시도</string>
+    <string name="douban_retry_option_local_desc">복구 가능 %1$d · 복구 불가 %2$d</string>
+    <string name="douban_retry_option_incremental">증분 동기화 새 마크</string>
+    <string name="douban_retry_option_incremental_desc">Douban의 새 wish/collect만 동기화</string>
+    <string name="douban_retry_option_json">JSON 파일에서 실패 항목 가져오기 재시도</string>
+    <string name="douban_retry_option_json_desc">내보낸 실패 데이터 파일에서 로드</string>
+    <string name="douban_retry_select_reasons">재시도할 실패 유형 선택</string>
+    <string name="douban_retry_reason_recoverable">%1$s (복구 가능)</string>
+    <string name="douban_retry_reason_non_recoverable">%1$s (기본 건너뜀)</string>
+    <string name="douban_retry_start">재시도 시작</string>
+    <string name="douban_retry_cancel">취소</string>
+    <string name="douban_retry_clear">실패 기록 삭제</string>
+    <string name="douban_retry_clear_confirm">모든 실패 기록을 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.</string>
+    <string name="douban_retry_clear_confirm_yes">삭제</string>
+    <string name="douban_retry_clear_confirm_no">취소</string>
+    <string name="douban_retry_max_attempt">%1$d회 재시도됨, 자동 재시도 비권장</string>
+    <string name="douban_retry_no_failures">재시도할 실패 항목이 없습니다</string>
+    <string name="douban_retry_json_import_failed">JSON 파일 파싱 실패</string>
+    <string name="douban_retry_json_import_empty">파일에 실패 항목이 없습니다</string>
+
+    <!-- 실패 이유 현지화 -->
+    <string name="douban_failure_reason_no_imdb_id">IMDb ID 없음</string>
+    <string name="douban_failure_reason_detail_fetch_failed">상세 페이지 가져오기 실패</string>
+    <string name="douban_failure_reason_trakt_not_found">Trakt 항목을 찾을 수 없음</string>
+    <string name="douban_failure_reason_trakt_write_timeout">Trakt 쓰기 시간 초과</string>
+    <string name="douban_failure_reason_trakt_write_failed">Trakt 쓰기 실패</string>
+
+    <!-- 동기화 결과 대화상자 -->
+    <string name="douban_sync_failed_group_recoverable">복구 가능 (%1$d)</string>
+    <string name="douban_sync_failed_group_non_recoverable">복구 불가 (%1$d)</string>
+    <string name="douban_sync_failed_export">실패 항목 내보내기</string>
+    <string name="douban_sync_failed_export_nothing">내보낼 실패 항목 없음</string>
+    <string name="douban_sync_failed_export_success">%1$d 실패 항목 내보냄</string>
+    <string name="douban_sync_failed_export_failed">내보내기 실패</string>
+    <string name="douban_sync_failed_show_all">모든 %1$d 항목 표시</string>
+    <string name="douban_sync_failed_collapse">접기</string>
+    <string name="douban_sync_current_processing">처리 중: %1$s</string>
+    <string name="douban_sync_recent_failures">최근 실패:</string>
+    <string name="douban_sync_retry_complete_banner">재시도 완료, %1$d 항목 성공</string>
+
+    <!-- Douban 동기화 재개 (취소 후 복원) -->
+    <string name="douban_resume_title">이전 동기화 재개</string>
+    <string name="douban_resume_subtitle">%1$d 항목이 크롤링되었지만 처리되지 않았습니다. 재개하시겠습니까?</string>
+    <string name="douban_resume_continue">동기화 재개</string>
+    <string name="douban_resume_full">전체 동기화</string>
+    <string name="douban_resume_continue_desc">리스트 크롤링 건너뛰기, 크롤링된 데이터 직접 처리</string>
+    <string name="douban_resume_full_desc">미처리 데이터 삭제, 처음부터 시작</string>
+    <string name="douban_resume_cancel">취소</string>
+    <string name="douban_resume_phase">미처리 리스트 재개 중</string>
+    <string name="douban_resume_complete">재개 완료</string>
 
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">로딩 중…</string>
@@ -143,6 +230,26 @@
     <string name="settings_version">버전</string>
     <string name="settings_cache">캐시</string>
     <string name="settings_cache_clear">지우기</string>
+    <string name="settings_cache_management">캐시 관리</string>
+    <string name="settings_cache_total">총 %1$s</string>
+    <string name="settings_cache_category_image">이미지 캐시</string>
+    <string name="settings_cache_category_image_desc">포스터, 아바타 (Coil 디스크)</string>
+    <string name="settings_cache_category_media_data">미디어 데이터 캐시</string>
+    <string name="settings_cache_category_media_data_desc">상세, 출연진, 차트 (TMDB + Trakt + 더우반)</string>
+    <string name="settings_cache_category_id_mapping">ID 매핑 캐시</string>
+    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt, 더우반→IMDb (영구)</string>
+    <string name="settings_cache_category_http">HTTP 캐시</string>
+    <string name="settings_cache_category_http_desc">네트워크 응답 캐시 (OkHttp)</string>
+    <string name="settings_cache_category_database">오프라인 데이터베이스</string>
+    <string name="settings_cache_category_database_desc">보고싶음/봄 목록 + 더우반 동기화 기록</string>
+    <string name="settings_cache_clear_all">모두 지우기</string>
+    <string name="settings_cache_clear_category_confirm">이 캐시를 지우시겠습니까?</string>
+    <string name="settings_cache_clear_all_impact">모든 캐시 데이터를 지웁니다. 포스터/아바타 재다운로드, 영화/TV 상세 및 차트 재요청, ID 매핑 재구축. 캐시가 다시 쌓이기 전까지 앱이 약간 느릴 수 있습니다.</string>
+    <string name="settings_cache_category_image_impact">포스터와 아바타가 다음 조회 시 네트워크에서 재다운로드됩니다. 이미지가 재캐시되기 전까지 앱이 약간 느릴 수 있습니다.</string>
+    <string name="settings_cache_category_media_data_impact">영화/TV 상세, 출연진, 차트 데이터를 네트워크에서 재요청합니다. 영구 상세 캐시(포스터 경로, ID)와 6시간 목록 캐시 모두 리셋됩니다.</string>
+    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt, Douban→IMDb 매핑을 지웁니다. 다음 조회 시 API에 재요청합니다(느림), 이후 다시 영구 캐시됩니다.</string>
+    <string name="settings_cache_category_http_impact">네트워크 응답 캐시를 지웁니다. 다음 요청은 캐시가 아닌 네트워크로 직접 이동합니다. 사용과 함께 자동 재구축됩니다.</string>
+    <string name="settings_cache_category_database_impact">보고싶다/봤다 오프라인 데이터와 Douban 동기화 기록을 지웁니다. 다음 동기화 전까지 오프라인 브라우징 불가.</string>
     <string name="settings_latest_version">최신 버전 v%1$s</string>
     <string name="settings_already_latest">최신 버전 v%1$s</string>
     <string name="settings_discover_sections">발견 섹션</string>
@@ -354,12 +461,62 @@
     <!-- Data Management (추가) -->
     <string name="settings_export_json">데이터 내보내기 (JSON)</string>
     <string name="settings_export_json_desc">관심목록과 기록을 JSON으로 내보내기</string>
-    <string name="settings_export_csv">CSV로 내보내기</string>
-    <string name="settings_export_csv_desc">관심목록을 CSV로 내보내기</string>
-    <string name="settings_import_letterboxd">Letterboxd에서 가져오기</string>
-    <string name="settings_import_letterboxd_desc">Letterboxd CSV에서 관심목록 가져오기</string>
     <string name="settings_import_imdb">IMDb에서 가져오기</string>
     <string name="settings_import_imdb_desc">IMDb CSV에서 관심목록 가져오기</string>
+    <string name="settings_douban_resync">더우반 재동기화</string>
+    <string name="settings_douban_resync_desc">동기화 모드를 선택하고 더우반 상태 변화 처리</string>
+    <string name="settings_douban_retry_failures">이전 실패 항목 재시도</string>
+
+    <!-- Douban sync mode picker -->
+    <string name="douban_sync_mode_picker_title">재동기화 모드 선택</string>
+    <string name="douban_sync_mode_a_title">증분만</string>
+    <string name="douban_sync_mode_a_desc">동기화된 항목을 건너뛰고 더우반의 새 관심/시청 표시만 가져옵니다. 상태 변화는 처리하지 않습니다.</string>
+    <string name="douban_sync_mode_a_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 건너뜁니다(Trakt는 관심으로 표시됨).</string>
+    <string name="douban_sync_mode_b_title">증분 + 상태 변화</string>
+    <string name="douban_sync_mode_b_desc">상태가 변하지 않은 동기화 항목을 건너뛰고 새 표시와 상태가 변한 항목만 동기화합니다. 삭제는 처리하지 않습니다.</string>
+    <string name="douban_sync_mode_b_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 Trakt의 관심을 제거하고 시청으로 표시합니다.</string>
+    <string name="douban_sync_mode_c_title">완전 재작성</string>
+    <string name="douban_sync_mode_c_desc">모든 동기화 기록을 지우고 모든 더우반 표시를 처음부터 재동기화합니다. 이 앱이 Trakt에 추가한 표시는 제거되고 다시 작성됩니다.</string>
+    <string name="douban_sync_mode_c_example">예: 이전에 %1$d개 항목 동기화됨, 모두 지워지고 재동기화됩니다. 데이터가 심하게 불일치할 때만 사용하세요.</string>
+    <string name="douban_sync_mode_confirm">확인</string>
+    <string name="douban_sync_mode_warning_c">완전 재작성은 모든 동기화 기록을 지웁니다. 정말 계속하시겠습니까?</string>
+
+    <!-- Douban retry dialog - export option -->
+    <string name="douban_retry_option_export">실패 기록 내보내기</string>
+    <string name="douban_retry_option_export_desc">JSON 파일로 저장, 백업이나 공유에 사용</string>
+
+    <!-- Douban failures viewer -->
+    <string name="settings_douban_view_failures">동기화 실패 항목 보기</string>
+    <string name="settings_douban_view_failures_desc">%1$d개 더우반 항목 동기화 실패</string>
+    <string name="screen_douban_failures_title">동기화 실패 항목</string>
+    <string name="screen_douban_failures_empty_wish">관심목록 동기화가 모두 성공했습니다</string>
+    <string name="screen_douban_failures_empty_collect">시청 목록 동기화가 모두 성공했습니다</string>
+    <string name="screen_douban_failures_empty_all">동기화 실패 항목이 없습니다</string>
+    <string name="screen_douban_failures_clear_all">전체 비우기</string>
+    <string name="screen_douban_failures_clear_all_confirm">모든 실패 기록을 비우시겠습니까? 이 작업은 되돌릴 수 없습니다.</string>
+    <string name="screen_douban_failures_mark_as_movie">영화로 표시</string>
+    <string name="screen_douban_failures_mark_as_show">TV 드라마로 표시</string>
+    <string name="screen_douban_failures_clear_mark">유형 표시 지우기</string>
+    <string name="screen_douban_failures_delete_item">이 항목 삭제</string>
+    <string name="screen_douban_failures_tab_uncategorized">미분류</string>
+
+    <!-- Douban item detail -->
+    <string name="screen_douban_item_detail_not_synced">이 항목은 Trakt에 없어 동기화할 수 없습니다</string>
+    <string name="screen_douban_item_detail_failure_reason">실패 이유: %1$s</string>
+    <string name="screen_douban_item_detail_open_douban">더우반 페이지 열기</string>
+    <string name="screen_douban_item_detail_retry">동기화 재시도</string>
+    <string name="screen_douban_item_detail_delete">이 실패 기록 삭제</string>
+    <string name="screen_douban_item_detail_delete_confirm">이 실패 기록을 삭제하시겠습니까?</string>
+    <string name="screen_douban_item_detail_subtitle_hint">탭하여 부제목 추가 (리소스 검색에 사용)</string>
+    <string name="screen_douban_item_detail_subtitle_edit">부제목 편집</string>
+    <string name="screen_douban_item_detail_search_with_subtitle">부제목으로 검색</string>
+    <string name="screen_douban_item_detail_tab_resources">리소스</string>
+    <string name="screen_douban_item_detail_tab_info">정보</string>
+    <string name="screen_douban_item_detail_no_resources">리소스를 찾을 수 없습니다, 부제목이나 다른 키워드를 시도해 보세요</string>
+    <string name="screen_douban_item_detail_retry_in_progress">재시도 중, 잠시만 기다려 주세요…</string>
+    <string name="screen_douban_item_detail_meta_failed_at">실패 시간</string>
+    <string name="screen_douban_item_detail_meta_attempt_count">시도 횟수</string>
+    <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
 
     <!-- Notification (추가) -->
     <string name="settings_notification_release_desc">관심목록의 작품이 공개되면 알림</string>
@@ -404,6 +561,8 @@
     <string name="common_close">닫기</string>
     <string name="common_confirm">확인</string>
     <string name="common_load_failed">로딩 실패</string>
+    <string name="error_detail_title">오류 상세</string>
+    <string name="error_detail_close">닫기</string>
     <string name="common_no_data">데이터 없음</string>
     <string name="common_loading">로딩 중…</string>
     <string name="common_save_success">앨범에 저장되었습니다</string>
@@ -425,9 +584,7 @@
     <string name="snackbar_export_failed">내보내기 실패</string>
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
-    <string name="snackbar_import_done_letterboxd">Letterboxd 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
-    <string name="snackbar_import_done_json">JSON 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
     <string name="snackbar_import_failed">가져오기 실패</string>
     <string name="snackbar_cache_cleared">캐시 삭제 완료</string>
     <string name="snackbar_cache_clear_failed">캐시 삭제 실패</string>
@@ -541,6 +698,9 @@
     <string name="discover_filter_select_decades">연대 선택</string>
     <string name="discover_filter_tag">태그</string>
     <string name="discover_filter_decade">연대</string>
+    <string name="discover_filter_decade_all">전체</string>
+    <string name="discover_filter_decade_earlier">이전</string>
+    <string name="decade_format">%d년대</string>
     <string name="discover_filter_rating_label">평점</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_more_title">더 많은 작품을 발견하고 싶나요?</string>
@@ -600,4 +760,40 @@
     <string name="watchlist_empty_hint_suffix">에서 더 탐색</string>
     <string name="watched_empty_hint_prefix">시도해 보세요: </string>
     <string name="watched_empty_hint_middle">에서 시청 표시, </string>
+
+    <!-- Douban Sync Help -->
+    <string name="help_data_douban_title">더우반 마크 동기화</string>
+    <string name="help_data_douban_b1">로그인 페이지에서 \"또는 더우반에서 가져오기\"를 탭하고 WebView로 더우반에 로그인하면, 더우반의 보고싶다/봤어요 마크를 자동으로 크롤링하여 Trakt에 동기화합니다.</string>
+    <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 다시 동기화\"를 탭하여 재동기화할 수 있습니다.</string>
+    <string name="help_data_douban_b3">동기화 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
+    <string name="help_data_douban_b4">동기화 실패한 항목은 로컬에 저장됩니다. 설정 → 데이터 관리에서 \"동기화 실패 항목 보기\"를 탭하여 확인할 수 있습니다. 미디어 타입 표시, 부제목 편집, 리소스 검색, 재동기화, 삭제를 지원합니다.</string>
+
+    <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
+    <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
+    <string name="easter_msg_shy_2">구름이 하트를 보냈어요</string>
+    <string name="easter_msg_shy_3">앗, 들켰다~</string>
+    <string name="easter_msg_cat_1">냐~ 농땡이 시간!</string>
+    <string name="easter_msg_cat_2">오늘도 고양이처럼 느긋하게</string>
+    <string name="easter_msg_cat_3">고양이가 스윽 다가왔어요</string>
+    <string name="easter_msg_sleepy_1">잠깐 쉬면서 물 한 잔</string>
+    <string name="easter_msg_sleepy_2">피곤하면 좀 쉬어~</string>
+    <string name="easter_msg_sleepy_3">좋은 오후, 낮잠 어때요</string>
+    <string name="easter_msg_dog_1">멍! 끝까지 함께 검색해요</string>
+    <string name="easter_msg_dog_2">언제나 곁에 있을게요</string>
+    <string name="easter_msg_dog_3">꼬리 살랑, 파이팅!</string>
+    <string name="easter_msg_bunny_1">깡충깡충, 걱정도 톡톡</string>
+    <string name="easter_msg_bunny_2">토끼가 작은 꽃을 선물해요</string>
+    <string name="easter_msg_bunny_3">푹신푹신, 안아볼래?</string>
+    <string name="easter_msg_panda_1">국보급 힐링~</string>
+    <string name="easter_msg_panda_2">천천히 가요, 급할 것 없어요</string>
+    <string name="easter_msg_panda_3">대나무 줄게, 화내지 마</string>
+    <string name="easter_msg_rainbow_1">비 개인 뒤 맑음, 좋은 일 다가온다</string>
+    <string name="easter_msg_rainbow_2">일곱빛깔 구름이 온다!</string>
+    <string name="easter_msg_rainbow_3">날마다 알록달록</string>
+    <string name="easter_msg_firework_1">축하! 이스터에그 발견</string>
+    <string name="easter_msg_firework_2">펑! 행운이 피어나</string>
+    <string name="easter_msg_firework_3">오늘은 기념할 만한 날</string>
+    <string name="easter_msg_lantern_1">검색의 길을 밝혀줄게요</string>
+    <string name="easter_msg_lantern_2">소원을 빌어봐~</string>
+    <string name="easter_msg_lantern_3">따뜻하게 곁에, 밤은 더 이상 어둡지 않아</string>
 </resources>

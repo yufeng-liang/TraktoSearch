@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,22 +43,30 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragIndicator
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.NewReleases
 import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -110,10 +119,14 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
+import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
+import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -137,6 +150,8 @@ fun SettingsScreen(
     isLoggedIn: Boolean = true,
     onHelpClick: () -> Unit = {},
     onRestartOnboarding: () -> Unit = {},
+    onDoubanResync: () -> Unit = {},
+    onDoubanFailures: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -149,8 +164,18 @@ fun SettingsScreen(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
+    // 豆瓣重试入口:检测 douban_sync_failures 表是否有数据
+    // 「重新同步豆瓣」按钮点击时,有失败则弹重试选择对话框,无失败直接走增量同步
+    val doubanRetryViewModel: DoubanRetryViewModel = hiltViewModel()
+    val doubanRetryState by doubanRetryViewModel.retryState.collectAsStateWithLifecycle()
+    var showDoubanRetryDialog by remember { mutableStateOf(false) }
+    var showSyncModePicker by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     LifecycleResumeEffect(Unit) {
         viewModel.refreshCacheInfo()
+        // 进入设置页时刷新豆瓣失败项统计(用于按钮文案和入口检测)
+        scope.launch { doubanRetryViewModel.refreshRetryState() }
         onPauseOrDispose { }
     }
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
@@ -167,6 +192,8 @@ fun SettingsScreen(
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showClearCategoryDialog by remember { mutableStateOf(false) }
+    var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
     var showDetailSectionsDialog by remember { mutableStateOf(false) }
     var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
@@ -184,31 +211,13 @@ fun SettingsScreen(
     val exportJsonLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
-        uri?.let { viewModel.exportData(it, ExportFormat.JSON) }
-    }
-
-    val exportCsvLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("text/csv")
-    ) { uri ->
-        uri?.let { viewModel.exportData(it, ExportFormat.CSV) }
-    }
-
-    val importLetterboxdLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { viewModel.importFromLetterboxd(it) }
+        uri?.let { viewModel.exportData(it) }
     }
 
     val importImdbLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { viewModel.importFromImdb(it) }
-    }
-
-    val importJsonLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { viewModel.importFromJson(it) }
     }
 
     val openUrl: (String) -> Unit = { url ->
@@ -475,31 +484,6 @@ fun SettingsScreen(
                 }
                 item {
                     SettingsItem(
-                        icon = Icons.Default.FileUpload,
-                        title = stringResource(R.string.settings_export_csv),
-                        subtitle = stringResource(R.string.settings_export_csv_desc),
-                        onClick = {
-                            if (!exportImportState.isExporting) {
-                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
-                                exportCsvLauncher.launch("trakt-export-$timestamp.csv")
-                            }
-                        }
-                    )
-                }
-                item {
-                    SettingsItem(
-                        icon = Icons.Default.FileDownload,
-                        title = stringResource(R.string.settings_import_letterboxd),
-                        subtitle = stringResource(R.string.settings_import_letterboxd_desc),
-                        onClick = {
-                            if (!exportImportState.isImporting) {
-                                importLetterboxdLauncher.launch("text/*")
-                            }
-                        }
-                    )
-                }
-                item {
-                    SettingsItem(
                         icon = Icons.Default.FileDownload,
                         title = stringResource(R.string.settings_import_imdb),
                         subtitle = stringResource(R.string.settings_import_imdb_desc),
@@ -513,14 +497,40 @@ fun SettingsScreen(
                 item {
                     SettingsItem(
                         icon = Icons.Default.FileDownload,
-                        title = stringResource(R.string.settings_import_json),
-                        subtitle = stringResource(R.string.settings_import_json_desc),
+                        title = stringResource(R.string.settings_douban_resync),
+                        subtitle = stringResource(R.string.settings_douban_resync_desc),
                         onClick = {
-                            if (!exportImportState.isImporting) {
-                                importJsonLauncher.launch("application/json")
-                            }
+                            // 重新同步:弹模式选择对话框(A/B/C)
+                            showSyncModePicker = true
                         }
                     )
+                }
+                item {
+                    if (doubanRetryState.hasFailures) {
+                        SettingsItem(
+                            icon = Icons.Default.Replay,
+                            title = stringResource(R.string.settings_douban_retry_failures),
+                            subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
+                            onClick = {
+                                // 重试失败项:弹重试选择对话框
+                                showDoubanRetryDialog = true
+                            }
+                        )
+                    }
+                }
+                item {
+                    // 「查看同步失败项」入口:仅在有失败项时显示
+                    if (doubanRetryState.hasFailures) {
+                        SettingsItem(
+                            icon = Icons.Default.BrokenImage,
+                            title = stringResource(R.string.settings_douban_view_failures),
+                            subtitle = stringResource(
+                                R.string.settings_douban_view_failures_desc,
+                                doubanRetryState.totalFailures
+                            ),
+                            onClick = { onDoubanFailures() }
+                        )
+                    }
                 }
                 exportImportState.syncProgress?.let { progress ->
                     if (exportImportState.isImporting) {
@@ -607,13 +617,17 @@ fun SettingsScreen(
                 )
             }
 
-            // 缓存管理（倒数第二）
+            // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
             item { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
             item {
-                val cacheInfo by viewModel.cacheInfo.collectAsStateWithLifecycle()
-                CacheItem(
-                    sizeText = cacheInfo,
-                    onClear = { showClearCacheDialog = true }
+                val breakdown by viewModel.cacheBreakdown.collectAsStateWithLifecycle()
+                CacheManagementItem(
+                    breakdown = breakdown,
+                    onClearCategory = { category ->
+                        pendingClearCategory = category
+                        showClearCategoryDialog = true
+                    },
+                    onClearAll = { showClearCacheDialog = true }
                 )
             }
 
@@ -730,7 +744,17 @@ fun SettingsScreen(
             onDismissRequest = { showClearCacheDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_cache)) },
-            text = { Text(stringResource(R.string.settings_clear_cache_confirm)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.settings_clear_cache_confirm))
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.settings_cache_clear_all_impact),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
             confirmButton = {
                 TextButton(onClick = {
                     showClearCacheDialog = false
@@ -741,6 +765,65 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showClearCacheDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    // 单项缓存清除确认对话框
+    if (showClearCategoryDialog && pendingClearCategory != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showClearCategoryDialog = false
+                pendingClearCategory = null
+            },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.settings_cache_clear_category_confirm)) },
+            text = {
+                val cat = pendingClearCategory!!
+                val labelRes = when (cat) {
+                    SettingsViewModel.CacheCategory.IMAGE -> R.string.settings_cache_category_image
+                    SettingsViewModel.CacheCategory.MEDIA_DATA -> R.string.settings_cache_category_media_data
+                    SettingsViewModel.CacheCategory.ID_MAPPING -> R.string.settings_cache_category_id_mapping
+                    SettingsViewModel.CacheCategory.HTTP -> R.string.settings_cache_category_http
+                    SettingsViewModel.CacheCategory.DATABASE -> R.string.settings_cache_category_database
+                }
+                val impactRes = when (cat) {
+                    SettingsViewModel.CacheCategory.IMAGE -> R.string.settings_cache_category_image_impact
+                    SettingsViewModel.CacheCategory.MEDIA_DATA -> R.string.settings_cache_category_media_data_impact
+                    SettingsViewModel.CacheCategory.ID_MAPPING -> R.string.settings_cache_category_id_mapping_impact
+                    SettingsViewModel.CacheCategory.HTTP -> R.string.settings_cache_category_http_impact
+                    SettingsViewModel.CacheCategory.DATABASE -> R.string.settings_cache_category_database_impact
+                }
+                Column {
+                    Text(
+                        text = stringResource(labelRes),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(impactRes),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cat = pendingClearCategory
+                    showClearCategoryDialog = false
+                    pendingClearCategory = null
+                    cat?.let { viewModel.clearCategory(it) }
+                }) {
+                    Text(stringResource(R.string.settings_cache_clear))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showClearCategoryDialog = false
+                    pendingClearCategory = null
+                }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -818,6 +901,58 @@ fun SettingsScreen(
             onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
             onEnabledChannelsChange = { viewModel.setPanHubEnabledChannels(it) },
             onDismiss = { showPanHubConfigDialog = false }
+        )
+    }
+
+    // 豆瓣重试入口:有失败项时弹选择对话框(重试上次失败/导入 JSON/导出失败记录)
+    if (showDoubanRetryDialog) {
+        DoubanRetryDialog(
+            onDismiss = { showDoubanRetryDialog = false },
+            onRetryLocal = { selectedReasons ->
+                showDoubanRetryDialog = false
+                scope.launch {
+                    val started = doubanRetryViewModel.startRetryFromLocal(selectedReasons)
+                    if (started) {
+                        // 重试已启动,跳转到豆瓣同步进度对话框页(沿用原导航)
+                        onDoubanResync()
+                    }
+                }
+            },
+            onRetryFromJson = {
+                // JSON 导入重试:跳转豆瓣登录页,用户可在那里选择导入 JSON
+                showDoubanRetryDialog = false
+                onDoubanResync()
+            },
+            onExportFailures = {
+                showDoubanRetryDialog = false
+                scope.launch {
+                    val uri = doubanRetryViewModel.doubanFailureExporter.exportFromLocal(context)
+                    if (uri != null) {
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "application/json"
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "分享失败项 JSON"))
+                    }
+                }
+            },
+            viewModel = doubanRetryViewModel
+        )
+    }
+
+    // 豆瓣重新同步模式选择:点「重新同步豆瓣」时弹模式选择对话框(A/B/C)
+    if (showSyncModePicker) {
+        DoubanSyncModePickerDialog(
+            syncedCount = 0,
+            onDismiss = { showSyncModePicker = false },
+            onModeSelected = { mode ->
+                showSyncModePicker = false
+                scope.launch {
+                    doubanRetryViewModel.doubanSyncManager.startSync(mode)
+                    onDoubanResync()
+                }
+            }
         )
     }
 }
@@ -1311,35 +1446,147 @@ fun VersionItem(
     }
 }
 
-/** 缓存项：显示"缓存"标题 + 空间占用大小 + 右侧"清除"按钮 */
+/**
+ * 缓存管理项：初始只显示总概览，点击展开 5 个类目分项大小与清除按钮。
+ *
+ * - 概览行：图标 + 「缓存管理」标题 + 总大小 + 右侧展开箭头
+ * - 展开后：5 个 CacheCategoryRow（图片/影视数据/ID 映射/HTTP/数据库），每个独立清除
+ * - 底部：「全部清除」按钮
+ */
 @Composable
-fun CacheItem(
-    sizeText: String,
+fun CacheManagementItem(
+    breakdown: SettingsViewModel.CacheBreakdown,
+    onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
+    onClearAll: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        // 概览行（点击展开/收起）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Storage,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_cache_management),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                Text(
+                    text = stringResource(R.string.settings_cache_total, formatFileSize(breakdown.totalBytes)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = { expanded = !expanded }) {
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = null
+                )
+            }
+        }
+
+        // 展开后：5 个类目分项
+        AnimatedVisibility(visible = expanded) {
+            Column {
+                CacheCategoryRow(
+                    icon = Icons.Default.Image,
+                    labelRes = R.string.settings_cache_category_image,
+                    descRes = R.string.settings_cache_category_image_desc,
+                    sizeBytes = breakdown.imageBytes,
+                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.IMAGE) }
+                )
+                CacheCategoryRow(
+                    icon = Icons.Default.Movie,
+                    labelRes = R.string.settings_cache_category_media_data,
+                    descRes = R.string.settings_cache_category_media_data_desc,
+                    sizeBytes = breakdown.mediaDataBytes,
+                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.MEDIA_DATA) }
+                )
+                CacheCategoryRow(
+                    icon = Icons.Default.Link,
+                    labelRes = R.string.settings_cache_category_id_mapping,
+                    descRes = R.string.settings_cache_category_id_mapping_desc,
+                    sizeBytes = breakdown.idMappingBytes,
+                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.ID_MAPPING) }
+                )
+                CacheCategoryRow(
+                    icon = Icons.Default.CloudDownload,
+                    labelRes = R.string.settings_cache_category_http,
+                    descRes = R.string.settings_cache_category_http_desc,
+                    sizeBytes = breakdown.httpBytes,
+                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.HTTP) }
+                )
+                CacheCategoryRow(
+                    icon = Icons.Default.Storage,
+                    labelRes = R.string.settings_cache_category_database,
+                    descRes = R.string.settings_cache_category_database_desc,
+                    sizeBytes = breakdown.databaseBytes,
+                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.DATABASE) }
+                )
+                // 全部清除按钮
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    OutlinedButton(onClick = onClearAll) {
+                        Text(stringResource(R.string.settings_cache_clear_all))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** 缓存类目行：图标 + 名称 + 描述 + 大小 + 清除按钮 */
+@Composable
+private fun CacheCategoryRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    descRes: Int,
+    sizeBytes: Long,
     onClear: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Storage,
+            imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp)
         )
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.settings_cache),
-                style = MaterialTheme.typography.bodyLarge
+                text = stringResource(labelRes),
+                style = MaterialTheme.typography.bodyMedium
             )
             Text(
-                text = sizeText,
+                text = stringResource(descRes),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Text(
+            text = formatFileSize(sizeBytes),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 8.dp)
+        )
         OutlinedButton(
             onClick = onClear,
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
@@ -1347,6 +1594,20 @@ fun CacheItem(
             Text(stringResource(R.string.settings_cache_clear))
         }
     }
+}
+
+/** 文件大小格式化（B/KB/MB/GB） */
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var size = bytes.toDouble()
+    var unitIndex = 0
+    while (size >= 1024 && unitIndex < units.size - 1) {
+        size /= 1024
+        unitIndex++
+    }
+    return if (unitIndex == 0) "${size.toInt()} ${units[unitIndex]}"
+    else String.format("%.1f %s", size, units[unitIndex])
 }
 
 /** 用户资料项：头像 + 用户名 + VIP标识 + 右侧退出登录按钮 */

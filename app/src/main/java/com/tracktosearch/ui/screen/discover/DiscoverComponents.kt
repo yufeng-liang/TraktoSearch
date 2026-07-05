@@ -20,17 +20,23 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -259,6 +265,7 @@ internal fun MovieCard(
 
 @Composable
 internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
+    var showError by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -271,12 +278,42 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error
         )
-        Spacer(Modifier.width(12.dp))
+        // 点击 info 图标弹出错误详情对话框
+        IconButton(
+            onClick = { showError = true },
+            modifier = Modifier.size(20.dp)
+        ) {
+            Icon(
+                Icons.Outlined.Info,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+        Spacer(Modifier.width(4.dp))
         TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
         }
+    }
+
+    if (showError) {
+        AlertDialog(
+            onDismissRequest = { showError = false },
+            title = { Text(stringResource(R.string.error_detail_title)) },
+            text = {
+                Text(
+                    text = error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showError = false }) {
+                    Text(stringResource(R.string.error_detail_close))
+                }
+            }
+        )
     }
 }
 

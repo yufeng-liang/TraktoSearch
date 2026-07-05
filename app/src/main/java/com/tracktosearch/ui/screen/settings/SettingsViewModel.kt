@@ -23,16 +23,20 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.custom.CustomSearchService
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UpdateInfo
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.util.DataExportImport
 import com.tracktosearch.data.util.ExportItem
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,12 +47,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
-
-enum class ExportFormat { JSON, CSV }
 
 @Immutable
 data class ExportImportState(
@@ -69,8 +72,11 @@ class SettingsViewModel @Inject constructor(
     private val notificationScheduler: NotificationScheduler,
     private val languageStorage: LanguageStorage,
     private val traktRepository: TraktRepository,
+    private val tmdbRepository: TmdbRepository,
     private val updateRepository: UpdateRepository,
     private val offlineCacheManager: OfflineCacheManager,
+    private val doubanHotCache: PersistentTtlCache<DoubanHotData>,
+    private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val discoverSectionStorage: DiscoverSectionStorage,
     private val detailSectionStorage: DetailSectionStorage,
     private val customSearchSourceStorage: CustomSearchSourceStorage,
@@ -268,7 +274,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { notificationStorage.setNewSeasonReminderEnabled(enabled) }
     }
 
-    fun exportData(uri: Uri, format: ExportFormat) {
+    fun exportData(uri: Uri) {
         viewModelScope.launch {
             _exportImportState.value = _exportImportState.value.copy(
                 isExporting = true, message = null
@@ -279,18 +285,12 @@ class SettingsViewModel @Inject constructor(
                 val historyMovies = fetchAllMovieHistory()
                 val historyShows = fetchAllShowHistory()
 
-                val content = when (format) {
-                    ExportFormat.JSON -> DataExportImport.exportToJson(
-                        watchlistMovies = watchlistMovies.map { it.toExportItem() },
-                        watchlistShows = watchlistShows.map { it.toExportItem() },
-                        historyMovies = historyMovies.map { it.toExportItem() },
-                        historyShows = historyShows.map { it.toExportItem() }
-                    )
-                    ExportFormat.CSV -> DataExportImport.exportToCsv(
-                        movies = watchlistMovies.map { it.toExportItem() },
-                        shows = watchlistShows.map { it.toExportItem() }
-                    )
-                }
+                val content = DataExportImport.exportToJson(
+                    watchlistMovies = watchlistMovies.map { it.toExportItem() },
+                    watchlistShows = watchlistShows.map { it.toExportItem() },
+                    historyMovies = historyMovies.map { it.toExportItem() },
+                    historyShows = historyShows.map { it.toExportItem() }
+                )
 
                 context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                     outputStream.write(content.toByteArray(Charsets.UTF_8))
@@ -304,62 +304,6 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_failed)
-                )
-            }
-        }
-    }
-
-    fun importFromLetterboxd(uri: Uri) {
-        viewModelScope.launch {
-            _exportImportState.value = _exportImportState.value.copy(
-                isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
-            )
-            try {
-                val csvContent = readUriContent(uri)
-                val items = DataExportImport.parseLetterboxdCsv(csvContent)
-                if (items.isEmpty()) {
-                    _exportImportState.value = _exportImportState.value.copy(
-                        isImporting = false,
-                        message = context.getString(R.string.snackbar_import_no_data)
-                    )
-                    return@launch
-                }
-
-                var success = 0
-                var failed = 0
-                val total = items.size
-
-                items.forEachIndexed { index, item ->
-                    _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
-                    )
-                    try {
-                        val searchResult = traktRepository.searchMovies(item.title, page = 1, limit = 1)
-                        val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.movie?.ids?.trakt
-                        if (traktId != null && traktId > 0) {
-                            traktRepository.markAsWatched(traktId, MediaType.MOVIE)
-                            success++
-                        } else {
-                            failed++
-                        }
-                    } catch (_: Exception) {
-                        failed++
-                    }
-                    if (index < total - 1 && index % 5 == 4) delay(200)
-                }
-
-                _exportImportState.value = _exportImportState.value.copy(
-                    isImporting = false,
-                    importedItems = items,
-                    syncProgress = null,
-                    syncSuccess = success,
-                    syncFailed = failed,
-                    message = context.getString(R.string.snackbar_import_done_letterboxd, success, failed)
-                )
-            } catch (e: Exception) {
-                _exportImportState.value = _exportImportState.value.copy(
-                    isImporting = false,
-                    message = context.getString(R.string.snackbar_import_failed)
                 )
             }
         }
@@ -438,102 +382,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun importFromJson(uri: Uri) {
-        viewModelScope.launch {
-            _exportImportState.value = _exportImportState.value.copy(
-                isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
-            )
-            try {
-                val jsonContent = readUriContent(uri)
-                val exportData = DataExportImport.parseAppJson(jsonContent)
-
-                // Collect all items to process: watchlist first, then history
-                // markAsWatched auto-removes from watchlist, so add watchlist first
-                // Triple: (ExportItem, MediaType, isHistory)
-                val allItems = mutableListOf<Triple<ExportItem, MediaType, Boolean>>()
-                exportData.watchlistMovies.forEach { allItems.add(Triple(it, MediaType.MOVIE, false)) }
-                exportData.watchlistShows.forEach { allItems.add(Triple(it, MediaType.SHOW, false)) }
-                exportData.historyMovies.forEach { allItems.add(Triple(it, MediaType.MOVIE, true)) }
-                exportData.historyShows.forEach { allItems.add(Triple(it, MediaType.SHOW, true)) }
-
-                if (allItems.isEmpty()) {
-                    _exportImportState.value = _exportImportState.value.copy(
-                        isImporting = false,
-                        message = context.getString(R.string.snackbar_import_no_data)
-                    )
-                    return@launch
-                }
-
-                var success = 0
-                var failed = 0
-                val total = allItems.size
-
-                allItems.forEachIndexed { index, (item, mediaType, isHistory) ->
-                    _exportImportState.value = _exportImportState.value.copy(
-                        syncProgress = context.getString(R.string.snackbar_sync_progress, index + 1, total, item.title)
-                    )
-                    try {
-                        val traktId = if (item.tmdbId != null && item.tmdbId > 0) {
-                            // Use TMDB ID search for precise matching
-                            val searchResult = traktRepository.searchByTmdb(item.tmdbId, mediaType)
-                            searchResult.getOrNull()?.firstOrNull()?.let { result ->
-                                when (mediaType) {
-                                    MediaType.MOVIE -> result.movie?.ids?.trakt
-                                    MediaType.SHOW -> result.show?.ids?.trakt
-                                    MediaType.PERSON -> null
-                                    MediaType.DISK -> null
-                                }
-                            }
-                        } else {
-                            // Fallback to text search
-                            val searchResult = when (mediaType) {
-                                MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
-                                MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
-                                MediaType.PERSON -> Result.failure(Exception("Person not supported"))
-                                MediaType.DISK -> Result.failure(Exception("DISK not supported"))
-                            }
-                            searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
-                                when (mediaType) {
-                                    MediaType.MOVIE -> result.movie?.ids?.trakt
-                                    MediaType.SHOW -> result.show?.ids?.trakt
-                                    MediaType.PERSON -> null
-                                    MediaType.DISK -> null
-                                }
-                            }
-                        }
-
-                        if (traktId != null && traktId > 0) {
-                            if (isHistory) {
-                                traktRepository.markAsWatched(traktId, mediaType)
-                            } else {
-                                traktRepository.addToWatchlist(traktId, mediaType)
-                            }
-                            success++
-                        } else {
-                            failed++
-                        }
-                    } catch (_: Exception) {
-                        failed++
-                    }
-                    if (index < total - 1 && index % 5 == 4) delay(200)
-                }
-
-                _exportImportState.value = _exportImportState.value.copy(
-                    isImporting = false,
-                    syncProgress = null,
-                    syncSuccess = success,
-                    syncFailed = failed,
-                    message = context.getString(R.string.snackbar_import_done_json, success, failed)
-                )
-            } catch (e: Exception) {
-                _exportImportState.value = _exportImportState.value.copy(
-                    isImporting = false,
-                    message = context.getString(R.string.snackbar_import_failed)
-                )
-            }
-        }
-    }
-
     fun clearMessage() {
         _exportImportState.value = _exportImportState.value.copy(message = null)
     }
@@ -542,6 +390,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 offlineCacheManager.clearAll()
+                // 同时清除所有持久化缓存（DataStore 按 key 前缀删除）
+                tmdbRepository.persistentCaches.forEach { it.clearAll() }
+                traktRepository.persistentCaches.forEach { it.clearAll() }
+                doubanHotCache.clearAll()
+                doubanDetailCache.clearAll()
                 refreshCacheInfo()
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
@@ -554,10 +407,67 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ========== 缓存信息 ==========
+    // ========== 缓存管理（分项显示与清除） ==========
 
-    private val _cacheInfo = MutableStateFlow("0 B")
-    val cacheInfo: StateFlow<String> = _cacheInfo.asStateFlow()
+    /** 缓存类目 */
+    enum class CacheCategory {
+        IMAGE,       // 图片缓存（Coil 磁盘）
+        MEDIA_DATA,  // 影视数据缓存（TMDB 详情/演职员 + Trakt 趋势/列表 + 豆瓣热榜）
+        ID_MAPPING,  // ID 映射缓存（TMDB↔Trakt、IMDb↔Trakt、豆瓣→IMDb）
+        HTTP,        // HTTP 缓存（OkHttp 响应）
+        DATABASE     // 离线数据库（Room DB）
+    }
+
+    /** 缓存分项明细 */
+    @Immutable
+    data class CacheBreakdown(
+        val imageBytes: Long = 0L,
+        val mediaDataBytes: Long = 0L,
+        val idMappingBytes: Long = 0L,
+        val httpBytes: Long = 0L,
+        val databaseBytes: Long = 0L
+    ) {
+        val totalBytes: Long get() = imageBytes + mediaDataBytes + idMappingBytes + httpBytes + databaseBytes
+    }
+
+    private val _cacheBreakdown = MutableStateFlow(CacheBreakdown())
+    val cacheBreakdown: StateFlow<CacheBreakdown> = _cacheBreakdown.asStateFlow()
+
+    /** 旧 API：兼容只显示总大小的调用方 */
+    val cacheInfo: StateFlow<String> = _cacheBreakdown
+        .map { formatFileSize(it.totalBytes) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0 B")
+
+    /** 按类目清除缓存 */
+    fun clearCategory(category: CacheCategory) {
+        viewModelScope.launch {
+            try {
+                when (category) {
+                    CacheCategory.IMAGE -> offlineCacheManager.clearImageCache()
+                    CacheCategory.HTTP -> offlineCacheManager.clearHttpCache()
+                    CacheCategory.DATABASE -> offlineCacheManager.clearDatabase()
+                    CacheCategory.MEDIA_DATA -> {
+                        // 清除影视数据类的所有 PersistentTtlCache（按 key 前缀删 DataStore）
+                        tmdbRepository.mediaDataCaches.forEach { it.clearAll() }
+                        traktRepository.mediaDataCaches.forEach { it.clearAll() }
+                        doubanHotCache.clearAll()
+                    }
+                    CacheCategory.ID_MAPPING -> {
+                        traktRepository.idMappingCaches.forEach { it.clearAll() }
+                        doubanDetailCache.clearAll()
+                    }
+                }
+                refreshCacheInfo()
+                _exportImportState.value = _exportImportState.value.copy(
+                    message = context.getString(R.string.snackbar_cache_cleared)
+                )
+            } catch (e: Exception) {
+                _exportImportState.value = _exportImportState.value.copy(
+                    message = context.getString(R.string.snackbar_cache_clear_failed)
+                )
+            }
+        }
+    }
 
     // ========== 用户资料 ==========
 
@@ -587,10 +497,24 @@ class SettingsViewModel @Inject constructor(
     fun refreshCacheInfo() {
         viewModelScope.launch {
             try {
-                val sizeBytes = offlineCacheManager.getCacheSizeBytes()
-                _cacheInfo.value = formatFileSize(sizeBytes)
+                // DataStore 文件大小（含影视数据 + ID 映射 + 豆瓣详情，共用同一个目录）
+                val dataStoreTotal = offlineCacheManager.getDataStoreSizeBytes()
+                // 按 PersistentTtlCache.getSizeBytes() 比例拆分影视数据 vs ID 映射
+                val mediaDataBytes = (
+                    tmdbRepository.mediaDataCaches.sumOf { it.getSizeBytes() } +
+                        traktRepository.mediaDataCaches.sumOf { it.getSizeBytes() } +
+                        doubanHotCache.getSizeBytes()
+                    ).coerceAtMost(dataStoreTotal)
+                val idMappingBytes = (dataStoreTotal - mediaDataBytes).coerceAtLeast(0L)
+                _cacheBreakdown.value = CacheBreakdown(
+                    imageBytes = offlineCacheManager.getImageCacheSizeBytes(),
+                    mediaDataBytes = mediaDataBytes,
+                    idMappingBytes = idMappingBytes,
+                    httpBytes = offlineCacheManager.getHttpCacheSizeBytes(),
+                    databaseBytes = offlineCacheManager.getDatabaseSizeBytes()
+                )
             } catch (_: Exception) {
-                _cacheInfo.value = "0 B"
+                _cacheBreakdown.value = CacheBreakdown()
             }
         }
     }
@@ -686,7 +610,8 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             _isCheckingUpdate.value = true
             try {
-                val info = updateRepository.checkForUpdate()
+                // 手动检查强制走网络，绕过 24 小时缓存
+                val info = updateRepository.checkForUpdate(force = true)
                 if (info != null && info.hasUpdate) {
                     _latestVersion.value = info.latestVersion
                     _updateInfo.value = info

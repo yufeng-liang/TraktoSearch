@@ -46,6 +46,14 @@
     <string name="help_col_format">フォーマット</string>
     <string name="help_col_how_to_get">取得方法</string>
     <string name="help_col_import_effect">インポート効果</string>
+    <string name="help_data_export_title">データエクスポート</string>
+    <string name="help_data_export_b1">JSON 形式でエクスポート(見たいリストと視聴履歴を含む、バックアップ/移行に適しています)</string>
+    <string name="help_data_import_title">データインポート</string>
+    <string name="help_data_import_b1">IMDb からエクスポートした CSV で見たいリストをインポート、Trakt 見たいリストに自動同期します</string>
+    <string name="help_data_import_sources">インポートソース一覧</string>
+    <string name="help_import_src_imdb">IMDb</string>
+    <string name="help_import_src_imdb_how">IMDb にログイン → Your Watchlist → メニュー → Export で CSV をダウンロード</string>
+    <string name="help_import_src_imdb_effect">タイトルで検索して Trakt 見たいリストに同期</string>
     <string name="notification_release_title">公開リマインダー：%1$s</string>
     <string name="notification_release_text">%1$s に公開されました。チェックしてみましょう！</string>
     <string name="notification_new_season_text">シーズン %1$d が %2$s に放送開始</string>
@@ -94,6 +102,85 @@
     <string name="login_failed">ログイン失敗</string>
     <string name="login_retry">再試行</string>
     <string name="login_guest">ゲストとして続行</string>
+    <string name="login_douban_import">または豆瓣からインポート</string>
+
+    <!-- Douban Sync -->
+    <string name="douban_login_title">豆瓣にログイン</string>
+    <string name="douban_login_hint">下で豆瓣アカウントにログインすると、マークがTraktに自動同期されます</string>
+    <string name="douban_login_privacy_short">このページは公開マーク（見たい/見た）を読み取るため豆瓣にログインします。認証情報は今回の同期にのみ使用され、第三者サーバーにアップロードされません。</string>
+    <string name="douban_login_privacy_detail_title">詳細</string>
+    <string name="douban_login_privacy_detail">• ログインの理由：豆瓣マーク（見たい、見た、評価）を読み取るため\n• 保存内容：CookieとuserId（今回のクロール用）のみ、豆瓣パスワードは保存しません\n• Cookieの用途：movie.douban.com/people/{userId}/wish|collectページのリクエストのみ\n• 同期完了後：設定で豆瓣認証情報をいつでも削除可能\n• データフロー：豆瓣 → アプリ → Trakt、中間サーバーなし</string>
+    <string name="douban_login_privacy_expand">詳細を表示</string>
+    <string name="douban_login_privacy_collapse">折りたたむ</string>
+    <string name="douban_login_success_snackbar">豆瓣ログイン成功、マークを同期中…</string>
+    <string name="douban_login_notification_rationale">バックグラウンド同期に通知権限が必要です。付与してください</string>
+    <string name="douban_sync_title">豆瓣マーク同期</string>
+    <string name="douban_sync_complete">同期完了</string>
+    <string name="douban_sync_cancel">キャンセル</string>
+    <string name="douban_sync_background">バックグラウンド</string>
+    <string name="douban_sync_relogin">再ログイン</string>
+    <string name="douban_sync_cookie_expired_banner">豆瓣ログイン期限切れ、タップして再ログイン</string>
+    <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
+    <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
+    <string name="douban_sync_result_format">成功 %1$d 件、失敗 %2$d 件</string>
+    <string name="douban_sync_failed_list_label">失敗項目：</string>
+    <string name="douban_sync_failed_more_format">...合計 %1$d 項目失敗</string>
+    <string name="douban_sync_eta_format">残り約 %1$s</string>
+    <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d · 失敗 %4$d</string>
+
+    <!-- 豆瓣同期失敗項目リトライ -->
+    <string name="douban_retry_title">Douban同期失敗項目をリトライ</string>
+    <string name="douban_retry_subtitle">前回の同期で %1$d 項目が失敗しました。操作を選択</string>
+    <string name="douban_retry_option_local">前回の失敗 %1$d 項目をリトライ</string>
+    <string name="douban_retry_option_local_desc">リカバリ可能 %1$d · リカバリ不可 %2$d</string>
+    <string name="douban_retry_option_incremental">増分同期で新規マーク</string>
+    <string name="douban_retry_option_incremental_desc">Doubanの新規wish/collectのみ同期</string>
+    <string name="douban_retry_option_json">JSONファイルから失敗項目をインポートしてリトライ</string>
+    <string name="douban_retry_option_json_desc">エクスポートされた失敗データファイルから読み込み</string>
+    <string name="douban_retry_select_reasons">リトライする失敗タイプを選択</string>
+    <string name="douban_retry_reason_recoverable">%1$s (リカバリ可能)</string>
+    <string name="douban_retry_reason_non_recoverable">%1$s (デフォルトスキップ)</string>
+    <string name="douban_retry_start">リトライ開始</string>
+    <string name="douban_retry_cancel">キャンセル</string>
+    <string name="douban_retry_clear">失敗記録をクリア</string>
+    <string name="douban_retry_clear_confirm">すべての失敗記録をクリアしますか？この操作は取り消せません。</string>
+    <string name="douban_retry_clear_confirm_yes">クリア</string>
+    <string name="douban_retry_clear_confirm_no">キャンセル</string>
+    <string name="douban_retry_max_attempt">%1$d 回リトライ済み、自動リトライ非推奨</string>
+    <string name="douban_retry_no_failures">リトライする失敗項目がありません</string>
+    <string name="douban_retry_json_import_failed">JSONファイルの解析に失敗</string>
+    <string name="douban_retry_json_import_empty">ファイルに失敗項目がありません</string>
+
+    <!-- 失敗理由のローカライズ -->
+    <string name="douban_failure_reason_no_imdb_id">IMDb IDなし</string>
+    <string name="douban_failure_reason_detail_fetch_failed">詳細ページの取得に失敗</string>
+    <string name="douban_failure_reason_trakt_not_found">Traktにエントリが見つかりません</string>
+    <string name="douban_failure_reason_trakt_write_timeout">Trakt書き込みタイムアウト</string>
+    <string name="douban_failure_reason_trakt_write_failed">Trakt書き込み失敗</string>
+
+    <!-- 同期結果ダイアログ -->
+    <string name="douban_sync_failed_group_recoverable">リカバリ可能 (%1$d)</string>
+    <string name="douban_sync_failed_group_non_recoverable">リカバリ不可 (%1$d)</string>
+    <string name="douban_sync_failed_export">失敗項目をエクスポート</string>
+    <string name="douban_sync_failed_export_nothing">エクスポートする失敗項目がありません</string>
+    <string name="douban_sync_failed_export_success">%1$d 項目の失敗データをエクスポート</string>
+    <string name="douban_sync_failed_export_failed">エクスポートに失敗</string>
+    <string name="douban_sync_failed_show_all">すべて %1$d 項目を表示</string>
+    <string name="douban_sync_failed_collapse">折りたたむ</string>
+    <string name="douban_sync_current_processing">処理中：%1$s</string>
+    <string name="douban_sync_recent_failures">最近の失敗：</string>
+    <string name="douban_sync_retry_complete_banner">リトライ完了、%1$d 項目が成功</string>
+
+    <!-- 豆瓣同期レジューム(キャンセル後の復元) -->
+    <string name="douban_resume_title">前回の同期を再開</string>
+    <string name="douban_resume_subtitle">%1$d 項目がクロール済みですが未処理です。再開しますか？</string>
+    <string name="douban_resume_continue">同期を再開</string>
+    <string name="douban_resume_full">完全同期</string>
+    <string name="douban_resume_continue_desc">リストクロールをスキップし、クロール済みデータを直接処理</string>
+    <string name="douban_resume_full_desc">未処理データをクリアし、最初から開始</string>
+    <string name="douban_resume_cancel">キャンセル</string>
+    <string name="douban_resume_phase">未処理リストを再開中</string>
+    <string name="douban_resume_complete">レジューム完了</string>
 
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">読み込み中…</string>
@@ -143,6 +230,26 @@
     <string name="settings_version">バージョン</string>
     <string name="settings_cache">キャッシュ</string>
     <string name="settings_cache_clear">クリア</string>
+    <string name="settings_cache_management">キャッシュ管理</string>
+    <string name="settings_cache_total">合計 %1$s</string>
+    <string name="settings_cache_category_image">画像キャッシュ</string>
+    <string name="settings_cache_category_image_desc">ポスター、アバター（Coil ディスク）</string>
+    <string name="settings_cache_category_media_data">メディアデータキャッシュ</string>
+    <string name="settings_cache_category_media_data_desc">詳細、クレジット、チャート（TMDB + Trakt + 豆瓣）</string>
+    <string name="settings_cache_category_id_mapping">ID マッピングキャッシュ</string>
+    <string name="settings_cache_category_id_mapping_desc">TMDB↔Trakt、豆瓣→IMDb（永続）</string>
+    <string name="settings_cache_category_http">HTTP キャッシュ</string>
+    <string name="settings_cache_category_http_desc">ネットワーク応答キャッシュ（OkHttp）</string>
+    <string name="settings_cache_category_database">オフラインデータベース</string>
+    <string name="settings_cache_category_database_desc">ウォッチリスト/視聴済み + 豆瓣同期記録</string>
+    <string name="settings_cache_clear_all">すべてクリア</string>
+    <string name="settings_cache_clear_category_confirm">このキャッシュをクリアしますか？</string>
+    <string name="settings_cache_clear_all_impact">すべてのキャッシュデータをクリアします。ポスター/アバターは再ダウンロード、映画/TV詳細とランキングは再取得、IDマッピングは再構築されます。キャッシュが再蓄積されるまでアプリが少し遅くなる場合があります。</string>
+    <string name="settings_cache_category_image_impact">ポスターとアバターは次回表示時にネットワークから再ダウンロードされます。画像が再キャッシュされるまでアプリが少し遅くなる場合があります。</string>
+    <string name="settings_cache_category_media_data_impact">映画/TV詳細、キャスト、ランキングデータをネットワークから再取得します。永久詳細キャッシュ（ポスター路径、ID）と6時間リストキャッシュの両方がリセットされます。</string>
+    <string name="settings_cache_category_id_mapping_impact">TMDB↔Trakt、Douban→IMDbマッピングをクリアします。次回検索はAPIに再リクエストします（遅くなる）、その後再キャッシュされます。</string>
+    <string name="settings_cache_category_http_impact">ネットワーク応答キャッシュをクリアします。次回リクエストはキャッシュではなくネットワークに直接行きます。使用とともに自動再構築されます。</string>
+    <string name="settings_cache_category_database_impact">ウォッチリスト/視聴済みオフラインデータとDouban同期レコードをクリアします。次回同期までオフライン閲覧は不可用です。</string>
     <string name="settings_latest_version">最新バージョン v%1$s</string>
     <string name="settings_already_latest">最新です v%1$s</string>
     <string name="settings_discover_sections">発見セクション</string>
@@ -354,12 +461,62 @@
     <!-- Data Management (追加) -->
     <string name="settings_export_json">データをエクスポート (JSON)</string>
     <string name="settings_export_json_desc">ウォッチリストと履歴をJSONとしてエクスポート</string>
-    <string name="settings_export_csv">CSVとしてエクスポート</string>
-    <string name="settings_export_csv_desc">ウォッチリストをCSVとしてエクスポート</string>
-    <string name="settings_import_letterboxd">Letterboxdからインポート</string>
-    <string name="settings_import_letterboxd_desc">Letterboxd CSVからウォッチリストをインポート</string>
     <string name="settings_import_imdb">IMDbからインポート</string>
     <string name="settings_import_imdb_desc">IMDb CSVからウォッチリストをインポート</string>
+    <string name="settings_douban_resync">豆瓣を再同期</string>
+    <string name="settings_douban_resync_desc">同期モードを選択し、豆瓣の状態変化を処理</string>
+    <string name="settings_douban_retry_failures">前回の失敗項目を再試行</string>
+
+    <!-- Douban sync mode picker -->
+    <string name="douban_sync_mode_picker_title">再同期モードを選択</string>
+    <string name="douban_sync_mode_a_title">増分のみ</string>
+    <string name="douban_sync_mode_a_desc">同期済み項目をスキップし、豆瓣の新規ウォッチ/視聴済みマークのみインポート。状態変化は処理しません。</string>
+    <string name="douban_sync_mode_a_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはスキップします(Traktはウォッチリストのまま)。</string>
+    <string name="douban_sync_mode_b_title">増分 + 状態変化</string>
+    <string name="douban_sync_mode_b_desc">状態が変わらない同期済み項目をスキップし、新規マークと状態が変化した項目のみ同期。削除は処理しません。</string>
+    <string name="douban_sync_mode_b_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはTraktのウォッチリストを削除し視聴済みにします。</string>
+    <string name="douban_sync_mode_c_title">完全上書き</string>
+    <string name="douban_sync_mode_c_desc">全ての同期記録をクリアし、すべての豆瓣マークをゼロから再同期します。このアプリがTraktに追加したマークは削除され、再書き込みされます。</string>
+    <string name="douban_sync_mode_c_example">例:以前に%1$d項目を同期済み、全てクリアされ再同期されます。データが著しく不整合な場合のみ使用してください。</string>
+    <string name="douban_sync_mode_confirm">確認</string>
+    <string name="douban_sync_mode_warning_c">完全上書きは全ての同期記録をクリアします。本当に続行しますか?</string>
+
+    <!-- Douban retry dialog - export option -->
+    <string name="douban_retry_option_export">失敗記録をエクスポート</string>
+    <string name="douban_retry_option_export_desc">JSONファイルとして保存、バックアップや共有に使用</string>
+
+    <!-- Douban failures viewer -->
+    <string name="settings_douban_view_failures">同期失敗項目を表示</string>
+    <string name="settings_douban_view_failures_desc">%1$d件の豆瓣項目が同期失敗</string>
+    <string name="screen_douban_failures_title">同期失敗項目</string>
+    <string name="screen_douban_failures_empty_wish">ウォッチリストの同期が全て成功しました</string>
+    <string name="screen_douban_failures_empty_collect">視聴済みリストの同期が全て成功しました</string>
+    <string name="screen_douban_failures_empty_all">同期失敗項目はありません</string>
+    <string name="screen_douban_failures_clear_all">全てクリア</string>
+    <string name="screen_douban_failures_clear_all_confirm">全ての失敗記録をクリアします?この操作は取り消せません。</string>
+    <string name="screen_douban_failures_mark_as_movie">映画としてマーク</string>
+    <string name="screen_douban_failures_mark_as_show">TVドラマとしてマーク</string>
+    <string name="screen_douban_failures_clear_mark">タイプマークをクリア</string>
+    <string name="screen_douban_failures_delete_item">この項目を削除</string>
+    <string name="screen_douban_failures_tab_uncategorized">未分類</string>
+
+    <!-- Douban item detail -->
+    <string name="screen_douban_item_detail_not_synced">この項目はTraktに未収録、同期できません</string>
+    <string name="screen_douban_item_detail_failure_reason">失敗理由: %1$s</string>
+    <string name="screen_douban_item_detail_open_douban">豆瓣ページを開く</string>
+    <string name="screen_douban_item_detail_retry">同期を再試行</string>
+    <string name="screen_douban_item_detail_delete">この失敗記録を削除</string>
+    <string name="screen_douban_item_detail_delete_confirm">この失敗記録を削除しますか?</string>
+    <string name="screen_douban_item_detail_subtitle_hint">タップしてサブタイトル追加(リソース検索に使用)</string>
+    <string name="screen_douban_item_detail_subtitle_edit">サブタイトル編集</string>
+    <string name="screen_douban_item_detail_search_with_subtitle">サブタイトルで検索</string>
+    <string name="screen_douban_item_detail_tab_resources">リソース</string>
+    <string name="screen_douban_item_detail_tab_info">情報</string>
+    <string name="screen_douban_item_detail_no_resources">リソースが見つかりません、サブタイトルや別のキーワードを試してください</string>
+    <string name="screen_douban_item_detail_retry_in_progress">再試行中、しばらくお待ちください…</string>
+    <string name="screen_douban_item_detail_meta_failed_at">失敗日時</string>
+    <string name="screen_douban_item_detail_meta_attempt_count">試行回数</string>
+    <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
 
     <!-- Notification (追加) -->
     <string name="settings_notification_release_desc">ウォッチリストの作品が公開されたら通知</string>
@@ -404,6 +561,8 @@
     <string name="common_close">閉じる</string>
     <string name="common_confirm">確認</string>
     <string name="common_load_failed">読み込み失敗</string>
+    <string name="error_detail_title">エラー詳細</string>
+    <string name="error_detail_close">閉じる</string>
     <string name="common_no_data">データがありません</string>
     <string name="common_loading">読み込み中…</string>
     <string name="common_save_success">アルバムに保存しました</string>
@@ -425,9 +584,7 @@
     <string name="snackbar_export_failed">エクスポート失敗</string>
     <string name="snackbar_import_no_data">有効なレコードが見つかりません</string>
     <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
-    <string name="snackbar_import_done_letterboxd">Letterboxd インポート完了: %1$d 件一致、%2$d 件不一致</string>
     <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>
-    <string name="snackbar_import_done_json">JSON インポート完了: %1$d 件一致、%2$d 件不一致</string>
     <string name="snackbar_import_failed">インポート失敗</string>
     <string name="snackbar_cache_cleared">キャッシュをクリア</string>
     <string name="snackbar_cache_clear_failed">キャッシュクリア失敗</string>
@@ -541,6 +698,9 @@
     <string name="discover_filter_select_decades">年代を選択</string>
     <string name="discover_filter_tag">タグ</string>
     <string name="discover_filter_decade">年代</string>
+    <string name="discover_filter_decade_all">すべて</string>
+    <string name="discover_filter_decade_earlier">それ以前</string>
+    <string name="decade_format">%d年代</string>
     <string name="discover_filter_rating_label">評価</string>
     <string name="discover_filter_rating_range">%1$.1f - %2$.1f</string>
     <string name="discover_filter_more_title">もっと作品を発見したい？</string>
@@ -600,4 +760,40 @@
     <string name="watchlist_empty_hint_suffix">でさらに探索</string>
     <string name="watched_empty_hint_prefix">こちらを試す：</string>
     <string name="watched_empty_hint_middle">で視聴済みにマーク、</string>
+
+    <!-- Douban Sync Help -->
+    <string name="help_data_douban_title">豆瓣マーク同期</string>
+    <string name="help_data_douban_b1">ログインページで「または豆瓣からインポート」をタップし、WebViewで豆瓣にログインすると、豆瓣の「見たい」「見た」マークを自動的にクロールしてTraktに同期します。</string>
+    <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を再同期」をタップすると再同期できます。</string>
+    <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
+    <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
+
+    <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
+    <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>
+    <string name="easter_msg_shy_2">雲がハートを送りました</string>
+    <string name="easter_msg_shy_3">あら、見つかっちゃった~</string>
+    <string name="easter_msg_cat_1">にゃ~ サボりタイム！</string>
+    <string name="easter_msg_cat_2">今日も猫のようにのんびりと</string>
+    <string name="easter_msg_cat_3">猫がすり寄ってきました</string>
+    <string name="easter_msg_sleepy_1">少し休んで、水でも飲みましょう</string>
+    <string name="easter_msg_sleepy_2">眠いなら少し休んで~</string>
+    <string name="easter_msg_sleepy_3">お昼休み、ひと眠りしましょう</string>
+    <string name="easter_msg_dog_1">ワン！最後まで検索に付き合います</string>
+    <string name="easter_msg_dog_2">忠誠を込めて、いつもそばに</string>
+    <string name="easter_msg_dog_3">しっぽ振って、応援！</string>
+    <string name="easter_msg_bunny_1">ピョンピョン跳ねて、悩みも消える</string>
+    <string name="easter_msg_bunny_2">ウサギが小さな花を贈ります</string>
+    <string name="easter_msg_bunny_3">ふわふわ、ハグしたい？</string>
+    <string name="easter_msg_panda_1">国宝級ヒーリング~</string>
+    <string name="easter_msg_panda_2">ゆっくりいこう、急がば回れ</string>
+    <string name="easter_msg_panda_3">笹をどうぞ、怒らないで</string>
+    <string name="easter_msg_rainbow_1">雨の後に晴れ、良いこと近し</string>
+    <string name="easter_msg_rainbow_2">七色の雲が来る！</string>
+    <string name="easter_msg_rainbow_3">日々が色鮮やかに</string>
+    <string name="easter_msg_firework_1">お祝い！イースターエッグ発見</string>
+    <string name="easter_msg_firework_2">バーン！幸運が咲く</string>
+    <string name="easter_msg_firework_3">今日は記念すべき日</string>
+    <string name="easter_msg_lantern_1">検索の道を照らします</string>
+    <string name="easter_msg_lantern_2">願い事をどうぞ~</string>
+    <string name="easter_msg_lantern_3">温かく寄り添い、夜はもう暗くない</string>
 </resources>

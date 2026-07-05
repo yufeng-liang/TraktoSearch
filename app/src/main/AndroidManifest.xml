@@ -9,6 +9,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 豆瓣同步前台服务（dataSync 类型），Android 14+ 必需 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <queries>
         <package android:name="com.quark.clouddrive" />
@@ -95,6 +98,12 @@
                 <action android:name="cn.jiguang.user.service.action" />
             </intent-filter>
         </service>
+
+        <!-- 豆瓣标记同步前台服务 -->
+        <service
+            android:name=".service.DoubanSyncService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
 
         <receiver
             android:name=".push.PushReceiver"

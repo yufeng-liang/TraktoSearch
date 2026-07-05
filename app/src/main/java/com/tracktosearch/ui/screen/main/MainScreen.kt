@@ -123,7 +123,10 @@ fun MainScreen(
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
     onRestartOnboarding: () -> Unit,
-    onFilterDiscoverClick: () -> Unit = {}
+    onFilterDiscoverClick: () -> Unit = {},
+    onDoubanResync: () -> Unit = {},
+    onDoubanFailures: () -> Unit = {},
+    onNavigateToDoubanLogin: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
@@ -320,6 +323,7 @@ fun MainScreen(
                                 onStatisticsClick = onStatisticsClick,
                                 onTraktSearch = onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
+                                onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -335,6 +339,8 @@ fun MainScreen(
                         isLoggedIn = isLoggedIn,
                         onHelpClick = onHelpClick,
                         onRestartOnboarding = onRestartOnboarding,
+                        onDoubanResync = onDoubanResync,
+                        onDoubanFailures = onDoubanFailures,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

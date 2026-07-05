@@ -56,69 +56,6 @@ object DataExportImport {
         return json.encodeToString(data)
     }
 
-    fun exportToCsv(movies: List<ExportItem>, shows: List<ExportItem>): String {
-        val sb = StringBuilder()
-        sb.appendLine("Type,Title,IMDb ID,TMDB ID,Watched At")
-        movies.forEach { item ->
-            sb.appendLine(buildCsvRow("Movie", item))
-        }
-        shows.forEach { item ->
-            sb.appendLine(buildCsvRow("Show", item))
-        }
-        return sb.toString()
-    }
-
-    private fun buildCsvRow(type: String, item: ExportItem): String {
-        return listOf(
-            type,
-            csvEscape(item.title),
-            csvEscape(item.imdbId ?: ""),
-            item.tmdbId?.toString() ?: "",
-            csvEscape(item.watchedAt ?: "")
-        ).joinToString(",")
-    }
-
-    private fun csvEscape(value: String): String {
-        return if (value.contains(',') || value.contains('"') || value.contains('\n')) {
-            "\"${value.replace("\"", "\"\"")}\""
-        } else {
-            value
-        }
-    }
-
-    /**
-     * 解析 Letterboxd CSV 格式。
-     * 支持两种格式：
-     * - 想看列表: Position,Name,Year,Letterboxd URI,Tags
-     * - 观影日记: Date,Name,Year,Letterboxd URI,Rating,Rewatch,...
-     */
-    fun parseLetterboxdCsv(csvContent: String): List<ImportItem> {
-        val rows = parseCsv(csvContent)
-        if (rows.size < 2) return emptyList()
-
-        val header = rows.first()
-        val dataRows = rows.drop(1)
-
-        val nameIdx = header.indexOfFirst { it.equals("Name", ignoreCase = true) }
-        val dateIdx = header.indexOfFirst { it.equals("Date", ignoreCase = true) }
-
-        if (nameIdx < 0) return emptyList()
-
-        return dataRows.mapNotNull { row ->
-            if (nameIdx >= row.size) return@mapNotNull null
-            val title = row[nameIdx].trim()
-            if (title.isEmpty()) return@mapNotNull null
-            val watchedAt = if (dateIdx >= 0 && dateIdx < row.size) {
-                row[dateIdx].trim().ifEmpty { null }
-            } else null
-            ImportItem(
-                title = title,
-                watchedAt = watchedAt,
-                source = "Letterboxd"
-            )
-        }
-    }
-
     /**
      * 解析 IMDb CSV 格式（想看列表导出）。
      * 表头示例: Position,Const,Created,Modified,Description,Title,URL,Title Type,...
@@ -159,13 +96,6 @@ object DataExportImport {
                 mediaType = mediaType
             )
         }
-    }
-
-    /**
-     * 解析 App 导出的 JSON 格式，恢复为 ExportData。
-     */
-    fun parseAppJson(jsonContent: String): ExportData {
-        return json.decodeFromString<ExportData>(jsonContent)
     }
 
     /**

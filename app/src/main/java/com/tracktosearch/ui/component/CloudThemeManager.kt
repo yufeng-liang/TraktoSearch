@@ -39,30 +39,22 @@ enum class CloudTheme(val rawRes: Int) {
     LABOR(R.raw.cloud_labor);
 }
 
-/** 彩蛋动画资源列表 */
-private val EASTER_EGG_RES = listOf(
-    R.raw.easter_shy,
-    R.raw.easter_cat,
-    R.raw.easter_sleepy,
-    // 新增彩蛋
-    R.raw.easter_dog,
-    R.raw.easter_bunny,
-    R.raw.easter_panda,
-    R.raw.easter_rainbow,
-    R.raw.easter_firework,
-    R.raw.easter_lantern
+/** 彩蛋：动画 + 语义匹配的候选文案池（1:N 配对） */
+private data class EasterEgg(
+    val animRes: Int,
+    val messageResIds: List<Int>
 )
 
-/** 趣味文案池 */
-private val EASTER_MESSAGES = listOf(
-    "今天也要开心哦~ ☁️",
-    "摸鱼时间到！🐟",
-    "你发现了隐藏彩蛋！🎉",
-    "云朵向你比了个心 💕",
-    "休息一下，喝杯水吧 ☕",
-    "愿你的搜索永远有结果 🔍",
-    "天空飘来五个字：那都不是事儿~",
-    "你戳到我了，好痒！🤭"
+private val EASTER_EGGS = listOf(
+    EasterEgg(R.raw.easter_shy, listOf(R.string.easter_msg_shy_1, R.string.easter_msg_shy_2, R.string.easter_msg_shy_3)),
+    EasterEgg(R.raw.easter_cat, listOf(R.string.easter_msg_cat_1, R.string.easter_msg_cat_2, R.string.easter_msg_cat_3)),
+    EasterEgg(R.raw.easter_sleepy, listOf(R.string.easter_msg_sleepy_1, R.string.easter_msg_sleepy_2, R.string.easter_msg_sleepy_3)),
+    EasterEgg(R.raw.easter_dog, listOf(R.string.easter_msg_dog_1, R.string.easter_msg_dog_2, R.string.easter_msg_dog_3)),
+    EasterEgg(R.raw.easter_bunny, listOf(R.string.easter_msg_bunny_1, R.string.easter_msg_bunny_2, R.string.easter_msg_bunny_3)),
+    EasterEgg(R.raw.easter_panda, listOf(R.string.easter_msg_panda_1, R.string.easter_msg_panda_2, R.string.easter_msg_panda_3)),
+    EasterEgg(R.raw.easter_rainbow, listOf(R.string.easter_msg_rainbow_1, R.string.easter_msg_rainbow_2, R.string.easter_msg_rainbow_3)),
+    EasterEgg(R.raw.easter_firework, listOf(R.string.easter_msg_firework_1, R.string.easter_msg_firework_2, R.string.easter_msg_firework_3)),
+    EasterEgg(R.raw.easter_lantern, listOf(R.string.easter_msg_lantern_1, R.string.easter_msg_lantern_2, R.string.easter_msg_lantern_3))
 )
 
 private const val CACHE_PREFS_NAME = "cloud_theme"
@@ -87,8 +79,9 @@ class CloudThemeManager @Inject constructor(
     private val _easterEggRes = MutableStateFlow<Int?>(null)
     val easterEggRes: StateFlow<Int?> = _easterEggRes
 
-    private val _easterMessage = MutableStateFlow<String?>(null)
-    val easterMessage: StateFlow<String?> = _easterMessage
+    // 彩蛋文案的 stringRes ID（UI 层用 stringResource 解析）
+    private val _easterMessageRes = MutableStateFlow<Int?>(null)
+    val easterMessageRes: StateFlow<Int?> = _easterMessageRes
 
     // 定位权限状态
     private val _hasLocationPermission = MutableStateFlow(false)
@@ -104,7 +97,6 @@ class CloudThemeManager @Inject constructor(
 
     // 随机去重：记录最近播放过的彩蛋索引
     private val recentEasterIndices = ArrayDeque<Int>(2)
-    private var lastMessageIndex = -1
 
     /** 加载天气并更新主题 */
     fun loadTheme(location: Location? = null) {
@@ -144,20 +136,17 @@ class CloudThemeManager @Inject constructor(
             return
         }
 
-        // 选择彩蛋动画（避免连续重复）
-        val available = EASTER_EGG_RES.indices.filter { it !in recentEasterIndices }
-        val index = if (available.isNotEmpty()) available.random() else EASTER_EGG_RES.indices.random()
+        // 选择彩蛋（避免连续重复）
+        val available = EASTER_EGGS.indices.filter { it !in recentEasterIndices }
+        val index = if (available.isNotEmpty()) available.random() else EASTER_EGGS.indices.random()
 
         if (recentEasterIndices.size >= 2) recentEasterIndices.removeFirst()
         recentEasterIndices.addLast(index)
 
-        _easterEggRes.value = EASTER_EGG_RES[index]
-
-        // 选择趣味文案（避免连续重复）
-        var msgIndex: Int
-        do { msgIndex = EASTER_MESSAGES.indices.random() } while (msgIndex == lastMessageIndex && EASTER_MESSAGES.size > 1)
-        lastMessageIndex = msgIndex
-        _easterMessage.value = EASTER_MESSAGES[msgIndex]
+        val egg = EASTER_EGGS[index]
+        _easterEggRes.value = egg.animRes
+        // 从该动画的候选文案池随机选一条
+        _easterMessageRes.value = egg.messageResIds.random()
     }
 
     /** 权限已授权 */
@@ -203,7 +192,7 @@ class CloudThemeManager @Inject constructor(
     /** 关闭彩蛋 */
     fun onEasterDismissed() {
         _easterEggRes.value = null
-        _easterMessage.value = null
+        _easterMessageRes.value = null
     }
 
     private fun loadCachedTheme(): CloudTheme {

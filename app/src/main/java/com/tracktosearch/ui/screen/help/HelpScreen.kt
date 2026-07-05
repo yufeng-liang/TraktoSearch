@@ -160,20 +160,23 @@ fun HelpScreen(
                     ) {
                         HelpSubtitle(stringResource(R.string.help_data_export_title))
                         HelpBullet(stringResource(R.string.help_data_export_b1))
-                        HelpBullet(stringResource(R.string.help_data_export_b2))
-                        HelpBullet(stringResource(R.string.help_data_export_b3))
 
                         Spacer(modifier = Modifier.height(8.dp))
                         HelpSubtitle(stringResource(R.string.help_data_import_title))
                         HelpBullet(stringResource(R.string.help_data_import_b1))
-                        HelpBullet(stringResource(R.string.help_data_import_b2))
-                        HelpBullet(stringResource(R.string.help_data_import_b3))
 
                         Spacer(modifier = Modifier.height(8.dp))
                         // 导入来源表格
                         HelpSubtitle(stringResource(R.string.help_data_import_sources))
                         Spacer(modifier = Modifier.height(4.dp))
                         ImportSourceTable()
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HelpSubtitle(stringResource(R.string.help_data_douban_title))
+                        HelpBullet(stringResource(R.string.help_data_douban_b1))
+                        HelpBullet(stringResource(R.string.help_data_douban_b2))
+                        HelpBullet(stringResource(R.string.help_data_douban_b3))
+                        HelpBullet(stringResource(R.string.help_data_douban_b4))
                     }
                 }
 
@@ -493,22 +496,10 @@ private fun ImportSourceTable() {
 
     val sources = listOf(
         ImportSource(
-            stringResource(R.string.help_import_src_letterboxd),
-            "CSV",
-            stringResource(R.string.help_import_src_letterboxd_how),
-            stringResource(R.string.help_import_src_letterboxd_effect)
-        ),
-        ImportSource(
             stringResource(R.string.help_import_src_imdb),
             "CSV",
             stringResource(R.string.help_import_src_imdb_how),
             stringResource(R.string.help_import_src_imdb_effect)
-        ),
-        ImportSource(
-            stringResource(R.string.help_import_src_appjson),
-            "JSON",
-            stringResource(R.string.help_import_src_appjson_how),
-            stringResource(R.string.help_import_src_appjson_effect)
         )
     )
 

@@ -186,8 +186,10 @@ internal fun TraktTrendingMovieSection(
     resolvingItemId: Int?,
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    error: String? = null,
     onItemClick: (TraktMovie) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     Column {
         Row(
@@ -222,6 +224,7 @@ internal fun TraktTrendingMovieSection(
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
+            error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -253,8 +256,10 @@ internal fun TraktTrendingShowSection(
     resolvingItemId: Int?,
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    error: String? = null,
     onItemClick: (TraktShow) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     Column {
         Row(
@@ -289,6 +294,7 @@ internal fun TraktTrendingShowSection(
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
+            error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -321,9 +327,11 @@ internal fun TraktAnticipatedSection(
     resolvingItemId: Int?,
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    error: String? = null,
     onMovieClick: (TraktMovie) -> Unit,
     onShowClick: (TraktShow) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     Column {
         Row(
@@ -358,6 +366,7 @@ internal fun TraktAnticipatedSection(
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
+            error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             anticipatedMovies.isEmpty() && anticipatedShows.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -404,10 +413,12 @@ internal fun TraktShowRecommendationSection(
     resolvingItemId: Int?,
     totalCount: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    error: String? = null,
     onItemClick: (TraktShow) -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onRetry: () -> Unit = {}
 ) {
-    if (items.isEmpty() && !isLoading) return // 未登录时无数据不显示
+    if (items.isEmpty() && !isLoading && error == null) return // 未登录时无数据不显示
     Column {
         Row(
             modifier = Modifier
@@ -441,6 +452,7 @@ internal fun TraktShowRecommendationSection(
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
+            error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
