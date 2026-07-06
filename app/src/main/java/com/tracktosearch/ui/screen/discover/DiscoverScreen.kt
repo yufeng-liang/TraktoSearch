@@ -191,7 +191,7 @@ fun DiscoverScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = 80.dp + statusBarHeight,
-                        bottom = 80.dp
+                        bottom = 112.dp
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
