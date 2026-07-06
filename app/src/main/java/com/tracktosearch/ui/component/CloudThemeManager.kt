@@ -98,6 +98,25 @@ class CloudThemeManager @Inject constructor(
     // 随机去重：记录最近播放过的彩蛋索引
     private val recentEasterIndices = ArrayDeque<Int>(2)
 
+    // 会话级 guard：标记本进程内是否已做过初始主题加载（含位置访问）
+    // 防止 SearchScreen 的 LaunchedEffect(Unit) 在导航返回时重新触发 getLastKnownLocation，
+    // 进而反复触发系统位置权限使用提示（Android 12+ 的状态栏位置图标）
+    @Volatile
+    private var themeInitialized: Boolean = false
+
+    /**
+     * 初始化主题：仅在本进程内首次调用时执行真正的加载（含位置访问）。
+     * 后续调用（如 SearchScreen 因导航返回而 LaunchedEffect 重新执行）会直接复用已加载的主题。
+     *
+     * 注意：[locationProvider] 只在首次调用时被执行，避免不必要的位置访问。
+     * 用户在权限弹窗中授权后，应直接调用 [loadTheme] 而非此方法，以便用真实位置重新加载。
+     */
+    fun initializeTheme(locationProvider: () -> Location?) {
+        if (themeInitialized) return
+        themeInitialized = true
+        loadTheme(locationProvider())
+    }
+
     /** 加载天气并更新主题 */
     fun loadTheme(location: Location? = null) {
         scope.launch {

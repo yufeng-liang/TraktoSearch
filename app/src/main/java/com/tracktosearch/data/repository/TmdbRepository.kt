@@ -122,6 +122,9 @@ class TmdbRepository @Inject constructor(
     // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
     private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON, maxSize = 30)
     private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON, maxSize = 30)
+    // 人物图片缓存：避免二次进入人物详情页时重复请求图片 URL 列表
+    private val personImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
+    private val personTaggedImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
     private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS, maxSize = 50)
 
     /** 持久化缓存列表，供 Application 启动时批量加载 */
@@ -702,20 +705,28 @@ class TmdbRepository @Inject constructor(
 
     /** 获取人物图片（TMDB profiles） */
     suspend fun getPersonImages(personId: Int): List<String> {
+        val key = langKey(personId)
+        personImagesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getPersonImages(personId)
             if (response.isSuccessful) {
-                response.body()?.profiles?.map { "https://image.tmdb.org/t/p/h632${it.file_path}" } ?: emptyList()
+                val urls = response.body()?.profiles?.map { "https://image.tmdb.org/t/p/h632${it.file_path}" } ?: emptyList()
+                personImagesCache.put(key, urls)
+                urls
             } else emptyList()
         } catch (_: Exception) { emptyList() }
     }
 
     /** 获取人物被标注的图片（TMDB tagged images） */
     suspend fun getPersonTaggedImages(personId: Int): List<String> {
+        val key = langKey(personId)
+        personTaggedImagesCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getPersonTaggedImages(personId, page = 1)
             if (response.isSuccessful) {
-                response.body()?.results?.map { "https://image.tmdb.org/t/p/w500${it.file_path}" } ?: emptyList()
+                val urls = response.body()?.results?.map { "https://image.tmdb.org/t/p/w500${it.file_path}" } ?: emptyList()
+                personTaggedImagesCache.put(key, urls)
+                urls
             } else emptyList()
         } catch (_: Exception) { emptyList() }
     }

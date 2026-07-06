@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
@@ -84,7 +85,9 @@ class DoubanSyncManager @Inject constructor(
     private val traktRepository: TraktRepository,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
-    private val doubanSyncPendingItemDao: DoubanSyncPendingItemDao
+    private val doubanSyncPendingItemDao: DoubanSyncPendingItemDao,
+    private val cloudFailureSyncManager: CloudFailureSyncManager,
+    private val tokenStorage: TokenStorage
 ) {
     private val _progress = MutableStateFlow(DoubanSyncProgress())
     val progress: StateFlow<DoubanSyncProgress> = _progress.asStateFlow()
@@ -111,6 +114,27 @@ class DoubanSyncManager @Inject constructor(
     }
 
     /**
+     * Trakt 登录态预检(同步层兜底)。
+     * - 已登录且 token 有效 → true,继续同步
+     * - 未登录或 token 过期 → 设置 phase="未登录 Trakt,请先登录",返回 false
+     *
+     * 这是 UI 层前置引导的兜底:即使用户绕过 LoginScreen 直接调用同步
+     * (如 DoubanLoginScreen 自动触发、设置页重试),也会被拦截。
+     */
+    private suspend fun checkTraktAvailable(): Boolean {
+        val token = tokenStorage.getCachedAccessToken()
+        if (token == null || !tokenStorage.isTokenValid()) {
+            _progress.value = DoubanSyncProgress(
+                isComplete = true,
+                isRunning = false,
+                phase = "未登录 Trakt,请先登录"
+            )
+            return false
+        }
+        return true
+    }
+
+    /**
      * 启动同步（非 suspend，立即返回，进度通过 progress StateFlow 暴露）。
      * @param forceOverwrite true=强制重新同步已同步过的条目；false=跳过已同步条目（断点续传）
      * @return true=已启动；false=已有同步在运行（防重入）
@@ -118,7 +142,10 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(forceOverwrite: Boolean = false): Boolean {
         if (isRunning()) return false
         cancelled = false
-        syncJob = appScope.launch { runSyncLegacy(forceOverwrite) }
+        syncJob = appScope.launch {
+            if (!checkTraktAvailable()) return@launch
+            runSyncLegacy(forceOverwrite)
+        }
         return true
     }
 
@@ -131,7 +158,10 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(mode: SyncMode): Boolean {
         if (isRunning()) return false
         cancelled = false
-        syncJob = appScope.launch { runSync(mode) }
+        syncJob = appScope.launch {
+            if (!checkTraktAvailable()) return@launch
+            runSync(mode)
+        }
         return true
     }
 
@@ -150,7 +180,10 @@ class DoubanSyncManager @Inject constructor(
     fun startResume(): Boolean {
         if (isRunning()) return false
         cancelled = false
-        syncJob = appScope.launch { runResume() }
+        syncJob = appScope.launch {
+            if (!checkTraktAvailable()) return@launch
+            runResume()
+        }
         return true
     }
 
@@ -188,7 +221,10 @@ class DoubanSyncManager @Inject constructor(
     ): Boolean {
         if (isRunning()) return false
         cancelled = false
-        syncJob = appScope.launch { runRetry(failures, selectedReasons) }
+        syncJob = appScope.launch {
+            if (!checkTraktAvailable()) return@launch
+            runRetry(failures, selectedReasons)
+        }
         return true
     }
 
@@ -342,6 +378,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
+        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
+        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
     }
 
     private suspend fun runSyncIncremental(includeStatusChanges: Boolean) {
@@ -500,6 +538,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
+        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
+        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
     }
 
     /**
@@ -742,6 +782,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
+        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
+        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
     }
 
     /**
@@ -854,6 +896,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = true
         )
         _progress.value = finalProgress
+        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
+        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
     }
 
     /**

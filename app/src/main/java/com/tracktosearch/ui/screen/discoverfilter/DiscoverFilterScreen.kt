@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -26,9 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -137,6 +136,11 @@ fun DiscoverFilterScreen(
         if (!uiState.hasSearched) viewModel.search()
     }
 
+    // 高级面板展开时,返回手势优先关闭面板而非返回上一页
+    BackHandler(enabled = uiState.showAdvanced) {
+        viewModel.collapseAdvanced()
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -230,7 +234,10 @@ fun DiscoverFilterScreen(
             hazeState = hazeState
         )
 
-        // ========== 吸顶栏（hazeEffect，透明底色，穿透滑动） ==========
+        // ========== 吸顶栏（hazeEffect，透明底色） ==========
+        // 注意：不要在此 Column 上加 .scrollable(state=listState) —— 那会让高级面板内的拖拽
+        // 被转发到 listState，触发 isScrollInProgress=true 进而 collapseAdvanced()，导致弹窗内滑动
+        // 就关闭弹窗的 bug。结果列表的滚动由 LazyColumn 自己处理即可。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -239,10 +246,6 @@ fun DiscoverFilterScreen(
                     style = HazeMaterials.thin()
                 )
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                .scrollable(
-                    state = listState,
-                    orientation = Orientation.Vertical
-                )
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
             // 标题栏 + 返回箭头
@@ -383,14 +386,14 @@ fun DiscoverFilterScreen(
                 }
             }
 
-            // 高级筛选展开区（阻断滑动穿透：用 pointerInput 吞掉垂直拖拽，不转发到吸顶栏的 scrollable）
+            // 高级筛选展开区（防御性消费垂直拖拽：避免拖拽冒泡到结果列表触发 collapse）
             if (uiState.showAdvanced) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 2.dp)
                         .pointerInput(Unit) {
-                            // 故意空实现：拦截并消费垂直拖拽手势，阻止冒泡到父级 scrollable，避免结果列表跟着动
+                            // 空实现：消费垂直拖拽手势，防止手势冒泡触发意外行为
                             detectVerticalDragGestures { _, _ -> }
                         },
                     verticalArrangement = Arrangement.spacedBy(4.dp)

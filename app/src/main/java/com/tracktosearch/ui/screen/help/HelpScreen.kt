@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,14 +25,21 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileOpen
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -44,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -158,25 +167,65 @@ fun HelpScreen(
                         isExpanded = expandedIndex == 4,
                         onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 }
                     ) {
-                        HelpSubtitle(stringResource(R.string.help_data_export_title))
-                        HelpBullet(stringResource(R.string.help_data_export_b1))
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpSubtitle(stringResource(R.string.help_data_import_title))
-                        HelpBullet(stringResource(R.string.help_data_import_b1))
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // 导入来源表格
-                        HelpSubtitle(stringResource(R.string.help_data_import_sources))
+                        HelpSubtitle(stringResource(R.string.help_data_table_title))
                         Spacer(modifier = Modifier.height(4.dp))
-                        ImportSourceTable()
-
-                        Spacer(modifier = Modifier.height(8.dp))
-                        HelpSubtitle(stringResource(R.string.help_data_douban_title))
-                        HelpBullet(stringResource(R.string.help_data_douban_b1))
-                        HelpBullet(stringResource(R.string.help_data_douban_b2))
-                        HelpBullet(stringResource(R.string.help_data_douban_b3))
-                        HelpBullet(stringResource(R.string.help_data_douban_b4))
+                        // 6 个图标卡片,放在圆角背景容器内
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .padding(8.dp)
+                        ) {
+                            HelpDataCard(
+                                icon = Icons.Filled.FileDownload,
+                                title = stringResource(R.string.help_dc_export_t),
+                                entry = stringResource(R.string.help_dc_export_entry),
+                                format = stringResource(R.string.help_dc_export_fmt),
+                                description = stringResource(R.string.help_dc_export_desc)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HelpDataCard(
+                                icon = Icons.Filled.FileUpload,
+                                title = stringResource(R.string.help_dc_imdb_t),
+                                entry = stringResource(R.string.help_dc_imdb_entry),
+                                format = stringResource(R.string.help_dc_imdb_fmt),
+                                description = stringResource(R.string.help_dc_imdb_desc)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HelpDataCard(
+                                icon = Icons.Filled.CloudUpload,
+                                title = stringResource(R.string.help_dc_upload_t),
+                                entry = stringResource(R.string.help_dc_upload_entry),
+                                format = stringResource(R.string.help_dc_upload_fmt),
+                                description = stringResource(R.string.help_dc_upload_desc)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HelpDataCard(
+                                icon = Icons.Filled.CloudDownload,
+                                title = stringResource(R.string.help_dc_download_t),
+                                entry = stringResource(R.string.help_dc_download_entry),
+                                format = stringResource(R.string.help_dc_download_fmt),
+                                description = stringResource(R.string.help_dc_download_desc)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HelpDataCard(
+                                icon = Icons.Filled.Sync,
+                                title = stringResource(R.string.help_dc_douban_t),
+                                entry = stringResource(R.string.help_dc_douban_entry),
+                                format = stringResource(R.string.help_dc_douban_fmt),
+                                description = stringResource(R.string.help_dc_douban_desc)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            HelpDataCard(
+                                icon = Icons.Filled.FileOpen,
+                                title = stringResource(R.string.help_dc_failures_t),
+                                entry = stringResource(R.string.help_dc_failures_entry),
+                                format = stringResource(R.string.help_dc_failures_fmt),
+                                description = stringResource(R.string.help_dc_failures_desc)
+                            )
+                        }
                     }
                 }
 
@@ -236,7 +285,6 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_discover_filter_b2))
                         HelpBullet(stringResource(R.string.help_discover_filter_b3))
                         HelpBullet(stringResource(R.string.help_discover_filter_b4))
-                        HelpBullet(stringResource(R.string.help_discover_filter_b5))
                         HelpBullet(stringResource(R.string.help_discover_filter_b6))
                     }
                 }
@@ -361,14 +409,35 @@ private fun HelpSection(
 }
 
 @Composable
-private fun HelpBullet(text: String) {
-    Text(
-        text = "• $text",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+private fun HelpBullet(text: String, icon: ImageVector? = null) {
+    Row(
         modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
-        lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.4f
-    )
+        verticalAlignment = Alignment.Top
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .size(16.dp)
+                    .padding(top = 3.dp, end = 6.dp)
+            )
+        } else {
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(end = 6.dp)
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.4f
+        )
+    }
 }
 
 @Composable
@@ -399,6 +468,70 @@ private fun HelpCodeBlock(text: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 18.sp
         )
+    }
+}
+
+@Composable
+private fun HelpDataCard(
+    icon: ImageVector,
+    title: String,
+    entry: String,
+    format: String,
+    description: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        // 左侧图标
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .size(20.dp)
+                .padding(end = 8.dp, top = 2.dp)
+        )
+        // 右侧内容
+        Column(modifier = Modifier.weight(1f)) {
+            // 第一行: 功能名 + 格式标签
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        text = format,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    )
+                }
+            }
+            // 第二行: 入口
+            Text(
+                text = "📍 $entry",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            // 第三行: 说明
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 1.dp)
+            )
+        }
     }
 }
 
@@ -480,55 +613,6 @@ private fun CustomSourceParamsTable() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(0.28f)
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ImportSourceTable() {
-    data class ImportSource(
-        val source: String,
-        val format: String,
-        val howTo: String,
-        val effect: String
-    )
-
-    val sources = listOf(
-        ImportSource(
-            stringResource(R.string.help_import_src_imdb),
-            "CSV",
-            stringResource(R.string.help_import_src_imdb_how),
-            stringResource(R.string.help_import_src_imdb_effect)
-        )
-    )
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(8.dp)
-    ) {
-        // Header
-        Row(modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.help_col_source), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(0.18f))
-            Text(stringResource(R.string.help_col_format), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(0.12f))
-            Text(stringResource(R.string.help_col_how_to_get), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(0.35f))
-            Text(stringResource(R.string.help_col_import_effect), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(0.35f))
-        }
-        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-        sources.forEach { src ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 3.dp)
-            ) {
-                Text(src.source, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.18f))
-                Text(src.format, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.12f))
-                Text(src.howTo, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.35f))
-                Text(src.effect, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(0.35f))
             }
         }
     }

@@ -60,6 +60,10 @@ class PersonViewModel @Inject constructor(
         private val traktPersonCache = android.util.LruCache<Int, com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail>(30)
         // 原名缓存（personId -> originalName），LRU 限制 30 条
         private val originalNameCache = android.util.LruCache<Int, String>(30)
+        // Trakt 数据最近一次拉取时间戳（personId -> System.currentTimeMillis），用于 TTL 跳过刷新
+        private val traktPersonFetchTime = android.util.LruCache<Int, Long>(30)
+        // Trakt 数据 TTL：1 小时内不重复请求
+        private const val TRAKT_PERSON_TTL = 60 * 60 * 1000L
     }
 
     private val _uiState = MutableStateFlow(PersonUiState())
@@ -134,10 +138,14 @@ class PersonViewModel @Inject constructor(
     }
 
     private fun loadTraktPerson(tmdbId: Int, personName: String) {
-        // 检查缓存：若有缓存则先用缓存显示，后台刷新
+        // 检查缓存：若有缓存则先用缓存显示
         val cachedImages = personImagesCache[tmdbId]
         val cachedTraktPerson = traktPersonCache[tmdbId]
         val cachedOriginalName = originalNameCache[tmdbId]
+        val cachedFetchTime = traktPersonFetchTime[tmdbId]
+        val now = System.currentTimeMillis()
+        // TTL 内（1 小时）有缓存则跳过 Trakt 后台刷新，避免二次进入重复发请求
+        val cacheFresh = cachedFetchTime != null && (now - cachedFetchTime) < TRAKT_PERSON_TTL
 
         if (cachedTraktPerson != null) {
             _uiState.value = _uiState.value.copy(traktPerson = cachedTraktPerson)
@@ -155,6 +163,22 @@ class PersonViewModel @Inject constructor(
             isLoadingPersonImages = cachedImages.isNullOrEmpty(),
             isLoadingTrakt = !hasAnyCache
         )
+
+        // 缓存新鲜则跳过 Trakt 后台刷新（图片仍走 TmdbRepository 的 TtlCache，命中即不重复请求）
+        if (cacheFresh) {
+            viewModelScope.launch {
+                // 仍然走 loadTmdbPersonImages 让图片列表合并状态正常化（若缓存图片已存在则状态保持）
+                if (cachedImages.isNullOrEmpty()) {
+                    loadTmdbPersonImages()
+                } else {
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingPersonImages = false,
+                        isLoadingTrakt = false
+                    )
+                }
+            }
+            return
+        }
 
         viewModelScope.launch {
             try {
@@ -212,6 +236,8 @@ class PersonViewModel @Inject constructor(
                                 _uiState.value = _uiState.value.copy(personImages = imageUrls)
                             }
                         }
+                        // 标记本次拉取完成,启动 TTL 跳过窗口
+                        traktPersonFetchTime.put(tmdbId, System.currentTimeMillis())
                     }
                 }
             } catch (_: Exception) {

@@ -100,8 +100,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             .diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
-                    // 200MB：海报图、演职员头像本身持久化缓存（跨 App 重启复用，省去重复下载）
-                    .maxSizeBytes(200L * 1024 * 1024)
+                    // 500MB：海报图、演职员头像持久化缓存（跨 App 重启复用，省去重复下载）
+                    .maxSizeBytes(500L * 1024 * 1024)
                     .build()
             }
             .memoryCachePolicy(CachePolicy.ENABLED)

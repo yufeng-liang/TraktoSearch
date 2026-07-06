@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.statistics
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -82,6 +83,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -99,7 +102,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatisticsScreen(
     onBack: () -> Unit,
@@ -107,6 +110,9 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showInfoDialog by remember { mutableStateOf(false) }
+    // 共享元素转场 scope(与设置页观看统计卡片配对)
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
 
     LaunchedEffect(Unit) {
         viewModel.loadStatistics()
@@ -254,9 +260,19 @@ fun StatisticsScreen(
             }
             }
             // Haze模糊渐变TopAppBar（含状态栏）
+            // 「标题+返回箭头」整体与设置页观看统计入口配对（sharedBounds）
+            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier.sharedBounds(
+                        sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            } else { Modifier }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(headerModifier)
                     .hazeEffect(
                         state = statsHazeState,
                         style = HazeMaterials.thin()

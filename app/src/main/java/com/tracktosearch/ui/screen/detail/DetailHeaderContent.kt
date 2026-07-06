@@ -44,9 +44,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -95,11 +97,23 @@ internal fun DetailHeaderContent(
     // 海报主色调提取相关:用于在海报加载成功后提取主色,回调通知 ViewModel 更新沉浸式背景
     posterColorExtractor: PosterColorExtractor,
     onPosterColorExtracted: (Color) -> Unit,
-    sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
+    sectionVisible: DetailSectionVisibility = DetailSectionVisibility(),
+    // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
+    // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
+    contentAlpha: Float = 1f
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     val scope = rememberCoroutineScope()
+    // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
+    // 亮色海报 → 深色文字;暗色海报 → 浅色文字;无海报色 → 回退主题色
+    val posterColor = uiState.posterDominantColor
+    val onPosterColor = posterColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+    } ?: MaterialTheme.colorScheme.onSurface
+    val onPosterVariantColor = posterColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+    } ?: MaterialTheme.colorScheme.onSurfaceVariant
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
@@ -200,7 +214,7 @@ internal fun DetailHeaderContent(
                         text = uiState.displayTitle,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        color = onPosterColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -212,7 +226,7 @@ internal fun DetailHeaderContent(
                         Text(
                             text = stringResource(R.string.detail_original_title, uiState.originalTitle),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = onPosterVariantColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -224,7 +238,7 @@ internal fun DetailHeaderContent(
                         Text(
                             text = uiState.genres,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = onPosterVariantColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -236,7 +250,7 @@ internal fun DetailHeaderContent(
                         Text(
                             text = uiState.country,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = onPosterVariantColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -266,7 +280,7 @@ internal fun DetailHeaderContent(
                         Text(
                             text = dateText + runtimeText,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = onPosterVariantColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -455,6 +469,8 @@ internal fun DetailHeaderContent(
         }
 
         // 第二行：演职员（海报下方独立一行，左对齐，始终预留空间避免布局跳动）
+        // 头部下方内容(cast/视频/简介/系列/季集)统一淡入,营造"沉浸背景先现,内容后显"效果
+        Column(modifier = Modifier.alpha(contentAlpha)) {
         if (sectionVisible.cast) {
         val hasCredits = uiState.cast.isNotEmpty() || uiState.crew.isNotEmpty()
         var showFullCast by rememberSaveable { mutableStateOf(false) }
@@ -644,6 +660,7 @@ internal fun DetailHeaderContent(
                 onToggleEpisodeWatched = onToggleEpisodeWatched
             )
         }
+        } // end Column(alpha = contentAlpha)
     }
 }
 

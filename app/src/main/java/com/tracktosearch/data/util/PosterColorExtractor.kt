@@ -18,12 +18,26 @@ class PosterColorExtractor @Inject constructor(
     suspend fun extractDominantColor(posterUrl: String, bitmap: Bitmap): Long = withContext(Dispatchers.Default) {
         cache.getColor(posterUrl)?.let { return@withContext it }
 
-        val palette = Palette.from(bitmap).generate()
+        // HARDWARE bitmap 不支持 getPixels,需先 copy 成 ARGB_8888
+        val safeBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+            bitmap.copy(Bitmap.Config.ARGB_8888, false)
+        } else {
+            bitmap
+        }
+        val palette = Palette.from(safeBitmap).generate()
         val argb = palette.getDominantColor(0).toLong()
 
         if (argb != 0L) {
             cache.putColor(posterUrl, argb)
         }
         argb
+    }
+
+    /**
+     * 仅查缓存的主色调查询,不需要 bitmap。
+     * 用于进入详情页时尽早拿到主色(命中则瞬间显示沉浸背景,未命中仍需等海报加载后用 [extractDominantColor])。
+     */
+    suspend fun getCachedColor(posterUrl: String): Long? = withContext(Dispatchers.Default) {
+        cache.getColor(posterUrl)
     }
 }

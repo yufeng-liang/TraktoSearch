@@ -119,13 +119,29 @@ class UpdateRepository @Inject constructor(
                         try { fmt.parse(dateStr)?.let { dateFormat.format(it) } } catch (_: Exception) { null }
                     }
                 } ?: ""
-                val header = if (dateStr.isNotBlank()) {
-                    "## ${release.tagName} 更新内容（$dateStr）"
-                } else {
-                    "## ${release.tagName} 更新内容"
-                }
                 val cleanBody = sanitizeChangelog(release.body)
-                "$header\n\n$cleanBody"
+                // body 已按 project_rules.md 规范以 "## vX.X.X 更新内容" 开头时:
+                // 复用 body 自带标题(避免外层 wrapper 重复),仅把日期注入到该标题行末尾(替换或追加)
+                // body 无标题时:补一个外层 header(legacy 兼容)
+                val firstLine = cleanBody.lineSequence().firstOrNull()
+                val firstLineIsSectionHeader = firstLine?.trimStart()?.startsWith("## ") == true
+                if (firstLineIsSectionHeader && firstLine != null) {
+                    if (dateStr.isNotBlank()) {
+                        // 移除已有的尾部日期括号(若有),再追加 (dateStr)
+                        val titleWithoutDate = firstLine.replace(Regex("（[^）]*\\d{4}-\\d{2}-\\d{2}[^）]*）$"), "").trimEnd()
+                        val restBody = cleanBody.substringAfter('\n')
+                        "$titleWithoutDate（$dateStr）\n$restBody"
+                    } else {
+                        cleanBody
+                    }
+                } else {
+                    val header = if (dateStr.isNotBlank()) {
+                        "## ${release.tagName} 更新内容（$dateStr）"
+                    } else {
+                        "## ${release.tagName} 更新内容"
+                    }
+                    "$header\n\n$cleanBody"
+                }
             }
     }
 

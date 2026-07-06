@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -143,6 +145,20 @@ internal fun PersonImagePagerOverlay(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .fillMaxSize()
+                        .pointerInput(zoomState) {
+                            detectTapGestures(
+                                onDoubleTap = { tapOffset ->
+                                    // 双击切换放大/还原
+                                    if (zoomState.scale > 1f) {
+                                        // 已放大 → 还原
+                                        scope.launch { zoomState.changeScale(1f, Offset.Zero) }
+                                    } else {
+                                        // 未放大 → 放大到 2.5x,以双击位置为中心
+                                        scope.launch { zoomState.changeScale(2.5f, tapOffset) }
+                                    }
+                                }
+                            )
+                        }
                         .zoomable(zoomState)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

@@ -58,6 +58,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
@@ -84,6 +85,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class, ExperimentalHazeMaterialsApi::class)
@@ -140,6 +142,24 @@ fun DetailScreen(
     var selectedBackdropIndex by remember { mutableIntStateOf(-1) }
     var showAllVideos by remember { mutableStateOf(false) }
 
+    // 内容就绪状态:沉浸背景优先显示,其他内容(cast/视频/简介/tab)淡入
+    // posterDominantColor 就绪 → 立即标记就绪;未就绪(首次访问无缓存) → 400ms 后兜底就绪
+    var contentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.posterDominantColor) {
+        if (uiState.posterDominantColor != null) {
+            // 颜色就绪后短暂延迟,让背景渐变先渲染出来再淡入内容
+            delay(80)
+            contentReady = true
+        } else {
+            // 首次访问无缓存主色,400ms 后兜底显示内容,避免长时间空白
+            delay(400)
+            contentReady = true
+        }
+    }
+    val contentAlpha by remember(contentReady) {
+        derivedStateOf { if (contentReady) 1f else 0f }
+    }
+
     // 评论翻译映射
     val translatedMap = remember(uiState.translatedComments) {
         uiState.translatedComments.associateBy { it.id }
@@ -183,13 +203,14 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            // 海报主色调垂直渐变背景(主色 0.45f 透明 → 背景色),实现沉浸式视觉
+            // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
+            // alpha 0.70:增强沉浸效果,让海报主色调更明显(+15%)
             .then(
                 uiState.posterDominantColor?.let { c ->
                     Modifier.background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                c.copy(alpha = 0.45f),
+                                c.copy(alpha = 0.70f),
                                 MaterialTheme.colorScheme.background
                             )
                         )
@@ -239,7 +260,9 @@ fun DetailScreen(
                         },
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
-                        sectionVisible = uiState.sectionVisible
+                        sectionVisible = uiState.sectionVisible,
+                        // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
+                        contentAlpha = contentAlpha
                     )
                 }
 
@@ -251,7 +274,11 @@ fun DetailScreen(
                 val effectiveTab = selectedTab.coerceAtMost(tabCount - 1)
                 if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
-                    PrimaryTabRow(selectedTabIndex = selectedTab) {
+                    PrimaryTabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        modifier = Modifier.alpha(contentAlpha)
+                    ) {
                         Tab(
                             selected = selectedTab == 0,
                             onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
@@ -279,14 +306,16 @@ fun DetailScreen(
                 if (selectedTab == 0) {
                     // 筛选器
                     item(key = "filter_section") {
-                        FilterSection(
-                            availableSources = uiState.availableSources,
-                            enabledSources = uiState.enabledSources,
-                            customSourceNames = uiState.customSourceNames,
-                            enabledDiskTypes = uiState.enabledDiskTypes,
-                            onToggleSource = { viewModel.toggleSource(it) },
-                            onToggleDiskType = { viewModel.toggleDiskType(it) }
-                        )
+                        Box(modifier = Modifier.alpha(contentAlpha)) {
+                            FilterSection(
+                                availableSources = uiState.availableSources,
+                                enabledSources = uiState.enabledSources,
+                                customSourceNames = uiState.customSourceNames,
+                                enabledDiskTypes = uiState.enabledDiskTypes,
+                                onToggleSource = { viewModel.toggleSource(it) },
+                                onToggleDiskType = { viewModel.toggleDiskType(it) }
+                            )
+                        }
                     }
 
                     // 季/集信息（仅电视剧）— 移到简介下方
@@ -297,14 +326,20 @@ fun DetailScreen(
                     when {
                         uiState.isSearching -> {
                             item(key = "searching") {
-                                SearchingState(
-                                    completedSources = uiState.completedSources,
-                                    totalSources = uiState.totalSources
-                                )
+                                Box(modifier = Modifier.alpha(contentAlpha)) {
+                                    SearchingState(
+                                        completedSources = uiState.completedSources,
+                                        totalSources = uiState.totalSources
+                                    )
+                                }
                             }
                         }
                         items.isEmpty() && uiState.searchAttempted -> {
-                            item(key = "empty") { EmptyState(onRetry = { viewModel.searchResources() }) }
+                            item(key = "empty") {
+                                Box(modifier = Modifier.alpha(contentAlpha)) {
+                                    EmptyState(onRetry = { viewModel.searchResources() })
+                                }
+                            }
                         }
                         else -> {
                             item(key = "resource_count") {
@@ -584,15 +619,16 @@ fun DetailScreen(
                     .hazeEffect(
                         state = detailHazeState,
                         style = HazeStyle(
-                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
                             blurRadius = 20.dp,
                             noiseFactor = 0f,
                             tint = null
                         )
                     )
                     // 半透明背景作为主视觉效果（Haze 在部分设备上效果不明显时兜底）
+                    // alpha 0.45:降低白色强度,让海报主色调更沉浸
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
                         shape = CircleShape
                     )
                     .border(
@@ -627,14 +663,14 @@ fun DetailScreen(
                     .hazeEffect(
                         state = detailHazeState,
                         style = HazeStyle(
-                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
                             blurRadius = 20.dp,
                             noiseFactor = 0f,
                             tint = null
                         )
                     )
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
                         shape = CircleShape
                     )
                     .border(

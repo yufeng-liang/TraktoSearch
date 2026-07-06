@@ -258,6 +258,7 @@
     <string name="settings_cache_category_database_impact">ウォッチリスト/視聴済みオフラインデータとDouban同期レコードをクリアします。次回同期までオフライン閲覧は不可用です。</string>
     <string name="settings_latest_version">最新バージョン v%1$s</string>
     <string name="settings_already_latest">最新です v%1$s</string>
+    <string name="settings_new_version">新バージョン v%1$s</string>
     <string name="settings_discover_sections">発見セクション</string>
     <string name="settings_discover_sections_desc">発見ページのセクション表示と並び順</string>
     <string name="settings_drag_to_reorder">ドラッグで並び替え</string>
@@ -352,6 +353,7 @@
     <string name="detail_disk_type_magnet">マグネット</string>
     <string name="detail_disk_type_other">その他</string>
     <string name="detail_share_links">リンク：</string>
+    <string name="share_douban_rating">豆瓣レーティング</string>
     <string name="detail_year_suffix">%d年</string>
     <string name="detail_watched">視聴済み</string>
     <string name="detail_not_watched">未視聴</string>
@@ -518,11 +520,20 @@
     <string name="cloud_sync_upload_failed">アップロード失敗、後でもう一度お試しください</string>
     <string name="cloud_sync_download_empty">この豆瓣アカウントのクラウド失敗データはありません</string>
     <string name="cloud_sync_download_success">クラウド失敗データ %1$d 件をダウンロードしてマージしました</string>
+    <string name="dialog_download_success_title">インポート成功</string>
+    <string name="dialog_download_success_message">クラウドから %1$d 件の失敗項目をインポートしました。同期失敗項目ページで確認できます。</string>
+    <string name="dialog_download_success_view">失敗項目を表示</string>
+    <string name="dialog_download_success_dismiss">閉じる</string>
     <string name="cloud_sync_download_failed">ダウンロード失敗、後でもう一度お試しください</string>
     <string name="cloud_sync_in_progress">同期中…</string>
     <string name="screen_douban_failures_empty_wish">ウォッチリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_collect">視聴済みリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_all">同期失敗項目はありません</string>
+    <string name="screen_douban_failures_empty_search">一致する失敗項目はありません</string>
+    <string name="screen_douban_failures_empty_filter">条件に一致する失敗項目はありません</string>
+    <string name="screen_douban_failures_empty_movie">映画リストは空です</string>
+    <string name="screen_douban_failures_empty_show">ドラマリストは空です</string>
+    <string name="screen_douban_failures_empty_uncategorized">未分類リストは空です</string>
     <string name="screen_douban_failures_clear_all">全てクリア</string>
     <string name="screen_douban_failures_clear_all_confirm">全ての失敗記録をクリアします?この操作は取り消せません。</string>
     <string name="screen_douban_failures_mark_as_movie">映画としてマーク</string>
@@ -672,7 +683,14 @@
     <!-- Settings: Custom Search Source -->
     <string name="settings_custom_search_source_title">カスタム検索ソースを追加</string>
     <string name="settings_custom_search_source_subtitle">PanSou/Zreso互換ソースまたはカスタムJSONPathに対応</string>
-    <string name="settings_add_source">カスタム検索ソースを追加</string>
+    <string name="settings_add_source">検索ソースを追加</string>
+    <!-- Settings: Card Layout -->
+    <string name="settings_view_statistics_desc">視聴回数、視聴時間、評価統計、ヒートマップ、ジャンル分布</string>
+    <string name="settings_custom_section">カスタムセクション</string>
+    <string name="settings_discover_page">発見ページ</string>
+    <string name="settings_detail_page">詳細ページ</string>
+    <string name="settings_panhub_advanced">高度な設定に対応</string>
+    <string name="settings_panhub_enabled">Panhubを有効化</string>
     <string name="settings_edit_source">検索ソースを編集</string>
     <string name="settings_delete_source">検索ソースを削除</string>
     <string name="settings_delete_source_confirm">「%1$s」を削除してもよろしいですか？</string>
@@ -821,6 +839,31 @@
     <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
     <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
     <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理で「JSONから失敗項目をインポート」をタップして、他のデバイスからエクスポートした失敗項目JSONファイルをインポートし、ローカルで表示できます。</string>
+    <string name="help_data_table_title">データインポート/エクスポート概览</string>
+    <string name="help_dc_export_t">マークデータをエクスポート</string>
+    <string name="help_dc_export_entry">設定 → データ管理</string>
+    <string name="help_dc_export_fmt">JSON</string>
+    <string name="help_dc_export_desc">ウォッチリストと視聴履歴を含む、バックアップ/移行に適しています</string>
+    <string name="help_dc_imdb_t">IMDbからインポート</string>
+    <string name="help_dc_imdb_entry">設定 → データ管理</string>
+    <string name="help_dc_imdb_fmt">CSV</string>
+    <string name="help_dc_imdb_desc">IMDbウォッチリストをインポート、タイトルで検索してTraktに同期</string>
+    <string name="help_dc_upload_t">失敗データをクラウドにアップロード</string>
+    <string name="help_dc_upload_entry">設定 → データ管理</string>
+    <string name="help_dc_upload_fmt">暗号化JSON</string>
+    <string name="help_dc_upload_desc">Douban同期失敗項目をクラウドにアップロード、AES暗号化保存</string>
+    <string name="help_dc_download_t">クラウドから失敗データを取得</string>
+    <string name="help_dc_download_entry">設定 → データ管理</string>
+    <string name="help_dc_download_fmt">暗号化JSON</string>
+    <string name="help_dc_download_desc">クラウドから失敗項目を取得、復号してローカルにマージ</string>
+    <string name="help_dc_douban_t">Doubanマーク同期</string>
+    <string name="help_dc_douban_entry">ログインページ / 設定</string>
+    <string name="help_dc_douban_fmt">Doubanアカウント</string>
+    <string name="help_dc_douban_desc">Doubanにログインしてウィッシュ/収集マークを取得、Traktに同期</string>
+    <string name="help_dc_failures_t">失敗項目JSONインポート</string>
+    <string name="help_dc_failures_entry">失敗項目表示ページ</string>
+    <string name="help_dc_failures_fmt">JSON</string>
+    <string name="help_dc_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをローカルにインポート</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>

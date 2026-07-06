@@ -30,6 +30,8 @@ import com.tracktosearch.ui.util.HapticType
 @Composable
 fun PanHubConfigDialog(
     config: PanHubConfig,
+    enabled: Boolean,
+    onEnabledChange: (Boolean) -> Unit,
     onConcurrencyChange: (Int) -> Unit,
     onTimeoutMsChange: (Int) -> Unit,
     onEnabledPluginsChange: (Set<String>) -> Unit,
@@ -54,6 +56,24 @@ fun PanHubConfigDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                // 启用开关（顶部，Panhub 卡片只负责进入此弹窗）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_panhub_enabled),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = enabled,
+                        onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
+                        colors = appSwitchColors()
+                    )
+                }
+                HorizontalDivider()
+
                 // 并发数
                 Column {
                     Text(stringResource(R.string.panhub_concurrency), style = MaterialTheme.typography.labelLarge)

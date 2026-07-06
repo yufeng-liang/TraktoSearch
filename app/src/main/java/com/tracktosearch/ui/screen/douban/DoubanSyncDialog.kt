@@ -122,6 +122,8 @@ fun DoubanSyncDialog(
      * 而「转后台」是用户主动要求隐藏弹窗,必须立即生效。
      */
     onBackground: () -> Unit = onDismiss,
+    /** Trakt 未登录时的引导回调:跳转到 LoginScreen */
+    onTraktLogin: (() -> Unit)? = null,
     viewModel: DoubanSyncViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -376,6 +378,19 @@ fun DoubanSyncDialog(
         },
         confirmButton = {
             when {
+                // Trakt 未登录(DoubanSyncManager 预检设置 phase="未登录 Trakt,请先登录")
+                p.isComplete && p.phase.contains("未登录 Trakt") -> {
+                    Row {
+                        if (onTraktLogin != null) {
+                            TextButton(onClick = {
+                                onDismiss()
+                                onTraktLogin()
+                            }) { Text(stringResource(R.string.douban_sync_login_trakt)) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                    }
+                }
                 p.cookieExpired -> {
                     Row {
                         if (onRelogin != null) {

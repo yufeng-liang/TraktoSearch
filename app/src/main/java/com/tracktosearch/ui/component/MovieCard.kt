@@ -52,10 +52,12 @@ fun MovieCard(
     val isCurrentTab = LocalIsCurrentTab.current
     val enableShared = tmdbId == activePosterTmdbId && isCurrentTab
     val context = LocalContext.current
+    // ImageRequest 尺寸与 DetailHeaderContent 保持一致(264),让 Coil 内存缓存同一份解码图,
+    // 避免 sharedElement 转场时详情页需要重新解码导致图片"空"瞬间跳动
     val imageRequest = remember(posterUrl) {
         ImageRequest.Builder(context)
             .data(posterUrl)
-            .size(200)
+            .size(264)
             .crossfade(false)
             .build()
     }

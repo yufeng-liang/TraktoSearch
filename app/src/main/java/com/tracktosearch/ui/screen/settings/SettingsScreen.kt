@@ -69,6 +69,7 @@ import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
@@ -250,19 +251,53 @@ fun SettingsScreen(
     }
 
     // 云端同步事件 → Snackbar 反馈(一次性,显示后清空)
+    // DownloadSuccess 改为弹窗提示(提供跳转失败页按钮)
+    var showDownloadSuccessDialog by remember { mutableStateOf(false) }
+    var downloadedCount by remember { mutableStateOf(0) }
     LaunchedEffect(cloudSyncEvent) {
         val event = cloudSyncEvent ?: return@LaunchedEffect
-        val msg = when (event) {
-            is CloudSyncEvent.NotLoggedIn -> context.getString(R.string.cloud_sync_no_login)
-            is CloudSyncEvent.NoLocalFailures -> context.getString(R.string.cloud_sync_no_local_failures)
-            is CloudSyncEvent.UploadSuccess -> context.getString(R.string.cloud_sync_upload_success)
-            is CloudSyncEvent.UploadFailed -> context.getString(R.string.cloud_sync_upload_failed)
-            is CloudSyncEvent.CloudEmpty -> context.getString(R.string.cloud_sync_download_empty)
-            is CloudSyncEvent.DownloadSuccess -> context.getString(R.string.cloud_sync_download_success, event.count)
-            is CloudSyncEvent.DownloadFailed -> context.getString(R.string.cloud_sync_download_failed)
+        when (event) {
+            is CloudSyncEvent.DownloadSuccess -> {
+                downloadedCount = event.count
+                showDownloadSuccessDialog = true
+            }
+            else -> {
+                val msg = when (event) {
+                    is CloudSyncEvent.NotLoggedIn -> context.getString(R.string.cloud_sync_no_login)
+                    is CloudSyncEvent.NoLocalFailures -> context.getString(R.string.cloud_sync_no_local_failures)
+                    is CloudSyncEvent.UploadSuccess -> context.getString(R.string.cloud_sync_upload_success)
+                    is CloudSyncEvent.UploadFailed -> context.getString(R.string.cloud_sync_upload_failed)
+                    is CloudSyncEvent.CloudEmpty -> context.getString(R.string.cloud_sync_download_empty)
+                    is CloudSyncEvent.DownloadFailed -> context.getString(R.string.cloud_sync_download_failed)
+                    is CloudSyncEvent.DownloadSuccess -> "" // 已上面处理
+                }
+                snackbarHostState.showSnackbar(msg)
+            }
         }
-        snackbarHostState.showSnackbar(msg)
         doubanRetryViewModel.clearCloudSyncEvent()
+    }
+
+    // 下载成功弹窗:提示用户可进入查看同步失败项页面查看
+    if (showDownloadSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showDownloadSuccessDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.dialog_download_success_title)) },
+            text = { Text(stringResource(R.string.dialog_download_success_message, downloadedCount)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDownloadSuccessDialog = false
+                    onDoubanFailures()
+                }) {
+                    Text(stringResource(R.string.dialog_download_success_view))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDownloadSuccessDialog = false }) {
+                    Text(stringResource(R.string.dialog_download_success_dismiss))
+                }
+            }
+        )
     }
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
@@ -285,6 +320,8 @@ fun SettingsScreen(
 
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsStateWithLifecycle()
     val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
+    val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
+    val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
 
     val settingsHazeState = remember { HazeState() }
     val savedScrollIndex = rememberSaveable { mutableIntStateOf(0) }
@@ -343,7 +380,21 @@ fun SettingsScreen(
                     bottom = 80.dp
                 )
         ) {
-            // 主题设置
+            // 观看统计（第一位，独占整行卡片，无类目 Header）
+            // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
+            item {
+                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedBounds(
+                            sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                    }
+                } else { Modifier }
+                StatisticsCard(modifier = statisticsEntryModifier, onClick = onStatisticsClick)
+            }
+
+            // 外观
             item { SettingsSectionHeader(stringResource(R.string.settings_appearance)) }
             item {
                 val themeName = when (currentTheme) {
@@ -351,23 +402,8 @@ fun SettingsScreen(
                     ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
                     else -> stringResource(R.string.theme_system)
                 }
-                SettingsItem(
-                    icon = Icons.Default.DarkMode,
-                    title = stringResource(R.string.settings_theme),
-                    subtitle = themeName,
-                    onClick = { showThemeDialog = true }
-                )
-            }
-            item {
-                val accentName = currentAccent?.let { stringResource(it.labelResId) } ?: stringResource(R.string.settings_accent_dynamic)
-                SettingsItem(
-                    icon = Icons.Default.Palette,
-                    title = stringResource(R.string.settings_accent_color),
-                    subtitle = accentName,
-                    onClick = { showAccentColorDialog = true }
-                )
-            }
-            item {
+                val accentName = currentAccent?.let { stringResource(it.labelResId) }
+                    ?: stringResource(R.string.settings_accent_dynamic)
                 val languageName = when (currentLanguage) {
                     LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
                     LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
@@ -375,39 +411,59 @@ fun SettingsScreen(
                     LanguageStorage.LANGUAGE_KOREAN -> stringResource(R.string.language_korean)
                     else -> stringResource(R.string.language_system)
                 }
-                SettingsItem(
-                    icon = Icons.Default.Language,
-                    title = stringResource(R.string.settings_language),
-                    subtitle = languageName,
-                    onClick = { showLanguageDialog = true }
-                )
-            }
-            // 默认启动页
-            item {
                 val tabName = when (currentDefaultTab) {
                     0 -> stringResource(R.string.tab_search)
                     1 -> stringResource(R.string.tab_discover)
                     else -> stringResource(R.string.tab_me)
                 }
-                SettingsItem(
-                    icon = Icons.Default.Home,
-                    title = stringResource(R.string.settings_default_tab),
-                    subtitle = tabName,
-                    onClick = { showDefaultTabDialog = true }
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.DarkMode, title = stringResource(R.string.settings_theme), subtitle = themeName, mergeTitleAndSubtitle = true, onClick = { showThemeDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Palette, title = stringResource(R.string.settings_accent_color), subtitle = accentName, mergeTitleAndSubtitle = true, onClick = { showAccentColorDialog = true })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Language, title = stringResource(R.string.settings_language), subtitle = languageName, mergeTitleAndSubtitle = true, onClick = { showLanguageDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Home, title = stringResource(R.string.settings_default_tab), subtitle = tabName, mergeTitleAndSubtitle = true, onClick = { showDefaultTabDialog = true })
+                }
             }
 
-            // 搜索源管理
+            // 搜索源
             item { SettingsSectionHeader(stringResource(R.string.settings_search)) }
-            item { SearchSourceItem("PanSou", pansouEnabled) { viewModel.setPansouEnabled(it) } }
-            item { PanHubSettingsItem(
-                enabled = panhubEnabled,
-                onEnabledChange = { viewModel.setPanhubEnabled(it) },
-                onConfigClick = { showPanHubConfigDialog = true }
-            ) }
-            item { SearchSourceItem("Zreso", zresoEnabled) { viewModel.setZresoEnabled(it) } }
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SearchSourceCard(modifier = Modifier.weight(1f), name = "PanSou", checked = pansouEnabled, onCheckedChange = { viewModel.setPansouEnabled(it) })
+                    SearchSourceCard(modifier = Modifier.weight(1f), name = "Panhub", checked = panhubEnabled, onCheckedChange = { viewModel.setPanhubEnabled(it) }, onConfigClick = { showPanHubConfigDialog = true }, configContentDescription = stringResource(R.string.settings_panhub_config))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SearchSourceCard(modifier = Modifier.weight(1f), name = "Zreso", checked = zresoEnabled, onCheckedChange = { viewModel.setZresoEnabled(it) })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Add, title = stringResource(R.string.settings_add_source), onClick = {
+                        showEditCustomSource = CustomSearchSource(
+                            id = java.util.UUID.randomUUID().toString(),
+                            name = "",
+                            baseUrl = "",
+                            apiPath = "api/search",
+                            keywordParam = "kw",
+                            cloudTypesParam = "cloud_types",
+                            cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
+                            srcParam = "src",
+                            srcValue = "all"
+                        )
+                    })
+                }
+            }
 
-            // 自定义搜索源
+            // 自定义搜索源列表项（已添加的自定义源仍按原列表项展示）
             items(customSources.size, key = { customSources[it].id }) { index ->
                 val source = customSources[index]
                 val testResult = testResults[source.id]
@@ -420,26 +476,8 @@ fun SettingsScreen(
                     onTest = { viewModel.testCustomSource(source) }
                 )
             }
-            item {
-                SettingsItem(
-                    icon = Icons.Default.Add,
-                    title = stringResource(R.string.settings_add_custom_source),
-                    subtitle = stringResource(R.string.settings_add_custom_source_desc),
-                    onClick = { showEditCustomSource = CustomSearchSource(
-                        id = java.util.UUID.randomUUID().toString(),
-                        name = "",
-                        baseUrl = "",
-                        apiPath = "api/search",
-                        keywordParam = "kw",
-                        cloudTypesParam = "cloud_types",
-                        cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
-                        srcParam = "src",
-                        srcValue = "all"
-                    ) }
-                )
-            }
 
-            // 通知设置（仅登录用户可见，通知依赖 Trakt 想看列表）
+            // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_notification)) }
                 item {
@@ -467,51 +505,38 @@ fun SettingsScreen(
                             }
                         }
                     )
-                }
-                item {
-                    val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
-                    val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
-                    SwitchSettingsItem(
-                        title = stringResource(R.string.settings_notification_release),
-                        subtitle = stringResource(R.string.settings_notification_release_desc),
-                        checked = releaseEnabled,
-                        enabled = notificationEnabled,
-                        onCheckedChange = { viewModel.setReleaseReminderEnabled(it) }
-                    )
-                }
-                item {
-                    val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
-                    val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
-                    SwitchSettingsItem(
-                        title = stringResource(R.string.settings_notification_new_season),
-                        subtitle = stringResource(R.string.settings_notification_new_season_desc),
-                        checked = newSeasonEnabled,
-                        enabled = notificationEnabled,
-                        onCheckedChange = { viewModel.setNewSeasonReminderEnabled(it) }
-                    )
+                    // 启用通知为关时，隐藏下面的「上映提醒」和「新季提醒」
+                    AnimatedVisibility(visible = notificationEnabled) {
+                        Column {
+                            val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
+                            SwitchSettingsItem(
+                                title = stringResource(R.string.settings_notification_release),
+                                subtitle = stringResource(R.string.settings_notification_release_desc),
+                                checked = releaseEnabled,
+                                onCheckedChange = { viewModel.setReleaseReminderEnabled(it) }
+                            )
+                            val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
+                            SwitchSettingsItem(
+                                title = stringResource(R.string.settings_notification_new_season),
+                                subtitle = stringResource(R.string.settings_notification_new_season_desc),
+                                checked = newSeasonEnabled,
+                                onCheckedChange = { viewModel.setNewSeasonReminderEnabled(it) }
+                            )
+                        }
+                    }
                 }
             }
 
-            // 发现页栏目
-            item { SettingsSectionHeader(stringResource(R.string.settings_discover_sections)) }
+            // 自定义板块（合并原「发现页栏目」+「自定义详情页」，删除原两个类目 Header）
+            item { SettingsSectionHeader(stringResource(R.string.settings_custom_section)) }
             item {
-                SettingsItem(
-                    icon = Icons.Default.Explore,
-                    title = stringResource(R.string.settings_discover_sections),
-                    subtitle = stringResource(R.string.settings_discover_sections_desc),
-                    onClick = { showDiscoverSectionsDialog = true }
-                )
-            }
-
-            // 详情页模块
-            item { SettingsSectionHeader(stringResource(R.string.settings_detail_sections)) }
-            item {
-                SettingsItem(
-                    icon = Icons.Default.Tune,
-                    title = stringResource(R.string.settings_detail_sections),
-                    subtitle = stringResource(R.string.settings_detail_sections_desc),
-                    onClick = { showDetailSectionsDialog = true }
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Explore, title = stringResource(R.string.settings_discover_page), subtitle = stringResource(R.string.settings_discover_sections_desc), onClick = { showDiscoverSectionsDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Movie, title = stringResource(R.string.settings_detail_page), subtitle = stringResource(R.string.settings_detail_sections_desc), onClick = { showDetailSectionsDialog = true })
+                }
             }
 
             // 数据管理（仅登录用户可见，依赖 Trakt API）
@@ -656,56 +681,58 @@ fun SettingsScreen(
             // 关于
             item { SettingsSectionHeader(stringResource(R.string.settings_about)) }
             item {
-                val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
-                val isChecking by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
-                val updateInfo by viewModel.updateInfo.collectAsStateWithLifecycle()
-                VersionItem(
-                    localVersion = BuildConfig.VERSION_NAME,
-                    latestVersion = latestVersion,
-                    isChecking = isChecking,
-                    hasUpdate = updateInfo?.hasUpdate == true,
-                    onCheckUpdate = { viewModel.checkUpdate() }
-                )
-            }
-            item {
-                SettingsItem(
-                    icon = Icons.Default.NewReleases,
-                    title = stringResource(R.string.settings_changelog),
-                    subtitle = "",
-                    onClick = {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 版本卡片：标题 + 版本号合并显示「版本 - vX.X.X」一行；点击 = 检查更新
+                    // 检查中：图标位置变 CircularProgressIndicator
+                    // 有新版本：小字变主题色显示「新版本 vXXX」（XXX 为新版本号）
+                    // 无新版本/检查失败：小字原色显示当前版本号
+                    val hasUpdate = updateInfo?.hasUpdate == true
+                    val latestVer = latestVersion
+                    val versionSubtitle = if (hasUpdate && latestVer != null) {
+                        stringResource(R.string.settings_new_version, latestVer)
+                    } else {
+                        "v${BuildConfig.VERSION_NAME}"
+                    }
+                    val versionSubtitleColor = if (hasUpdate) MaterialTheme.colorScheme.primary
+                                               else MaterialTheme.colorScheme.onSurfaceVariant
+                    SettingsCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Info,
+                        title = stringResource(R.string.settings_version),
+                        subtitle = versionSubtitle,
+                        mergeTitleAndSubtitle = true,
+                        loadingIcon = isCheckingUpdate,
+                        subtitleColor = versionSubtitleColor,
+                        onClick = { viewModel.checkUpdate() }
+                    )
+                    // 更新日志卡片：无小字
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.NewReleases, title = stringResource(R.string.settings_changelog), onClick = {
                         viewModel.loadChangelog()
                         showChangelogDialog = true
-                    }
-                )
-            }
-            item {
-                // 「帮助与说明」入口整栏与帮助页「标题+返回箭头」整体配对（sharedBounds）
-                val helpEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "settings-help-entry"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else { Modifier }
-                Box(modifier = Modifier.fillMaxWidth().then(helpEntryModifier)) {
-                    @Suppress("DEPRECATION")
-                    SettingsItem(
-                        icon = Icons.Outlined.HelpOutline,
-                        title = stringResource(R.string.settings_help),
-                        subtitle = "",
-                        onClick = { onHelpClick() }
-                    )
+                    })
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // 帮助与说明卡片（保留 sharedBounds 转场配对）
+                    val helpEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "settings-help-entry"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else { Modifier }
+                    SettingsCard(modifier = Modifier.weight(1f).then(helpEntryModifier), icon = Icons.Outlined.HelpOutline, title = stringResource(R.string.settings_help), onClick = { onHelpClick() })
+                    // 新手引导卡片
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.AutoAwesome, title = stringResource(R.string.settings_restart_onboarding), onClick = { onRestartOnboarding() })
                 }
             }
-            item {
-                SettingsItem(
-                    icon = Icons.Default.AutoAwesome,
-                    title = stringResource(R.string.settings_restart_onboarding),
-                    subtitle = "",
-                    onClick = { onRestartOnboarding() }
-                )
-            }
+            // 源代码仓库（保持原列表项样式）
             item {
                 SettingsItem(
                     icon = Icons.Default.Code,
@@ -726,16 +753,6 @@ fun SettingsScreen(
                         showClearCategoryDialog = true
                     },
                     onClearAll = { showClearCacheDialog = true }
-                )
-            }
-
-            // 观看统计入口（账户 section 上方）
-            item {
-                SettingsItem(
-                    icon = Icons.Default.BarChart,
-                    title = stringResource(R.string.settings_view_statistics),
-                    subtitle = "",
-                    onClick = onStatisticsClick
                 )
             }
 
@@ -1004,6 +1021,8 @@ fun SettingsScreen(
     if (showPanHubConfigDialog) {
         PanHubConfigDialog(
             config = panHubConfig,
+            enabled = panhubEnabled,
+            onEnabledChange = { viewModel.setPanhubEnabled(it) },
             onConcurrencyChange = { viewModel.setPanHubConcurrency(it) },
             onTimeoutMsChange = { viewModel.setPanHubTimeoutMs(it) },
             onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
@@ -2432,6 +2451,190 @@ private fun DataFlowCard(
         ) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Text(title, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+/**
+ * 设置卡片：圆角居中布局（图标 + 标题 + 可选小字），用于 2x2 / 2x1 网格入口。
+ * iconTintColor 用于根据状态（如启用/禁用）变化以提供视觉反馈。
+ *
+ * - mergeTitleAndSubtitle：true 时合并显示「标题 - 小字」为一行；无小字则只显示标题
+ * - loadingIcon：true 时图标位置用 CircularProgressIndicator 替代（用于版本检查等待态）
+ * - subtitleColor：小字颜色（merge 模式下整个合并文本使用此颜色）
+ */
+@Composable
+private fun SettingsCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    title: String,
+    subtitle: String? = null,
+    mergeTitleAndSubtitle: Boolean = false,
+    iconTintColor: Color = MaterialTheme.colorScheme.primary,
+    loadingIcon: Boolean = false,
+    subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
+    onClick: () -> Unit
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (loadingIcon) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    strokeWidth = 2.dp,
+                    color = iconTintColor
+                )
+            } else if (icon != null) {
+                Icon(icon, contentDescription = null, tint = iconTintColor)
+            }
+            if (mergeTitleAndSubtitle) {
+                // 合并显示「标题 - 小字」一行；小字为空时只显示标题，不显示破折号
+                val displayText = if (!subtitle.isNullOrEmpty()) {
+                    "$title - $subtitle"
+                } else {
+                    title
+                }
+                Text(
+                    text = displayText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = subtitleColor,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodySmall,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!subtitle.isNullOrEmpty()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = subtitleColor,
+                        textAlign = TextAlign.Center,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 搜索源卡片：用于 2x2 网格（PanSou/Panhub/Zreso）。
+ * 左侧搜索源名字 + 右侧开关；名字颜色随开关状态变化（开启=主题色，关闭=原色）。
+ * 可选配置按钮（Panhub 用齿轮图标）位于中间。
+ */
+@Composable
+private fun SearchSourceCard(
+    modifier: Modifier = Modifier,
+    name: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    onConfigClick: (() -> Unit)? = null,
+    configContentDescription: String? = null
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (checked) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (onConfigClick != null) {
+                IconButton(
+                    onClick = { view.performHaptic(HapticType.CLICK); onConfigClick() },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = configContentDescription,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+            } else {
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
+                colors = appSwitchColors()
+            )
+        }
+    }
+}
+
+/**
+ * 观看统计卡片：横跨整宽的单卡片（图标 + 标题 + 描述小字 + 右箭头）。
+ * 作为设置页第一位置，无类目 Header。
+ */
+@Composable
+private fun StatisticsCard(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val view = LocalView.current
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.BarChart,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_view_statistics),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.settings_view_statistics_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

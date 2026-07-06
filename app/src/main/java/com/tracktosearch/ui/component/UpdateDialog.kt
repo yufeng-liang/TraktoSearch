@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -150,13 +151,17 @@ fun parseInlineMarkdown(input: String): androidx.compose.ui.text.AnnotatedString
 }
 
 /**
- * 将更新日志按版本分割为 sections，每个 section 包含标题和内容行。
+ * 将更新日志按版本分割为 sections，每个 section 包含标题、日期和内容行。
+ * 标题形如 "v2.23.0 更新内容（2026-07-06）",日期会被提取到独立字段 [date]。
  */
-private data class ChangelogSection(val title: String, val lines: List<String>)
+private data class ChangelogSection(val title: String, val date: String, val lines: List<String>)
+
+private val trailingDateRegex = Regex("（[^）]*\\d{4}-\\d{2}-\\d{2}[^）]*）$")
 
 private fun parseChangelogSections(text: String): List<ChangelogSection> {
     val sections = mutableListOf<ChangelogSection>()
     var currentTitle = ""
+    var currentDate = ""
     val currentLines = mutableListOf<String>()
 
     text.lineSequence().forEach { raw ->
@@ -164,32 +169,46 @@ private fun parseChangelogSections(text: String): List<ChangelogSection> {
         val trimmed = line.trimStart()
         if (trimmed == "---" || trimmed == "***" || trimmed == "___") {
             if (currentTitle.isNotBlank() || currentLines.isNotEmpty()) {
-                sections.add(ChangelogSection(currentTitle, currentLines.toList()))
+                sections.add(ChangelogSection(currentTitle, currentDate, currentLines.toList()))
             }
             currentTitle = ""
+            currentDate = ""
             currentLines.clear()
             return@forEach
         }
         // 只认 ## 作为 section 标题，# 开头的行跳过（与自动生成的 header 重复）
         if (trimmed.startsWith("## ")) {
             if (currentTitle.isNotBlank() || currentLines.isNotEmpty()) {
-                sections.add(ChangelogSection(currentTitle, currentLines.toList()))
+                sections.add(ChangelogSection(currentTitle, currentDate, currentLines.toList()))
                 currentLines.clear()
             }
-            currentTitle = trimmed.removePrefix("##").trimStart()
+            val rawTitle = trimmed.removePrefix("##").trimStart()
+            // 提取尾部日期括号,如 "v2.23.0 更新内容（2026-07-06）"
+            val match = trailingDateRegex.find(rawTitle)
+            if (match != null) {
+                // 提取括号内的 yyyy-MM-dd
+                val dateInParen = match.value
+                val dateMatch = Regex("\\d{4}-\\d{2}-\\d{2}").find(dateInParen)
+                currentDate = dateMatch?.value ?: ""
+                currentTitle = rawTitle.replace(trailingDateRegex, "").trimEnd()
+            } else {
+                currentDate = ""
+                currentTitle = rawTitle
+            }
         } else if (line.isNotBlank()) {
             currentLines.add(line)
         }
     }
     if (currentTitle.isNotBlank() || currentLines.isNotEmpty()) {
-        sections.add(ChangelogSection(currentTitle, currentLines.toList()))
+        sections.add(ChangelogSection(currentTitle, currentDate, currentLines.toList()))
     }
     return sections
 }
 
 /**
  * 带吸顶标题的更新日志渲染：
- * - 每个版本的标题在滚动时自动吸顶
+ * - 仅渲染吸顶标题(随内容滚动的 section 标题被隐藏,避免重复)
+ * - 吸顶标题左侧显示版本标题,右侧右对齐显示更新日期
  * - 滑到下一版时标题自动替换
  */
 @Composable
@@ -197,13 +216,13 @@ fun StickyHeaderChangelogContent(text: String) {
     val sections = remember(text) { parseChangelogSections(text) }
     val listState = rememberLazyListState()
 
-    // 计算每个 section 的起始 item 索引（header 占一个 item）
+    // 计算每个 section 的起始 item 索引(只算 content lines,不含 header item)
     val sectionStartIndices = remember(sections) {
         val indices = mutableListOf<Int>()
         var idx = 0
         sections.forEach {
             indices.add(idx)
-            idx += 1 + it.lines.size // header + content lines
+            idx += it.lines.size // 只算 content lines
         }
         indices
     }
@@ -219,26 +238,14 @@ fun StickyHeaderChangelogContent(text: String) {
         }
         result
     }
-    val currentTitle = sections.getOrNull(currentSectionIndex)?.title ?: ""
+    val currentSection = sections.getOrNull(currentSectionIndex)
+    val currentTitle = currentSection?.title ?: ""
+    val currentDate = currentSection?.date ?: ""
 
     Box(modifier = Modifier.fillMaxWidth()) {
         LazyColumn(state = listState) {
             sections.forEachIndexed { sectionIdx, section ->
-                // 版本标题作为普通 item（滚动时随内容走）
-                item(key = "header_$sectionIdx") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 4.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = parseInlineMarkdown(section.title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
+                // 不再渲染 section 的 header item(随内容滚动的标题),仅由吸顶标题显示版本信息
                 // 内容行
                 items(section.lines, key = { "${sectionIdx}_${it.hashCode()}" }) { line ->
                     RenderLine(line)
@@ -246,20 +253,30 @@ fun StickyHeaderChangelogContent(text: String) {
             }
         }
 
-        // 吸顶标题（浮在顶部，背景匹配弹窗容器色 + 底部分隔线）
+        // 吸顶标题(浮在顶部,背景匹配弹窗容器色 + 底部分隔线)
+        // 左侧:版本标题;右侧右对齐:更新日期(若有)
         Column(modifier = Modifier.fillMaxWidth()) {
-            Box(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 4.dp, vertical = 8.dp)
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     text = parseInlineMarkdown(currentTitle),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f)
                 )
+                if (currentDate.isNotBlank()) {
+                    Text(
+                        text = currentDate,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }

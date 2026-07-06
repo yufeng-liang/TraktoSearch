@@ -205,7 +205,8 @@ class DetailViewModel @Inject constructor(
             val currentImdbId: String,
             val currentTraktRating: Double,
             val currentTmdbId: Int,
-            val currentMediaType: MediaType
+            val currentMediaType: MediaType,
+            val currentCollectionId: Int = 0
         )
     }
 
@@ -215,6 +216,24 @@ class DetailViewModel @Inject constructor(
     /** 海报主色调提取完成后更新 UiState(由 DetailHeaderContent 在图片加载成功回调中调用) */
     fun updatePosterColor(color: Color) {
         _uiState.value = _uiState.value.copy(posterDominantColor = color)
+    }
+
+    /**
+     * 进入详情页时尽早从缓存预查海报主色(不需要 bitmap)。
+     * 命中则瞬间设置 posterDominantColor,让沉浸背景在海报图片加载完成前就显示出来。
+     * 未命中(首次访问)仍由 DetailHeaderContent 的 Coil listener 走 [updatePosterColor] 流程。
+     */
+    private fun prefetchPosterColor(posterUrl: String?) {
+        if (posterUrl.isNullOrEmpty()) return
+        // 已有主色就不重复查
+        if (_uiState.value.posterDominantColor != null) return
+        viewModelScope.launch {
+            posterColorExtractor.getCachedColor(posterUrl)?.let { argb ->
+                if (argb != 0L) {
+                    _uiState.value = _uiState.value.copy(posterDominantColor = Color(argb))
+                }
+            }
+        }
     }
 
     init {
@@ -273,16 +292,37 @@ class DetailViewModel @Inject constructor(
             currentImdbId = cached.currentImdbId
             currentTraktRating = cached.currentTraktRating
             currentTmdbId = cached.currentTmdbId
+            currentCollectionId = cached.currentCollectionId
             detailLoaded = true
             allResources = cached.allResources
             _uiState.value = cached.uiState.copy(
                 isMarkedWatchlist = inWatchlist,
                 isMarkedWatched = isWatched
             )
-            // 上次缓存时搜索未完成（用户中途返回），重启搜索避免卡在搜索中状态
+            // 上次缓存时若未提取到海报主色(用户中途返回),尽早从持久化缓存补查
+            prefetchPosterColor(cached.uiState.posterUrl)
+            // 上次缓存时搜索未完成(用户中途返回),重启搜索避免卡在搜索中状态
             // startSearch 内部会重新设置 isSearching=true 并发起新的搜索流程
             if (cached.uiState.isSearching) {
                 startSearch()
+            }
+            // 按需补启附属 fetch:缓存可能是在附属请求完成前被写入的(用户中途返回),
+            // 此时 ratings/comments/credits/videos/seasons 等字段为空,需要重新拉取避免永久卡在骨架状态
+            val visibility = cached.uiState.sectionVisible
+            if (visibility.myRating && cached.uiState.ratings == null) fetchRatingsAsync(cached.currentTraktRating)
+            if (visibility.comments && cached.uiState.comments.isEmpty()) fetchComments()
+            if (cached.uiState.seasons.isEmpty() && cached.currentMediaType == MediaType.SHOW) fetchSeasons()
+            if (visibility.cast && cached.uiState.cast.isEmpty() && cached.uiState.crew.isEmpty()) fetchCredits()
+            if (visibility.videosImages && (cached.uiState.isLoadingVideosImages || (cached.uiState.videos.isEmpty() && cached.uiState.backdrops.isEmpty()))) fetchVideosAndImages()
+            // fetchUserRating 内部会判断 tokenStorage.getCachedAccessToken() 是否为空,无需在此重复判断
+            if (visibility.myRating && cached.uiState.userRating == null) fetchUserRating()
+            delayedLoadJob?.cancel()
+            delayedLoadJob = viewModelScope.launch {
+                delay(1500)
+                if (visibility.recommendations && cached.uiState.recommendations.isEmpty()) fetchRecommendations()
+                if (cached.currentMediaType == MediaType.MOVIE && cached.currentCollectionId > 0 && cached.uiState.collectionInfo == null) {
+                    fetchCollection(cached.currentCollectionId)
+                }
             }
             return
         }
@@ -375,6 +415,8 @@ class DetailViewModel @Inject constructor(
                     runtime = enrichment?.runtime,
                     status = enrichment?.status ?: ""
                 )
+                // 拿到 posterUrl 后立即从缓存预查主色,让沉浸背景先于海报图片加载显示
+                prefetchPosterColor(enrichment?.posterUrl)
                 detailLoaded = true
                 saveToCache()
                 startSearch()
@@ -1436,7 +1478,8 @@ class DetailViewModel @Inject constructor(
             currentImdbId = currentImdbId,
             currentTraktRating = currentTraktRating,
             currentTmdbId = currentTmdbId,
-            currentMediaType = currentMediaType
+            currentMediaType = currentMediaType,
+            currentCollectionId = currentCollectionId
         ))
     }
 }

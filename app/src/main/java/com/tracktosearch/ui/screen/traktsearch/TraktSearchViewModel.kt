@@ -39,7 +39,9 @@ data class TraktSearchUiItem(
     val posterUrl: String? = null,
     val imdbId: String = "",
     val traktRating: Double = 0.0,
-    val knownForDepartment: String = ""
+    val knownForDepartment: String = "",
+    // 人物流行度(TMDB 提供),用于人物搜索结果按流行度降序排序
+    val popularity: Double = 0.0
 )
 
 @Immutable
@@ -213,10 +215,14 @@ class TraktSearchViewModel @Inject constructor(
             if (searchType == MediaType.PERSON) {
                 // 人物搜索：同时用 TMDB 搜索（支持中文名），合并去重
                 val tmdbResults = tmdbRepository.searchPerson(query)
+                // 建立 tmdbId → popularity 索引,TMDB 搜索结果已自带 popularity 字段,无需额外请求
+                val tmdbPopularityMap = tmdbResults.associate { it.id to it.popularity }
                 result.onSuccess { (searchResults, totalCount) ->
                     val traktItems = searchResults.map { item ->
                         async { withTimeoutOrNull(8_000) { enrichSearchResult(item, searchType) } }
                     }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                        // 用 TMDB popularity 索引补全流行度(零额外请求)
+                        .map { it.copy(popularity = tmdbPopularityMap[it.tmdbId] ?: 0.0) }
                     // 收集已有的 tmdbId
                     val existingTmdbIds = traktItems.map { it.tmdbId }.toMutableSet()
                     // TMDB 独有的结果：通过 TMDB ID 反查 Trakt
@@ -232,12 +238,14 @@ class TraktSearchViewModel @Inject constructor(
                                     title = person.original_name,
                                     displayTitle = person.name,
                                     posterUrl = profileUrl,
-                                    knownForDepartment = person.known_for_department
+                                    knownForDepartment = person.known_for_department,
+                                    popularity = person.popularity
                                 )
                             }
                         }
                     }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
-                    val merged = traktItems + tmdbOnlyItems
+                    // 合并后按流行度降序排序(知名人物优先展示)
+                    val merged = (traktItems + tmdbOnlyItems).sortedByDescending { it.popularity }
                     val effectiveTotal = if (merged.isEmpty()) 0 else totalCount + tmdbOnlyItems.size
                     updateTabState(searchType, SearchTabState(
                         results = merged,
@@ -306,11 +314,14 @@ class TraktSearchViewModel @Inject constructor(
                                         title = person.original_name,
                                         displayTitle = person.name,
                                         posterUrl = profileUrl,
-                                        knownForDepartment = person.known_for_department
+                                        knownForDepartment = person.known_for_department,
+                                        popularity = person.popularity
                                     )
                                 }
                             }
                         }.awaitAll().filterNotNull().filter { it.traktId > 0 || it.tmdbId > 0 }
+                            // 按流行度降序排序
+                            .sortedByDescending { it.popularity }
                         val effectiveTotal = if (tmdbItems.isEmpty()) 0 else tmdbResults.size
                         updateTabState(searchType, SearchTabState(
                             results = tmdbItems,

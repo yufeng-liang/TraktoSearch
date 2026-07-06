@@ -438,6 +438,43 @@ object NetworkModule {
             .create(GiteeUpdateApiService::class.java)
     }
 
+    /** 豆瓣失败项云端同步专用 Gitee Contents API(复用 GITEE_ACCESS_TOKEN) */
+    @Provides
+    @Singleton
+    fun provideGiteeContentsApi(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor
+    ): com.tracktosearch.data.remote.cloud.GiteeContentsApi {
+        val token = BuildConfig.GITEE_ACCESS_TOKEN
+        val client = baseClient.newBuilder().apply {
+            if (token.isNotEmpty()) {
+                addInterceptor(Interceptor { chain ->
+                    val request = chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                    chain.proceed(request)
+                })
+            }
+        }
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+        // 专用 Json:encodeDefaults = false,使 GiteeContentRequest.sha = null 时不出现在 JSON 体中
+        // (Gitee API 收到 "sha": null 会报 "sha is empty")
+        val giteeJson = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            encodeDefaults = false
+        }
+        return Retrofit.Builder()
+            .baseUrl("https://gitee.com/api/v5/")
+            .client(client)
+            .addConverterFactory(giteeJson.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(com.tracktosearch.data.remote.cloud.GiteeContentsApi::class.java)
+    }
+
     @Provides
     @Singleton
     @Named("custom_search")

@@ -56,6 +56,7 @@ fun DoubanSyncModePickerDialog(
     if (showFullRewriteConfirm) {
         AlertDialog(
             onDismissRequest = { showFullRewriteConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
             text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
             confirmButton = {
@@ -78,6 +79,7 @@ fun DoubanSyncModePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(stringResource(R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {

@@ -50,7 +50,7 @@ enum class SortOrder { ASC, DESC }
 @Immutable
 data class FilterState(
     val selectedGenres: Set<String> = emptySet(),
-    val yearRange: IntRange = 1900..2100,
+    val selectedDecadeKeys: Set<Int> = emptySet(),  // 年代起始年份,如 2020 表示 2020s
     val markedTimePreset: MarkedTimePreset = MarkedTimePreset.ALL,
     val markedTimeOrder: SortOrder = SortOrder.DESC,
     val ratingRange: ClosedFloatingPointRange<Float> = 0f..10f
@@ -105,15 +105,15 @@ class WatchlistViewModel @Inject constructor(
     /** 是否存在生效的筛选条件（markedTimeOrder 不算，只是排序方向） */
     val hasActiveFilters: StateFlow<Boolean> = _filterState.map { state ->
         state.selectedGenres.isNotEmpty() ||
-            state.yearRange != 1900..2100 ||
+            state.selectedDecadeKeys.isNotEmpty() ||
             state.markedTimePreset != MarkedTimePreset.ALL ||
             state.ratingRange != 0f..10f
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    /** 从 movies + shows 聚合可选类型（split(",")、distinct、sorted） */
+    /** 从 movies + shows 聚合可选类型（按 `,` 和 `·` 拆分、distinct、sorted） */
     val availableGenres: StateFlow<List<String>> = _uiState.map { state ->
         (state.movies.asSequence() + state.shows.asSequence())
-            .flatMap { it.genres.split(",").asSequence() }
+            .flatMap { it.genres.split(",", "·").asSequence() }
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
@@ -121,11 +121,28 @@ class WatchlistViewModel @Inject constructor(
             .toList()
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** 从 movies + shows 动态生成可选年代列表（按起始年份降序，如 2020、2010、2000...） */
+    val decadeOptions: StateFlow<List<Int>> = _uiState.map { state ->
+        (state.movies.asSequence() + state.shows.asSequence())
+            .mapNotNull { it.year }
+            .filter { it > 0 }
+            .map { (it / 10) * 10 }  // 取年代起始年份,如 2023 -> 2020
+            .distinct()
+            .sortedDescending()
+            .toList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun updateSelectedGenres(genres: Set<String>) {
         _filterState.value = _filterState.value.copy(selectedGenres = genres)
     }
-    fun updateYearRange(range: IntRange) {
-        _filterState.value = _filterState.value.copy(yearRange = range)
+    fun updateSelectedDecades(keys: Set<Int>) {
+        _filterState.value = _filterState.value.copy(selectedDecadeKeys = keys)
+    }
+    fun toggleDecade(key: Int) {
+        val current = _filterState.value.selectedDecadeKeys
+        _filterState.value = _filterState.value.copy(
+            selectedDecadeKeys = if (key in current) current - key else current + key
+        )
     }
     fun updateMarkedTimePreset(preset: MarkedTimePreset) {
         _filterState.value = _filterState.value.copy(markedTimePreset = preset)

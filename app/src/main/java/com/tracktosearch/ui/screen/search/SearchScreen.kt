@@ -186,10 +186,13 @@ fun SearchScreen(
             android.content.pm.PackageManager.PERMISSION_GRANTED
         if (hasPermission) {
             cloudThemeManager.onPermissionGranted()
-            cloudThemeManager.loadTheme(getLastKnownLocation(context))
+            // 用 initializeTheme 而非 loadTheme：会话级 guard 防止导航返回时重新触发
+            // getLastKnownLocation（避免 Android 12+ 状态栏位置图标反复出现）
+            // locationProvider 仅在首次调用时执行，后续直接复用已加载主题
+            cloudThemeManager.initializeTheme { getLastKnownLocation(context) }
         } else {
             // 未授权时只加载缓存主题，不自动请求权限
-            cloudThemeManager.loadTheme(null)
+            cloudThemeManager.initializeTheme { null }
         }
         // 触发夜晚交替
         cloudThemeManager.toggleNightAlternate()

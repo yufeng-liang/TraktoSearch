@@ -158,6 +158,7 @@
     <string name="detail_disk_type_magnet">Magnet</string>
     <string name="detail_disk_type_other">Other</string>
     <string name="detail_share_links">Links: </string>
+    <string name="share_douban_rating">Douban Rating</string>
     <string name="detail_year_suffix">%d</string>
     <string name="detail_watched">Watched</string>
     <string name="detail_not_watched">Not watched</string>
@@ -471,6 +472,31 @@
     <string name="help_data_douban_b3">Conflict strategy: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
     <string name="help_data_douban_b4">Failed items are saved locally. In Settings → Data Management, tap \"View Sync Failures\" to review them, mark movie/show type, edit subtitle, search resources, retry sync, or delete.</string>
     <string name="help_data_douban_b5">Cross-device: In Settings → Data Management, tap \"Import failures from JSON\" to import a failures JSON file exported from another device and view them locally.</string>
+    <string name="help_data_table_title">Data Import/Export Overview</string>
+    <string name="help_dc_export_t">Export Marks</string>
+    <string name="help_dc_export_entry">Settings → Data Management</string>
+    <string name="help_dc_export_fmt">JSON</string>
+    <string name="help_dc_export_desc">Includes watchlist and watched history, suitable for backup/migration</string>
+    <string name="help_dc_imdb_t">Import from IMDb</string>
+    <string name="help_dc_imdb_entry">Settings → Data Management</string>
+    <string name="help_dc_imdb_fmt">CSV</string>
+    <string name="help_dc_imdb_desc">Import IMDb watchlist, search by title and sync to Trakt watchlist</string>
+    <string name="help_dc_upload_t">Upload Failures to Cloud</string>
+    <string name="help_dc_upload_entry">Settings → Data Management</string>
+    <string name="help_dc_upload_fmt">Encrypted JSON</string>
+    <string name="help_dc_upload_desc">Upload Douban sync failures to cloud with AES encryption</string>
+    <string name="help_dc_download_t">Download Failures from Cloud</string>
+    <string name="help_dc_download_entry">Settings → Data Management</string>
+    <string name="help_dc_download_fmt">Encrypted JSON</string>
+    <string name="help_dc_download_desc">Download failures from cloud, decrypt and merge to local</string>
+    <string name="help_dc_douban_t">Douban Marks Sync</string>
+    <string name="help_dc_douban_entry">Login Page / Settings</string>
+    <string name="help_dc_douban_fmt">Douban Account</string>
+    <string name="help_dc_douban_desc">Log in to Douban, crawl wish/collect marks and sync to Trakt</string>
+    <string name="help_dc_failures_t">Import Failures JSON</string>
+    <string name="help_dc_failures_entry">Failures Viewer Page</string>
+    <string name="help_dc_failures_fmt">JSON</string>
+    <string name="help_dc_failures_desc">Import failures JSON exported from another device to view locally</string>
     <string name="help_custom_source">Custom Search Sources</string>
     <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
     <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
@@ -594,6 +620,7 @@ Config:
     <string name="settings_cache_category_database_impact">Watchlist/watched offline data and Douban sync records cleared. Offline browsing unavailable until next sync.</string>
     <string name="settings_latest_version">Latest version v%1$s</string>
     <string name="settings_already_latest">Already up to date v%1$s</string>
+    <string name="settings_new_version">New version v%1$s</string>
     <string name="settings_discover_sections">Discover Sections</string>
     <string name="settings_discover_sections_desc">Toggle visibility and reorder discover sections</string>
     <string name="settings_discover_sections_hint">Drag to reorder, toggle to show/hide</string>
@@ -657,11 +684,20 @@ Config:
     <string name="cloud_sync_upload_failed">Upload failed, please try again later</string>
     <string name="cloud_sync_download_empty">No cloud failures for this Douban account</string>
     <string name="cloud_sync_download_success">Downloaded and merged %1$d cloud failures</string>
+    <string name="dialog_download_success_title">Import Successful</string>
+    <string name="dialog_download_success_message">Imported %1$d failure items from cloud. You can view them in the sync failures page.</string>
+    <string name="dialog_download_success_view">View Failures</string>
+    <string name="dialog_download_success_dismiss">Close</string>
     <string name="cloud_sync_download_failed">Download failed, please try again later</string>
     <string name="cloud_sync_in_progress">Syncing…</string>
     <string name="screen_douban_failures_empty_wish">Wishlist sync all succeeded</string>
     <string name="screen_douban_failures_empty_collect">Watched list sync all succeeded</string>
     <string name="screen_douban_failures_empty_all">No sync failures</string>
+    <string name="screen_douban_failures_empty_search">No matching failures</string>
+    <string name="screen_douban_failures_empty_filter">No failures match the filters</string>
+    <string name="screen_douban_failures_empty_movie">Movie list is empty</string>
+    <string name="screen_douban_failures_empty_show">TV show list is empty</string>
+    <string name="screen_douban_failures_empty_uncategorized">Uncategorized list is empty</string>
     <string name="screen_douban_failures_clear_all">Clear all</string>
     <string name="screen_douban_failures_clear_all_confirm">Clear all failure records? This cannot be undone.</string>
     <string name="screen_douban_failures_mark_as_movie">Mark as movie</string>
@@ -820,7 +856,14 @@ Config:
     <!-- Settings: Custom Search Source -->
     <string name="settings_custom_search_source_title">Custom Search Source</string>
     <string name="settings_custom_search_source_subtitle">Supports PanSou/Zreso compatible or custom JSONPath</string>
-    <string name="settings_add_source">Add Custom Search Source</string>
+    <string name="settings_add_source">Add Source</string>
+    <!-- Settings: Card Layout -->
+    <string name="settings_view_statistics_desc">Watch count, watch time, ratings, heatmap, genres</string>
+    <string name="settings_custom_section">Custom Sections</string>
+    <string name="settings_discover_page">Discover</string>
+    <string name="settings_detail_page">Details</string>
+    <string name="settings_panhub_advanced">Advanced settings available</string>
+    <string name="settings_panhub_enabled">Enable Panhub</string>
     <string name="settings_edit_source">Edit Search Source</string>
     <string name="settings_delete_source">Delete Search Source</string>
     <string name="settings_delete_source_confirm">Are you sure you want to delete "%1$s"?</string>

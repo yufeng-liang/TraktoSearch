@@ -64,6 +64,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -997,8 +998,9 @@ fun WatchlistScreen(
             WatchlistFilterSheet(
                 filterState = filterState,
                 availableGenres = availableGenres,
+                decadeOptions = viewModel.decadeOptions.collectAsStateWithLifecycle().value,
                 onGenresChange = viewModel::updateSelectedGenres,
-                onYearRangeChange = viewModel::updateYearRange,
+                onDecadeToggle = viewModel::toggleDecade,
                 onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
                 onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
                 onRatingRangeChange = viewModel::updateRatingRange,
@@ -1055,15 +1057,17 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
 }
 
 /**
- * 筛选 ModalBottomSheet：类型多选 + 年份区间 + 标记时间区间 + 排序方向 + Trakt 评分区间。
+ * 筛选 ModalBottomSheet：类型多选 + 年代多选 + 标记时间区间 + 排序方向 + Trakt 评分区间。
+ * 布局参考影视筛选页：年份/评分/排序/标记时间均标题+内容同一行。
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 private fun WatchlistFilterSheet(
     filterState: FilterState,
     availableGenres: List<String>,
+    decadeOptions: List<Int>,
     onGenresChange: (Set<String>) -> Unit,
-    onYearRangeChange: (IntRange) -> Unit,
+    onDecadeToggle: (Int) -> Unit,
     onMarkedTimePresetChange: (MarkedTimePreset) -> Unit,
     onMarkedTimeOrderChange: (SortOrder) -> Unit,
     onRatingRangeChange: (ClosedFloatingPointRange<Float>) -> Unit,
@@ -1072,7 +1076,9 @@ private fun WatchlistFilterSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onApply,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        // 去除默认 drag 条,内容更紧凑
+        dragHandle = null
     ) {
         Column(
             modifier = Modifier
@@ -1080,7 +1086,15 @@ private fun WatchlistFilterSheet(
                 .padding(horizontal = 16.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // 类型多选
+            // 类型多选(chip 按估算宽度降序排列:长块先占位,短块填缝,行数少且每行数量均衡)
+            // 估算宽度 = 中文字符数 * 14dp + 24dp(chip 内边距)
+            val sortedGenres = remember(availableGenres) {
+                availableGenres.sortedByDescending { genre ->
+                    val cjkCount = genre.count { it.code in 0x4E00..0x9FFF }
+                    val otherCount = genre.length - cjkCount
+                    cjkCount * 14 + otherCount * 8 + 24
+                }
+            }
             Text(
                 text = stringResource(R.string.filter_genre),
                 style = MaterialTheme.typography.titleSmall,
@@ -1091,7 +1105,7 @@ private fun WatchlistFilterSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                availableGenres.forEach { genre ->
+                sortedGenres.forEach { genre ->
                     FilterChip(
                         selected = genre in filterState.selectedGenres,
                         onClick = {
@@ -1107,112 +1121,146 @@ private fun WatchlistFilterSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-            // 年份区间 RangeSlider（步长 1 年）
-            Text(
-                text = stringResource(R.string.filter_year),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "${filterState.yearRange.first} - ${filterState.yearRange.last}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            RangeSlider(
-                value = filterState.yearRange.first.toFloat()..filterState.yearRange.last.toFloat(),
-                onValueChange = { range ->
-                    onYearRangeChange(range.start.toInt()..range.endInclusive.toInt())
-                },
-                valueRange = 1900f..2100f,
-                steps = 199  // 步长 1 年：(2100-1900)/1 - 1 = 199
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 标记时间区间 SingleChoiceChip
-            Text(
-                text = stringResource(R.string.filter_marked_time),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // 年代多选(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                MarkedTimePreset.entries.forEach { preset ->
-                    FilterChip(
-                        selected = filterState.markedTimePreset == preset,
-                        onClick = { onMarkedTimePresetChange(preset) },
-                        label = {
-                            Text(stringResource(when (preset) {
-                                MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
-                                MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
-                                MarkedTimePreset.ALL -> R.string.filter_time_all
-                            }))
+                Text(
+                    text = stringResource(R.string.filter_year),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                FlowRow(
+                    // SpaceBetween:每行 chips 撑满宽度,6 个 → 3-3 两行均匀
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    decadeOptions.forEach { decade ->
+                        FilterChip(
+                            selected = decade in filterState.selectedDecadeKeys,
+                            onClick = { onDecadeToggle(decade) },
+                            label = { Text("${decade}s") }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 评分 RangeSlider(步长 1,标题+评分值+滑动条同一行,右侧 padding 加大防边缘手势)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.filter_rating),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(36.dp)
+                )
+                RangeSlider(
+                    value = filterState.ratingRange,
+                    onValueChange = { range -> onRatingRangeChange(range) },
+                    valueRange = 0f..10f,
+                    steps = 9,  // 步长 1（0,1,2,...,10）
+                    // 右侧 padding 加大,防止滑到边缘手势被系统返回拦截
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 24.dp)
+                )
+                Text(
+                    text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(40.dp)
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 标记时间区间(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.filter_marked_time),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                    verticalArrangement = Arrangement.spacedBy(0.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    MarkedTimePreset.entries.forEach { preset ->
+                        FilterChip(
+                            selected = filterState.markedTimePreset == preset,
+                            onClick = { onMarkedTimePresetChange(preset) },
+                            label = {
+                                Text(stringResource(when (preset) {
+                                    MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
+                                    MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
+                                    MarkedTimePreset.ALL -> R.string.filter_time_all
+                                }))
+                            }
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            // 排序方式(标题+SegmentedButton 同行,两个按钮各占 weight(1f) 撑满宽度)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.filter_sort_order),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(48.dp)
+                )
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    SegmentedButton(
+                        selected = filterState.markedTimeOrder == SortOrder.DESC,
+                        onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        label = { Text(stringResource(R.string.filter_sort_desc)) },
+                        icon = {
+                            Icon(
+                                Icons.Default.ArrowDownward,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    )
+                    SegmentedButton(
+                        selected = filterState.markedTimeOrder == SortOrder.ASC,
+                        onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        label = { Text(stringResource(R.string.filter_sort_asc)) },
+                        icon = {
+                            Icon(
+                                Icons.Default.ArrowUpward,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                         }
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 排序方式 SegmentedButton（降序/升序）
-            Text(
-                text = stringResource(R.string.filter_sort_order),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                SegmentedButton(
-                    selected = filterState.markedTimeOrder == SortOrder.DESC,
-                    onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    label = { Text(stringResource(R.string.filter_sort_desc)) },
-                    icon = {
-                        Icon(
-                            Icons.Default.ArrowDownward,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-                SegmentedButton(
-                    selected = filterState.markedTimeOrder == SortOrder.ASC,
-                    onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    label = { Text(stringResource(R.string.filter_sort_asc)) },
-                    icon = {
-                        Icon(
-                            Icons.Default.ArrowUpward,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Trakt 评分 RangeSlider（步长 0.5）
-            Text(
-                text = stringResource(R.string.filter_rating),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "%.1f - %.1f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            RangeSlider(
-                value = filterState.ratingRange,
-                onValueChange = { range -> onRatingRangeChange(range) },
-                valueRange = 0f..10f,
-                steps = 19  // 步长 0.5：(10-0)/0.5 - 1 = 19
-            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -1235,8 +1283,8 @@ private fun WatchlistFilterSheet(
 /**
  * 应用搜索 + 筛选条件，并按标记时间排序。
  * - 搜索：标题/displayTitle 包含关键词（忽略大小写）
- * - 类型：多选，item.genres（逗号分隔）与选中类型有交集即通过；未选则全部通过
- * - 年份：null year 视为通过（避免误筛无年份项）
+ * - 类型：多选，item.genres（按 `,` 或 `·` 分隔）与选中类型有交集即通过；未选则全部通过
+ * - 年份：按年代多选匹配（null year 视为不通过；未选年代则全部通过）
  * - 标记时间：按预设区间过滤（7天/30天/全部）
  * - Trakt 评分：item.traktRating 落在区间内
  * - 排序：按 listedAt（ISO 字符串天然有序）升降序
@@ -1252,15 +1300,16 @@ private fun applyFilterAndSort(
             item.displayTitle.contains(searchQuery, ignoreCase = true) ||
             item.title.contains(searchQuery, ignoreCase = true)
         if (!matchesSearch) return@filter false
-        // 类型多选
+        // 类型多选（按 `,` 或 `·` 分隔）
         val matchesGenres = filter.selectedGenres.isEmpty() ||
             (item.genres.isNotEmpty() && filter.selectedGenres.any { g ->
-                item.genres.split(",").any { it.trim() == g }
+                item.genres.split(",", "·").any { it.trim() == g }
             })
         if (!matchesGenres) return@filter false
-        // 年份区间（null year 视为通过）
-        val matchesYear = item.year == null || item.year in filter.yearRange
-        if (!matchesYear) return@filter false
+        // 年代多选（未选年代则全部通过；null year 视为不通过）
+        val matchesDecade = filter.selectedDecadeKeys.isEmpty() ||
+            (item.year != null && ((item.year / 10) * 10) in filter.selectedDecadeKeys)
+        if (!matchesDecade) return@filter false
         // 标记时间区间
         val matchesMarkedTime = when (filter.markedTimePreset) {
             MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.listedAt, 7)

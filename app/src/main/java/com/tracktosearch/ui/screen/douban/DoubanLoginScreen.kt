@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -42,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +55,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
@@ -60,6 +63,7 @@ import com.tracktosearch.data.repository.DoubanSyncManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -71,7 +75,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DoubanLoginViewModel @Inject constructor(
     val doubanAuthStorage: DoubanAuthStorage,
-    val doubanSyncManager: DoubanSyncManager
+    val doubanSyncManager: DoubanSyncManager,
+    val cloudFailureSyncManager: com.tracktosearch.data.repository.CloudFailureSyncManager
 ) : ViewModel() {
 
     val progress = doubanSyncManager.progress
@@ -79,11 +84,17 @@ class DoubanLoginViewModel @Inject constructor(
     private val _loginSuccess = MutableStateFlow(false)
     val loginSuccess: StateFlow<Boolean> = _loginSuccess
 
+    // 云端失败数据检测结果(null=未检测/检测失败,>0=云端有 N 条失败数据)
+    private val _cloudFailureCount = MutableStateFlow<Int?>(null)
+    val cloudFailureCount: StateFlow<Int?> = _cloudFailureCount
+
     fun onLoginSuccess(userId: String, cookie: String) {
         doubanAuthStorage.saveCredentials(userId, cookie)
         _loginSuccess.value = true
         // 首次登录自动触发同步（Application scope，不依赖 ViewModel 生命周期）
         doubanSyncManager.startSync()
+        // 检测云端是否有该豆瓣账号的失败数据(用于跨设备查看)
+        checkCloudFailures()
     }
 
     /**
@@ -93,6 +104,26 @@ class DoubanLoginViewModel @Inject constructor(
      */
     fun triggerSync(forceOverwrite: Boolean = false) {
         doubanSyncManager.startSync(forceOverwrite = forceOverwrite)
+    }
+
+    /** 检测云端是否有当前豆瓣账号的失败数据 */
+    private fun checkCloudFailures() {
+        viewModelScope.launch {
+            _cloudFailureCount.value = cloudFailureSyncManager.checkCloudFailures()
+        }
+    }
+
+    /** 用户确认后下载云端失败数据并合并到本地 */
+    fun downloadCloudFailures() {
+        viewModelScope.launch {
+            cloudFailureSyncManager.downloadAndMerge()
+            _cloudFailureCount.value = null
+        }
+    }
+
+    /** 用户忽略云端数据 */
+    fun dismissCloudFailures() {
+        _cloudFailureCount.value = null
     }
 
     /**
@@ -126,6 +157,7 @@ fun DoubanLoginScreen(
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     // 标记本次会话是否已触发同步（区分「本次触发」与「上次同步遗留的 isComplete」）
     var syncTriggered by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // Snackbar 状态：登录成功时显示提示
     val snackbarHostState = remember { SnackbarHostState() }
@@ -186,9 +218,47 @@ fun DoubanLoginScreen(
             onRelogin = {
                 viewModel.resetForRelogin()
                 syncTriggered = false
+            },
+            onTraktLogin = {
+                // 回到 LoginScreen 让用户登录 Trakt(本页是从 LoginScreen 跳过来的,onBack 即可)
+                syncTriggered = false
+                onBack()
             }
         )
         return
+    }
+
+    // 云端失败数据检测弹窗:登录后发现云端有同豆瓣账号的失败数据,提示下载查看
+    val cloudCount by viewModel.cloudFailureCount.collectAsStateWithLifecycle()
+    cloudCount?.let { count ->
+        if (count > 0) {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissCloudFailures() },
+                containerColor = MaterialTheme.colorScheme.surface,
+                title = { Text(stringResource(R.string.cloud_failures_detected_title)) },
+                text = {
+                    Text(stringResource(R.string.cloud_failures_detected_desc, count))
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.downloadCloudFailures()
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                message = context.getString(R.string.cloud_failures_downloaded),
+                                duration = androidx.compose.material3.SnackbarDuration.Short
+                            )
+                        }
+                    }) {
+                        Text(stringResource(R.string.cloud_failures_download))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissCloudFailures() }) {
+                        Text(stringResource(R.string.cloud_failures_dismiss))
+                    }
+                }
+        )
+        }
     }
 
     // WebView 加载状态：null=空闲，"loading"=加载中，其他字符串=错误信息

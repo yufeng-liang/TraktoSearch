@@ -3,7 +3,10 @@ package com.tracktosearch.ui.screen.douban
 import android.content.Context
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +34,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -48,12 +52,14 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +78,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -83,10 +90,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -109,6 +121,7 @@ import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ImportResult
+import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -286,6 +299,36 @@ fun DoubanFailuresScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var searchQuery by remember { mutableStateOf("") }
     var showFilterSheet by remember { mutableStateOf(false) }
+    // 搜索框展开状态:未展开显示放大镜图标,展开时搜索框向左扩展遮住标题
+    var isSearchExpanded by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    /** 收起搜索框:清空文本 + 失焦 + 收起键盘 + 切回图标 */
+    fun collapseSearch() {
+        isSearchExpanded = false
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
+
+    /** 展开搜索框:切换状态后下一帧请求焦点 */
+    fun expandSearch() {
+        isSearchExpanded = true
+    }
+
+    // 展开时延迟请求焦点,等待 BasicTextField 布局完成
+    LaunchedEffect(isSearchExpanded) {
+        if (isSearchExpanded) {
+            kotlinx.coroutines.delay(50)
+            runCatching { searchFocusRequester.requestFocus() }
+        }
+    }
+
+    // 返回手势拦截:搜索框展开时,第一次返回收起搜索框,第二次返回才真正返回
+    BackHandler(enabled = isSearchExpanded) {
+        collapseSearch()
+    }
 
     // 进入页面时加载
     LaunchedEffect(Unit) {
@@ -384,32 +427,59 @@ fun DoubanFailuresScreen(
 
             // 内容区:空状态 / 失败项网格
             Box(modifier = Modifier.fillMaxSize()) {
-                if (!uiState.isLoading && uiState.failures.isEmpty()) {
-                    // 全部为空 → 居中提示 + 返回按钮(避开顶部覆盖层)
-                    Box(modifier = Modifier.padding(top = 224.dp + statusBarHeight)) {
+                // 计算当前模式总数(不受搜索/筛选影响,用于判断"模式为空"和"分类为空")
+                val currentModeTotalCount = remember(uiState.failures, selectedMode) {
+                    uiState.failures.count { it.status == currentStatus }
+                }
+                // 当前 tab 的数量(用于判断分类为空)
+                val currentTabCount = when (selectedTab) {
+                    0 -> movieCount
+                    1 -> showCount
+                    else -> uncategorizedCount
+                }
+                // 是否有激活的筛选条件(失败原因多选 + 标记时间区间预设)
+                val hasActiveFilter = filterState.selectedReasons.isNotEmpty() ||
+                    filterState.markedTimePreset != MarkedTimePreset.ALL
+
+                // 判断空状态类型(优先级:总空 > 模式空 > 搜索空 > 筛选空 > 分类空)
+                val emptyTextRes = when {
+                    !uiState.isLoading && uiState.failures.isEmpty() ->
+                        R.string.screen_douban_failures_empty_all
+                    !uiState.isLoading && currentModeTotalCount == 0 ->
+                        if (selectedMode == 0) R.string.screen_douban_failures_empty_wish
+                        else R.string.screen_douban_failures_empty_collect
+                    !uiState.isLoading && filtered.isEmpty() && searchQuery.isNotBlank() ->
+                        R.string.screen_douban_failures_empty_search
+                    !uiState.isLoading && filtered.isEmpty() && hasActiveFilter ->
+                        R.string.screen_douban_failures_empty_filter
+                    !uiState.isLoading && currentTabCount == 0 ->
+                        when (selectedTab) {
+                            0 -> R.string.screen_douban_failures_empty_movie
+                            1 -> R.string.screen_douban_failures_empty_show
+                            else -> R.string.screen_douban_failures_empty_uncategorized
+                        }
+                    else -> null
+                }
+
+                if (emptyTextRes != null) {
+                    // 空状态:空图标 + 文案(参考 Watchlist 空白页布局)
+                    Box(modifier = Modifier.padding(top = 172.dp + statusBarHeight)) {
                         EmptyStateView(
-                            text = stringResource(R.string.screen_douban_failures_empty_all),
-                            showBackButton = true,
+                            text = stringResource(emptyTextRes),
+                            // 仅在"总空"时显示返回按钮(其他情况用户可能想调整搜索/筛选/分类)
+                            showBackButton = emptyTextRes == R.string.screen_douban_failures_empty_all,
                             onBack = onBack
                         )
                     }
-                } else if (!uiState.isLoading && filtered.isEmpty()) {
-                    // 当前模式为空 → 对应提示(避开顶部覆盖层)
-                    val emptyText = if (selectedMode == 0) {
-                        stringResource(R.string.screen_douban_failures_empty_wish)
-                    } else {
-                        stringResource(R.string.screen_douban_failures_empty_collect)
-                    }
-                    Box(modifier = Modifier.padding(top = 224.dp + statusBarHeight)) {
-                        EmptyStateView(text = emptyText, showBackButton = false, onBack = null)
-                    }
                 } else if (!uiState.isLoading && filtered.isNotEmpty()) {
+                    val gridState = rememberLazyGridState()
                     LazyVerticalGrid(
+                        state = gridState,
                         columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(
                             start = 8.dp,
                             end = 8.dp,
-                            top = 224.dp + statusBarHeight,
+                            top = 172.dp + statusBarHeight,
                             bottom = 16.dp
                         ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -437,6 +507,14 @@ fun DoubanFailuresScreen(
                             )
                         }
                     }
+                    // 快速回顶按钮(参考社区列表查看页)
+                    ScrollToTopButton(
+                        gridState = gridState,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 16.dp, end = 16.dp),
+                        hazeState = hazeState
+                    )
                 }
             }
 
@@ -457,11 +535,89 @@ fun DoubanFailuresScreen(
                             .statusBarsPadding()
                             .fillMaxWidth()
                     )
-                    // 标题栏:标题 + 返回 + JSON 导入 + 筛选 + 清空
+                    // 标题栏:标题 + 返回 + 搜索 + JSON 导入 + 筛选 + 清空
+                    // 搜索框展开时遮住标题(向左扩展),点击搜索图标切换
                     TopAppBar(
-                        title = { Text(stringResource(R.string.screen_douban_failures_title)) },
+                        title = {
+                            // 用 Crossfade 在标题文字和搜索框之间淡入淡出切换
+                            // 两者都 fillMaxWidth,navigationIcon 始终保留,占位不变,避免布局跳动
+                            Crossfade(
+                                targetState = isSearchExpanded,
+                                animationSpec = tween(200),
+                                label = "searchCrossfade"
+                            ) { expanded ->
+                                if (!expanded) {
+                                    Text(
+                                        text = stringResource(R.string.screen_douban_failures_title),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else {
+                                    val searchInteractionSource = remember { MutableInteractionSource() }
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .focusRequester(searchFocusRequester),
+                                        singleLine = true,
+                                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        ),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        keyboardActions = KeyboardActions(onSearch = { keyboardController?.hide() }),
+                                        interactionSource = searchInteractionSource,
+                                        decorationBox = { innerTextField ->
+                                            OutlinedTextFieldDefaults.DecorationBox(
+                                                value = searchQuery,
+                                                innerTextField = innerTextField,
+                                                enabled = true,
+                                                singleLine = true,
+                                                visualTransformation = VisualTransformation.None,
+                                                interactionSource = searchInteractionSource,
+                                                placeholder = {
+                                                    Text(
+                                                        stringResource(R.string.douban_failure_search_hint),
+                                                        style = MaterialTheme.typography.bodyMedium
+                                                    )
+                                                },
+                                                trailingIcon = {
+                                                    if (searchQuery.isNotEmpty()) {
+                                                        IconButton(onClick = { searchQuery = "" }) {
+                                                            Icon(
+                                                                Icons.Filled.Close,
+                                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                                modifier = Modifier.size(19.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                },
+                                                contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
+                                                container = {
+                                                    OutlinedTextFieldDefaults.Container(
+                                                        enabled = true,
+                                                        isError = false,
+                                                        interactionSource = searchInteractionSource,
+                                                        colors = OutlinedTextFieldDefaults.colors(),
+                                                        shape = RoundedCornerShape(22.dp)
+                                                    )
+                                                }
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        },
                         navigationIcon = {
-                            IconButton(onClick = onBack) {
+                            // 始终保留返回按钮占位:展开时点击收起搜索(保留搜索词),未展开时点击返回上一页
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                if (isSearchExpanded) {
+                                    collapseSearch()
+                                } else {
+                                    onBack()
+                                }
+                            }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = stringResource(R.string.douban_retry_cancel)
@@ -469,6 +625,21 @@ fun DoubanFailuresScreen(
                             }
                         },
                         actions = {
+                            // 搜索图标(放在导入图标左侧):未展开是放大镜,展开是关闭
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                if (isSearchExpanded) {
+                                    searchQuery = ""
+                                    collapseSearch()
+                                } else {
+                                    expandSearch()
+                                }
+                            }) {
+                                Icon(
+                                    imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
+                                    contentDescription = stringResource(R.string.douban_failure_search_hint)
+                                )
+                            }
                             // JSON 导入入口(从设置页移到此处)
                             IconButton(onClick = {
                                 view.performHaptic(HapticType.CLICK)
@@ -502,69 +673,11 @@ fun DoubanFailuresScreen(
                                 )
                             }
                         },
+                        // 禁用 TopAppBar 默认的 windowInsets(状态栏 padding),避免与前面的 Spacer.statusBarsPadding() 重复
+                        windowInsets = WindowInsets(0),
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent
                         )
-                    )
-
-                    // 搜索框(参考 WatchlistScreen 风格,支持一键清空)
-                    val searchInteractionSource = remember { MutableInteractionSource() }
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
-                            .height(45.dp),
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        interactionSource = searchInteractionSource,
-                        decorationBox = { innerTextField ->
-                            OutlinedTextFieldDefaults.DecorationBox(
-                                value = searchQuery,
-                                innerTextField = innerTextField,
-                                enabled = true,
-                                singleLine = true,
-                                visualTransformation = VisualTransformation.None,
-                                interactionSource = searchInteractionSource,
-                                placeholder = {
-                                    Text(
-                                        stringResource(R.string.douban_failure_search_hint),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                },
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                                            Icon(
-                                                Icons.Filled.Close,
-                                                contentDescription = stringResource(R.string.content_desc_clear),
-                                                modifier = Modifier.size(19.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Icon(
-                                            Icons.Default.Search,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(19.dp)
-                                        )
-                                    }
-                                },
-                                contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
-                                container = {
-                                    OutlinedTextFieldDefaults.Container(
-                                        enabled = true,
-                                        isError = false,
-                                        interactionSource = searchInteractionSource,
-                                        colors = OutlinedTextFieldDefaults.colors(),
-                                        shape = RoundedCornerShape(22.dp)
-                                    )
-                                }
-                            )
-                        }
                     )
 
                     // 胶囊切换条:想看 / 已看
@@ -619,7 +732,12 @@ fun DoubanFailuresScreen(
 
     // 筛选 ModalBottomSheet
     if (showFilterSheet) {
-        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
+        ModalBottomSheet(
+            onDismissRequest = { showFilterSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            // 去除默认 drag 条,内容更紧凑
+            dragHandle = null
+        ) {
             FailureFilterSheet(
                 filterState = filterState,
                 onReasonsChange = { viewModel.updateSelectedReasons(it) },
@@ -776,6 +894,14 @@ private fun EmptyStateView(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            // 空图标(参考 Watchlist 空白页布局,以后统一用这个风格)
+            Icon(
+                imageVector = Icons.Outlined.Inbox,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = text,
                 style = MaterialTheme.typography.bodyLarge,
@@ -915,16 +1041,25 @@ private fun FailureCard(
                     .fillMaxWidth()
                     .padding(horizontal = 5.dp, vertical = 4.dp)
             ) {
+                // 处理 title 中包含 / 的中英文名分隔(如 "盗梦空间/Inception")
+                // 主标题取 / 前面;子标题优先用已有 subtitle,为空时取 / 后面
+                val titleContainsSlash = failure.title.contains("/")
+                val displayTitle = if (titleContainsSlash) failure.title.substringBefore("/") else failure.title
+                val displaySubtitle = when {
+                    !failure.subtitle.isNullOrBlank() -> failure.subtitle
+                    titleContainsSlash -> failure.title.substringAfter("/", "").takeIf { it.isNotEmpty() }
+                    else -> null
+                }
                 Text(
-                    text = failure.title,
+                    text = displayTitle,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (!failure.subtitle.isNullOrBlank()) {
+                if (!displaySubtitle.isNullOrBlank()) {
                     Text(
-                        text = failure.subtitle,
+                        text = displaySubtitle,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         maxLines = 1,
@@ -1006,6 +1141,8 @@ private fun ActionItem(
 
 /**
  * 筛选 ModalBottomSheet 内容:失败原因多选 + 标记时间区间 + 排序方式。
+ * 布局参考 Watchlist 筛选弹窗:每类之间用 HorizontalDivider 分隔,
+ * 标题与 chips/SegmentedButton 共用一行,SpaceBetween 让每行均匀分布。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1020,10 +1157,23 @@ private fun FailureFilterSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // 失败原因多选
+        // 失败原因多选(chip 按估算宽度降序排列:长块先占位,短块填缝)
+        val sortedReasons = remember {
+            FailureReason.entries.sortedByDescending { reason ->
+                val labelRes = reason.localizedStringResCompat()
+                // 估算:不同原因的文本长度,粗略排序
+                when (reason) {
+                    FailureReason.NO_IMDB_ID -> 80
+                    FailureReason.DETAIL_FETCH_FAILED -> 110
+                    FailureReason.TRAKT_NOT_FOUND -> 100
+                    FailureReason.TRAKT_WRITE_TIMEOUT -> 110
+                    FailureReason.TRAKT_WRITE_FAILED -> 100
+                }
+            }
+        }
         Text(
             text = stringResource(R.string.douban_failure_filter_reason),
             style = MaterialTheme.typography.titleSmall,
@@ -1034,7 +1184,7 @@ private fun FailureFilterSheet(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            FailureReason.entries.forEach { reason ->
+            sortedReasons.forEach { reason ->
                 FilterChip(
                     selected = reason in filterState.selectedReasons,
                     onClick = {
@@ -1050,63 +1200,78 @@ private fun FailureFilterSheet(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // 标记时间区间 SingleChoiceChip
-        Text(
-            text = stringResource(R.string.filter_marked_time),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // 标记时间区间(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            MarkedTimePreset.entries.forEach { preset ->
-                FilterChip(
-                    selected = filterState.markedTimePreset == preset,
-                    onClick = { onPresetChange(preset) },
-                    label = { Text(stringResource(preset.localizedStringRes())) }
-                )
+            Text(
+                text = stringResource(R.string.filter_marked_time),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                MarkedTimePreset.entries.forEach { preset ->
+                    FilterChip(
+                        selected = filterState.markedTimePreset == preset,
+                        onClick = { onPresetChange(preset) },
+                        label = { Text(stringResource(preset.localizedStringRes())) }
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // 排序方式 SegmentedButton
-        Text(
-            text = stringResource(R.string.filter_sort_order),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            SegmentedButton(
-                selected = filterState.markedTimeOrder == SortOrder.DESC,
-                onClick = { onOrderChange(SortOrder.DESC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                label = { Text(stringResource(R.string.filter_sort_desc)) },
-                icon = {
-                    Icon(
-                        Icons.Default.ArrowDownward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+        // 排序方式(标题+SegmentedButton 同行,两个按钮各占 weight(1f) 撑满宽度)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.filter_sort_order),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(48.dp)
             )
-            SegmentedButton(
-                selected = filterState.markedTimeOrder == SortOrder.ASC,
-                onClick = { onOrderChange(SortOrder.ASC) },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                label = { Text(stringResource(R.string.filter_sort_asc)) },
-                icon = {
-                    Icon(
-                        Icons.Default.ArrowUpward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.weight(1f)
+            ) {
+                SegmentedButton(
+                    selected = filterState.markedTimeOrder == SortOrder.DESC,
+                    onClick = { onOrderChange(SortOrder.DESC) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    label = { Text(stringResource(R.string.filter_sort_desc)) },
+                    icon = {
+                        Icon(
+                            Icons.Default.ArrowDownward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                SegmentedButton(
+                    selected = filterState.markedTimeOrder == SortOrder.ASC,
+                    onClick = { onOrderChange(SortOrder.ASC) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    label = { Text(stringResource(R.string.filter_sort_asc)) },
+                    icon = {
+                        Icon(
+                            Icons.Default.ArrowUpward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.traktsearch
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -88,6 +89,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -347,6 +350,7 @@ fun TraktSearchScreen(
                                     name = item.displayTitle,
                                     profileUrl = item.posterUrl,
                                     knownForDepartment = item.knownForDepartment,
+                                    personId = item.tmdbId,
                                     onClick = {
                                         if (item.tmdbId > 0) {
                                             onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "")
@@ -840,13 +844,17 @@ private fun DiskSearchContent(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun PersonSearchCard(
     name: String,
     profileUrl: String?,
     knownForDepartment: String,
+    personId: Int,
     onClick: () -> Unit
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -865,6 +873,19 @@ private fun PersonSearchCard(
                 contentAlignment = Alignment.Center
             ) {
                 if (profileUrl != null) {
+                    // 启用 sharedElement 转场:key 与 PersonHeaderContent 一致("person-avatar-$personId")
+                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        with(sharedTransitionScope) {
+                            Modifier
+                                .sharedElement(
+                                    rememberSharedContentState(key = "person-avatar-$personId"),
+                                    animatedVisibilityScope = animatedVisibilityScope
+                                )
+                                .fillMaxSize()
+                        }
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(profileUrl)
@@ -872,8 +893,7 @@ private fun PersonSearchCard(
                             .crossfade(false)
                             .build(),
                         contentDescription = name,
-                        modifier = Modifier
-                            .fillMaxSize()
+                        modifier = imageModifier
                             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
                         contentScale = ContentScale.Crop
                     )

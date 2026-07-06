@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,12 +43,17 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
+import com.tracktosearch.data.repository.CloudFailureSyncManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -55,14 +62,26 @@ import javax.inject.Inject
  *
  * 暴露 [DoubanRetryManager.retryState] 给 UI,并提供启动重试、清空失败记录的能力。
  * 同时暴露 [doubanFailureExporter] 与 [doubanSyncManager] 供设置页「重新同步豆瓣」「导出失败记录」入口调用。
+ *
+ * 云端同步:[cloudFailureSyncManager] 提供手动上传/下载失败数据到 Gitee 云端的能力,
+ * 供设置页「上传到云端」「从云端拉取」入口调用(要求登录豆瓣获取 userId 做文件路径隔离)。
  */
 @HiltViewModel
 class DoubanRetryViewModel @Inject constructor(
     val doubanRetryManager: DoubanRetryManager,
     val doubanFailureExporter: DoubanFailureExporter,
-    val doubanSyncManager: DoubanSyncManager
+    val doubanSyncManager: DoubanSyncManager,
+    val cloudFailureSyncManager: CloudFailureSyncManager
 ) : ViewModel() {
     val retryState = doubanRetryManager.retryState
+
+    /** 云端同步事件(一次性,UI 显示后用 [clearCloudSyncEvent] 清空) */
+    private val _cloudSyncEvent = MutableStateFlow<CloudSyncEvent?>(null)
+    val cloudSyncEvent: StateFlow<CloudSyncEvent?> = _cloudSyncEvent.asStateFlow()
+
+    /** 云端同步进行中(用于 UI 显示 loading) */
+    private val _cloudSyncLoading = MutableStateFlow(false)
+    val cloudSyncLoading: StateFlow<Boolean> = _cloudSyncLoading.asStateFlow()
 
     /** 重新加载失败项统计(用于入口检测) */
     suspend fun refreshRetryState() {
@@ -86,6 +105,76 @@ class DoubanRetryViewModel @Inject constructor(
     suspend fun clearAllFailures() {
         doubanRetryManager.clearAllFailures()
     }
+
+    /** 手动上传本地失败项到云端(要求已登录豆瓣获取 userId 做文件路径隔离) */
+    fun uploadToCloud() {
+        viewModelScope.launch {
+            _cloudSyncLoading.value = true
+            if (!cloudFailureSyncManager.isLoggedIn()) {
+                _cloudSyncEvent.value = CloudSyncEvent.NotLoggedIn
+                _cloudSyncLoading.value = false
+                return@launch
+            }
+            if (!retryState.value.hasFailures) {
+                _cloudSyncEvent.value = CloudSyncEvent.NoLocalFailures
+                _cloudSyncLoading.value = false
+                return@launch
+            }
+            val success = cloudFailureSyncManager.uploadIfHasFailures()
+            _cloudSyncEvent.value = if (success) CloudSyncEvent.UploadSuccess else CloudSyncEvent.UploadFailed
+            _cloudSyncLoading.value = false
+        }
+    }
+
+    /** 从云端拉取该豆瓣账号的失败数据并合并到本地 Room */
+    fun downloadFromCloud() {
+        viewModelScope.launch {
+            _cloudSyncLoading.value = true
+            if (!cloudFailureSyncManager.isLoggedIn()) {
+                _cloudSyncEvent.value = CloudSyncEvent.NotLoggedIn
+                _cloudSyncLoading.value = false
+                return@launch
+            }
+            val count = cloudFailureSyncManager.downloadAndMerge()
+            _cloudSyncEvent.value = when {
+                count < 0 -> CloudSyncEvent.DownloadFailed
+                count == 0 -> CloudSyncEvent.CloudEmpty
+                else -> {
+                    refreshRetryState()
+                    CloudSyncEvent.DownloadSuccess(count)
+                }
+            }
+            _cloudSyncLoading.value = false
+        }
+    }
+
+    fun clearCloudSyncEvent() {
+        _cloudSyncEvent.value = null
+    }
+}
+
+/** 云端同步事件(用于 UI 显示 Snackbar 反馈) */
+sealed class CloudSyncEvent {
+    /** 未登录豆瓣账号,无法定位云端文件路径 */
+    object NotLoggedIn : CloudSyncEvent()
+
+    /** 本地无失败项,跳过上传 */
+    object NoLocalFailures : CloudSyncEvent()
+
+    /** 上传成功 */
+    object UploadSuccess : CloudSyncEvent()
+
+    /** 上传失败(网络/服务端错误) */
+    object UploadFailed : CloudSyncEvent()
+
+    /** 云端无失败数据 */
+    object CloudEmpty : CloudSyncEvent()
+
+    /** 下载并合并 N 条失败数据 */
+    data class DownloadSuccess(val count: Int) : CloudSyncEvent()
+
+    /** 下载失败(网络/服务端错误) */
+    object DownloadFailed : CloudSyncEvent()
 }
 
 /**
@@ -118,6 +207,7 @@ fun DoubanRetryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(stringResource(R.string.douban_retry_title)) },
         text = {
             Column {
@@ -207,6 +297,7 @@ fun DoubanRetryDialog(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surface,
             title = { Text(stringResource(R.string.douban_retry_clear)) },
             text = { Text(stringResource(R.string.douban_retry_clear_confirm)) },
             confirmButton = {
@@ -245,6 +336,7 @@ private fun FailureReasonPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         title = { Text(stringResource(R.string.douban_retry_select_reasons)) },
         text = {
             Column {

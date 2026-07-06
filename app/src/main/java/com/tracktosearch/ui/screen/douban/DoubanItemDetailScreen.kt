@@ -6,7 +6,9 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,13 +29,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,6 +48,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.FilterChip
@@ -69,8 +78,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -105,6 +117,7 @@ import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
@@ -197,6 +210,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                     // 默认开启「同时用子标题搜索」(仅当 subtitle 非空时才生效)
                     searchWithSubtitle = !failure.subtitle.isNullOrBlank()
                 )
+                // 尽早从缓存预查海报主色,让沉浸背景在海报图片加载前显示
+                prefetchPosterColor(failure.posterUrl)
                 // 加载完成后自动触发资源搜索
                 searchResources()
             } catch (e: Exception) {
@@ -417,9 +432,37 @@ class DoubanItemDetailViewModel @Inject constructor(
         }
     }
 
+    /** 手动标注当前条目的媒体类型(movie/show/null),用于资源搜索时按类型筛选 */
+    fun setMediaType(mediaType: String?) {
+        val failure = _uiState.value.failure ?: return
+        viewModelScope.launch {
+            doubanRetryManager.updateMediaType(failure.doubanId, mediaType)
+            _uiState.value = _uiState.value.copy(
+                failure = failure.copy(mediaType = mediaType)
+            )
+        }
+    }
+
     /** 海报主色调提取回调:更新沉浸式渐变背景色 */
     fun updatePosterColor(color: Color) {
         _uiState.value = _uiState.value.copy(posterDominantColor = color)
+    }
+
+    /**
+     * 进入详情页时尽早从缓存预查海报主色(不需要 bitmap)。
+     * 命中则瞬间设置 posterDominantColor,让沉浸背景在海报图片加载前显示。
+     * 未命中仍由 DoubanItemHeader 的 Coil listener 走 [updatePosterColor] 流程。
+     */
+    private fun prefetchPosterColor(posterUrl: String?) {
+        if (posterUrl.isNullOrEmpty()) return
+        if (_uiState.value.posterDominantColor != null) return
+        viewModelScope.launch {
+            posterColorExtractor.getCachedColor(posterUrl)?.let { argb ->
+                if (argb != 0L) {
+                    _uiState.value = _uiState.value.copy(posterDominantColor = Color(argb))
+                }
+            }
+        }
     }
 }
 
@@ -442,6 +485,22 @@ fun DoubanItemDetailScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
     var subtitleInput by remember { mutableStateOf("") }
+    // 手动标记媒体类型下拉菜单展开状态
+    var showMarkMenu by remember { mutableStateOf(false) }
+
+    // 内容就绪状态:沉浸背景优先显示,其他内容(tab/搜索/资源)淡入
+    // posterDominantColor 就绪 → 80ms 后标记就绪;未就绪 → 400ms 兜底
+    var contentReady by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.posterDominantColor) {
+        if (uiState.posterDominantColor != null) {
+            kotlinx.coroutines.delay(80)
+            contentReady = true
+        } else {
+            kotlinx.coroutines.delay(400)
+            contentReady = true
+        }
+    }
+    val contentAlpha = if (contentReady) 1f else 0f
 
     // 拦截系统返回手势
     BackHandler(enabled = true) {
@@ -488,7 +547,7 @@ fun DoubanItemDetailScreen(
                         Modifier.background(
                             Brush.verticalGradient(
                                 colors = listOf(
-                                    c.copy(alpha = 0.45f),
+                                    c.copy(alpha = 0.70f),
                                     MaterialTheme.colorScheme.background
                                 )
                             )
@@ -517,6 +576,7 @@ fun DoubanItemDetailScreen(
                     item(key = "header") {
                         DoubanItemHeader(
                             failure = failure,
+                            posterColor = uiState.posterDominantColor,
                             onPosterClick = { showPosterFullscreen = true },
                             onSubtitleClick = {
                                 subtitleInput = failure.subtitle ?: ""
@@ -527,9 +587,13 @@ fun DoubanItemDetailScreen(
                         )
                     }
 
-                    // Tab 行(吸顶)
+                    // Tab 行(吸顶) — 容器色透明,让海报主色调透出
                     stickyHeader(key = "tab_row") {
-                        PrimaryTabRow(selectedTabIndex = selectedTab) {
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            modifier = Modifier.alpha(contentAlpha)
+                        ) {
                             Tab(
                                 selected = selectedTab == 0,
                                 onClick = {
@@ -564,28 +628,36 @@ fun DoubanItemDetailScreen(
                         0 -> {
                             // 资源搜索 Tab
                             item(key = "search_keyword_bar") {
-                                DoubanSearchKeywordBar(
-                                    failure = failure,
-                                    searchWithSubtitle = uiState.searchWithSubtitle,
-                                    onToggleSearchWithSubtitle = { viewModel.toggleSearchWithSubtitle() }
-                                )
+                                Box(modifier = Modifier.alpha(contentAlpha)) {
+                                    DoubanSearchKeywordBar(
+                                        failure = failure,
+                                        searchWithSubtitle = uiState.searchWithSubtitle,
+                                        onToggleSearchWithSubtitle = { viewModel.toggleSearchWithSubtitle() }
+                                    )
+                                }
                             }
                             item(key = "filter_section") {
-                                DoubanFilterSection(
-                                    availableSources = uiState.availableSources,
-                                    enabledSources = uiState.enabledSources,
-                                    customSourceNames = uiState.customSourceNames,
-                                    enabledDiskTypes = uiState.enabledDiskTypes,
-                                    onToggleSource = { viewModel.toggleSource(it) },
-                                    onToggleDiskType = { viewModel.toggleDiskType(it) }
-                                )
+                                Box(modifier = Modifier.alpha(contentAlpha)) {
+                                    DoubanFilterSection(
+                                        availableSources = uiState.availableSources,
+                                        enabledSources = uiState.enabledSources,
+                                        customSourceNames = uiState.customSourceNames,
+                                        enabledDiskTypes = uiState.enabledDiskTypes,
+                                        onToggleSource = { viewModel.toggleSource(it) },
+                                        onToggleDiskType = { viewModel.toggleDiskType(it) }
+                                    )
+                                }
                             }
                             when {
                                 uiState.isSearching -> {
-                                    item(key = "searching") { DoubanSearchingState() }
+                                    item(key = "searching") {
+                                        Box(modifier = Modifier.alpha(contentAlpha)) { DoubanSearchingState() }
+                                    }
                                 }
                                 uiState.searchResults.isEmpty() && uiState.searchAttempted -> {
-                                    item(key = "empty") { DoubanEmptyState(onRetry = { viewModel.searchResources() }) }
+                                    item(key = "empty") {
+                                        Box(modifier = Modifier.alpha(contentAlpha)) { DoubanEmptyState(onRetry = { viewModel.searchResources() }) }
+                                    }
                                 }
                                 else -> {
                                     item(key = "resource_count") {
@@ -628,22 +700,24 @@ fun DoubanItemDetailScreen(
                         1 -> {
                             // 详情信息 Tab
                             item(key = "info_actions") {
-                                DoubanDetailInfoTab(
-                                    failure = failure,
-                                    onOpenDouban = {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(failure.doubanUrl))
-                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        try {
-                                            context.startActivity(intent)
-                                        } catch (_: ActivityNotFoundException) {
-                                            context.showToast(
-                                                context.getString(R.string.screen_douban_item_detail_open_douban)
-                                            )
-                                        }
-                                    },
-                                    onRetry = { viewModel.retrySingle() },
-                                    onDelete = { viewModel.showDeleteConfirm(true) }
-                                )
+                                Box(modifier = Modifier.alpha(contentAlpha)) {
+                                    DoubanDetailInfoTab(
+                                        failure = failure,
+                                        onOpenDouban = {
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(failure.doubanUrl))
+                                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            try {
+                                                context.startActivity(intent)
+                                            } catch (_: ActivityNotFoundException) {
+                                                context.showToast(
+                                                    context.getString(R.string.screen_douban_item_detail_open_douban)
+                                                )
+                                            }
+                                        },
+                                        onRetry = { viewModel.retrySingle() },
+                                        onDelete = { viewModel.showDeleteConfirm(true) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -678,7 +752,8 @@ fun DoubanItemDetailScreen(
                 )
             }
 
-            // Haze 模糊覆盖层:状态栏 + 标题栏(参考 DoubanFailuresScreen)
+            // Haze 模糊覆盖层:状态栏 + 顶部悬浮按钮区域(参考正常详情页)
+            // alpha 0.15:降低白色强度,让海报主色调更沉浸(+15% 增强)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -686,46 +761,197 @@ fun DoubanItemDetailScreen(
                         state = hazeState,
                         style = HazeMaterials.thin()
                     )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.15f))
             ) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = uiState.failure?.title ?: "",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = {
-                            view.performHaptic(HapticType.TICK)
-                            onBack()
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.detail_back)
-                            )
-                        }
-                    },
-                    actions = {
-                        // 手动刷新按钮:清缓存重拉(仅在条目加载完成且未在加载中时可用)
-                        IconButton(
-                            onClick = {
-                                view.performHaptic(HapticType.TICK)
-                                viewModel.refreshResources()
-                            },
-                            enabled = !uiState.isLoading && uiState.failure != null
+                Column {
+                    // 状态栏 Spacer
+                    Spacer(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .fillMaxWidth()
+                    )
+                    // 顶部悬浮按钮行:左侧返回 + 右侧标记 + 分享(参考正常详情页圆形按钮)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 返回按钮
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .hazeEffect(
+                                    state = hazeState,
+                                    style = HazeStyle(
+                                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                        blurRadius = 20.dp,
+                                        noiseFactor = 0f,
+                                        tint = null
+                                    )
+                                )
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                    shape = CircleShape
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        onBack()
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.content_desc_refresh)
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.detail_back),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Transparent
-                    )
-                )
+                        Spacer(modifier = Modifier.weight(1f))
+                        // 手动标记媒体类型按钮(下拉菜单)
+                        val failure = uiState.failure
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .hazeEffect(
+                                        state = hazeState,
+                                        style = HazeStyle(
+                                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                            blurRadius = 20.dp,
+                                            noiseFactor = 0f,
+                                            tint = null
+                                        )
+                                    )
+                                    .background(
+                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                        shape = CircleShape
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                        shape = CircleShape
+                                    )
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null,
+                                        onClick = {
+                                            view.performHaptic(HapticType.CLICK)
+                                            showMarkMenu = true
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Label,
+                                    contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMarkMenu,
+                                onDismissRequest = { showMarkMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.screen_douban_failures_mark_as_movie)) },
+                                    leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                                    onClick = {
+                                        viewModel.setMediaType("movie")
+                                        showMarkMenu = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.screen_douban_failures_mark_as_show)) },
+                                    leadingIcon = { Icon(Icons.Default.Tv, contentDescription = null) },
+                                    onClick = {
+                                        viewModel.setMediaType("show")
+                                        showMarkMenu = false
+                                    }
+                                )
+                                if (failure?.mediaType != null) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.screen_douban_failures_clear_mark)) },
+                                        onClick = {
+                                            viewModel.setMediaType(null)
+                                            showMarkMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        // 分享按钮(分享影视标题、评分、豆瓣链接)
+                        val shareContext = LocalContext.current
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .hazeEffect(
+                                    state = hazeState,
+                                    style = HazeStyle(
+                                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                        blurRadius = 20.dp,
+                                        noiseFactor = 0f,
+                                        tint = null
+                                    )
+                                )
+                                .background(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                    shape = CircleShape
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                    shape = CircleShape
+                                )
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onClick = {
+                                        view.performHaptic(HapticType.TICK)
+                                        val f = uiState.failure
+                                        if (f != null) {
+                                            val shareText = buildString {
+                                                append(f.title)
+                                                f.rating?.let { append(" - ${shareContext.getString(R.string.share_douban_rating)}: $it") }
+                                                if (f.doubanUrl.isNotBlank()) {
+                                                    append("\n")
+                                                    append(f.doubanUrl)
+                                                }
+                                            }
+                                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, shareText)
+                                            }
+                                            shareContext.startActivity(
+                                                Intent.createChooser(sendIntent, null)
+                                            )
+                                        }
+                                    }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Share,
+                                contentDescription = stringResource(R.string.detail_share),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -796,16 +1022,34 @@ fun DoubanItemDetailScreen(
 @Composable
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
+    posterColor: Color?,
     onPosterClick: () -> Unit,
     onSubtitleClick: () -> Unit,
     posterColorExtractor: PosterColorExtractor,
     onPosterColorExtracted: (Color) -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    // 根据海报主色调亮度自适应文字颜色,增强沉浸背景下的可读性
+    val onPosterColor = posterColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+    } ?: MaterialTheme.colorScheme.onSurface
+    val onPosterVariantColor = posterColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+    } ?: MaterialTheme.colorScheme.onSurfaceVariant
+    // 处理 title 中包含 / 的中英文名分隔:主标题取 / 前面,子标题优先用已有,为空时取 / 后面
+    val titleContainsSlash = failure.title.contains("/")
+    val displayTitle = if (titleContainsSlash) failure.title.substringBefore("/") else failure.title
+    val displaySubtitle = when {
+        !failure.subtitle.isNullOrBlank() -> failure.subtitle
+        titleContainsSlash -> failure.title.substringAfter("/", "").takeIf { it.isNotEmpty() }
+        else -> null
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            // 顶部留白 = 状态栏 + TopAppBar 高度(64dp),避免海报被标题栏遮住
             .statusBarsPadding()
+            .padding(top = 64.dp)
             .padding(horizontal = 16.dp)
     ) {
         Row(
@@ -845,7 +1089,7 @@ private fun DoubanItemHeader(
                                 )
                                 .build()
                         },
-                        contentDescription = failure.title,
+                        contentDescription = displayTitle,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -870,19 +1114,19 @@ private fun DoubanItemHeader(
                     .weight(1f)
                     .fillMaxHeight()
             ) {
-                // 标题
+                // 标题(主标题,去除 / 后的英文名部分)
                 Text(
-                    text = failure.title,
+                    text = displayTitle,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = onPosterColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // 子标题(可点击编辑)
+                // 子标题(可点击编辑;为空时若 title 含 / 则取 / 后面)
                 Surface(
                     shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
@@ -891,10 +1135,10 @@ private fun DoubanItemHeader(
                         .clickable { onSubtitleClick() }
                 ) {
                     Text(
-                        text = failure.subtitle
+                        text = displaySubtitle
                             ?: stringResource(R.string.screen_douban_item_detail_subtitle_hint),
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (failure.subtitle != null)
+                        color = if (displaySubtitle != null)
                             MaterialTheme.colorScheme.onSurface
                         else
                             MaterialTheme.colorScheme.onSurfaceVariant,
@@ -908,7 +1152,7 @@ private fun DoubanItemHeader(
 
                 // 评分(5★)
                 if (failure.rating != null) {
-                    DoubanStarRating(rating = failure.rating)
+                    DoubanStarRating(rating = failure.rating, textColor = onPosterVariantColor)
                     Spacer(modifier = Modifier.height(6.dp))
                 }
 
@@ -920,7 +1164,7 @@ private fun DoubanItemHeader(
                 Text(
                     text = "${failure.markedAt} · $statusText",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = onPosterVariantColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -957,13 +1201,13 @@ private fun DoubanItemHeader(
 
 /** 5 星评分显示(豆瓣 1-5 评分) */
 @Composable
-private fun DoubanStarRating(rating: Int) {
+private fun DoubanStarRating(rating: Int, textColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         for (i in 1..5) {
             Icon(
                 imageVector = if (i <= rating) Icons.Filled.Star else Icons.Outlined.Star,
                 contentDescription = null,
-                tint = if (i <= rating) Color(0xFFFFC107) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                tint = if (i <= rating) Color(0xFFFFC107) else textColor.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -971,7 +1215,7 @@ private fun DoubanStarRating(rating: Int) {
         Text(
             text = "$rating/5",
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = textColor
         )
     }
 }
