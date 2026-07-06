@@ -608,6 +608,8 @@
     <string name="settings_export_json_desc">导出想看和历史为 JSON</string>
     <string name="settings_import_imdb">从 IMDb 导入</string>
     <string name="settings_import_imdb_desc">从 IMDb CSV 导入想看列表</string>
+    <string name="settings_export_marks_data">导出标记数据</string>
+    <string name="settings_view_statistics">观看统计</string>
     <string name="settings_douban_resync">重新同步豆瓣</string>
     <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
     <string name="settings_douban_retry_failures">重试上次失败项</string>

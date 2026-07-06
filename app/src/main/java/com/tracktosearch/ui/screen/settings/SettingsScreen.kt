@@ -43,10 +43,12 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
@@ -108,6 +110,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -124,6 +127,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
+import com.tracktosearch.ui.screen.douban.CloudSyncEvent
 import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
@@ -152,6 +156,7 @@ fun SettingsScreen(
     onRestartOnboarding: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onDoubanFailures: () -> Unit = {},
+    onStatisticsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -168,9 +173,29 @@ fun SettingsScreen(
     // 「重新同步豆瓣」按钮点击时,有失败则弹重试选择对话框,无失败直接走增量同步
     val doubanRetryViewModel: DoubanRetryViewModel = hiltViewModel()
     val doubanRetryState by doubanRetryViewModel.retryState.collectAsStateWithLifecycle()
+    val cloudSyncLoading by doubanRetryViewModel.cloudSyncLoading.collectAsStateWithLifecycle()
+    val cloudSyncEvent by doubanRetryViewModel.cloudSyncEvent.collectAsStateWithLifecycle()
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 跳转查看页
+    // 用于跨设备查看:A 导出失败数据 → B 导入后在查看页显示
+    val importFailuresLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val count = doubanRetryViewModel.doubanFailureExporter.importToRoom(context, uri)
+                if (count >= 0) {
+                    // 刷新失败项统计 + 跳转查看页
+                    doubanRetryViewModel.refreshRetryState()
+                    onDoubanFailures()
+                }
+            }
+        }
+    }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshCacheInfo()
@@ -198,7 +223,6 @@ fun SettingsScreen(
     var showDetailSectionsDialog by remember { mutableStateOf(false) }
     var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
-    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(exportImportState.message) {
@@ -206,6 +230,22 @@ fun SettingsScreen(
             snackbarHostState.showSnackbar(it)
             viewModel.clearMessage()
         }
+    }
+
+    // 云端同步事件 → Snackbar 反馈(一次性,显示后清空)
+    LaunchedEffect(cloudSyncEvent) {
+        val event = cloudSyncEvent ?: return@LaunchedEffect
+        val msg = when (event) {
+            is CloudSyncEvent.NotLoggedIn -> context.getString(R.string.cloud_sync_no_login)
+            is CloudSyncEvent.NoLocalFailures -> context.getString(R.string.cloud_sync_no_local_failures)
+            is CloudSyncEvent.UploadSuccess -> context.getString(R.string.cloud_sync_upload_success)
+            is CloudSyncEvent.UploadFailed -> context.getString(R.string.cloud_sync_upload_failed)
+            is CloudSyncEvent.CloudEmpty -> context.getString(R.string.cloud_sync_download_empty)
+            is CloudSyncEvent.DownloadSuccess -> context.getString(R.string.cloud_sync_download_success, event.count)
+            is CloudSyncEvent.DownloadFailed -> context.getString(R.string.cloud_sync_download_failed)
+        }
+        snackbarHostState.showSnackbar(msg)
+        doubanRetryViewModel.clearCloudSyncEvent()
     }
 
     val exportJsonLauncher = rememberLauncherForActivityResult(
@@ -470,29 +510,50 @@ fun SettingsScreen(
                     }
                 }
                 item {
-                    SettingsItem(
-                        icon = Icons.Default.FileUpload,
-                        title = stringResource(R.string.settings_export_json),
-                        subtitle = stringResource(R.string.settings_export_json_desc),
-                        onClick = {
-                            if (!exportImportState.isExporting) {
-                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
-                                exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                    // 数据流通入口:2x2 圆角卡片(导出标记数据 / 从 IMDb 导入 / 上传云端 / 从云端拉取)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DataFlowCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.FileUpload,
+                            title = stringResource(R.string.settings_export_marks_data),
+                            onClick = {
+                                if (!exportImportState.isExporting) {
+                                    val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                    exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                                }
                             }
-                        }
-                    )
-                }
-                item {
-                    SettingsItem(
-                        icon = Icons.Default.FileDownload,
-                        title = stringResource(R.string.settings_import_imdb),
-                        subtitle = stringResource(R.string.settings_import_imdb_desc),
-                        onClick = {
-                            if (!exportImportState.isImporting) {
-                                importImdbLauncher.launch("text/*")
+                        )
+                        DataFlowCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.FileDownload,
+                            title = stringResource(R.string.settings_import_imdb),
+                            onClick = {
+                                if (!exportImportState.isImporting) {
+                                    importImdbLauncher.launch("text/*")
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        DataFlowCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.CloudUpload,
+                            title = stringResource(R.string.settings_douban_upload_cloud),
+                            onClick = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() }
+                        )
+                        DataFlowCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Default.CloudDownload,
+                            title = stringResource(R.string.settings_douban_download_cloud),
+                            onClick = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() }
+                        )
+                    }
                 }
                 item {
                     SettingsItem(
@@ -530,6 +591,26 @@ fun SettingsScreen(
                             ),
                             onClick = { onDoubanFailures() }
                         )
+                    }
+                }
+                // 云端同步进行中:显示进度条
+                if (cloudSyncLoading) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.cloud_sync_in_progress),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 exportImportState.syncProgress?.let { progress ->
@@ -628,6 +709,16 @@ fun SettingsScreen(
                         showClearCategoryDialog = true
                     },
                     onClearAll = { showClearCacheDialog = true }
+                )
+            }
+
+            // 观看统计入口（账户 section 上方）
+            item {
+                SettingsItem(
+                    icon = Icons.Default.BarChart,
+                    title = stringResource(R.string.settings_view_statistics),
+                    subtitle = "",
+                    onClick = onStatisticsClick
                 )
             }
 
@@ -919,9 +1010,9 @@ fun SettingsScreen(
                 }
             },
             onRetryFromJson = {
-                // JSON 导入重试:跳转豆瓣登录页,用户可在那里选择导入 JSON
+                // JSON 导入:启动文件选择器,选中后 importToRoom + 跳转查看页
                 showDoubanRetryDialog = false
-                onDoubanResync()
+                importFailuresLauncher.launch(arrayOf("application/json"))
             },
             onExportFailures = {
                 showDoubanRetryDialog = false
@@ -1459,13 +1550,14 @@ fun CacheManagementItem(
     onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
     onClearAll: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        // 概览行（点击展开/收起）
+        // 概览行（整卡可点击展开/收起）
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { expanded = !expanded }
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2299,5 +2391,31 @@ private fun DefaultTabSelectionDialog(
         },
         confirmButton = {}
     )
+}
+
+/**
+ * 数据流通卡片：圆角居中布局（图标 + 标题），用于 2x2 网格入口
+ */
+@Composable
+private fun DataFlowCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    title: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Text(title, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+        }
+    }
 }
 

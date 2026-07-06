@@ -324,6 +324,7 @@ fun MainScreen(
                                 onTraktSearch = onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                                 onNavigateToDoubanLogin = onNavigateToDoubanLogin,
+                                onNavigateToLogin = onNavigateToLogin,
                                 modifier = Modifier.fillMaxSize()
                             )
                         } else {
@@ -341,6 +342,7 @@ fun MainScreen(
                         onRestartOnboarding = onRestartOnboarding,
                         onDoubanResync = onDoubanResync,
                         onDoubanFailures = onDoubanFailures,
+                        onStatisticsClick = onStatisticsClick,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

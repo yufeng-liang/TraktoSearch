@@ -469,6 +469,8 @@
     <string name="settings_export_json_desc">ウォッチリストと履歴をJSONとしてエクスポート</string>
     <string name="settings_import_imdb">IMDbからインポート</string>
     <string name="settings_import_imdb_desc">IMDb CSVからウォッチリストをインポート</string>
+    <string name="settings_export_marks_data">マークをエクスポート</string>
+    <string name="settings_view_statistics">視聴統計</string>
     <string name="settings_douban_resync">豆瓣を再同期</string>
     <string name="settings_douban_resync_desc">同期モードを選択し、豆瓣の状態変化を処理</string>
     <string name="settings_douban_retry_failures">前回の失敗項目を再試行</string>
