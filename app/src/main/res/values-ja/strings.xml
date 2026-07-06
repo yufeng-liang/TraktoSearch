@@ -29,6 +29,7 @@
     <string name="content_desc_save">保存</string>
     <string name="content_desc_view_all">すべて表示</string>
     <string name="content_desc_back">戻る</string>
+    <string name="content_desc_refresh">更新</string>
     <string name="gallery_save_failed">保存に失敗しました</string>
     <string name="gallery_already_exists">既に存在します: %1$s</string>
     <string name="gallery_saved">保存しました: %1$s/%2$s</string>
@@ -103,6 +104,10 @@
     <string name="login_retry">再試行</string>
     <string name="login_guest">ゲストとして続行</string>
     <string name="login_douban_import">または豆瓣からインポート</string>
+    <string name="douban_import_require_trakt_title">Trakt ログインが必要です</string>
+    <string name="douban_import_require_trakt_desc">豆瓣マークのインポートには Trakt ログインが必要です。マークは Trakt のウォッチリスト/視聴済みリストに同期されます。Trakt にログインしますか?</string>
+    <string name="douban_import_require_trakt_login">Trakt にログイン</string>
+    <string name="douban_import_require_trakt_cancel">キャンセル</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">豆瓣にログイン</string>
@@ -119,6 +124,7 @@
     <string name="douban_sync_cancel">キャンセル</string>
     <string name="douban_sync_background">バックグラウンド</string>
     <string name="douban_sync_relogin">再ログイン</string>
+    <string name="douban_sync_login_trakt">Trakt にログイン</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣ログイン期限切れ、タップして再ログイン</string>
     <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -488,7 +494,30 @@
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">同期失敗項目を表示</string>
     <string name="settings_douban_view_failures_desc">%1$d件の豆瓣項目が同期失敗</string>
+    <string name="settings_douban_import_failures">JSONから失敗項目をインポート</string>
+    <string name="settings_douban_import_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてここで表示</string>
     <string name="screen_douban_failures_title">同期失敗項目</string>
+
+    <!-- クラウド失敗データ同期 -->
+    <string name="cloud_failures_detected_title">クラウドに失敗データを検出</string>
+    <string name="cloud_failures_detected_desc">クラウドにこの豆瓣アカウントの失敗データ %1$d 件があります。ローカルにダウンロードして表示しますか?</string>
+    <string name="cloud_failures_download">ダウンロード</string>
+    <string name="cloud_failures_dismiss">後で</string>
+    <string name="cloud_failures_downloaded">クラウド失敗データをダウンロードしてマージしました</string>
+
+    <!-- Manual cloud sync (settings page) -->
+    <string name="settings_douban_upload_cloud">失敗データをクラウドにアップロード</string>
+    <string name="settings_douban_upload_cloud_desc">ローカルの失敗項目を Gitee クラウドにアップロードして他のデバイスで表示(豆瓣ログイン必須)</string>
+    <string name="settings_douban_download_cloud">クラウドから失敗データを取得</string>
+    <string name="settings_douban_download_cloud_desc">この豆瓣アカウントのクラウド失敗データをダウンロードしてローカルにマージ</string>
+    <string name="cloud_sync_no_login">先に豆瓣アカウントにログインしてください</string>
+    <string name="cloud_sync_no_local_failures">ローカルに失敗項目がないため、アップロードをスキップ</string>
+    <string name="cloud_sync_upload_success">失敗データをクラウドにアップロードしました</string>
+    <string name="cloud_sync_upload_failed">アップロード失敗、後でもう一度お試しください</string>
+    <string name="cloud_sync_download_empty">この豆瓣アカウントのクラウド失敗データはありません</string>
+    <string name="cloud_sync_download_success">クラウド失敗データ %1$d 件をダウンロードしてマージしました</string>
+    <string name="cloud_sync_download_failed">ダウンロード失敗、後でもう一度お試しください</string>
+    <string name="cloud_sync_in_progress">同期中…</string>
     <string name="screen_douban_failures_empty_wish">ウォッチリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_collect">視聴済みリストの同期が全て成功しました</string>
     <string name="screen_douban_failures_empty_all">同期失敗項目はありません</string>
@@ -767,6 +796,7 @@
     <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を再同期」をタップすると再同期できます。</string>
     <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
     <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
+    <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理で「JSONから失敗項目をインポート」をタップして、他のデバイスからエクスポートした失敗項目JSONファイルをインポートし、ローカルで表示できます。</string>
 
     <!-- 彩蛋メッセージ（9アニメ × 3メッセージ） -->
     <string name="easter_msg_shy_1">つつかれました、くすぐったい！</string>

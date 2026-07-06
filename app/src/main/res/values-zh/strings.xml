@@ -30,6 +30,7 @@
     <string name="content_desc_save">保存</string>
     <string name="content_desc_view_all">查看全部</string>
     <string name="content_desc_back">返回</string>
+    <string name="content_desc_refresh">刷新</string>
     <string name="gallery_save_failed">保存失败</string>
     <string name="gallery_already_exists">已存在: %1$s</string>
     <string name="gallery_saved">已保存: %1$s/%2$s</string>
@@ -193,6 +194,10 @@
     <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
+    <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
+    <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号,标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt?</string>
+    <string name="douban_import_require_trakt_login">登录 Trakt</string>
+    <string name="douban_import_require_trakt_cancel">取消</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">登录豆瓣</string>
@@ -209,6 +214,7 @@
     <string name="douban_sync_cancel">取消</string>
     <string name="douban_sync_background">转后台</string>
     <string name="douban_sync_relogin">重新登录</string>
+    <string name="douban_sync_login_trakt">登录 Trakt</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣登录已过期，点此重新登录</string>
     <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -464,6 +470,7 @@
     <string name="help_data_douban_b2">在设置 → 数据管理点击「重新同步豆瓣」可重新同步豆瓣标记</string>
     <string name="help_data_douban_b3">冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
     <string name="help_data_douban_b4">同步失败的条目会保存在本地。在设置 → 数据管理点击「查看同步失败项」可查看失败项,支持手动标注电影/电视剧类型、编辑子标题、搜索资源、重试同步或删除</string>
+    <string name="help_data_douban_b5">跨设备查看:在设置 → 数据管理点击「从 JSON 导入失败项」,可导入从其他设备导出的失败项 JSON 文件,在本地查看</string>
     <string name="help_custom_source">自定义搜索源</string>
     <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
     <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
@@ -529,7 +536,6 @@
     <string name="help_discover_filter_b2">支持按类型、地区、标签、评分区间、年代筛选，可按热度、上映时间或评分排序</string>
     <string name="help_discover_filter_b3">电影与电视剧的筛选条件互相独立，切换 Tab 会保留各自的筛选选择</string>
     <string name="help_discover_filter_b4">筛选条件未变化时不刷新结果（关闭弹窗或点应用时如条件未变会跳过重复请求）</string>
-    <string name="help_discover_filter_b5">吸顶筛选栏支持穿透滑动，在标题栏区域拖动可直接滚动下方列表</string>
     <string name="help_discover_filter_b6">高级筛选中开启"仅展示未标看过"可过滤掉已标记看过的影视（需登录）</string>
     <string name="help_tips_b1">点击状态栏可快速回到页面顶部</string>
     <string name="help_tips_b2">评分支持半星选择（点击星星左右两侧），再次点击已选区域可取消评分</string>
@@ -627,7 +633,30 @@
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">查看同步失败项</string>
     <string name="settings_douban_view_failures_desc">%1$d 项豆瓣条目同步失败</string>
+    <string name="settings_douban_import_failures">从 JSON 导入失败项</string>
+    <string name="settings_douban_import_failures_desc">导入从其他设备导出的失败项 JSON 文件,在此查看</string>
     <string name="screen_douban_failures_title">同步失败项</string>
+
+    <!-- 云端失败数据同步 -->
+    <string name="cloud_failures_detected_title">检测到云端失败数据</string>
+    <string name="cloud_failures_detected_desc">云端有 %1$d 条该豆瓣账号的同步失败数据,是否下载到本地查看?</string>
+    <string name="cloud_failures_download">下载</string>
+    <string name="cloud_failures_dismiss">暂不</string>
+    <string name="cloud_failures_downloaded">云端失败数据已下载并合并</string>
+
+    <!-- Manual cloud sync (settings page) -->
+    <string name="settings_douban_upload_cloud">上传失败数据到云端</string>
+    <string name="settings_douban_upload_cloud_desc">把本地失败项上传到 Gitee 云端,用于跨设备查看(需登录豆瓣)</string>
+    <string name="settings_douban_download_cloud">从云端拉取失败数据</string>
+    <string name="settings_douban_download_cloud_desc">下载该豆瓣账号的云端失败数据并合并到本地</string>
+    <string name="cloud_sync_no_login">请先登录豆瓣账号</string>
+    <string name="cloud_sync_no_local_failures">本地无失败项,跳过上传</string>
+    <string name="cloud_sync_upload_success">失败数据已上传到云端</string>
+    <string name="cloud_sync_upload_failed">上传失败,请稍后重试</string>
+    <string name="cloud_sync_download_empty">云端无该豆瓣账号的失败数据</string>
+    <string name="cloud_sync_download_success">已下载并合并 %1$d 条云端失败数据</string>
+    <string name="cloud_sync_download_failed">下载失败,请稍后重试</string>
+    <string name="cloud_sync_in_progress">同步中…</string>
     <string name="screen_douban_failures_empty_wish">想看列表同步全部成功</string>
     <string name="screen_douban_failures_empty_collect">已看列表同步全部成功</string>
     <string name="screen_douban_failures_empty_all">没有同步失败项</string>

@@ -30,6 +30,7 @@
     <string name="content_desc_save">Save</string>
     <string name="content_desc_view_all">View all</string>
     <string name="content_desc_back">Back</string>
+    <string name="content_desc_refresh">Refresh</string>
     <string name="gallery_save_failed">Save failed</string>
     <string name="gallery_already_exists">Already exists: %1$s</string>
     <string name="gallery_saved">Saved: %1$s/%2$s</string>
@@ -193,6 +194,10 @@
     <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
+    <string name="douban_import_require_trakt_title">Login to Trakt required</string>
+    <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
+    <string name="douban_import_require_trakt_login">Login Trakt</string>
+    <string name="douban_import_require_trakt_cancel">Cancel</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">Login to Douban</string>
@@ -209,6 +214,7 @@
     <string name="douban_sync_cancel">Cancel</string>
     <string name="douban_sync_background">Background</string>
     <string name="douban_sync_relogin">Re-login</string>
+    <string name="douban_sync_login_trakt">Login Trakt</string>
     <string name="douban_sync_cookie_expired_banner">Douban login expired, tap to re-login</string>
     <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -464,6 +470,7 @@
     <string name="help_data_douban_b2">In Settings → Data Management, tap \"Re-sync Douban\" to re-sync Douban marks.</string>
     <string name="help_data_douban_b3">Conflict strategy: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
     <string name="help_data_douban_b4">Failed items are saved locally. In Settings → Data Management, tap \"View Sync Failures\" to review them, mark movie/show type, edit subtitle, search resources, retry sync, or delete.</string>
+    <string name="help_data_douban_b5">Cross-device: In Settings → Data Management, tap \"Import failures from JSON\" to import a failures JSON file exported from another device and view them locally.</string>
     <string name="help_custom_source">Custom Search Sources</string>
     <string name="help_custom_source_b1">Settings → Search Sources → Custom Sources → Add Source</string>
     <string name="help_custom_source_b2">URL is constructed as: {baseUrl}/{apiPath}?{keywordParam}=query&amp;other params</string>
@@ -529,7 +536,6 @@ Config:
     <string name="help_discover_filter_b2">Filter by genre, region, tag, rating range, decade, and sort by popularity, release date, or rating</string>
     <string name="help_discover_filter_b3">Movie and TV show filters are independent — switching tabs keeps each type\'s previous filter selections</string>
     <string name="help_discover_filter_b4">Filter conditions unchanged will not refresh results (closing a dialog or tapping Apply with no changes skips redundant requests)</string>
-    <string name="help_discover_filter_b5">The sticky filter bar supports scroll-through — drag on the header to scroll the list beneath it</string>
     <string name="help_discover_filter_b6">Enable \"Hide Watched\" in advanced filters to exclude items you\'ve already marked as watched (requires login)</string>
     <string name="help_tips_b1">Tap status bar to quickly scroll to top</string>
     <string name="help_tips_b2">Rating supports half-star selection (tap left/right side), tap again to cancel</string>
@@ -627,7 +633,30 @@ Config:
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">View sync failures</string>
     <string name="settings_douban_view_failures_desc">%1$d Douban items failed to sync</string>
+    <string name="settings_douban_import_failures">Import failures from JSON</string>
+    <string name="settings_douban_import_failures_desc">Import a failures JSON file exported from another device to view here</string>
     <string name="screen_douban_failures_title">Sync failures</string>
+
+    <!-- Cloud failure sync -->
+    <string name="cloud_failures_detected_title">Cloud failures detected</string>
+    <string name="cloud_failures_detected_desc">Found %1$d synced failure items in the cloud for your Douban account. Download to view them locally?</string>
+    <string name="cloud_failures_download">Download</string>
+    <string name="cloud_failures_dismiss">Not now</string>
+    <string name="cloud_failures_downloaded">Cloud failures downloaded and merged</string>
+
+    <!-- Manual cloud sync (settings page) -->
+    <string name="settings_douban_upload_cloud">Upload failures to cloud</string>
+    <string name="settings_douban_upload_cloud_desc">Upload local failures to Gitee cloud for cross-device viewing (requires Douban login)</string>
+    <string name="settings_douban_download_cloud">Pull failures from cloud</string>
+    <string name="settings_douban_download_cloud_desc">Download cloud failures for this Douban account and merge locally</string>
+    <string name="cloud_sync_no_login">Please login to Douban first</string>
+    <string name="cloud_sync_no_local_failures">No local failures, skipped upload</string>
+    <string name="cloud_sync_upload_success">Failures uploaded to cloud</string>
+    <string name="cloud_sync_upload_failed">Upload failed, please try again later</string>
+    <string name="cloud_sync_download_empty">No cloud failures for this Douban account</string>
+    <string name="cloud_sync_download_success">Downloaded and merged %1$d cloud failures</string>
+    <string name="cloud_sync_download_failed">Download failed, please try again later</string>
+    <string name="cloud_sync_in_progress">Syncing…</string>
     <string name="screen_douban_failures_empty_wish">Wishlist sync all succeeded</string>
     <string name="screen_douban_failures_empty_collect">Watched list sync all succeeded</string>
     <string name="screen_douban_failures_empty_all">No sync failures</string>

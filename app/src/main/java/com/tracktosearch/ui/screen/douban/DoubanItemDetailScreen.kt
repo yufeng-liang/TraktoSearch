@@ -216,8 +216,11 @@ class DoubanItemDetailViewModel @Inject constructor(
     /**
      * 资源搜索:主标题 + 子标题(可选)并行搜索,结果按 URL 去重合并。
      * 参照 [com.tracktosearch.ui.screen.detail.DetailViewModel.updateSearchResults]。
+     *
+     * @param forceRefresh true 时强制清缓存重拉(用于手动刷新按钮);
+     * 默认 false 先查缓存命中即用,5 分钟内复用避免二次进入转圈。
      */
-    fun searchResources() {
+    fun searchResources(forceRefresh: Boolean = false) {
         val failure = _uiState.value.failure ?: return
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
@@ -250,12 +253,23 @@ class DoubanItemDetailViewModel @Inject constructor(
                 val results = coroutineScope {
                     val deferreds = keywords.map { kw ->
                         async {
-                            resourceRepository.refreshResources(
-                                keyword = kw,
-                                enabledSources = storageEnabledSources,
-                                enabledDiskTypes = _uiState.value.enabledDiskTypes,
-                                isShow = isShow
-                            ).getOrDefault(emptyList())
+                            // forceRefresh=true 清缓存重拉;false 先查缓存命中即用
+                            val result = if (forceRefresh) {
+                                resourceRepository.refreshResources(
+                                    keyword = kw,
+                                    enabledSources = storageEnabledSources,
+                                    enabledDiskTypes = _uiState.value.enabledDiskTypes,
+                                    isShow = isShow
+                                )
+                            } else {
+                                resourceRepository.searchResources(
+                                    keyword = kw,
+                                    enabledSources = storageEnabledSources,
+                                    enabledDiskTypes = _uiState.value.enabledDiskTypes,
+                                    isShow = isShow
+                                )
+                            }
+                            result.getOrDefault(emptyList())
                         }
                     }
                     deferreds.awaitAll()
@@ -303,6 +317,11 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** 手动刷新入口(供 TopAppBar 刷新按钮调用):强制清缓存重拉 */
+    fun refreshResources() {
+        searchResources(forceRefresh = true)
     }
 
     /** 切换「同时用子标题搜索」开关,切换后自动重新搜索 */
@@ -458,6 +477,21 @@ fun DoubanItemDetailScreen(
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.detail_back)
+                        )
+                    }
+                },
+                actions = {
+                    // 手动刷新按钮:清缓存重拉(仅在条目加载完成且未在加载中时可用)
+                    IconButton(
+                        onClick = {
+                            view.performHaptic(HapticType.TICK)
+                            viewModel.refreshResources()
+                        },
+                        enabled = !uiState.isLoading && uiState.failure != null
+                    ) {
+                        Icon(
+                            Icons.Default.Refresh,
+                            contentDescription = stringResource(R.string.content_desc_refresh)
                         )
                     }
                 }
