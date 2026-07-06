@@ -670,6 +670,20 @@ Config:
     <string name="screen_douban_failures_delete_item">Delete this item</string>
     <string name="screen_douban_failures_tab_uncategorized">Uncategorized</string>
 
+    <!-- 豆瓣失败项查看页:筛选与搜索 -->
+    <string name="filter_title">Filter</string>
+    <string name="filter_marked_time">Marked time</string>
+    <string name="filter_time_7d">Last 7 days</string>
+    <string name="filter_time_30d">Last 30 days</string>
+    <string name="filter_time_all">All</string>
+    <string name="filter_sort_order">Sort order</string>
+    <string name="filter_sort_desc">Newest first</string>
+    <string name="filter_sort_asc">Oldest first</string>
+    <string name="filter_reset">Reset</string>
+    <string name="filter_apply">Apply</string>
+    <string name="douban_failure_search_hint">Search title or subtitle</string>
+    <string name="douban_failure_filter_reason">Failure reason</string>
+
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">This item is not in Trakt, cannot sync</string>
     <string name="screen_douban_item_detail_failure_reason">Failure reason: %1$s</string>

@@ -670,6 +670,20 @@
     <string name="screen_douban_failures_delete_item">删除此条目</string>
     <string name="screen_douban_failures_tab_uncategorized">未分类</string>
 
+    <!-- 豆瓣失败项查看页:筛选与搜索 -->
+    <string name="filter_title">筛选</string>
+    <string name="filter_marked_time">标记时间</string>
+    <string name="filter_time_7d">最近7天</string>
+    <string name="filter_time_30d">最近30天</string>
+    <string name="filter_time_all">全部</string>
+    <string name="filter_sort_order">排序方式</string>
+    <string name="filter_sort_desc">最新优先</string>
+    <string name="filter_sort_asc">最旧优先</string>
+    <string name="filter_reset">重置</string>
+    <string name="filter_apply">应用</string>
+    <string name="douban_failure_search_hint">搜索标题或副标题</string>
+    <string name="douban_failure_filter_reason">失败原因</string>
+
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">此条目 Trakt 未收录,无法同步</string>
     <string name="screen_douban_item_detail_failure_reason">失败原因:%1$s</string>

@@ -531,6 +531,20 @@
     <string name="screen_douban_failures_delete_item">この項目を削除</string>
     <string name="screen_douban_failures_tab_uncategorized">未分類</string>
 
+    <!-- 豆瓣失敗項查看頁:フィルターと検索 -->
+    <string name="filter_title">フィルター</string>
+    <string name="filter_marked_time">マーク日時</string>
+    <string name="filter_time_7d">過去7日</string>
+    <string name="filter_time_30d">過去30日</string>
+    <string name="filter_time_all">すべて</string>
+    <string name="filter_sort_order">並び替え</string>
+    <string name="filter_sort_desc">新しい順</string>
+    <string name="filter_sort_asc">古い順</string>
+    <string name="filter_reset">リセット</string>
+    <string name="filter_apply">適用</string>
+    <string name="douban_failure_search_hint">タイトルやサブタイトルを検索</string>
+    <string name="douban_failure_filter_reason">失敗の理由</string>
+
     <!-- Douban item detail -->
     <string name="screen_douban_item_detail_not_synced">この項目はTraktに未収録、同期できません</string>
     <string name="screen_douban_item_detail_failure_reason">失敗理由: %1$s</string>

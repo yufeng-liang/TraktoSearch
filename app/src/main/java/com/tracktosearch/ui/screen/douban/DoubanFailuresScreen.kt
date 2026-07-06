@@ -1,5 +1,9 @@
 package com.tracktosearch.ui.screen.douban
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -8,9 +12,13 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,34 +26,59 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +90,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,27 +104,49 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
+import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
+
+/** 标记时间区间预设 */
+enum class MarkedTimePreset { SEVEN_DAYS, THIRTY_DAYS, ALL }
+
+/** 标记时间排序方式 */
+enum class SortOrder { ASC, DESC }
 
 /**
  * 豆瓣同步失败项查看页 ViewModel。
  *
  * 从 [DoubanRetryManager] 加载全部失败项,内存中按 status(WISH/COLLECT) × mediaType(movie/show/null) 分组,
  * UI 通过 selectedMode × selectedTab 索引展示对应子集。
+ * 支持搜索(标题/副标题)+ 筛选(失败原因多选 + 标记时间区间 + 排序)。
  */
 @HiltViewModel
 class DoubanFailuresViewModel @Inject constructor(
-    private val doubanRetryManager: DoubanRetryManager
+    private val doubanRetryManager: DoubanRetryManager,
+    private val doubanFailureExporter: DoubanFailureExporter
 ) : ViewModel() {
 
     data class DoubanFailuresUiState(
@@ -98,8 +155,25 @@ class DoubanFailuresViewModel @Inject constructor(
         val error: String? = null
     )
 
+    /** 筛选状态:失败原因多选 + 标记时间区间 + 排序方式 */
+    data class FilterState(
+        val selectedReasons: Set<FailureReason> = emptySet(),
+        val markedTimePreset: MarkedTimePreset = MarkedTimePreset.ALL,
+        val markedTimeOrder: SortOrder = SortOrder.DESC
+    )
+
     private val _uiState = MutableStateFlow(DoubanFailuresUiState())
     val uiState: StateFlow<DoubanFailuresUiState> = _uiState.asStateFlow()
+
+    private val _filterState = MutableStateFlow(FilterState())
+    val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
+
+    /** 是否有激活的筛选条件(用于筛选按钮图标高亮) */
+    val hasActiveFilters: StateFlow<Boolean> = _filterState.map { state ->
+        state.selectedReasons.isNotEmpty() ||
+        state.markedTimePreset != MarkedTimePreset.ALL ||
+        state.markedTimeOrder != SortOrder.DESC
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     /** 从 doubanRetryManager 加载全部失败项 */
     fun loadFailures() {
@@ -152,6 +226,31 @@ class DoubanFailuresViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(failures = emptyList())
         }
     }
+
+    fun updateSelectedReasons(reasons: Set<FailureReason>) {
+        _filterState.value = _filterState.value.copy(selectedReasons = reasons)
+    }
+
+    fun updateMarkedTimePreset(preset: MarkedTimePreset) {
+        _filterState.value = _filterState.value.copy(markedTimePreset = preset)
+    }
+
+    fun updateMarkedTimeOrder(order: SortOrder) {
+        _filterState.value = _filterState.value.copy(markedTimeOrder = order)
+    }
+
+    fun resetFilters() {
+        _filterState.value = FilterState()
+    }
+
+    /** 从用户选择的 JSON 文件导入失败项,成功后重新加载列表 */
+    suspend fun importFailuresFromJson(context: Context, uri: Uri): ImportResult {
+        val result = doubanFailureExporter.importToRoom(context, uri)
+        if (result is ImportResult.Success) {
+            loadFailures()
+        }
+        return result
+    }
 }
 
 /**
@@ -160,10 +259,12 @@ class DoubanFailuresViewModel @Inject constructor(
  * 数据流:
  * - selectedMode: 0=想看(WISH), 1=已看(COLLECT)
  * - selectedTab: 0=电影(movie), 1=电视剧(show), 2=未分类(null)
+ * - 搜索:标题 + 副标题模糊匹配
+ * - 筛选:失败原因多选 + 标记时间区间 + 标记时间排序
  * - 卡片点击 → onItemClick(doubanId)
  * - 卡片长按 → 弹 AlertDialog 菜单(标注类型/删除)
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun DoubanFailuresScreen(
     onBack: () -> Unit,
@@ -171,22 +272,59 @@ fun DoubanFailuresScreen(
     viewModel: DoubanFailuresViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val filterState by viewModel.filterState.collectAsStateWithLifecycle()
+    val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val view = LocalView.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val hazeState = remember { HazeState() }
 
     // 0=想看(WISH), 1=已看(COLLECT)
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     // 0=电影, 1=电视剧, 2=未分类
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showFilterSheet by remember { mutableStateOf(false) }
 
     // 进入页面时加载
     LaunchedEffect(Unit) {
         viewModel.loadFailures()
     }
 
-    // 按 status × mediaType 过滤当前列表
+    // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 重新加载
+    val importFailuresLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                when (val result = viewModel.importFailuresFromJson(context, uri)) {
+                    is ImportResult.Success -> {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.snackbar_import_done_json, result.count)
+                        )
+                    }
+                    is ImportResult.InvalidFormat -> {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_invalid_json_format))
+                    }
+                    is ImportResult.Empty -> {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_empty_csv))
+                    }
+                    is ImportResult.Error -> {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.error_parse_failed, result.message)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 按 status × mediaType × 搜索 × 筛选 过滤当前列表
     val currentStatus = if (selectedMode == 0) DoubanMarkStatus.WISH else DoubanMarkStatus.COLLECT
-    val filtered = remember(uiState.failures, selectedMode, selectedTab) {
-        uiState.failures.filter { failure ->
+    val filtered = remember(uiState.failures, selectedMode, selectedTab, searchQuery, filterState) {
+        // 1. status × mediaType 分组
+        val byStatusAndType = uiState.failures.filter { failure ->
             failure.status == currentStatus &&
                 when (selectedTab) {
                     0 -> failure.mediaType == "movie"
@@ -194,9 +332,29 @@ fun DoubanFailuresScreen(
                     else -> failure.mediaType == null
                 }
         }
+        // 2. 搜索:标题 + 副标题模糊匹配
+        val bySearch = if (searchQuery.isBlank()) byStatusAndType
+        else byStatusAndType.filter {
+            it.title.contains(searchQuery, ignoreCase = true) ||
+            (it.subtitle?.contains(searchQuery, ignoreCase = true) ?: false)
+        }
+        // 3. 失败原因多选
+        val byReason = if (filterState.selectedReasons.isEmpty()) bySearch
+        else bySearch.filter { it.failureReason in filterState.selectedReasons }
+        // 4. 标记时间区间预设
+        val byTime = byReason.filter { item ->
+            when (filterState.markedTimePreset) {
+                MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.markedAt, 7)
+                MarkedTimePreset.THIRTY_DAYS -> isWithinDays(item.markedAt, 30)
+                MarkedTimePreset.ALL -> true
+            }
+        }
+        // 5. 标记时间排序(ISO 字符串天然有序)
+        if (filterState.markedTimeOrder == SortOrder.DESC) byTime.sortedByDescending { it.markedAt }
+        else byTime.sortedBy { it.markedAt }
     }
 
-    // 各分类数量(用于 Tab 徽标)
+    // 各分类数量(用于 Tab 徽标,不受搜索/筛选影响,反映实际分组数量)
     val movieCount = remember(uiState.failures, selectedMode) {
         uiState.failures.count { it.status == currentStatus && it.mediaType == "movie" }
     }
@@ -213,111 +371,52 @@ fun DoubanFailuresScreen(
     var showClearConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.screen_douban_failures_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.douban_retry_cancel)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        showClearConfirm = true
-                    }) {
-                        Icon(
-                            imageVector = Icons.Default.DeleteSweep,
-                            contentDescription = stringResource(R.string.screen_douban_failures_clear_all)
-                        )
-                    }
-                }
-            )
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // 沉浸式:内容延伸到状态栏/导航栏区域(参考 WatchlistScreen)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // 胶囊切换条:想看 / 已看(简化版双段切换,固定宽度)
-            ModeCapsuleToggle(
-                selectedMode = selectedMode,
-                onModeChange = { newMode ->
-                    view.performHaptic(HapticType.CLICK)
-                    selectedMode = newMode
-                }
-            )
-
-            // PrimaryTabRow:电影 / 电视剧 / 未分类(带数量徽标)
-            PrimaryTabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.Transparent
-            ) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        selectedTab = 0
-                    },
-                    text = {
-                        Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)")
-                    }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        selectedTab = 1
-                    },
-                    text = {
-                        Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)")
-                    }
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        selectedTab = 2
-                    },
-                    text = {
-                        Text("${stringResource(R.string.screen_douban_failures_tab_uncategorized)}($uncategorizedCount)")
-                    }
-                )
-            }
+            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
             // 内容区:空状态 / 失败项网格
             Box(modifier = Modifier.fillMaxSize()) {
                 if (!uiState.isLoading && uiState.failures.isEmpty()) {
-                    // 全部为空 → 居中提示 + 返回按钮
-                    EmptyStateView(
-                        text = stringResource(R.string.screen_douban_failures_empty_all),
-                        showBackButton = true,
-                        onBack = onBack
-                    )
+                    // 全部为空 → 居中提示 + 返回按钮(避开顶部覆盖层)
+                    Box(modifier = Modifier.padding(top = 224.dp + statusBarHeight)) {
+                        EmptyStateView(
+                            text = stringResource(R.string.screen_douban_failures_empty_all),
+                            showBackButton = true,
+                            onBack = onBack
+                        )
+                    }
                 } else if (!uiState.isLoading && filtered.isEmpty()) {
-                    // 当前模式为空 → 对应提示
+                    // 当前模式为空 → 对应提示(避开顶部覆盖层)
                     val emptyText = if (selectedMode == 0) {
                         stringResource(R.string.screen_douban_failures_empty_wish)
                     } else {
                         stringResource(R.string.screen_douban_failures_empty_collect)
                     }
-                    EmptyStateView(text = emptyText, showBackButton = false, onBack = null)
+                    Box(modifier = Modifier.padding(top = 224.dp + statusBarHeight)) {
+                        EmptyStateView(text = emptyText, showBackButton = false, onBack = null)
+                    }
                 } else if (!uiState.isLoading && filtered.isNotEmpty()) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
                         contentPadding = PaddingValues(
                             start = 8.dp,
                             end = 8.dp,
-                            top = 8.dp,
+                            top = 224.dp + statusBarHeight,
                             bottom = 16.dp
                         ),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(state = hazeState)
                     ) {
                         items(
                             count = filtered.size,
@@ -340,6 +439,195 @@ fun DoubanFailuresScreen(
                     }
                 }
             }
+
+            // Haze 模糊覆盖层:状态栏 + 标题栏 + 搜索框 + 切换条 + 分类 Tab
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin()
+                    )
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                Column {
+                    // 状态栏 Spacer
+                    Spacer(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .fillMaxWidth()
+                    )
+                    // 标题栏:标题 + 返回 + JSON 导入 + 筛选 + 清空
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.screen_douban_failures_title)) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.douban_retry_cancel)
+                                )
+                            }
+                        },
+                        actions = {
+                            // JSON 导入入口(从设置页移到此处)
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                importFailuresLauncher.launch(arrayOf("application/json"))
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.FileUpload,
+                                    contentDescription = stringResource(R.string.douban_retry_option_json)
+                                )
+                            }
+                            // 筛选按钮(激活时图标变 primary 色)
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                showFilterSheet = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = stringResource(R.string.filter_title),
+                                    tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary
+                                    else androidx.compose.material3.LocalContentColor.current
+                                )
+                            }
+                            // 清空全部
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                showClearConfirm = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.DeleteSweep,
+                                    contentDescription = stringResource(R.string.screen_douban_failures_clear_all)
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent
+                        )
+                    )
+
+                    // 搜索框(参考 WatchlistScreen 风格,支持一键清空)
+                    val searchInteractionSource = remember { MutableInteractionSource() }
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                            .height(45.dp),
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurface
+                        ),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        interactionSource = searchInteractionSource,
+                        decorationBox = { innerTextField ->
+                            OutlinedTextFieldDefaults.DecorationBox(
+                                value = searchQuery,
+                                innerTextField = innerTextField,
+                                enabled = true,
+                                singleLine = true,
+                                visualTransformation = VisualTransformation.None,
+                                interactionSource = searchInteractionSource,
+                                placeholder = {
+                                    Text(
+                                        stringResource(R.string.douban_failure_search_hint),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            Icons.Default.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(19.dp)
+                                        )
+                                    }
+                                },
+                                contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
+                                container = {
+                                    OutlinedTextFieldDefaults.Container(
+                                        enabled = true,
+                                        isError = false,
+                                        interactionSource = searchInteractionSource,
+                                        colors = OutlinedTextFieldDefaults.colors(),
+                                        shape = RoundedCornerShape(22.dp)
+                                    )
+                                }
+                            )
+                        }
+                    )
+
+                    // 胶囊切换条:想看 / 已看
+                    ModeCapsuleToggle(
+                        selectedMode = selectedMode,
+                        onModeChange = { newMode ->
+                            view.performHaptic(HapticType.CLICK)
+                            selectedMode = newMode
+                        }
+                    )
+
+                    // PrimaryTabRow:电影 / 电视剧 / 未分类(带数量徽标)
+                    PrimaryTabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color.Transparent
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = 0
+                            },
+                            text = {
+                                Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)")
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = 1
+                            },
+                            text = {
+                                Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)")
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 2,
+                            onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = 2
+                            },
+                            text = {
+                                Text("${stringResource(R.string.screen_douban_failures_tab_uncategorized)}($uncategorizedCount)")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 筛选 ModalBottomSheet
+    if (showFilterSheet) {
+        ModalBottomSheet(onDismissRequest = { showFilterSheet = false }) {
+            FailureFilterSheet(
+                filterState = filterState,
+                onReasonsChange = { viewModel.updateSelectedReasons(it) },
+                onPresetChange = { viewModel.updateMarkedTimePreset(it) },
+                onOrderChange = { viewModel.updateMarkedTimeOrder(it) },
+                onReset = { viewModel.resetFilters() },
+                onApply = { showFilterSheet = false }
+            )
         }
     }
 
@@ -714,4 +1002,176 @@ private fun ActionItem(
             color = color
         )
     }
+}
+
+/**
+ * 筛选 ModalBottomSheet 内容:失败原因多选 + 标记时间区间 + 排序方式。
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FailureFilterSheet(
+    filterState: DoubanFailuresViewModel.FilterState,
+    onReasonsChange: (Set<FailureReason>) -> Unit,
+    onPresetChange: (MarkedTimePreset) -> Unit,
+    onOrderChange: (SortOrder) -> Unit,
+    onReset: () -> Unit,
+    onApply: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // 失败原因多选
+        Text(
+            text = stringResource(R.string.douban_failure_filter_reason),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            FailureReason.entries.forEach { reason ->
+                FilterChip(
+                    selected = reason in filterState.selectedReasons,
+                    onClick = {
+                        val newSet = if (reason in filterState.selectedReasons) {
+                            filterState.selectedReasons - reason
+                        } else {
+                            filterState.selectedReasons + reason
+                        }
+                        onReasonsChange(newSet)
+                    },
+                    label = { Text(stringResource(reason.localizedStringResCompat())) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 标记时间区间 SingleChoiceChip
+        Text(
+            text = stringResource(R.string.filter_marked_time),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            MarkedTimePreset.entries.forEach { preset ->
+                FilterChip(
+                    selected = filterState.markedTimePreset == preset,
+                    onClick = { onPresetChange(preset) },
+                    label = { Text(stringResource(preset.localizedStringRes())) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 排序方式 SegmentedButton
+        Text(
+            text = stringResource(R.string.filter_sort_order),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = filterState.markedTimeOrder == SortOrder.DESC,
+                onClick = { onOrderChange(SortOrder.DESC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                label = { Text(stringResource(R.string.filter_sort_desc)) },
+                icon = {
+                    Icon(
+                        Icons.Default.ArrowDownward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            )
+            SegmentedButton(
+                selected = filterState.markedTimeOrder == SortOrder.ASC,
+                onClick = { onOrderChange(SortOrder.ASC) },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                label = { Text(stringResource(R.string.filter_sort_asc)) },
+                icon = {
+                    Icon(
+                        Icons.Default.ArrowUpward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // 重置 + 应用
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            TextButton(onClick = onReset) {
+                Text(stringResource(R.string.filter_reset))
+            }
+            Button(onClick = onApply) {
+                Text(stringResource(R.string.filter_apply))
+            }
+        }
+    }
+}
+
+/**
+ * 检查 markedAt 是否在最近指定天数内。
+ *
+ * markedAt 来自豆瓣页面的 `span.date` 文本,可能为多种格式:
+ * - ISO 格式:yyyy-MM-dd'T'HH:mm:ss'Z'
+ * - 常规格式:yyyy-MM-dd HH:mm:ss / yyyy-MM-dd HH:mm / yyyy-MM-dd
+ *
+ * 解析失败时返回 true(包含该条目),避免隐藏无法解析日期的项。
+ */
+private fun isWithinDays(markedAt: String, days: Int): Boolean {
+    if (markedAt.isBlank()) return true
+    val cutoff = System.currentTimeMillis() - days * 24L * 60L * 60L * 1000L
+    val formats = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd HH:mm:ss",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd"
+    )
+    for (format in formats) {
+        try {
+            val sdf = SimpleDateFormat(format, Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            val date = sdf.parse(markedAt)
+            if (date != null) {
+                return date.time >= cutoff
+            }
+        } catch (_: Exception) {
+            // 尝试下一个格式
+        }
+    }
+    // 全部格式解析失败,包含该条目(避免隐藏)
+    return true
+}
+
+/** FailureReason 本地化字符串资源 ID */
+private fun FailureReason.localizedStringResCompat(): Int = when (this) {
+    FailureReason.NO_IMDB_ID -> R.string.douban_failure_reason_no_imdb_id
+    FailureReason.DETAIL_FETCH_FAILED -> R.string.douban_failure_reason_detail_fetch_failed
+    FailureReason.TRAKT_NOT_FOUND -> R.string.douban_failure_reason_trakt_not_found
+    FailureReason.TRAKT_WRITE_TIMEOUT -> R.string.douban_failure_reason_trakt_write_timeout
+    FailureReason.TRAKT_WRITE_FAILED -> R.string.douban_failure_reason_trakt_write_failed
+}
+
+/** MarkedTimePreset 本地化字符串资源 ID */
+private fun MarkedTimePreset.localizedStringRes(): Int = when (this) {
+    MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
+    MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
+    MarkedTimePreset.ALL -> R.string.filter_time_all
 }
