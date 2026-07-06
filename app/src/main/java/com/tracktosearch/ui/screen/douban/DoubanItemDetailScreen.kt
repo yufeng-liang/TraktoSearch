@@ -63,11 +63,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -78,6 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,6 +90,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
@@ -140,7 +144,9 @@ data class DoubanItemDetailUiState(
     val showDeleteConfirm: Boolean = false,
     // 重试
     val retryStarted: Boolean = false,
-    val retryStartFailed: Boolean = false
+    val retryStartFailed: Boolean = false,
+    // 海报主色调(沉浸式渐变背景用,null 表示尚未提取)
+    val posterDominantColor: Color? = null
 )
 
 /**
@@ -157,7 +163,8 @@ data class DoubanItemDetailUiState(
 class DoubanItemDetailViewModel @Inject constructor(
     private val doubanRetryManager: DoubanRetryManager,
     private val doubanSyncManager: DoubanSyncManager,
-    private val resourceRepository: ResourceRepository
+    private val resourceRepository: ResourceRepository,
+    val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DoubanItemDetailUiState())
@@ -406,6 +413,11 @@ class DoubanItemDetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(failure = null, showDeleteConfirm = false)
         }
     }
+
+    /** 海报主色调提取回调:更新沉浸式渐变背景色 */
+    fun updatePosterColor(color: Color) {
+        _uiState.value = _uiState.value.copy(posterDominantColor = color)
+    }
 }
 
 // ==================== Composable ====================
@@ -503,6 +515,19 @@ fun DoubanItemDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // 海报主色调垂直渐变背景(顶部主色 45% 透明度 → 底部主题背景色)
+                .then(
+                    uiState.posterDominantColor?.let { c ->
+                        Modifier.background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    c.copy(alpha = 0.45f),
+                                    MaterialTheme.colorScheme.background
+                                )
+                            )
+                        )
+                    } ?: Modifier
+                )
         ) {
             val failure = uiState.failure
 
@@ -527,7 +552,9 @@ fun DoubanItemDetailScreen(
                             onSubtitleClick = {
                                 subtitleInput = failure.subtitle ?: ""
                                 viewModel.showSubtitleDialog(true)
-                            }
+                            },
+                            posterColorExtractor = viewModel.posterColorExtractor,
+                            onPosterColorExtracted = viewModel::updatePosterColor
                         )
                     }
 
@@ -756,8 +783,11 @@ fun DoubanItemDetailScreen(
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
     onPosterClick: () -> Unit,
-    onSubtitleClick: () -> Unit
+    onSubtitleClick: () -> Unit,
+    posterColorExtractor: PosterColorExtractor,
+    onPosterColorExtracted: (Color) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
@@ -780,6 +810,19 @@ private fun DoubanItemHeader(
                             ImageRequest.Builder(context)
                                 .data(failure.posterUrl)
                                 .size(360)
+                                .listener(
+                                    onSuccess = { _, result ->
+                                        // 图片加载成功后提取主色调,用于沉浸式背景渐变
+                                        // 外层已判空且 failure 为 val 参数,posterUrl 在此非 null
+                                        val bitmap = result.drawable.toBitmap()
+                                        scope.launch {
+                                            val argb = posterColorExtractor.extractDominantColor(failure.posterUrl, bitmap)
+                                            if (argb != 0L) {
+                                                onPosterColorExtracted(Color(argb))
+                                            }
+                                        }
+                                    }
+                                )
                                 .build()
                         },
                         contentDescription = failure.title,
