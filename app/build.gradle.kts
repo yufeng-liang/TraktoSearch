@@ -135,6 +135,9 @@ dependencies {
     // Image
     implementation(libs.coil.compose)
 
+    // Palette（海报主色调提取）
+    implementation(libs.androidx.palette)
+
     // Lottie 动画
     implementation(libs.lottie.compose)
 
