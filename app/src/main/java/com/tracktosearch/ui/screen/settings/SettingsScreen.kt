@@ -123,6 +123,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
@@ -179,6 +180,8 @@ fun SettingsScreen(
     var showSyncModePicker by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    // snackbarHostState 在 importFailuresLauncher 之前声明,供 launcher 回调内使用
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 跳转查看页
     // 用于跨设备查看:A 导出失败数据 → B 导入后在查看页显示
@@ -187,11 +190,26 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) {
             scope.launch {
-                val count = doubanRetryViewModel.doubanFailureExporter.importToRoom(context, uri)
-                if (count >= 0) {
-                    // 刷新失败项统计 + 跳转查看页
-                    doubanRetryViewModel.refreshRetryState()
-                    onDoubanFailures()
+                // 根据 ImportResult 显示不同 Snackbar;成功时刷新统计并跳转查看页
+                when (val result = doubanRetryViewModel.doubanFailureExporter.importToRoom(context, uri)) {
+                    is ImportResult.Success -> {
+                        doubanRetryViewModel.refreshRetryState()
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.snackbar_import_done_json, result.count)
+                        )
+                        onDoubanFailures()
+                    }
+                    is ImportResult.InvalidFormat -> {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_invalid_json_format))
+                    }
+                    is ImportResult.Empty -> {
+                        snackbarHostState.showSnackbar(context.getString(R.string.error_empty_csv))
+                    }
+                    is ImportResult.Error -> {
+                        snackbarHostState.showSnackbar(
+                            context.getString(R.string.error_parse_failed, result.message)
+                        )
+                    }
                 }
             }
         }
@@ -223,7 +241,6 @@ fun SettingsScreen(
     var showDetailSectionsDialog by remember { mutableStateOf(false) }
     var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(exportImportState.message) {
         exportImportState.message?.let {

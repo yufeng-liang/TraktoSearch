@@ -617,6 +617,11 @@
     <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>
     <string name="snackbar_import_failed">インポート失敗</string>
+    <string name="snackbar_import_done_json">%1$d 件の失敗データをインポートしました</string>
+    <string name="error_not_imdb_csv">有効な IMDb CSV ではありません（必須列 Title、Created、Title Type が不足）</string>
+    <string name="error_empty_csv">ファイルが空かデータ行がありません</string>
+    <string name="error_parse_failed">ファイルの解析に失敗: %1$s</string>
+    <string name="error_invalid_json_format">失敗項 JSON ファイルの形式が無効です</string>
     <string name="snackbar_cache_cleared">キャッシュをクリア</string>
     <string name="snackbar_cache_clear_failed">キャッシュクリア失敗</string>
     <string name="snackbar_already_latest">最新バージョンです</string>

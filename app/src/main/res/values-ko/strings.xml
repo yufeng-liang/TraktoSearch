@@ -617,6 +617,11 @@
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
     <string name="snackbar_import_failed">가져오기 실패</string>
+    <string name="snackbar_import_done_json">실패 데이터 %1$d건을 가져왔습니다</string>
+    <string name="error_not_imdb_csv">유효한 IMDb CSV가 아닙니다 (필수 열 Title, Created, Title Type 누락)</string>
+    <string name="error_empty_csv">파일이 비어 있거나 데이터 행이 없습니다</string>
+    <string name="error_parse_failed">파일 파싱 실패: %1$s</string>
+    <string name="error_invalid_json_format">실패 항목 JSON 파일 형식이 잘못되었습니다</string>
     <string name="snackbar_cache_cleared">캐시 삭제 완료</string>
     <string name="snackbar_cache_clear_failed">캐시 삭제 실패</string>
     <string name="snackbar_already_latest">이미 최신 버전</string>

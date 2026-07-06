@@ -764,6 +764,11 @@
     <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>
     <string name="snackbar_import_failed">导入失败：未知错误</string>
+    <string name="snackbar_import_done_json">已导入 %1$d 条失败数据</string>
+    <string name="error_not_imdb_csv">不是有效的 IMDb CSV 文件（缺少必填列：Title、Created、Title Type）</string>
+    <string name="error_empty_csv">文件为空或没有数据行</string>
+    <string name="error_parse_failed">解析文件失败：%1$s</string>
+    <string name="error_invalid_json_format">失败项 JSON 文件格式无效</string>
     <string name="snackbar_cache_cleared">缓存已清除</string>
     <string name="snackbar_cache_clear_failed">清除缓存失败</string>
     <string name="snackbar_already_latest">已是最新版本</string>

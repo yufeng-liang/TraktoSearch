@@ -25,6 +25,21 @@ import javax.inject.Singleton
  *
  * JSON 格式版本化(version 字段),未来格式变更时升级 version 即可向后兼容。
  */
+
+/**
+ * 失败项 JSON 导入结果。
+ * - [Success] 导入成功,返回导入条目数
+ * - [InvalidFormat] JSON 格式不符(反序列化失败或非预期结构)
+ * - [Empty] 文件为空或失败项列表为空
+ * - [Error] 其他异常
+ */
+sealed class ImportResult {
+    data class Success(val count: Int) : ImportResult()
+    object InvalidFormat : ImportResult()
+    object Empty : ImportResult()
+    data class Error(val message: String) : ImportResult()
+}
+
 @Singleton
 class DoubanFailureExporter @Inject constructor(
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
@@ -43,7 +58,10 @@ class DoubanFailureExporter @Inject constructor(
         val status: String,
         val failureReason: String,
         val failedAt: Long,
-        val attemptCount: Int
+        val attemptCount: Int,
+        // 新增字段(默认 null 向后兼容旧版导出的 JSON)
+        val mediaType: String? = null,
+        val subtitle: String? = null
     )
 
     @Serializable
@@ -80,7 +98,9 @@ class DoubanFailureExporter @Inject constructor(
                     status = e.status,
                     failureReason = e.failureReason,
                     failedAt = e.failedAt,
-                    attemptCount = e.attemptCount
+                    attemptCount = e.attemptCount,
+                    mediaType = e.mediaType,
+                    subtitle = e.subtitle
                 )
             }
         )
@@ -124,7 +144,9 @@ class DoubanFailureExporter @Inject constructor(
                         status = com.tracktosearch.data.remote.douban.DoubanMarkStatus.fromString(dto.status),
                         failureReason = FailureReason.fromString(dto.failureReason),
                         failedAt = dto.failedAt,
-                        attemptCount = dto.attemptCount
+                        attemptCount = dto.attemptCount,
+                        mediaType = dto.mediaType,
+                        subtitle = dto.subtitle
                     )
                 }
             } catch (e: Exception) {
@@ -156,7 +178,9 @@ class DoubanFailureExporter @Inject constructor(
                     status = f.status.path,
                     failureReason = f.failureReason.name,
                     failedAt = f.failedAt,
-                    attemptCount = f.attemptCount
+                    attemptCount = f.attemptCount,
+                    mediaType = f.mediaType,
+                    subtitle = f.subtitle
                 )
             }
         )
@@ -195,7 +219,9 @@ class DoubanFailureExporter @Inject constructor(
                     status = e.status,
                     failureReason = e.failureReason,
                     failedAt = e.failedAt,
-                    attemptCount = e.attemptCount
+                    attemptCount = e.attemptCount,
+                    mediaType = e.mediaType,
+                    subtitle = e.subtitle
                 )
             }
         )
@@ -208,5 +234,30 @@ class DoubanFailureExporter @Inject constructor(
 
         val authority = "${context.packageName}.fileprovider"
         FileProvider.getUriForFile(context, authority, file)
+    }
+
+    /**
+     * 从用户选择的 URI 导入失败项 JSON,解析后写入 Room(REPLACE 策略合并)。
+     *
+     * 用于跨设备查看场景:A 手机导出失败数据 → B 手机导入 → 在查看页显示。
+     * 同 doubanId 覆盖,不删除本地已有的、云端没有的项(合并而非覆盖)。
+     *
+     * @return [ImportResult]:
+     * - [ImportResult.InvalidFormat] JSON 格式不符或读取失败
+     * - [ImportResult.Empty] 失败项列表为空
+     * - [ImportResult.Success] 导入成功,携带条目数
+     * - [ImportResult.Error] 其他异常
+     */
+    suspend fun importToRoom(context: Context, uri: Uri): ImportResult = withContext(Dispatchers.IO) {
+        try {
+            val failures = importFromFile(context, uri)
+                ?: return@withContext ImportResult.InvalidFormat
+            if (failures.isEmpty()) return@withContext ImportResult.Empty
+            val entities = failures.map { it.toEntity() }
+            doubanSyncFailureDao.insertAll(entities)
+            ImportResult.Success(entities.size)
+        } catch (e: Exception) {
+            ImportResult.Error(e.message ?: "Unknown error")
+        }
     }
 }

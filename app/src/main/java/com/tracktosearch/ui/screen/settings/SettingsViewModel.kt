@@ -36,6 +36,7 @@ import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.util.DataExportImport
 import com.tracktosearch.data.util.ExportItem
+import com.tracktosearch.data.util.ParseResult
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
 import androidx.compose.runtime.Immutable
@@ -316,7 +317,31 @@ class SettingsViewModel @Inject constructor(
             )
             try {
                 val csvContent = readUriContent(uri)
-                val items = DataExportImport.parseImdbCsv(csvContent)
+                // 严格校验:根据 ParseResult 分支处理
+                val items = when (val result = DataExportImport.parseImdbCsv(csvContent)) {
+                    is ParseResult.Success -> result.items
+                    is ParseResult.MissingRequiredColumns -> {
+                        _exportImportState.value = _exportImportState.value.copy(
+                            isImporting = false,
+                            message = context.getString(R.string.error_not_imdb_csv)
+                        )
+                        return@launch
+                    }
+                    is ParseResult.Empty -> {
+                        _exportImportState.value = _exportImportState.value.copy(
+                            isImporting = false,
+                            message = context.getString(R.string.error_empty_csv)
+                        )
+                        return@launch
+                    }
+                    is ParseResult.Error -> {
+                        _exportImportState.value = _exportImportState.value.copy(
+                            isImporting = false,
+                            message = context.getString(R.string.error_parse_failed, result.message)
+                        )
+                        return@launch
+                    }
+                }
                 if (items.isEmpty()) {
                     _exportImportState.value = _exportImportState.value.copy(
                         isImporting = false,
@@ -354,6 +379,9 @@ class SettingsViewModel @Inject constructor(
                             }
                         }
                         if (traktId != null && traktId > 0) {
+                            // addToWatchlist 内部已调用 addToWatchlistCache,
+                            // WatchlistWatchedIds 全局缓存会同步新增该 traktId,
+                            // 切回 Watchlist 页 MovieCard 的想看标记可立即命中缓存。
                             traktRepository.addToWatchlist(traktId, mediaType)
                             success++
                         } else {
@@ -376,7 +404,7 @@ class SettingsViewModel @Inject constructor(
             } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
-                    message = context.getString(R.string.snackbar_import_failed)
+                    message = context.getString(R.string.error_parse_failed, e.message ?: "")
                 )
             }
         }

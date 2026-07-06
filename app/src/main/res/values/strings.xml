@@ -764,6 +764,11 @@ Config:
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
     <string name="snackbar_import_failed">Import failed: unknown error</string>
+    <string name="snackbar_import_done_json">Imported %1$d failure items</string>
+    <string name="error_not_imdb_csv">Not a valid IMDb CSV (missing required columns: Title, Created, Title Type)</string>
+    <string name="error_empty_csv">File is empty or has no data rows</string>
+    <string name="error_parse_failed">Failed to parse file: %1$s</string>
+    <string name="error_invalid_json_format">Invalid JSON format for failures file</string>
     <string name="snackbar_cache_cleared">Cache cleared</string>
     <string name="snackbar_cache_clear_failed">Failed to clear cache</string>
     <string name="snackbar_already_latest">Already up to date</string>

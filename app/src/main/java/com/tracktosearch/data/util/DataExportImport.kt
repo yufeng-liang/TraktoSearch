@@ -31,6 +31,20 @@ data class ImportItem(
     val mediaType: String? = null  // "movie" or "show", null means unknown
 )
 
+/**
+ * IMDb CSV 解析结果。
+ * - [Success] 解析成功,返回 [ImportItem] 列表
+ * - [MissingRequiredColumns] 缺少 IMDb 必填列(Title、Created、Title Type)
+ * - [Empty] CSV 为空或没有数据行
+ * - [Error] 其他解析异常
+ */
+sealed class ParseResult {
+    data class Success(val items: List<ImportItem>) : ParseResult()
+    object MissingRequiredColumns : ParseResult()
+    object Empty : ParseResult()
+    data class Error(val message: String) : ParseResult()
+}
+
 object DataExportImport {
 
     private val json = Json {
@@ -60,41 +74,53 @@ object DataExportImport {
      * 解析 IMDb CSV 格式（想看列表导出）。
      * 表头示例: Position,Const,Created,Modified,Description,Title,URL,Title Type,...
      * Title Type 值: movie, tvSeries, tvMiniSeries, short, tvMovie, video, etc.
+     *
+     * 必填列: Title、Created、Title Type,任一缺失返回 [ParseResult.MissingRequiredColumns]。
      */
-    fun parseImdbCsv(csvContent: String): List<ImportItem> {
-        val rows = parseCsv(csvContent)
-        if (rows.size < 2) return emptyList()
+    fun parseImdbCsv(csvContent: String): ParseResult {
+        return try {
+            val rows = parseCsv(csvContent)
+            if (rows.size < 2) return ParseResult.Empty
 
-        val header = rows.first()
-        val dataRows = rows.drop(1)
+            val header = rows.first().map { it.trim().lowercase() }
+            // IMDb CSV 必填列:Title、Created、Title Type
+            val requiredCols = listOf("title", "created", "title type")
+            if (!requiredCols.all { col -> header.any { it == col } }) {
+                return ParseResult.MissingRequiredColumns
+            }
 
-        val titleIdx = header.indexOfFirst { it.equals("Title", ignoreCase = true) }
-        val createdIdx = header.indexOfFirst { it.equals("Created", ignoreCase = true) }
-        val titleTypeIdx = header.indexOfFirst { it.equals("Title Type", ignoreCase = true) }
+            val dataRows = rows.drop(1)
+            if (dataRows.isEmpty()) return ParseResult.Empty
 
-        if (titleIdx < 0) return emptyList()
+            val titleIdx = header.indexOfFirst { it == "title" }
+            val createdIdx = header.indexOfFirst { it == "created" }
+            val titleTypeIdx = header.indexOfFirst { it == "title type" }
 
-        return dataRows.mapNotNull { row ->
-            if (titleIdx >= row.size) return@mapNotNull null
-            val title = row[titleIdx].trim()
-            if (title.isEmpty()) return@mapNotNull null
-            val watchedAt = if (createdIdx >= 0 && createdIdx < row.size) {
-                row[createdIdx].trim().ifEmpty { null }
-            } else null
-            val mediaType = if (titleTypeIdx >= 0 && titleTypeIdx < row.size) {
-                val titleType = row[titleTypeIdx].trim().lowercase()
-                when {
-                    titleType.contains("tvseries") || titleType.contains("tvminiseries") -> "show"
-                    titleType.contains("movie") || titleType.contains("short") || titleType.contains("video") -> "movie"
-                    else -> null
-                }
-            } else null
-            ImportItem(
-                title = title,
-                watchedAt = watchedAt,
-                source = "IMDb",
-                mediaType = mediaType
-            )
+            val items = dataRows.mapNotNull { row ->
+                if (titleIdx >= row.size) return@mapNotNull null
+                val title = row[titleIdx].trim()
+                if (title.isEmpty()) return@mapNotNull null
+                val watchedAt = if (createdIdx >= 0 && createdIdx < row.size) {
+                    row[createdIdx].trim().ifEmpty { null }
+                } else null
+                val mediaType = if (titleTypeIdx >= 0 && titleTypeIdx < row.size) {
+                    val titleType = row[titleTypeIdx].trim().lowercase()
+                    when {
+                        titleType.contains("tvseries") || titleType.contains("tvminiseries") -> "show"
+                        titleType.contains("movie") || titleType.contains("short") || titleType.contains("video") -> "movie"
+                        else -> null
+                    }
+                } else null
+                ImportItem(
+                    title = title,
+                    watchedAt = watchedAt,
+                    source = "IMDb",
+                    mediaType = mediaType
+                )
+            }
+            ParseResult.Success(items)
+        } catch (e: Exception) {
+            ParseResult.Error(e.message ?: "Unknown error")
         }
     }
 
