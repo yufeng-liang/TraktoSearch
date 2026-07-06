@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -182,6 +183,19 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            // 海报主色调垂直渐变背景(主色 0.45f 透明 → 背景色),实现沉浸式视觉
+            .then(
+                uiState.posterDominantColor?.let { c ->
+                    Modifier.background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                c.copy(alpha = 0.45f),
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+                } ?: Modifier
+            )
         ) {
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             LazyColumn(
@@ -223,6 +237,8 @@ fun DetailScreen(
                         onCollectionMovieClick = { movieTmdbId, movieTitle ->
                             onMovieClick(0, movieTmdbId, movieTitle, "", 0.0)
                         },
+                        posterColorExtractor = viewModel.posterColorExtractor,
+                        onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible
                     )
                 }

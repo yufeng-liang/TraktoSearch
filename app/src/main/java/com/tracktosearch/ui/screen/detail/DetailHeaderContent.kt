@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,6 +64,9 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.data.util.PosterColorExtractor
+import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.launch
 
 // ==================== 头部内容 ====================
 
@@ -88,10 +92,14 @@ internal fun DetailHeaderContent(
     onBackdropClick: (Int) -> Unit = {},
     onShowAllVideos: () -> Unit = {},
     onCollectionMovieClick: (tmdbId: Int, title: String) -> Unit = { _, _ -> },
+    // 海报主色调提取相关:用于在海报加载成功后提取主色,回调通知 ViewModel 更新沉浸式背景
+    posterColorExtractor: PosterColorExtractor,
+    onPosterColorExtracted: (Color) -> Unit,
     sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    val scope = rememberCoroutineScope()
     Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
         Row(
             modifier = Modifier
@@ -134,6 +142,23 @@ internal fun DetailHeaderContent(
                                 ImageRequest.Builder(context)
                                     .data(uiState.posterUrl)
                                     .size(264)
+                                    // 与 MovieCard 保持一致:转场时不要图片淡入叠加在
+                                    // sharedElement 容器动画上,避免双重动画看起来卡顿
+                                    .crossfade(false)
+                                    .listener(
+                                        onSuccess = { _, result ->
+                                            // 图片加载成功后提取主色调,用于沉浸式背景渐变
+                                            uiState.posterUrl?.let { url ->
+                                                val bitmap = result.drawable.toBitmap()
+                                                scope.launch {
+                                                    val argb = posterColorExtractor.extractDominantColor(url, bitmap)
+                                                    if (argb != 0L) {
+                                                        onPosterColorExtracted(Color(argb))
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
                                     .build()
                             },
                             contentDescription = uiState.displayTitle,

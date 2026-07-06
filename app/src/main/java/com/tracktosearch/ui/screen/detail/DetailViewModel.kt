@@ -25,8 +25,10 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.util.CommentTranslator
+import com.tracktosearch.data.util.PosterColorExtractor
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -71,6 +73,8 @@ data class DetailUiState(
     val genres: String = "",
     val country: String = "",
     val posterUrl: String? = null,
+    // 海报主色调(沉浸式背景渐变用,null=未提取或提取失败)
+    val posterDominantColor: Color? = null,
     val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
     val availableSources: List<String> = emptyList(),   // 筛选条上所有可用源（来自设置页，固定不变）
@@ -161,7 +165,9 @@ class DetailViewModel @Inject constructor(
     private val commentTranslator: CommentTranslator,
     private val tokenStorage: TokenStorage,
     private val detailSectionStorage: DetailSectionStorage,
-    private val languageStorage: LanguageStorage
+    private val languageStorage: LanguageStorage,
+    // 海报主色调提取器(对 DetailHeaderContent 暴露,用于在海报加载成功后提取主色)
+    val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     companion object {
@@ -205,6 +211,11 @@ class DetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+
+    /** 海报主色调提取完成后更新 UiState(由 DetailHeaderContent 在图片加载成功回调中调用) */
+    fun updatePosterColor(color: Color) {
+        _uiState.value = _uiState.value.copy(posterDominantColor = color)
+    }
 
     init {
         // 尽早检查登录状态，避免 loadDetail 异步延迟导致 isLoggedIn 为 false
@@ -268,6 +279,11 @@ class DetailViewModel @Inject constructor(
                 isMarkedWatchlist = inWatchlist,
                 isMarkedWatched = isWatched
             )
+            // 上次缓存时搜索未完成（用户中途返回），重启搜索避免卡在搜索中状态
+            // startSearch 内部会重新设置 isSearching=true 并发起新的搜索流程
+            if (cached.uiState.isSearching) {
+                startSearch()
+            }
             return
         }
 
