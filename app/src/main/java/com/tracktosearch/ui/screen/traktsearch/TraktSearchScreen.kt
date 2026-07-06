@@ -47,6 +47,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
@@ -463,12 +464,26 @@ fun TraktSearchScreen(
                                     )
                                 },
                                 trailingIcon = {
-                                    IconButton(onClick = {
-                                        if (searchQuery.isNotBlank()) {
-                                            viewModel.search(searchQuery)
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                                            Icon(
+                                                Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                modifier = Modifier.size(19.dp)
+                                            )
                                         }
-                                    }) {
-                                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search))
+                                    } else {
+                                        IconButton(onClick = {
+                                            if (searchQuery.isNotBlank()) {
+                                                viewModel.search(searchQuery)
+                                            }
+                                        }) {
+                                            Icon(
+                                                Icons.Default.Search,
+                                                contentDescription = stringResource(R.string.watchlist_search),
+                                                modifier = Modifier.size(19.dp)
+                                            )
+                                        }
                                     }
                                 },
                                 contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
