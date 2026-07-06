@@ -16,9 +16,13 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,30 +49,41 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -130,21 +145,27 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
-    onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onDiscoverClick: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
+    onNavigateToLogin: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val filterState by viewModel.filterState.collectAsStateWithLifecycle()
+    val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
+    val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
+    var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val view = LocalView.current
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场，避免跨页面重复海报 key 冲突
@@ -282,34 +303,18 @@ fun WatchlistScreen(
         isRemoving = false
     }
 
-    // 根据搜索关键词过滤当前 Tab 的列表
-    val filteredMovies = remember(uiState.movies, searchQuery) {
-        if (searchQuery.isBlank()) uiState.movies
-        else uiState.movies.filter {
-            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
-            it.title.contains(searchQuery, ignoreCase = true)
-        }
+    // 根据搜索关键词和筛选条件过滤当前 Tab 的列表
+    val filteredMovies = remember(uiState.movies, searchQuery, filterState) {
+        applyFilterAndSort(uiState.movies, searchQuery, filterState)
     }
-    val filteredShows = remember(uiState.shows, searchQuery) {
-        if (searchQuery.isBlank()) uiState.shows
-        else uiState.shows.filter {
-            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
-            it.title.contains(searchQuery, ignoreCase = true)
-        }
+    val filteredShows = remember(uiState.shows, searchQuery, filterState) {
+        applyFilterAndSort(uiState.shows, searchQuery, filterState)
     }
-    val filteredHistoryMovies = remember(uiState.historyMovies, searchQuery) {
-        if (searchQuery.isBlank()) uiState.historyMovies
-        else uiState.historyMovies.filter {
-            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
-            it.title.contains(searchQuery, ignoreCase = true)
-        }
+    val filteredHistoryMovies = remember(uiState.historyMovies, searchQuery, filterState) {
+        applyFilterAndSort(uiState.historyMovies, searchQuery, filterState)
     }
-    val filteredHistoryShows = remember(uiState.historyShows, searchQuery) {
-        if (searchQuery.isBlank()) uiState.historyShows
-        else uiState.historyShows.filter {
-            it.displayTitle.contains(searchQuery, ignoreCase = true) ||
-            it.title.contains(searchQuery, ignoreCase = true)
-        }
+    val filteredHistoryShows = remember(uiState.historyShows, searchQuery, filterState) {
+        applyFilterAndSort(uiState.historyShows, searchQuery, filterState)
     }
 
     // 获取当前 tab 对应的 items（用于多选操作）
@@ -602,10 +607,10 @@ fun WatchlistScreen(
                             val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
                             val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
                             val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
-                            val statsButtonSize = 48.dp
+                            val filterButtonSize = 48.dp
                             val rowPadding = 12.dp * 2
                             val gaps = 8.dp * 2
-                            val searchBoxWidth = (screenWidth - capsuleWidth - statsButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
+                            val searchBoxWidth = (screenWidth - capsuleWidth - filterButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
 
                             // 搜索框
                             val searchInteractionSource = remember { MutableInteractionSource() }
@@ -676,11 +681,12 @@ fun WatchlistScreen(
                                     )
                                 }
                             )
-                            // 统计按钮（放大图标）
-                            IconButton(onClick = onStatisticsClick) {
+                            // 筛选按钮（有筛选条件生效时图标变 primary 色）
+                            IconButton(onClick = { showFilterSheet = true }) {
                                 Icon(
-                                    Icons.Default.BarChart,
-                                    contentDescription = stringResource(R.string.statistics_title),
+                                    Icons.Default.Tune,
+                                    contentDescription = stringResource(R.string.filter_title),
+                                    tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -944,13 +950,13 @@ fun WatchlistScreen(
                 }
             }
 
-            // 骨架屏：首次加载时显示
+            // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
             val isLoading = if (selectedMode == 0) {
-                if (selectedTab == 0) uiState.isLoadingMovies && !uiState.moviesLoaded
-                else uiState.isLoadingShows && !uiState.showsLoaded
+                if (selectedTab == 0) uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
+                else uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
             } else {
-                if (selectedTab == 0) uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded
-                else uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded
+                if (selectedTab == 0) uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
+                else uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
             }
             if (isLoading) {
                 WatchlistSkeletonGrid(
@@ -978,7 +984,26 @@ fun WatchlistScreen(
                 onRelogin = {
                     showSyncDialog = false
                     onNavigateToDoubanLogin()
+                },
+                onTraktLogin = {
+                    showSyncDialog = false
+                    onNavigateToLogin()
                 }
+            )
+        }
+
+        // 筛选 ModalBottomSheet
+        if (showFilterSheet) {
+            WatchlistFilterSheet(
+                filterState = filterState,
+                availableGenres = availableGenres,
+                onGenresChange = viewModel::updateSelectedGenres,
+                onYearRangeChange = viewModel::updateYearRange,
+                onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
+                onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
+                onRatingRangeChange = viewModel::updateRatingRange,
+                onReset = viewModel::resetFilters,
+                onApply = { showFilterSheet = false }
             )
         }
     }
@@ -1026,5 +1051,243 @@ private fun WatchlistSkeletonGrid(modifier: Modifier = Modifier) {
                 )
             }
         }
+    }
+}
+
+/**
+ * 筛选 ModalBottomSheet：类型多选 + 年份区间 + 标记时间区间 + 排序方向 + Trakt 评分区间。
+ */
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun WatchlistFilterSheet(
+    filterState: FilterState,
+    availableGenres: List<String>,
+    onGenresChange: (Set<String>) -> Unit,
+    onYearRangeChange: (IntRange) -> Unit,
+    onMarkedTimePresetChange: (MarkedTimePreset) -> Unit,
+    onMarkedTimeOrderChange: (SortOrder) -> Unit,
+    onRatingRangeChange: (ClosedFloatingPointRange<Float>) -> Unit,
+    onReset: () -> Unit,
+    onApply: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onApply,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // 类型多选
+            Text(
+                text = stringResource(R.string.filter_genre),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                availableGenres.forEach { genre ->
+                    FilterChip(
+                        selected = genre in filterState.selectedGenres,
+                        onClick = {
+                            val newSet = if (genre in filterState.selectedGenres) {
+                                filterState.selectedGenres - genre
+                            } else {
+                                filterState.selectedGenres + genre
+                            }
+                            onGenresChange(newSet)
+                        },
+                        label = { Text(genre) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 年份区间 RangeSlider（步长 1 年）
+            Text(
+                text = stringResource(R.string.filter_year),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "${filterState.yearRange.first} - ${filterState.yearRange.last}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            RangeSlider(
+                value = filterState.yearRange.first.toFloat()..filterState.yearRange.last.toFloat(),
+                onValueChange = { range ->
+                    onYearRangeChange(range.start.toInt()..range.endInclusive.toInt())
+                },
+                valueRange = 1900f..2100f,
+                steps = 199  // 步长 1 年：(2100-1900)/1 - 1 = 199
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 标记时间区间 SingleChoiceChip
+            Text(
+                text = stringResource(R.string.filter_marked_time),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                MarkedTimePreset.entries.forEach { preset ->
+                    FilterChip(
+                        selected = filterState.markedTimePreset == preset,
+                        onClick = { onMarkedTimePresetChange(preset) },
+                        label = {
+                            Text(stringResource(when (preset) {
+                                MarkedTimePreset.SEVEN_DAYS -> R.string.filter_time_7d
+                                MarkedTimePreset.THIRTY_DAYS -> R.string.filter_time_30d
+                                MarkedTimePreset.ALL -> R.string.filter_time_all
+                            }))
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 排序方式 SegmentedButton（降序/升序）
+            Text(
+                text = stringResource(R.string.filter_sort_order),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = filterState.markedTimeOrder == SortOrder.DESC,
+                    onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    label = { Text(stringResource(R.string.filter_sort_desc)) },
+                    icon = {
+                        Icon(
+                            Icons.Default.ArrowDownward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+                SegmentedButton(
+                    selected = filterState.markedTimeOrder == SortOrder.ASC,
+                    onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    label = { Text(stringResource(R.string.filter_sort_asc)) },
+                    icon = {
+                        Icon(
+                            Icons.Default.ArrowUpward,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Trakt 评分 RangeSlider（步长 0.5）
+            Text(
+                text = stringResource(R.string.filter_rating),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "%.1f - %.1f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            RangeSlider(
+                value = filterState.ratingRange,
+                onValueChange = { range -> onRatingRangeChange(range) },
+                valueRange = 0f..10f,
+                steps = 19  // 步长 0.5：(10-0)/0.5 - 1 = 19
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // 重置 + 应用
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(onClick = onReset) {
+                    Text(stringResource(R.string.filter_reset))
+                }
+                Button(onClick = onApply) {
+                    Text(stringResource(R.string.filter_apply))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 应用搜索 + 筛选条件，并按标记时间排序。
+ * - 搜索：标题/displayTitle 包含关键词（忽略大小写）
+ * - 类型：多选，item.genres（逗号分隔）与选中类型有交集即通过；未选则全部通过
+ * - 年份：null year 视为通过（避免误筛无年份项）
+ * - 标记时间：按预设区间过滤（7天/30天/全部）
+ * - Trakt 评分：item.traktRating 落在区间内
+ * - 排序：按 listedAt（ISO 字符串天然有序）升降序
+ */
+private fun applyFilterAndSort(
+    items: List<MediaUiItem>,
+    searchQuery: String,
+    filter: FilterState
+): List<MediaUiItem> {
+    val filtered = items.filter { item ->
+        // 搜索
+        val matchesSearch = searchQuery.isBlank() ||
+            item.displayTitle.contains(searchQuery, ignoreCase = true) ||
+            item.title.contains(searchQuery, ignoreCase = true)
+        if (!matchesSearch) return@filter false
+        // 类型多选
+        val matchesGenres = filter.selectedGenres.isEmpty() ||
+            (item.genres.isNotEmpty() && filter.selectedGenres.any { g ->
+                item.genres.split(",").any { it.trim() == g }
+            })
+        if (!matchesGenres) return@filter false
+        // 年份区间（null year 视为通过）
+        val matchesYear = item.year == null || item.year in filter.yearRange
+        if (!matchesYear) return@filter false
+        // 标记时间区间
+        val matchesMarkedTime = when (filter.markedTimePreset) {
+            MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.listedAt, 7)
+            MarkedTimePreset.THIRTY_DAYS -> isWithinDays(item.listedAt, 30)
+            MarkedTimePreset.ALL -> true
+        }
+        if (!matchesMarkedTime) return@filter false
+        // Trakt 评分区间
+        val rating = item.traktRating.toFloat()
+        rating >= filter.ratingRange.start && rating <= filter.ratingRange.endInclusive
+    }
+    // 标记时间排序（ISO 字符串天然有序）
+    return if (filter.markedTimeOrder == SortOrder.DESC) {
+        filtered.sortedByDescending { it.listedAt }
+    } else {
+        filtered.sortedBy { it.listedAt }
+    }
+}
+
+/** 判断 ISO 时间字符串是否在最近 N 天内（解析失败返回 false） */
+private fun isWithinDays(isoString: String, days: Long): Boolean {
+    if (isoString.isBlank()) return false
+    return try {
+        val instant = Instant.parse(isoString)
+        val cutoff = Instant.now().minus(days, ChronoUnit.DAYS)
+        instant.isAfter(cutoff)
+    } catch (e: Exception) {
+        false
     }
 }

@@ -681,6 +681,9 @@
     <string name="filter_sort_asc">最旧优先</string>
     <string name="filter_reset">重置</string>
     <string name="filter_apply">应用</string>
+    <string name="filter_genre">类型</string>
+    <string name="filter_year">年份</string>
+    <string name="filter_rating">Trakt 评分</string>
     <string name="douban_failure_search_hint">搜索标题或副标题</string>
     <string name="douban_failure_filter_reason">失败原因</string>
 

@@ -18,10 +18,15 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @Immutable
@@ -36,6 +41,19 @@ data class MediaUiItem(
     val imdbId: String = "",
     val traktRating: Double = 0.0,
     val listedAt: String = ""
+)
+
+// 筛选相关枚举（与豆瓣失败页独立定义，Watchlist 模块自包含）
+enum class MarkedTimePreset { SEVEN_DAYS, THIRTY_DAYS, ALL }
+enum class SortOrder { ASC, DESC }
+
+@Immutable
+data class FilterState(
+    val selectedGenres: Set<String> = emptySet(),
+    val yearRange: IntRange = 1900..2100,
+    val markedTimePreset: MarkedTimePreset = MarkedTimePreset.ALL,
+    val markedTimeOrder: SortOrder = SortOrder.DESC,
+    val ratingRange: ClosedFloatingPointRange<Float> = 0f..10f
 )
 
 @Immutable
@@ -79,6 +97,48 @@ class WatchlistViewModel @Inject constructor(
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
 
     private val maxRetries = 2
+
+    // ========== 筛选状态 ==========
+    private val _filterState = MutableStateFlow(FilterState())
+    val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
+
+    /** 是否存在生效的筛选条件（markedTimeOrder 不算，只是排序方向） */
+    val hasActiveFilters: StateFlow<Boolean> = _filterState.map { state ->
+        state.selectedGenres.isNotEmpty() ||
+            state.yearRange != 1900..2100 ||
+            state.markedTimePreset != MarkedTimePreset.ALL ||
+            state.ratingRange != 0f..10f
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /** 从 movies + shows 聚合可选类型（split(",")、distinct、sorted） */
+    val availableGenres: StateFlow<List<String>> = _uiState.map { state ->
+        (state.movies.asSequence() + state.shows.asSequence())
+            .flatMap { it.genres.split(",").asSequence() }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+            .toList()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun updateSelectedGenres(genres: Set<String>) {
+        _filterState.value = _filterState.value.copy(selectedGenres = genres)
+    }
+    fun updateYearRange(range: IntRange) {
+        _filterState.value = _filterState.value.copy(yearRange = range)
+    }
+    fun updateMarkedTimePreset(preset: MarkedTimePreset) {
+        _filterState.value = _filterState.value.copy(markedTimePreset = preset)
+    }
+    fun updateMarkedTimeOrder(order: SortOrder) {
+        _filterState.value = _filterState.value.copy(markedTimeOrder = order)
+    }
+    fun updateRatingRange(range: ClosedFloatingPointRange<Float>) {
+        _filterState.value = _filterState.value.copy(ratingRange = range)
+    }
+    fun resetFilters() {
+        _filterState.value = FilterState()
+    }
 
     init {
         // 监听豆瓣同步进度：isRunning 时显示横幅，完成且有成功条目则静默刷新

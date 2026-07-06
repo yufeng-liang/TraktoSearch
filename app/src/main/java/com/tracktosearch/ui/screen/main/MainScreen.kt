@@ -320,7 +320,6 @@ fun MainScreen(
                                 onMovieClick = onMovieClick,
                                 onShowClick = onShowClick,
                                 onSearchClick = onSearchClick,
-                                onStatisticsClick = onStatisticsClick,
                                 onTraktSearch = onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                                 onNavigateToDoubanLogin = onNavigateToDoubanLogin,

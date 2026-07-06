@@ -542,6 +542,9 @@
     <string name="filter_sort_asc">古い順</string>
     <string name="filter_reset">リセット</string>
     <string name="filter_apply">適用</string>
+    <string name="filter_genre">ジャンル</string>
+    <string name="filter_year">年</string>
+    <string name="filter_rating">Trakt 評価</string>
     <string name="douban_failure_search_hint">タイトルやサブタイトルを検索</string>
     <string name="douban_failure_filter_reason">失敗の理由</string>
 
