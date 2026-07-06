@@ -7,29 +7,29 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
@@ -57,6 +57,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -78,8 +79,6 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -98,12 +97,18 @@ import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -112,8 +117,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import net.engawapg.lib.zoomable.rememberZoomState
-import net.engawapg.lib.zoomable.zoomable
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -422,7 +425,7 @@ class DoubanItemDetailViewModel @Inject constructor(
 
 // ==================== Composable ====================
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun DoubanItemDetailScreen(
     doubanId: String,
@@ -434,6 +437,7 @@ fun DoubanItemDetailScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val listState = rememberLazyListState()
+    val hazeState = remember { HazeState() }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
@@ -472,44 +476,7 @@ fun DoubanItemDetailScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = uiState.failure?.title ?: "",
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        view.performHaptic(HapticType.TICK)
-                        onBack()
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.detail_back)
-                        )
-                    }
-                },
-                actions = {
-                    // 手动刷新按钮:清缓存重拉(仅在条目加载完成且未在加载中时可用)
-                    IconButton(
-                        onClick = {
-                            view.performHaptic(HapticType.TICK)
-                            viewModel.refreshResources()
-                        },
-                        enabled = !uiState.isLoading && uiState.failure != null
-                    ) {
-                        Icon(
-                            Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.content_desc_refresh)
-                        )
-                    }
-                }
-            )
-        },
-        contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
             modifier = Modifier
@@ -541,7 +508,9 @@ fun DoubanItemDetailScreen(
             } else if (failure != null) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = hazeState),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     // 头部区域:海报 + 标题 + 子标题 + 评分 + 标记信息 + 短评
@@ -556,11 +525,6 @@ fun DoubanItemDetailScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onPosterColorExtracted = viewModel::updatePosterColor
                         )
-                    }
-
-                    // 提示横幅:此条目未同步 + 失败原因
-                    item(key = "banner") {
-                        DoubanFailureBanner(failure = failure)
                     }
 
                     // Tab 行(吸顶)
@@ -704,13 +668,63 @@ fun DoubanItemDetailScreen(
                 }
             }
 
-            // 海报大图查看(简化版)
+            // 海报大图查看(复用 DetailPosterOverlay,支持保存到相册)
             val posterUrl = failure?.posterUrl
             if (showPosterFullscreen && posterUrl != null) {
-                DoubanPosterOverlay(
+                PosterFullscreenOverlay(
                     posterUrl = posterUrl,
                     title = failure.title,
                     onDismiss = { showPosterFullscreen = false }
+                )
+            }
+
+            // Haze 模糊覆盖层:状态栏 + 标题栏(参考 DoubanFailuresScreen)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin()
+                    )
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+            ) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = uiState.failure?.title ?: "",
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = {
+                            view.performHaptic(HapticType.TICK)
+                            onBack()
+                        }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.detail_back)
+                            )
+                        }
+                    },
+                    actions = {
+                        // 手动刷新按钮:清缓存重拉(仅在条目加载完成且未在加载中时可用)
+                        IconButton(
+                            onClick = {
+                                view.performHaptic(HapticType.TICK)
+                                viewModel.refreshResources()
+                            },
+                            enabled = !uiState.isLoading && uiState.failure != null
+                        ) {
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.content_desc_refresh)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent
+                    )
                 )
             }
         }
@@ -788,10 +802,16 @@ private fun DoubanItemHeader(
     onPosterColorExtracted: (Color) -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Max)
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
@@ -844,8 +864,12 @@ private fun DoubanItemHeader(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 右侧信息列
-            Column(modifier = Modifier.weight(1f)) {
+            // 右侧信息列(与海报等高,失败原因栏底部对齐海报底部)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+            ) {
                 // 标题
                 Text(
                     text = failure.title,
@@ -900,6 +924,15 @@ private fun DoubanItemHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+
+                // 占位将失败原因栏推到底部,与海报底部对齐
+                Spacer(modifier = Modifier.weight(1f))
+
+                // 失败原因栏(从 header 之后的独立 banner 移入此处)
+                DoubanFailureBanner(
+                    failure = failure,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
 
@@ -946,14 +979,15 @@ private fun DoubanStarRating(rating: Int) {
 // ==================== 提示横幅 ====================
 
 @Composable
-private fun DoubanFailureBanner(failure: DoubanSyncFailure) {
+private fun DoubanFailureBanner(
+    failure: DoubanSyncFailure,
+    modifier: Modifier = Modifier
+) {
     val reasonText = failure.failureReason.toLocalizedString()
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+        modifier = modifier
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -1302,84 +1336,5 @@ private fun formatTimestamp(timestampMs: Long): String {
         sdf.format(Date(timestampMs))
     } catch (_: Exception) {
         timestampMs.toString()
-    }
-}
-
-// ==================== 海报大图 Overlay(简化版) ====================
-
-@Composable
-private fun DoubanPosterOverlay(
-    posterUrl: String,
-    title: String,
-    onDismiss: () -> Unit
-) {
-    val context = LocalContext.current
-    val zoomState = rememberZoomState()
-
-    BackHandler(enabled = true) {
-        if (zoomState.scale > 1f) {
-            zoomState.let { /* 缩放重置由库内部处理 */ }
-        }
-        onDismiss()
-    }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.95f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            AsyncImage(
-                model = remember(posterUrl) {
-                    ImageRequest.Builder(context)
-                        .data(posterUrl)
-                        .size(1080)
-                        .build()
-                },
-                contentDescription = title,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .aspectRatio(2f / 3f)
-                    .zoomable(zoomState)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {} // 拦截点击,不触发外层 dismiss
-                    )
-            )
-
-            // 关闭按钮
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            ) {
-                Surface(
-                    shape = androidx.compose.foundation.shape.CircleShape,
-                    color = Color.Black.copy(alpha = 0.5f),
-                    modifier = Modifier.size(40.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = stringResource(R.string.detail_back),
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
-        }
     }
 }
