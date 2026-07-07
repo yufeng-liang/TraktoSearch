@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.help
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
@@ -59,12 +58,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpScreen(
     onBack: () -> Unit
@@ -72,10 +69,6 @@ fun HelpScreen(
     var expandedIndex by remember { mutableIntStateOf(0) }
     val lazyListState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    // 共享元素转场 scope（标题+返回箭头整体 ↔ 设置页帮助入口配对）
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-
     // 状态栏回顶
     val scrollToTopProvider = LocalScrollToTopProvider.current
     DisposableEffect(Unit) {
@@ -322,20 +315,10 @@ fun HelpScreen(
                 }
             }
 
-            // TopAppBar（移除 Haze 模糊，使用纯色背景）
-            // 「标题+返回箭头」整体与设置页帮助入口配对（sharedBounds）
-            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Modifier.sharedBounds(
-                        sharedContentState = rememberSharedContentState(key = "settings-help-entry"),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-                }
-            } else { Modifier }
+            // TopAppBar（纯色背景，无共享元素转场）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(headerModifier)
                     .background(MaterialTheme.colorScheme.surface)
                     .clickable(enabled = false, onClick = {})
             ) {

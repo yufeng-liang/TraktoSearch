@@ -29,6 +29,9 @@ import retrofit2.http.Query
  * 重要:Gitee API 区分新建(POST)和更新(PUT)两个端点。
  * PUT 在文件不存在时会报 "sha is missing","sha is empty"。
  * 必须先用 POST 创建,再在文件已存在时用 PUT 更新。
+ *
+ * 鉴权:token 仅通过 `Authorization: Bearer {token}` header 传递(由 OkHttpClient 拦截器注入),
+ * 不再走 URL query 参数 `?access_token=`,避免 token 出现在访问日志/nginx 反代日志中。
  */
 interface GiteeContentsApi {
 
@@ -37,7 +40,6 @@ interface GiteeContentsApi {
      * @param owner 仓库 owner
      * @param repo 仓库名
      * @param path 文件路径(如 failures/abc123.json),注意必须用 encoded=true 避免 / 被 URL 编码
-     * @param accessToken Gitee access token
      * @param ref 分支(默认 master)
      * @return [JsonElement]:文件存在时是 JsonObject(含 content/sha),不存在时可能是 JsonArray(`[]`)
      */
@@ -46,7 +48,6 @@ interface GiteeContentsApi {
         @Path("owner") owner: String,
         @Path("repo") repo: String,
         @Path(value = "path", encoded = true) path: String,
-        @Query("access_token") accessToken: String,
         @Query("ref") ref: String = "master"
     ): Response<JsonElement>
 
@@ -56,14 +57,12 @@ interface GiteeContentsApi {
      * @param repo 仓库名
      * @param path 文件路径(如 failures/abc123.json),注意必须用 encoded=true 避免 / 被 URL 编码
      * @param body 请求体(content 为 base64 编码,message 为 commit message,不传 sha)
-     * @param accessToken Gitee access token
      */
     @POST("repos/{owner}/{repo}/contents/{path}")
     suspend fun createFileContent(
         @Path("owner") owner: String,
         @Path("repo") repo: String,
         @Path(value = "path", encoded = true) path: String,
-        @Query("access_token") accessToken: String,
         @Body body: GiteeContentRequest
     ): Response<GiteeContentUpdateResponse>
 
@@ -73,14 +72,12 @@ interface GiteeContentsApi {
      * @param repo 仓库名
      * @param path 文件路径(如 failures/abc123.json),注意必须用 encoded=true 避免 / 被 URL 编码
      * @param body 请求体(content 为 base64 编码,message 为 commit message,sha 必传)
-     * @param accessToken Gitee access token
      */
     @PUT("repos/{owner}/{repo}/contents/{path}")
     suspend fun putFileContent(
         @Path("owner") owner: String,
         @Path("repo") repo: String,
         @Path(value = "path", encoded = true) path: String,
-        @Query("access_token") accessToken: String,
         @Body body: GiteeContentRequest
     ): Response<GiteeContentUpdateResponse>
 }

@@ -11,6 +11,8 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.data.util.persistentTtlCache
+import com.tracktosearch.data.remote.config.ApiKeyInterceptor
+import com.tracktosearch.data.remote.config.BaseUrlInterceptor
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -109,15 +111,18 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor,
         tokenStorage: TokenStorage,
         cache: Cache,
-        traktAuthenticator: TraktAuthenticator
+        traktAuthenticator: TraktAuthenticator,
+        @TraktBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
+        @TraktApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
+            .addInterceptor(baseUrlInterceptor)
+            .addInterceptor(apiKeyInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val token = tokenStorage.getCachedAccessToken()
                 val request = chain.request().newBuilder()
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("trakt-api-key", BuildConfig.TRAKT_CLIENT_ID)
                     .addHeader("trakt-api-version", "2")
                     .addHeader("User-Agent", USER_AGENT)
                     .apply {
@@ -153,13 +158,16 @@ object NetworkModule {
     fun provideTmdbOkHttpClient(
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
-        cache: Cache
+        cache: Cache,
+        @TmdbBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
+        @TmdbApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
+            .addInterceptor(baseUrlInterceptor)
+            .addInterceptor(apiKeyInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
-                    .addHeader("Authorization", "Bearer ${BuildConfig.TMDB_API_KEY}")
                     .addHeader("User-Agent", USER_AGENT)
                     .build()
                 chain.proceed(request)
@@ -312,14 +320,17 @@ object NetworkModule {
     fun provideDoubanOkHttpClient(
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
-        cache: Cache
+        cache: Cache,
+        @DoubanBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
+        @DoubanApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
+            .addInterceptor(baseUrlInterceptor)
+            .addInterceptor(apiKeyInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
-                    .addHeader("X-API-Key", BuildConfig.DOUBAN_API_KEY)
                     .build()
                 chain.proceed(request)
             })

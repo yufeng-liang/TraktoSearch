@@ -1,0 +1,10 @@
+{
+  "name": "app-config-encrypt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AES-256-GCM 加密脚本,生成 config.json.enc",
+  "type": "commonjs",
+  "scripts": {
+    "encrypt": "node encrypt-config.js"
+  }
+}

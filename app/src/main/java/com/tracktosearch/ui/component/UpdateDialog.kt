@@ -2,6 +2,7 @@ package com.tracktosearch.ui.component
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -207,78 +209,60 @@ private fun parseChangelogSections(text: String): List<ChangelogSection> {
 
 /**
  * 带吸顶标题的更新日志渲染：
- * - 仅渲染吸顶标题(随内容滚动的 section 标题被隐藏,避免重复)
- * - 吸顶标题左侧显示版本标题,右侧右对齐显示更新日期
- * - 滑到下一版时标题自动替换
+ * - 每版 section 标题作为 stickyHeader item 渲染，随内容滚动到顶部时变 sticky（不会遮住首行）
+ * - 未到顶时标题仍在下面正常显示，便于用户区分各版本
+ * - 滑到下一版时，新标题顶替旧标题
+ *
+ * 使用 LazyColumn 的 stickyHeader API 而非 overlay 浮层：
+ * overlay 模式会遮住首行文字；stickyHeader 是标准吸顶，标题占位而非覆盖。
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun StickyHeaderChangelogContent(text: String) {
     val sections = remember(text) { parseChangelogSections(text) }
     val listState = rememberLazyListState()
 
-    // 计算每个 section 的起始 item 索引(只算 content lines,不含 header item)
-    val sectionStartIndices = remember(sections) {
-        val indices = mutableListOf<Int>()
-        var idx = 0
-        sections.forEach {
-            indices.add(idx)
-            idx += it.lines.size // 只算 content lines
-        }
-        indices
-    }
-
-    // 根据当前滚动位置确定吸顶标题
-    val currentSectionIndex = remember(listState.firstVisibleItemIndex) {
-        var result = 0
-        for (i in sectionStartIndices.indices.reversed()) {
-            if (listState.firstVisibleItemIndex >= sectionStartIndices[i]) {
-                result = i
-                break
-            }
-        }
-        result
-    }
-    val currentSection = sections.getOrNull(currentSectionIndex)
-    val currentTitle = currentSection?.title ?: ""
-    val currentDate = currentSection?.date ?: ""
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        LazyColumn(state = listState) {
-            sections.forEachIndexed { sectionIdx, section ->
-                // 不再渲染 section 的 header item(随内容滚动的标题),仅由吸顶标题显示版本信息
-                // 内容行
-                items(section.lines, key = { "${sectionIdx}_${it.hashCode()}" }) { line ->
-                    RenderLine(line)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        sections.forEachIndexed { sectionIdx, section ->
+            // 每版 section 标题作为 stickyHeader：随内容滚动到顶部时变 sticky，下一个 header 顶走时正常滚出
+            stickyHeader(key = "header_${sectionIdx}") {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = parseInlineMarkdown(section.title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (section.date.isNotBlank()) {
+                                Text(
+                                    text = section.date,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
                 }
             }
-        }
-
-        // 吸顶标题(浮在顶部,背景匹配弹窗容器色 + 底部分隔线)
-        // 左侧:版本标题;右侧右对齐:更新日期(若有)
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = parseInlineMarkdown(currentTitle),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.weight(1f)
-                )
-                if (currentDate.isNotBlank()) {
-                    Text(
-                        text = currentDate,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            // 内容行
+            items(items = section.lines, key = { line -> "content_${sectionIdx}_${line.hashCode()}" }) { line ->
+                RenderLine(line)
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
 }

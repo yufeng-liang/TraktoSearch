@@ -53,7 +53,8 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
-import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 
@@ -75,12 +76,20 @@ internal fun MovieCard(
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-    // 当前活跃海报 tmdbId（-1=都不启用 / 具体值=只有匹配的启用）
+    // 当前活跃海报 tmdbId(-1=都不启用 / 具体值=只有匹配的启用)
     val activePosterTmdbId = LocalActivePosterTmdbId.current
-    val setActivePosterTmdbId = LocalActivePosterTmdbIdSetter.current
+    val setActivePosterTmdbId = LocalActivePosterClickSetter.current
+    // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
+    val activeClickToken = LocalActivePosterClickToken.current
+    var myClickToken by remember { mutableStateOf(0) }
     // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
+    // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)
     val isCurrentTab = LocalIsCurrentTab.current
-    val enableShared = tmdbId > 0 && tmdbId == activePosterTmdbId && isCurrentTab
+    val enableShared = tmdbId > 0
+        && tmdbId == activePosterTmdbId
+        && isCurrentTab
+        && myClickToken != 0
+        && myClickToken == activeClickToken
     val posterUrl = posterPath?.let {
         if (it.startsWith("http")) it
         else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
@@ -91,8 +100,10 @@ internal fun MovieCard(
         modifier = Modifier
             .width(105.dp)
             .clickable(enabled = !isResolving) {
-                // 点击时记录当前海报为活跃状态，确保只有这个卡片参与转场
-                if (tmdbId > 0) setActivePosterTmdbId(tmdbId)
+                // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
+                if (tmdbId > 0) {
+                    myClickToken = setActivePosterTmdbId(tmdbId)
+                }
                 onClick()
             },
         shape = RoundedCornerShape(10.dp),
@@ -127,7 +138,7 @@ internal fun MovieCard(
                     val imageRequest = remember(posterUrl) {
                         ImageRequest.Builder(context)
                             .data(posterUrl)
-                            .size(200)
+                            .size(264)
                             .crossfade(false)
                             .build()
                     }

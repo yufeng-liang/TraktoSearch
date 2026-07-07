@@ -68,6 +68,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -105,8 +107,10 @@ fun DiscoverScreen(
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     // 记录进入影视筛选页的入口来源（"card"=底部卡片 / "icon"=右上角图标），返回时据此决定哪个入口参与转场
     var activeFilterEntry by rememberSaveable { mutableStateOf<String?>(null) }
-    // 当前活跃的海报 tmdbId（-1=初始无活跃 / 具体值=被点击的海报），确保同页面多栏目相同海报只有被点击的参与转场
+    // 当前活跃的海报 tmdbId(-1=初始无活跃 / 具体值=被点击的海报),确保同页面多栏目相同海报只有被点击的参与转场
     var activePosterTmdbId by rememberSaveable { mutableStateOf(-1) }
+    // 每次点击递增的 token,用于精确匹配被点击的卡片实例(避免同 tmdbId 海报跨栏目飘错)
+    var activeClickToken by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         viewModel.toastEvent.collect { resId ->
@@ -171,7 +175,12 @@ fun DiscoverScreen(
 
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+        LocalActivePosterClickSetter provides { id ->
+            activePosterTmdbId = id
+            activeClickToken += 1
+            activeClickToken  // 返回新 token 给调用方保存
+        },
+        LocalActivePosterClickToken provides activeClickToken
     ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)

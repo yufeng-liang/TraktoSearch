@@ -110,6 +110,8 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
@@ -214,9 +216,17 @@ fun TraktSearchScreen(
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
+    // 点击 token,确保只有被点击的卡片参与转场
+    var activeClickToken by remember { mutableStateOf(0) }
+
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+        LocalActivePosterClickSetter provides { id ->
+            activePosterTmdbId = id
+            activeClickToken += 1
+            activeClickToken
+        },
+        LocalActivePosterClickToken provides activeClickToken
     ) {
     Box(
         modifier = Modifier.fillMaxSize()

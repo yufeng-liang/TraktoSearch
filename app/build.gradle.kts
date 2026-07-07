@@ -42,6 +42,9 @@ android {
         buildConfigField("String", "BAIDU_APP_ID", "\"${properties.getProperty("baidu.app.id", "")}\"")
         buildConfigField("String", "BAIDU_SECRET_KEY", "\"${properties.getProperty("baidu.secret.key", "")}\"")
         buildConfigField("String", "BAIDU_API_KEY", "\"${properties.getProperty("baidu.api.key", "")}\"")
+        // 云端配置热更新:加密 key(与 app-config/.env 中 CONFIG_AES_KEY 一致)+ 配置服务 baseUrl
+        buildConfigField("String", "CONFIG_AES_KEY", "\"${properties.getProperty("config.aes.key", "")}\"")
+        buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
 
         val appId = applicationId ?: "com.tracktosearch"
         manifestPlaceholders["JPUSH_PKGNAME"] = appId

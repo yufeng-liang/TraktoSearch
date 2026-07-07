@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.remote.config.RemoteConfigProvider
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +22,8 @@ data class MultiRatings(
 
 @Singleton
 class RatingsRepository @Inject constructor(
-    private val omdbApiService: OmdbApiService
+    private val omdbApiService: OmdbApiService,
+    private val remoteConfig: RemoteConfigProvider
 ) {
     private val cache = object : LinkedHashMap<String, MultiRatings>(50, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, MultiRatings>): Boolean {
@@ -50,8 +52,10 @@ class RatingsRepository @Inject constructor(
 
         // 第二步：OMDb 一返回就 emit
         val omdbRatings = try {
+            // OMDB apiKey 从云端配置取(支持热更新),无值时回退 BuildConfig
+            val omdbApiKey = remoteConfig.get("omdb.apiKey", BuildConfig.OMDB_API_KEY)
             val response = omdbApiService.getByImdbId(
-                apiKey = BuildConfig.OMDB_API_KEY,
+                apiKey = omdbApiKey,
                 imdbId = imdbId
             )
             if (response.Response == "True") response else null

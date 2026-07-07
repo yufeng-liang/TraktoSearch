@@ -167,10 +167,15 @@ fun MainScreen(
         }
     }
 
+    // 悬浮导航显隐状态(提前声明,供 LaunchedEffect(onboardingCompleted) 使用)
+    var isFabVisible by remember { mutableFloatStateOf(1f) }
+
     LaunchedEffect(onboardingCompleted) {
         if (onboardingCompleted == false) {
             showOnboarding = true
             // 重置到搜索页，确保新手引导从搜索页开始
+            // 同时强制显示底部导航(若设置页滚动时把它隐藏了)
+            isFabVisible = 1f
             scope.launch {
                 pagerState.scrollToPage(0)
                 selectedTab = 0
@@ -201,8 +206,6 @@ fun MainScreen(
         }
     }
 
-    // 悬浮导航显隐状态
-    var isFabVisible by remember { mutableFloatStateOf(1f) }
     val fabOffset by animateDpAsState(
         targetValue = if (isFabVisible > 0.5f) 0.dp else 100.dp,
         animationSpec = tween(durationMillis = 200),
@@ -341,6 +344,7 @@ fun MainScreen(
                         onRestartOnboarding = onRestartOnboarding,
                         onDoubanResync = onDoubanResync,
                         onDoubanFailures = onDoubanFailures,
+                        onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                         onStatisticsClick = onStatisticsClick,
                         modifier = Modifier.fillMaxSize()
                     )

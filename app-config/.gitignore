@@ -1,0 +1,7 @@
+# 明文配置绝不进 git(含真实 API key)
+scripts/config.plain.json
+.env
+.env.local
+node_modules/
+.wrangler/
+public/config.json.enc

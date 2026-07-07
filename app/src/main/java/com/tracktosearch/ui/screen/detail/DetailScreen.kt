@@ -61,6 +61,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -71,6 +74,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -195,9 +200,17 @@ fun DetailScreen(
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
 
+    // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
+    var activeClickToken by remember { mutableStateOf(0) }
+
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+        LocalActivePosterClickSetter provides { id ->
+            activePosterTmdbId = id
+            activeClickToken += 1
+            activeClickToken
+        },
+        LocalActivePosterClickToken provides activeClickToken
     ) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
@@ -218,7 +231,30 @@ fun DetailScreen(
                 } ?: Modifier
             )
         ) {
+            // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
+            // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
+            // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
+            val isPinned by remember {
+                derivedStateOf { listState.firstVisibleItemIndex >= 1 }
+            }
+            val tabContainerColor = if (isPinned) {
+                uiState.posterDominantColor?.let { c ->
+                    lerp(c, Color.White, 0.38f)
+                } ?: MaterialTheme.colorScheme.surface
+            } else {
+                Color.Transparent
+            }
+            val tabContentColor = when {
+                isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                !isPinned && (uiState.posterDominantColor?.luminance() ?: 1f) <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
+            // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型/找到xx个资源等文字可自适应
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides tabContentColor
+            ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -274,9 +310,11 @@ fun DetailScreen(
                 val effectiveTab = selectedTab.coerceAtMost(tabCount - 1)
                 if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
+                    // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
                     PrimaryTabRow(
                         selectedTabIndex = selectedTab,
-                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        containerColor = tabContainerColor,
+                        contentColor = tabContentColor,
                         modifier = Modifier.alpha(contentAlpha)
                     ) {
                         Tab(
@@ -346,7 +384,7 @@ fun DetailScreen(
                                 Text(
                                     text = stringResource(R.string.detail_found_resources, items.size),
                                     style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = androidx.compose.material3.LocalContentColor.current,
                                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
                                 )
                             }
@@ -607,6 +645,7 @@ fun DetailScreen(
                     }
                 }
             }
+            } // CompositionLocalProvider
 
             // 返回按钮（半透明背景 + Haze 模糊增强）
             Box(

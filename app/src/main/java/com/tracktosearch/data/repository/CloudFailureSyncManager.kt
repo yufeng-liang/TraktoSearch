@@ -1,7 +1,6 @@
 package com.tracktosearch.data.repository
 
 import android.util.Log
-import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.cloud.AesCrypto
@@ -77,8 +76,6 @@ class CloudFailureSyncManager @Inject constructor(
         val hash = AesCrypto.hashUserId(doubanUserId)
         return "$PATH_PREFIX$hash$FILE_SUFFIX"
     }
-
-    private fun token(): String = BuildConfig.GITEE_ACCESS_TOKEN
 
     /**
      * 从 GET 响应中安全提取文件信息。
@@ -161,7 +158,7 @@ class CloudFailureSyncManager @Inject constructor(
             // 先 GET 获取 sha(更新已有文件时必传)
             // 注意:文件不存在时 Gitee 可能返回 200 + `[]`,parseContentResponse 会返回 null
             val existingSha = try {
-                val resp = giteeContentsApi.getFileContent(OWNER, REPO, path, token())
+                val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
                 if (resp.isSuccessful) parseContentResponse(resp.body())?.sha else null
             } catch (e: Exception) {
                 null
@@ -184,9 +181,9 @@ class CloudFailureSyncManager @Inject constructor(
                 )
             }
             val putResp = if (existingSha != null) {
-                giteeContentsApi.putFileContent(OWNER, REPO, path, token(), request)
+                giteeContentsApi.putFileContent(OWNER, REPO, path, request)
             } else {
-                giteeContentsApi.createFileContent(OWNER, REPO, path, token(), request)
+                giteeContentsApi.createFileContent(OWNER, REPO, path, request)
             }
             if (putResp.isSuccessful) {
                 Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"})")
@@ -213,7 +210,7 @@ class CloudFailureSyncManager @Inject constructor(
         val path = buildPath(creds.userId)
 
         try {
-            val resp = giteeContentsApi.getFileContent(OWNER, REPO, path, token())
+            val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
             if (!resp.isSuccessful) {
                 if (resp.code() != 404) {
                     Log.w(TAG, "检测云端失败: ${resp.code()}")
@@ -250,7 +247,7 @@ class CloudFailureSyncManager @Inject constructor(
         val path = buildPath(creds.userId)
 
         try {
-            val resp = giteeContentsApi.getFileContent(OWNER, REPO, path, token())
+            val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
             if (!resp.isSuccessful) return@withContext -1
             val body = parseContentResponse(resp.body()) ?: return@withContext -1
             val base64Content = body.content ?: return@withContext -1

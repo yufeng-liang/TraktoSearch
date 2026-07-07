@@ -211,8 +211,9 @@ fun AppNavigation(
                             }
                         }
 
-                        // 版本更新检查：首页加载完成后检查，仅一次
-                        // 已登录：等想看列表加载完成；未登录：立即检查
+                        // 版本更新检查：首页数据加载完成后再延迟 0.8 秒检查，仅一次
+                        // 已登录：等想看列表加载完成；未登录：立即就绪
+                        // 延迟 0.8s：等首屏渲染稳定后再发起网络请求，避免与 UI 抢资源导致卡顿
                         val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
                         var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
                         var updateChecked by rememberSaveable { mutableStateOf(false) }
@@ -226,6 +227,8 @@ fun AppNavigation(
                                     true
                                 }
                             }.first { it }
+                            // 数据加载完成后再等 0.8 秒，让首屏渲染稳定
+                            kotlinx.coroutines.delay(800)
                             if (!updateChecked) {
                                 updateChecked = true
                                 try {

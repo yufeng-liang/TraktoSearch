@@ -10,10 +10,7 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
-import coil.compose.SubcomposeAsyncImage
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,7 +42,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
@@ -62,21 +58,22 @@ import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.outlined.HelpOutline
-import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -107,6 +104,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -116,14 +114,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.SubcomposeAsyncImage
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -131,23 +128,23 @@ import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.douban.CloudSyncEvent
 import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
-import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
+import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.debounce
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+/** 返回设置页后,SharedTransitionLayout/HorizontalPager 重激活期间会产生幽灵 scroll。延迟打开写入窗口,覆盖 SharedTransition 动画时长 + pager layout 稳定时间。 */
+private const val SCROLL_GATE_DELAY_MS = 800L
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -158,6 +155,7 @@ fun SettingsScreen(
     onRestartOnboarding: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onDoubanFailures: () -> Unit = {},
+    onNavigateToDoubanLogin: () -> Unit = {},
     onStatisticsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
@@ -216,11 +214,16 @@ fun SettingsScreen(
         }
     }
 
-    LifecycleResumeEffect(Unit) {
-        viewModel.refreshCacheInfo()
-        // 进入设置页时刷新豆瓣失败项统计(用于按钮文案和入口检测)
-        scope.launch { doubanRetryViewModel.refreshRetryState() }
-        onPauseOrDispose { }
+    // 仅首次进入组合时刷新缓存信息和豆瓣失败项统计
+    // 不使用 LifecycleResumeEffect：导航到帮助页再返回时生命周期 STARTED→RESUMED 会重新触发，
+    // 导致缓存大小等数据更新引起 LazyColumn 项高度微调，滚动位置偏移
+    // 用 rememberSaveable 标记确保仅真正首次组合才刷新；重新组合(跨页面导航)后标记已存，避免重复刷新导致列表高度变化
+    val cacheRefreshed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!cacheRefreshed) {
+            viewModel.refreshCacheInfo()
+            doubanRetryViewModel.refreshRetryState()
+        }
     }
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
@@ -235,6 +238,7 @@ fun SettingsScreen(
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showDoubanLogoutDialog by remember { mutableStateOf(false) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearCategoryDialog by remember { mutableStateOf(false) }
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
@@ -323,23 +327,75 @@ fun SettingsScreen(
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
     val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
 
-    val settingsHazeState = remember { HazeState() }
-    val savedScrollIndex = rememberSaveable { mutableIntStateOf(0) }
-    val savedScrollOffset = rememberSaveable { mutableIntStateOf(0) }
+    // 用 rememberSaveable 持久化滚动位置(跨页面导航可靠恢复)
+    // 显式保存 index+offset 比 LazyListState.Saver 在 HorizontalPager + Nav 跨页场景下更稳定
+    val savedFirstVisibleItemIndex = rememberSaveable { mutableIntStateOf(0) }
+    val savedFirstVisibleItemScrollOffset = rememberSaveable { mutableIntStateOf(0) }
+    android.util.Log.d("SettingsScroll", "restore: index=${savedFirstVisibleItemIndex.intValue} offset=${savedFirstVisibleItemScrollOffset.intValue}")
     val settingsListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = savedScrollIndex.intValue,
-        initialFirstVisibleItemScrollOffset = savedScrollOffset.intValue
+        initialFirstVisibleItemIndex = savedFirstVisibleItemIndex.intValue,
+        initialFirstVisibleItemScrollOffset = savedFirstVisibleItemScrollOffset.intValue
     )
-    val scrollToTopProvider = LocalScrollToTopProvider.current
-    val settingsCoroutineScope = rememberCoroutineScope()
+    // scroll gate:返回设置页后,SharedTransitionLayout/HorizontalPager 重激活期间会产生
+    // "幽灵 scroll"(layout 修正导致 position 跳变)。延迟打开写入窗口,窗口期内丢弃 snapshotFlow 收集到的位置
+    var scrollGateOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(SCROLL_GATE_DELAY_MS)
+        scrollGateOpen = true
+        android.util.Log.d("SettingsScroll", "gate opened, state index=${settingsListState.firstVisibleItemIndex} offset=${settingsListState.firstVisibleItemScrollOffset}")
+    }
+    // 返回设置页后 force restore:SharedTransitionLayout/HorizontalPager 重激活期间
+    // settingsListState 被外部拉到错误 index。等到 layout 有 items 后立即 scrollToItem 恢复
+    // 不等固定延迟,越早恢复用户越少看到错误位置
+    val targetRestoreIndex = savedFirstVisibleItemIndex.intValue
+    val targetRestoreOffset = savedFirstVisibleItemScrollOffset.intValue
+    // 记录已执行过初次跨页恢复的 saveIdx,恢复后不再重入(避免用户新 scroll 后被旧 save 值覆盖)
+    val restoreMark = rememberSaveable { mutableIntStateOf(0) }
+    if ((targetRestoreIndex > 0 || targetRestoreOffset > 0) && restoreMark.intValue != targetRestoreIndex) {
+        LaunchedEffect(targetRestoreIndex, targetRestoreOffset) {
+            // 轮询直到 layout 完成,最多 20 次 * 50ms = 1s
+            repeat(20) {
+                if (settingsListState.layoutInfo.totalItemsCount > 0) {
+                    val maxIndex = (settingsListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                    val safeIndex = targetRestoreIndex.coerceAtMost(maxIndex)
+                    try {
+                        settingsListState.scrollToItem(safeIndex, targetRestoreOffset)
+                        android.util.Log.d("SettingsScroll", "early restore: index=$safeIndex offset=$targetRestoreOffset")
+                        scrollGateOpen = true
+                        restoreMark.intValue = targetRestoreIndex // 标记已恢复
+                    } catch (_: Exception) {
+                        android.util.Log.d("SettingsScroll", "early restore failed")
+                    }
+                    return@LaunchedEffect
+                }
+                kotlinx.coroutines.delay(50)
+            }
+        }
+    }
+    // 滚动时持续保存最新位置(保证实时性)
     LaunchedEffect(settingsListState) {
         snapshotFlow {
             settingsListState.firstVisibleItemIndex to settingsListState.firstVisibleItemScrollOffset
-        }.debounce(150).collect { (index, offset) ->
-            savedScrollIndex.intValue = index
-            savedScrollOffset.intValue = offset
+        }.collect { (index, offset) ->
+            if (scrollGateOpen) {
+                savedFirstVisibleItemIndex.intValue = index
+                savedFirstVisibleItemScrollOffset.intValue = offset
+            }
+            android.util.Log.d("SettingsScroll", "snapshotFlow: index=$index offset=$offset gate=$scrollGateOpen")
         }
     }
+    // dispose 时同步再保存一次最终 scroll 值
+    // snapshotFlow 的 collect 在 dispose 时会丢弃最后一个 in-flight emit,导致最终 scroll 值丢失
+    // onDispose 同步读取 settingsListState 当前值,这是离开时用户看到的最终位置
+    DisposableEffect(settingsListState) {
+        onDispose {
+            android.util.Log.d("SettingsScroll", "onDispose: index=${settingsListState.firstVisibleItemIndex} offset=${settingsListState.firstVisibleItemScrollOffset}")
+            savedFirstVisibleItemIndex.intValue = settingsListState.firstVisibleItemIndex
+            savedFirstVisibleItemScrollOffset.intValue = settingsListState.firstVisibleItemScrollOffset
+        }
+    }
+    val scrollToTopProvider = LocalScrollToTopProvider.current
+    val settingsCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
         scrollToTopProvider.register {
             settingsCoroutineScope.launch {
@@ -348,10 +404,6 @@ fun SettingsScreen(
         }
         onDispose {
             scrollToTopProvider.unregister()
-            // 页面销毁（如导航到帮助页）时立即保存滚动位置，
-            // 避免 LaunchedEffect 的 debounce(150) 被取消导致最后位置丢失
-            savedScrollIndex.intValue = settingsListState.firstVisibleItemIndex
-            savedScrollOffset.intValue = settingsListState.firstVisibleItemScrollOffset
         }
     }
 
@@ -373,8 +425,7 @@ fun SettingsScreen(
             LazyColumn(
                 state = settingsListState,
                 modifier = modifier
-                    .fillMaxSize()
-                    .hazeSource(state = settingsHazeState),
+                    .fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = 65.dp + statusBarHeight,
                     bottom = 80.dp
@@ -439,15 +490,15 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SearchSourceCard(modifier = Modifier.weight(1f), name = "PanSou", checked = pansouEnabled, onCheckedChange = { viewModel.setPansouEnabled(it) })
-                    SearchSourceCard(modifier = Modifier.weight(1f), name = "Panhub", checked = panhubEnabled, onCheckedChange = { viewModel.setPanhubEnabled(it) }, onConfigClick = { showPanHubConfigDialog = true }, configContentDescription = stringResource(R.string.settings_panhub_config))
+                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "PanSou", checked = pansouEnabled, onCheckedChange = { viewModel.setPansouEnabled(it) })
+                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "Panhub", checked = panhubEnabled, onCheckedChange = { viewModel.setPanhubEnabled(it) }, onConfigClick = { showPanHubConfigDialog = true }, configContentDescription = stringResource(R.string.settings_panhub_config))
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SearchSourceCard(modifier = Modifier.weight(1f), name = "Zreso", checked = zresoEnabled, onCheckedChange = { viewModel.setZresoEnabled(it) })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Add, title = stringResource(R.string.settings_add_source), onClick = {
+                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "Zreso", checked = zresoEnabled, onCheckedChange = { viewModel.setZresoEnabled(it) })
+                    SearchSourceAddCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), title = stringResource(R.string.settings_add_source), onClick = {
                         showEditCustomSource = CustomSearchSource(
                             id = java.util.UUID.randomUUID().toString(),
                             name = "",
@@ -490,38 +541,115 @@ fun SettingsScreen(
                             viewModel.setNotificationEnabled(false)
                         }
                     }
-                    SwitchSettingsItem(
-                        title = stringResource(R.string.settings_notification_enabled),
-                        subtitle = stringResource(R.string.settings_notification_enabled_desc),
-                        checked = notificationEnabled,
-                        onCheckedChange = { enabled ->
-                            if (enabled) {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    // 独占一行的卡片：标题 + 小字描述 + 开关；开关打开后展开为三行
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            val view = LocalView.current
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 通知图标：与设置页其他卡片风格一致,左侧带图标
+                                Icon(
+                                    Icons.Default.Notifications,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.settings_notification_enabled),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.settings_notification_enabled_desc),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
-                                viewModel.setNotificationEnabled(true)
-                            } else {
-                                viewModel.setNotificationEnabled(false)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Switch(
+                                    checked = notificationEnabled,
+                                    onCheckedChange = { enabled ->
+                                        if (enabled) {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                            }
+                                            viewModel.setNotificationEnabled(true)
+                                        } else {
+                                            viewModel.setNotificationEnabled(false)
+                                        }
+                                    },
+                                    colors = appSwitchColors()
+                                )
                             }
-                        }
-                    )
-                    // 启用通知为关时，隐藏下面的「上映提醒」和「新季提醒」
-                    AnimatedVisibility(visible = notificationEnabled) {
-                        Column {
-                            val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
-                            SwitchSettingsItem(
-                                title = stringResource(R.string.settings_notification_release),
-                                subtitle = stringResource(R.string.settings_notification_release_desc),
-                                checked = releaseEnabled,
-                                onCheckedChange = { viewModel.setReleaseReminderEnabled(it) }
-                            )
-                            val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
-                            SwitchSettingsItem(
-                                title = stringResource(R.string.settings_notification_new_season),
-                                subtitle = stringResource(R.string.settings_notification_new_season_desc),
-                                checked = newSeasonEnabled,
-                                onCheckedChange = { viewModel.setNewSeasonReminderEnabled(it) }
-                            )
+                            // 启用通知后，展开「上映提醒」和「新季提醒」两行（整体仍为一个卡片）
+                            AnimatedVisibility(visible = notificationEnabled) {
+                                Column {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // 占位:Icon(20.dp) + Spacer(8.dp) 与「启用通知」文字起点对齐
+                                        Spacer(modifier = Modifier.width(28.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = stringResource(R.string.settings_notification_release),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.settings_notification_release_desc),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Switch(
+                                            checked = releaseEnabled,
+                                            onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(it) },
+                                            colors = appSwitchColors()
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        // 占位:Icon(20.dp) + Spacer(8.dp) 与「启用通知」文字起点对齐
+                                        Spacer(modifier = Modifier.width(28.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = stringResource(R.string.settings_notification_new_season),
+                                                style = MaterialTheme.typography.bodyLarge,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = stringResource(R.string.settings_notification_new_season_desc),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Switch(
+                                            checked = newSeasonEnabled,
+                                            onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(it) },
+                                            colors = appSwitchColors()
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -534,8 +662,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Explore, title = stringResource(R.string.settings_discover_page), subtitle = stringResource(R.string.settings_discover_sections_desc), onClick = { showDiscoverSectionsDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Movie, title = stringResource(R.string.settings_detail_page), subtitle = stringResource(R.string.settings_detail_sections_desc), onClick = { showDetailSectionsDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Explore, title = stringResource(R.string.settings_discover_page), onClick = { showDiscoverSectionsDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Movie, title = stringResource(R.string.settings_detail_page), onClick = { showDetailSectionsDialog = true })
                 }
             }
 
@@ -598,7 +726,7 @@ fun SettingsScreen(
                     }
                 }
                 item {
-                    SettingsItem(
+                    SettingsItemCard(
                         icon = Icons.Default.FileDownload,
                         title = stringResource(R.string.settings_douban_resync),
                         subtitle = stringResource(R.string.settings_douban_resync_desc),
@@ -610,7 +738,7 @@ fun SettingsScreen(
                 }
                 item {
                     if (doubanRetryState.hasFailures) {
-                        SettingsItem(
+                        SettingsItemCard(
                             icon = Icons.Default.Replay,
                             title = stringResource(R.string.settings_douban_retry_failures),
                             subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
@@ -622,9 +750,9 @@ fun SettingsScreen(
                     }
                 }
                 item {
-                    // 「查看同步失败项」入口:仅在有失败项时显示
+                    // 「查看同步失败项」入口:仅在有失败项时显示,卡片独占一行
                     if (doubanRetryState.hasFailures) {
-                        SettingsItem(
+                        SettingsItemCard(
                             icon = Icons.Default.BrokenImage,
                             title = stringResource(R.string.settings_douban_view_failures),
                             subtitle = stringResource(
@@ -718,23 +846,15 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 帮助与说明卡片（保留 sharedBounds 转场配对）
-                    val helpEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedBounds(
-                                sharedContentState = rememberSharedContentState(key = "settings-help-entry"),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        }
-                    } else { Modifier }
-                    SettingsCard(modifier = Modifier.weight(1f).then(helpEntryModifier), icon = Icons.Outlined.HelpOutline, title = stringResource(R.string.settings_help), onClick = { onHelpClick() })
+                    // 帮助与说明卡片
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Outlined.HelpOutline, title = stringResource(R.string.settings_help), onClick = { onHelpClick() })
                     // 新手引导卡片
                     SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.AutoAwesome, title = stringResource(R.string.settings_restart_onboarding), onClick = { onRestartOnboarding() })
                 }
             }
-            // 源代码仓库（保持原列表项样式）
+            // 源代码仓库（卡片独占一行，保留小字）
             item {
-                SettingsItem(
+                SettingsItemCard(
                     icon = Icons.Default.Code,
                     title = stringResource(R.string.settings_source_repo),
                     subtitle = "yufeng-liang/TrackToSearch-release",
@@ -756,30 +876,69 @@ fun SettingsScreen(
                 )
             }
 
-            // 账户（仅登录用户可见）
+            // 账户（仅登录用户可见）：Trakt + 豆瓣共用一个卡片，分两行
             if (isLoggedIn) {
                 item { SettingsSectionHeader(stringResource(R.string.settings_account)) }
                 item {
                     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-                    LaunchedEffect(Unit) { viewModel.loadUserProfile() }
-                    UserProfileItem(
-                        username = userProfile?.username,
-                        avatarUrl = userProfile?.images?.avatar?.full ?: "",
-                        isVip = userProfile?.vip == true,
-                        onLogout = { showLogoutDialog = true }
-                    )
+                    val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
+                    val doubanProfile by viewModel.doubanProfile.collectAsStateWithLifecycle()
+                    LaunchedEffect(Unit) {
+                        viewModel.loadUserProfile()
+                        viewModel.loadDoubanProfile()
+                    }
+                    // 一个卡片包住 Trakt + 豆瓣两行
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // 第一行：Trakt（标签 + 头像 + 名称 + 登出）
+                            AccountRow(
+                                accountLabel = stringResource(R.string.settings_account_trakt_label),
+                                avatarUrl = userProfile?.images?.avatar?.full ?: "",
+                                primaryName = userProfile?.username,
+                                secondaryName = null,
+                                showAvatar = true,
+                                isVip = userProfile?.vip == true,
+                                onLogout = { showLogoutDialog = true }
+                            )
+                            HorizontalDivider(
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            // 第二行：豆瓣
+                            // - 已登录：头像 + 昵称 + ID 小字 + 登出按钮
+                            // - 未登录/登出后：去掉头像和名称,显示登录用途说明 + 登录按钮
+                            val doubanCreds = doubanProfile
+                            if (doubanLoggedIn) {
+                                AccountRow(
+                                    accountLabel = stringResource(R.string.settings_account_douban),
+                                    avatarUrl = doubanCreds?.avatarUrl ?: "",
+                                    primaryName = doubanCreds?.nickname ?: doubanCreds?.userId,
+                                    secondaryName = doubanCreds?.userId?.let { "ID: $it" },
+                                    showAvatar = true,
+                                    isVip = false,
+                                    onLogout = { showDoubanLogoutDialog = true }
+                                )
+                            } else {
+                                DoubanLoginPromptRow(
+                                    onLogin = { onNavigateToDoubanLogin() }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
-            // Haze模糊渐变TopAppBar（含状态栏）
+            // 普通标题栏（含状态栏）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(
-                        state = settingsHazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .background(MaterialTheme.colorScheme.surface)
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -858,6 +1017,39 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showLogoutDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    // 豆瓣登出二次确认对话框(登出后用 Snackbar 提供"重新登录"入口)
+    if (showDoubanLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showDoubanLogoutDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.settings_account_douban)) },
+            text = { Text(stringResource(R.string.settings_logout_confirm)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDoubanLogoutDialog = false
+                    viewModel.clearDoubanCredentials()
+                    scope.launch {
+                        val result = snackbarHostState.showSnackbar(
+                            message = context.getString(R.string.settings_douban_logout_done),
+                            actionLabel = context.getString(R.string.douban_sync_relogin),
+                            duration = androidx.compose.material3.SnackbarDuration.Long
+                        )
+                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                            onNavigateToDoubanLogin()
+                        }
+                    }
+                }) {
+                    Text(stringResource(R.string.settings_logout_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDoubanLogoutDialog = false }) {
                     Text(stringResource(android.R.string.cancel))
                 }
             }
@@ -1131,6 +1323,61 @@ fun SettingsItem(
         }
         if (onClick != null) {
             Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * 设置项卡片：独占一行的圆角卡片（图标 + 标题 + 小字 + 右箭头）。
+ * 用于把原列表项样式的 SettingsItem 改为卡片样式，保留小字描述。
+ */
+@Composable
+private fun SettingsItemCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                if (subtitle.isNotEmpty()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
@@ -1588,87 +1835,83 @@ fun CacheManagementItem(
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        // 概览行（整卡可点击展开/收起）
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Storage,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.settings_cache_management),
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = stringResource(R.string.settings_cache_total, formatFileSize(breakdown.totalBytes)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = { expanded = !expanded }) {
+    // 卡片样式：独占一行的圆角卡片
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // 概览行（整卡可点击展开/收起）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null
+                    imageVector = Icons.Default.Storage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
                 )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_cache_management),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_cache_total, formatFileSize(breakdown.totalBytes)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null
+                    )
+                }
             }
-        }
 
-        // 展开后：5 个类目分项
-        AnimatedVisibility(visible = expanded) {
-            Column {
-                CacheCategoryRow(
-                    icon = Icons.Default.Image,
-                    labelRes = R.string.settings_cache_category_image,
-                    descRes = R.string.settings_cache_category_image_desc,
-                    sizeBytes = breakdown.imageBytes,
-                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.IMAGE) }
-                )
-                CacheCategoryRow(
-                    icon = Icons.Default.Movie,
-                    labelRes = R.string.settings_cache_category_media_data,
-                    descRes = R.string.settings_cache_category_media_data_desc,
-                    sizeBytes = breakdown.mediaDataBytes,
-                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.MEDIA_DATA) }
-                )
-                CacheCategoryRow(
-                    icon = Icons.Default.Link,
-                    labelRes = R.string.settings_cache_category_id_mapping,
-                    descRes = R.string.settings_cache_category_id_mapping_desc,
-                    sizeBytes = breakdown.idMappingBytes,
-                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.ID_MAPPING) }
-                )
-                CacheCategoryRow(
-                    icon = Icons.Default.CloudDownload,
-                    labelRes = R.string.settings_cache_category_http,
-                    descRes = R.string.settings_cache_category_http_desc,
-                    sizeBytes = breakdown.httpBytes,
-                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.HTTP) }
-                )
-                CacheCategoryRow(
-                    icon = Icons.Default.Storage,
-                    labelRes = R.string.settings_cache_category_database,
-                    descRes = R.string.settings_cache_category_database_desc,
-                    sizeBytes = breakdown.databaseBytes,
-                    onClear = { onClearCategory(SettingsViewModel.CacheCategory.DATABASE) }
-                )
-                // 全部清除按钮
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    OutlinedButton(onClick = onClearAll) {
-                        Text(stringResource(R.string.settings_cache_clear_all))
+            // 展开后：保留 图片/影视数据/HTTP 三个类目（去掉 ID 映射、离线数据库）
+            AnimatedVisibility(visible = expanded) {
+                Column {
+                    CacheCategoryRow(
+                        icon = Icons.Default.Image,
+                        labelRes = R.string.settings_cache_category_image,
+                        descRes = R.string.settings_cache_category_image_desc,
+                        sizeBytes = breakdown.imageBytes,
+                        onClear = { onClearCategory(SettingsViewModel.CacheCategory.IMAGE) }
+                    )
+                    CacheCategoryRow(
+                        icon = Icons.Default.Movie,
+                        labelRes = R.string.settings_cache_category_media_data,
+                        descRes = R.string.settings_cache_category_media_data_desc,
+                        sizeBytes = breakdown.mediaDataBytes,
+                        onClear = { onClearCategory(SettingsViewModel.CacheCategory.MEDIA_DATA) }
+                    )
+                    CacheCategoryRow(
+                        icon = Icons.Default.CloudDownload,
+                        labelRes = R.string.settings_cache_category_http,
+                        descRes = R.string.settings_cache_category_http_desc,
+                        sizeBytes = breakdown.httpBytes,
+                        onClear = { onClearCategory(SettingsViewModel.CacheCategory.HTTP) }
+                    )
+                    // 全部清除按钮
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        OutlinedButton(onClick = onClearAll) {
+                            Text(stringResource(R.string.settings_cache_clear_all))
+                        }
                     }
                 }
             }
@@ -1738,76 +1981,117 @@ private fun formatFileSize(bytes: Long): String {
     else String.format("%.1f %s", size, units[unitIndex])
 }
 
-/** 用户资料项：头像 + 用户名 + VIP标识 + 右侧退出登录按钮 */
+/**
+ * 账户行：左标签 + 头像 + 主名称（含可选 ID 小字）+ 登出按钮。
+ * 用于账户卡片中 Trakt / 豆瓣两行，统一行结构。
+ *
+ * - avatarUrl 为空且 showAvatar=true 时显示占位图标（未登录或加载失败）
+ * - primaryName 为 null 时显示骨架占位（等待加载）
+ * - secondaryName 非空时在主名称下方以小字显示（豆瓣 ID 行用）
+ */
 @Composable
-fun UserProfileItem(
-    username: String?,
+private fun AccountRow(
+    accountLabel: String,
     avatarUrl: String,
+    primaryName: String?,
+    secondaryName: String?,
+    showAvatar: Boolean,
     isVip: Boolean,
-    onLogout: () -> Unit = {}
+    onLogout: () -> Unit
 ) {
+    val view = LocalView.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 头像：SubcomposeAsyncImage 自带 loading/error 状态
-        SubcomposeAsyncImage(
-            model = avatarUrl,
-            contentDescription = null,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentScale = ContentScale.Crop,
-            loading = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            error = {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
+        // 账户标签：固定宽度让 Trakt/豆瓣两行的头像起点对齐
+        Text(
+            text = accountLabel,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(40.dp)
         )
-        Spacer(modifier = Modifier.width(16.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        // 头像：仅在 showAvatar=true 时展示（豆瓣未登录时无头像）
+        if (showAvatar) {
+            SubcomposeAsyncImage(
+                model = avatarUrl,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface),
+                contentScale = ContentScale.Crop,
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surface),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+        } else {
+            // 未登录豆瓣：用占位图标保持视觉对齐
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Movie,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+        }
+        // 主名称 + 可选副名称（豆瓣 ID 小字）
         Column(modifier = Modifier.weight(1f)) {
-            if (username == null) {
-                // 用户名骨架
+            if (primaryName == null) {
+                // 名称骨架
                 Box(
                     modifier = Modifier
                         .width(80.dp)
                         .height(16.dp)
                         .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(MaterialTheme.colorScheme.surface)
                 )
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = username,
+                        text = primaryName,
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (isVip) {
                         Spacer(modifier = Modifier.width(6.dp))
@@ -1825,9 +2109,15 @@ fun UserProfileItem(
                     }
                 }
             }
+            if (secondaryName != null) {
+                Text(
+                    text = secondaryName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-        // 右侧退出登录按钮
-        val view = LocalView.current
+        // 右侧登出按钮（固定高度确保两行按钮大小一致）
         Button(
             onClick = {
                 view.performHaptic(HapticType.HEAVY_CLICK)
@@ -1837,9 +2127,54 @@ fun UserProfileItem(
                 containerColor = MaterialTheme.colorScheme.error,
                 contentColor = MaterialTheme.colorScheme.onError
             ),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.height(36.dp)
         ) {
             Text(stringResource(R.string.settings_logout_button))
+        }
+    }
+}
+
+/**
+ * 豆瓣未登录行：标签 + 登录用途说明文字 + 登录按钮。
+ * 用于账户卡片中豆瓣未登录或登出后的状态,与 AccountRow 保持行结构一致(标签宽度对齐)。
+ */
+@Composable
+private fun DoubanLoginPromptRow(
+    onLogin: () -> Unit
+) {
+    val view = LocalView.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 账户标签：与 AccountRow 固定 40dp 宽度对齐
+        Text(
+            text = stringResource(R.string.settings_account_douban),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(40.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        // 登录用途说明文字
+        Text(
+            text = stringResource(R.string.settings_douban_login_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        // 登录按钮(与 AccountRow 登出按钮同高,保持视觉对齐)
+        Button(
+            onClick = {
+                view.performHaptic(HapticType.HEAVY_CLICK)
+                onLogin()
+            },
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(stringResource(R.string.settings_account_douban_login))
         }
     }
 }
@@ -1847,7 +2182,6 @@ fun UserProfileItem(
 /** 退出登录项：文字"退出登录" + 右侧红色"登出"按钮 */
 @Composable
 fun LogoutItem(onClick: () -> Unit) {
-    val context = LocalContext.current
     val view = LocalView.current
     Row(
         modifier = Modifier
@@ -2445,12 +2779,12 @@ private fun DataFlowCard(
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text(title, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
         }
     }
 }
@@ -2484,7 +2818,7 @@ private fun SettingsCard(
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -2506,7 +2840,8 @@ private fun SettingsCard(
                 }
                 Text(
                     text = displayText,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                     color = subtitleColor,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
@@ -2515,7 +2850,8 @@ private fun SettingsCard(
             } else {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -2551,17 +2887,18 @@ private fun SearchSourceCard(
 ) {
     val view = LocalView.current
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = name,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
                 color = if (checked) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -2588,6 +2925,50 @@ private fun SearchSourceCard(
                 checked = checked,
                 onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
                 colors = appSwitchColors()
+            )
+        }
+    }
+}
+
+/**
+ * 搜索源「添加」卡片：与 [SearchSourceCard] 同高度对齐,内部 Column 居中布局。
+ * 左侧 Add 图标 + 标题垂直堆叠,与其他卡片有开关按钮撑大的视觉感保持一致。
+ */
+@Composable
+private fun SearchSourceAddCard(
+    modifier: Modifier = Modifier,
+    title: String,
+    onClick: () -> Unit
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = modifier
+            .fillMaxSize()
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }

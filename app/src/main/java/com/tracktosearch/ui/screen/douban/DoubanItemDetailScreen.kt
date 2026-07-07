@@ -69,6 +69,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -80,8 +81,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -99,10 +101,13 @@ import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
@@ -129,6 +134,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -162,7 +169,9 @@ data class DoubanItemDetailUiState(
     val retryStarted: Boolean = false,
     val retryStartFailed: Boolean = false,
     // 海报主色调(沉浸式渐变背景用,null 表示尚未提取)
-    val posterDominantColor: Color? = null
+    val posterDominantColor: Color? = null,
+    // 豆瓣详情补充信息(年份/制片国家/地区/导演/类型),命中缓存秒回,失败或未加载为 null
+    val detailInfo: DoubanDetailInfo? = null
 )
 
 /**
@@ -174,12 +183,15 @@ data class DoubanItemDetailUiState(
  * - 子标题编辑 → 持久化 → 自动刷新搜索
  * - 单条重试 → 启动 [DoubanSyncManager] 重试流程
  * - 删除失败记录 → 触发 onBack
+ * - 加载豆瓣详情补充信息(年份/国家/导演/类型),命中持久化缓存秒回
  */
 @HiltViewModel
 class DoubanItemDetailViewModel @Inject constructor(
     private val doubanRetryManager: DoubanRetryManager,
     private val doubanSyncManager: DoubanSyncManager,
     private val resourceRepository: ResourceRepository,
+    private val doubanRepository: DoubanRepository,
+    private val doubanAuthStorage: DoubanAuthStorage,
     val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
@@ -212,6 +224,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
                 // 尽早从缓存预查海报主色,让沉浸背景在海报图片加载前显示
                 prefetchPosterColor(failure.posterUrl)
+                // 异步加载豆瓣详情补充信息(年份/国家/导演/类型),命中缓存秒回
+                loadDetailInfo(failure)
                 // 加载完成后自动触发资源搜索
                 searchResources()
             } catch (e: Exception) {
@@ -219,6 +233,28 @@ class DoubanItemDetailViewModel @Inject constructor(
                     isLoading = false,
                     error = e.message ?: "unknown error"
                 )
+            }
+        }
+    }
+
+    /**
+     * 加载豆瓣详情补充信息(年份/制片国家/地区/导演/类型)。
+     * 优先命中持久化缓存(秒回);缓存未命中且 cookie 过期时静默失败,detailInfo 保持 null。
+     */
+    private fun loadDetailInfo(failure: DoubanSyncFailure) {
+        viewModelScope.launch {
+            try {
+                val cookie = doubanAuthStorage.getCredentials()?.cookie ?: return@launch
+                val result = doubanRepository.fetchDetail(
+                    doubanUrl = failure.doubanUrl,
+                    cookie = cookie,
+                    title = failure.title
+                )
+                result.first?.let { info ->
+                    _uiState.value = _uiState.value.copy(detailInfo = info)
+                }
+            } catch (_: Exception) {
+                // 静默失败:不影响主流程,detailInfo 保持 null
             }
         }
     }
@@ -239,17 +275,16 @@ class DoubanItemDetailViewModel @Inject constructor(
     }
 
     /**
-     * 资源搜索:主标题 + 子标题(可选)并行搜索,结果按 URL 去重合并。
-     * 参照 [com.tracktosearch.ui.screen.detail.DetailViewModel.updateSearchResults]。
+     * 资源搜索：主标题和子标题分开搜索；标题里若含「第x季」或「season x」，
+     * 再分别用「去季版本」和「含季版本」各搜一次（最多 4 个关键词）。
+     * 多关键词用 Flow merge 模式实现「先到先显示」；最终结果按是否含季信息排序（含季排前）。
      *
-     * @param forceRefresh true 时强制清缓存重拉(用于手动刷新按钮);
-     * 默认 false 先查缓存命中即用,5 分钟内复用避免二次进入转圈。
+     * @param forceRefresh true 时强制清缓存重拉（用于手动刷新按钮）
      */
     fun searchResources(forceRefresh: Boolean = false) {
         val failure = _uiState.value.failure ?: return
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            // 从设置页读取启用的搜索源(含自定义源)
             val storageEnabledSources = resourceRepository.getEnabledSources()
             val customSources = resourceRepository.getEnabledCustomSources()
             val customNames = customSources.associate { it.id to it.name }
@@ -263,76 +298,102 @@ class DoubanItemDetailViewModel @Inject constructor(
                 customSourceNames = customNames
             )
 
-            // 构造关键词:主标题 + 子标题(可选)
-            val keywords = mutableListOf(failure.title)
-            val useSubtitle = !failure.subtitle.isNullOrBlank() && _uiState.value.searchWithSubtitle
-            if (useSubtitle && failure.subtitle != null) {
-                keywords.add(failure.subtitle)
-            }
-
-            // 电视剧类型按多季优先排序
             val isShow = failure.mediaType == "show"
 
-            try {
-                // 多关键词并行搜索
-                val results = coroutineScope {
-                    val deferreds = keywords.map { kw ->
-                        async {
-                            // forceRefresh=true 清缓存重拉;false 先查缓存命中即用
-                            val result = if (forceRefresh) {
-                                resourceRepository.refreshResources(
-                                    keyword = kw,
-                                    enabledSources = storageEnabledSources,
-                                    enabledDiskTypes = _uiState.value.enabledDiskTypes,
-                                    isShow = isShow
-                                )
-                            } else {
-                                resourceRepository.searchResources(
-                                    keyword = kw,
-                                    enabledSources = storageEnabledSources,
-                                    enabledDiskTypes = _uiState.value.enabledDiskTypes,
-                                    isShow = isShow
-                                )
-                            }
-                            result.getOrDefault(emptyList())
-                        }
-                    }
-                    deferreds.awaitAll()
+            // 构造关键词列表（最多 4 个）：主标题(原/去季) + 子标题(原/去季)
+            val keywords = mutableListOf<String>()
+            val mainTitle = failure.title
+            val mainNoSeason = removeSeasonInfo(mainTitle)
+            keywords.add(mainTitle)
+            if (mainNoSeason != mainTitle) {
+                keywords.add(mainNoSeason)
+            }
+            val subtitle = failure.subtitle
+            if (subtitle != null && subtitle.isNotBlank() && _uiState.value.searchWithSubtitle) {
+                val subNoSeason = removeSeasonInfo(subtitle)
+                keywords.add(subtitle)
+                if (subNoSeason != subtitle) {
+                    keywords.add(subNoSeason)
                 }
+            }
 
-                // 按 URL 去重合并(保留先出现的)
-                val seenUrls = mutableSetOf<String>()
-                val merged = mutableListOf<ResourceItem>()
-                for (items in results) {
-                    for (item in items) {
-                        if (item.url !in seenUrls) {
-                            seenUrls.add(item.url)
-                            merged.add(item)
-                        }
-                    }
-                }
-
-                // 写入缓存并按筛选器过滤
-                allResources = if (merged.isNotEmpty()) {
-                    resourceRepository.mergeAndCacheResources(
-                        keyword = failure.title,
-                        items = merged,
+            // forceRefresh=true 时清缓存
+            if (forceRefresh) {
+                keywords.forEach { kw ->
+                    resourceRepository.refreshResources(
+                        keyword = kw,
+                        enabledSources = storageEnabledSources,
+                        enabledDiskTypes = _uiState.value.enabledDiskTypes,
                         isShow = isShow
                     )
+                }
+            }
+
+            try {
+                // 多关键词并行 Flow，每源完成发射累积结果；merge 后逐次更新 UI
+                val keywordFlows = keywords.map { kw ->
+                    resourceRepository.searchResourcesFlow(
+                        keyword = kw,
+                        enabledSources = storageEnabledSources,
+                        enabledDiskTypes = _uiState.value.enabledDiskTypes,
+                        isShow = isShow
+                    ).map { items -> kw to items }
+                }
+                val mergedFlow = if (keywordFlows.size == 1) {
+                    keywordFlows.first()
                 } else {
-                    resourceRepository.getCachedAllResources(failure.title)
+                    merge(*keywordFlows.toTypedArray())
                 }
 
-                val filtered = resourceRepository.filterItems(
-                    allResources,
-                    _uiState.value.enabledSources,
-                    _uiState.value.enabledDiskTypes
-                )
+                val keywordItemsMap = mutableMapOf<String, List<ResourceItem>>()
+                val seenUrls = mutableSetOf<String>()
+                var firstResultShown = false
 
+                mergedFlow.collect { (kw, items) ->
+                    keywordItemsMap[kw] = items
+                    // 重新合并所有关键词当前结果，按 URL 去重（保留先出现的）
+                    seenUrls.clear()
+                    val merged = mutableListOf<ResourceItem>()
+                    for (currentItems in keywordItemsMap.values) {
+                        for (item in currentItems) {
+                            if (item.url !in seenUrls) {
+                                seenUrls.add(item.url)
+                                merged.add(item)
+                            }
+                        }
+                    }
+                    // 写入缓存并按筛选器过滤
+                    allResources = if (merged.isNotEmpty()) {
+                        resourceRepository.mergeAndCacheResources(
+                            keyword = failure.title,
+                            items = merged,
+                            isShow = isShow
+                        )
+                    } else {
+                        resourceRepository.getCachedAllResources(failure.title)
+                    }
+                    val filtered = resourceRepository.filterItems(
+                        allResources,
+                        _uiState.value.enabledSources,
+                        _uiState.value.enabledDiskTypes
+                    )
+                    // 排序：含季信息的结果排前面（与查询关键词的「含季版本」匹配的结果更靠前）
+                    val sorted = sortResourcesBySeasonPresence(filtered)
+                    _uiState.value = _uiState.value.copy(
+                        searchResults = sorted,
+                        searchAttempted = true
+                    )
+                    // 第一次有非空结果时关闭搜索状态
+                    if (!firstResultShown && items.isNotEmpty()) {
+                        firstResultShown = true
+                        _uiState.value = _uiState.value.copy(isSearching = false)
+                    }
+                }
+
+                // 所有 Flow 收集完毕，关闭搜索状态
                 _uiState.value = _uiState.value.copy(
                     isSearching = false,
-                    searchAttempted = true,
-                    searchResults = filtered
+                    searchAttempted = true
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -342,6 +403,37 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /**
+     * 移除标题中的季信息（「第x季」/「season x」/「Season x」）。
+     * 不含季信息时返回原标题。
+     */
+    private fun removeSeasonInfo(title: String): String {
+        var result = title
+        // 中文「第x季」「第三季」「第 3 季」等
+        result = result.replace(Regex("""第\s*[一二三四五六七八九十0-9]+\s*季"""), "")
+        // 英文「season x」「Season x」「SEASON X」
+        result = result.replace(Regex("""(?i)\bseason\s*\d+\b"""), "")
+        return result.trim()
+    }
+
+    /**
+     * 排序：标题/资源名里含「第x季」或「season x」的项排在前面。
+     * 含季信息的项内部保持原顺序（来自搜索结果顺序），不含季的项也保持原顺序。
+     */
+    private fun sortResourcesBySeasonPresence(items: List<ResourceItem>): List<ResourceItem> {
+        val withSeason = mutableListOf<ResourceItem>()
+        val withoutSeason = mutableListOf<ResourceItem>()
+        val seasonRegex = Regex("""第\s*[一二三四五六七八九十0-9]+\s*季|(?i)\bseason\s*\d+\b""")
+        for (item in items) {
+            if (seasonRegex.containsMatchIn(item.name)) {
+                withSeason.add(item)
+            } else {
+                withoutSeason.add(item)
+            }
+        }
+        return withSeason + withoutSeason
     }
 
     /** 手动刷新入口(供 TopAppBar 刷新按钮调用):强制清缓存重拉 */
@@ -587,11 +679,29 @@ fun DoubanItemDetailScreen(
                         )
                     }
 
-                    // Tab 行(吸顶) — 容器色透明,让海报主色调透出
+                    // Tab 行(吸顶) —
+                    // - 非吸顶(tab 还在海报下方):透明
+                    // - 吸顶:沉浸色与白色 0.5f 混合,文字按底色亮度自适应
                     stickyHeader(key = "tab_row") {
+                        val isPinned by remember {
+                            derivedStateOf { listState.firstVisibleItemIndex >= 1 }
+                        }
+                        val tabContainerColor = if (isPinned) {
+                            uiState.posterDominantColor?.let { c ->
+                                lerp(c, Color.White, 0.38f)
+                            } ?: MaterialTheme.colorScheme.surface
+                        } else {
+                            Color.Transparent
+                        }
+                        val tabContentColor = when {
+                            isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                            !isPinned && (uiState.posterDominantColor?.luminance() ?: 1f) <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
                         PrimaryTabRow(
                             selectedTabIndex = selectedTab,
-                            containerColor = Color.Transparent,
+                            containerColor = tabContainerColor,
+                            contentColor = tabContentColor,
                             modifier = Modifier.alpha(contentAlpha)
                         ) {
                             Tab(
@@ -703,6 +813,7 @@ fun DoubanItemDetailScreen(
                                 Box(modifier = Modifier.alpha(contentAlpha)) {
                                     DoubanDetailInfoTab(
                                         failure = failure,
+                                        detailInfo = uiState.detailInfo,
                                         onOpenDouban = {
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(failure.doubanUrl))
                                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -742,7 +853,193 @@ fun DoubanItemDetailScreen(
                 }
             }
 
-            // 海报大图查看(复用 DetailPosterOverlay,支持保存到相册)
+            // 返回按钮(独立定位,半透明圆形背景 + Haze 模糊,参考正常详情页)
+            Box(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(start = 12.dp, top = 4.dp)
+                    .align(Alignment.TopStart)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeStyle(
+                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                            blurRadius = 20.dp,
+                            noiseFactor = 0f,
+                            tint = null
+                        )
+                    )
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        shape = CircleShape
+                    )
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            view.performHaptic(HapticType.TICK)
+                            onBack()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.detail_back),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            // 右上角按钮组:标记媒体类型 + 分享(独立定位,放在同一 Row)
+            Row(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(end = 12.dp, top = 4.dp)
+                    .align(Alignment.TopEnd),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 手动标记媒体类型按钮(下拉菜单)
+                val failure = uiState.failure
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .hazeEffect(
+                                state = hazeState,
+                                style = HazeStyle(
+                                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                    blurRadius = 20.dp,
+                                    noiseFactor = 0f,
+                                    tint = null
+                                )
+                            )
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                shape = CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    showMarkMenu = true
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Label,
+                            contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMarkMenu,
+                        onDismissRequest = { showMarkMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_movie)) },
+                            leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                            onClick = {
+                                viewModel.setMediaType("movie")
+                                showMarkMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_show)) },
+                            leadingIcon = { Icon(Icons.Default.Tv, contentDescription = null) },
+                            onClick = {
+                                viewModel.setMediaType("show")
+                                showMarkMenu = false
+                            }
+                        )
+                        if (failure?.mediaType != null) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.screen_douban_failures_clear_mark)) },
+                                onClick = {
+                                    viewModel.setMediaType(null)
+                                    showMarkMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+                // 分享按钮(分享影视标题、评分、豆瓣链接)
+                val shareContext = LocalContext.current
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                blurRadius = 20.dp,
+                                noiseFactor = 0f,
+                                tint = null
+                            )
+                        )
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                            shape = CircleShape
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                view.performHaptic(HapticType.TICK)
+                                val f = uiState.failure
+                                if (f != null) {
+                                    val shareText = buildString {
+                                        append(f.title)
+                                        f.rating?.let { append(" - ${shareContext.getString(R.string.share_douban_rating)}: $it") }
+                                        if (f.doubanUrl.isNotBlank()) {
+                                            append("\n")
+                                            append(f.doubanUrl)
+                                        }
+                                    }
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                    }
+                                    shareContext.startActivity(
+                                        Intent.createChooser(sendIntent, null)
+                                    )
+                                }
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = stringResource(R.string.detail_share),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // 海报大图查看(放在最后绘制,关闭/保存按钮不被顶部按钮遮住)
             val posterUrl = failure?.posterUrl
             if (showPosterFullscreen && posterUrl != null) {
                 PosterFullscreenOverlay(
@@ -750,208 +1047,6 @@ fun DoubanItemDetailScreen(
                     title = failure.title,
                     onDismiss = { showPosterFullscreen = false }
                 )
-            }
-
-            // Haze 模糊覆盖层:状态栏 + 顶部悬浮按钮区域(参考正常详情页)
-            // alpha 0.15:降低白色强度,让海报主色调更沉浸(+15% 增强)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.15f))
-            ) {
-                Column {
-                    // 状态栏 Spacer
-                    Spacer(
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .fillMaxWidth()
-                    )
-                    // 顶部悬浮按钮行:左侧返回 + 右侧标记 + 分享(参考正常详情页圆形按钮)
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // 返回按钮
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .hazeEffect(
-                                    state = hazeState,
-                                    style = HazeStyle(
-                                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                        blurRadius = 20.dp,
-                                        noiseFactor = 0f,
-                                        tint = null
-                                    )
-                                )
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                    shape = CircleShape
-                                )
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = {
-                                        view.performHaptic(HapticType.TICK)
-                                        onBack()
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.detail_back),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.weight(1f))
-                        // 手动标记媒体类型按钮(下拉菜单)
-                        val failure = uiState.failure
-                        Box {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .hazeEffect(
-                                        state = hazeState,
-                                        style = HazeStyle(
-                                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                            blurRadius = 20.dp,
-                                            noiseFactor = 0f,
-                                            tint = null
-                                        )
-                                    )
-                                    .background(
-                                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                                        shape = CircleShape
-                                    )
-                                    .border(
-                                        width = 1.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                        shape = CircleShape
-                                    )
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null,
-                                        onClick = {
-                                            view.performHaptic(HapticType.CLICK)
-                                            showMarkMenu = true
-                                        }
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Label,
-                                    contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showMarkMenu,
-                                onDismissRequest = { showMarkMenu = false }
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.screen_douban_failures_mark_as_movie)) },
-                                    leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
-                                    onClick = {
-                                        viewModel.setMediaType("movie")
-                                        showMarkMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.screen_douban_failures_mark_as_show)) },
-                                    leadingIcon = { Icon(Icons.Default.Tv, contentDescription = null) },
-                                    onClick = {
-                                        viewModel.setMediaType("show")
-                                        showMarkMenu = false
-                                    }
-                                )
-                                if (failure?.mediaType != null) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.screen_douban_failures_clear_mark)) },
-                                        onClick = {
-                                            viewModel.setMediaType(null)
-                                            showMarkMenu = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        // 分享按钮(分享影视标题、评分、豆瓣链接)
-                        val shareContext = LocalContext.current
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .hazeEffect(
-                                    state = hazeState,
-                                    style = HazeStyle(
-                                        backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                        blurRadius = 20.dp,
-                                        noiseFactor = 0f,
-                                        tint = null
-                                    )
-                                )
-                                .background(
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                                    shape = CircleShape
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                    shape = CircleShape
-                                )
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null,
-                                    onClick = {
-                                        view.performHaptic(HapticType.TICK)
-                                        val f = uiState.failure
-                                        if (f != null) {
-                                            val shareText = buildString {
-                                                append(f.title)
-                                                f.rating?.let { append(" - ${shareContext.getString(R.string.share_douban_rating)}: $it") }
-                                                if (f.doubanUrl.isNotBlank()) {
-                                                    append("\n")
-                                                    append(f.doubanUrl)
-                                                }
-                                            }
-                                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, shareText)
-                                            }
-                                            shareContext.startActivity(
-                                                Intent.createChooser(sendIntent, null)
-                                            )
-                                        }
-                                    }
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Filled.Share,
-                                contentDescription = stringResource(R.string.detail_share),
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -1473,6 +1568,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
 @Composable
 private fun DoubanDetailInfoTab(
     failure: DoubanSyncFailure,
+    detailInfo: DoubanDetailInfo?,
     onOpenDouban: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit
@@ -1550,6 +1646,62 @@ private fun DoubanDetailInfoTab(
                     label = stringResource(R.string.screen_douban_item_detail_meta_douban_id),
                     value = failure.doubanId
                 )
+            }
+        }
+
+        // 详情字段卡片(仅在 detailInfo 不为空且有可展示字段时显示)
+        if (detailInfo != null) {
+            val hasAnyField = detailInfo.year != null
+                || detailInfo.countries.isNotEmpty()
+                || detailInfo.directors.isNotEmpty()
+                || detailInfo.genres.isNotEmpty()
+                || !detailInfo.imdbId.isNullOrBlank()
+            if (hasAnyField) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        if (!detailInfo.imdbId.isNullOrBlank()) {
+                            MetaRow(
+                                label = "IMDb ID",
+                                value = detailInfo.imdbId
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        if (detailInfo.year != null) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_year),
+                                value = detailInfo.year
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        if (detailInfo.countries.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_countries),
+                                value = detailInfo.countries.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        if (detailInfo.directors.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_directors),
+                                value = detailInfo.directors.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        if (detailInfo.genres.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_genres),
+                                value = detailInfo.genres.joinToString(" / ")
+                            )
+                        }
+                    }
+                }
             }
         }
     }

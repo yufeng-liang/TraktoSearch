@@ -201,7 +201,7 @@
 
     <!-- Accent Color -->
     <string name="settings_accent_color">액센트 색상</string>
-    <string name="settings_accent_dynamic">다이나믹 (기본)</string>
+    <string name="settings_accent_dynamic">다이나믹</string>
     <!-- 액센트 색상 -->
     <string name="accent_water_lily">연꽃 보라</string>
     <string name="accent_sunrise">일출 주황</string>
@@ -442,6 +442,10 @@
     <string name="detail_cast_as">%1$s 역</string>
     <string name="detail_writer_tag">각본</string>
     <string name="detail_producer_tag">프로듀서</string>
+    <string name="detail_info_year">연도</string>
+    <string name="detail_info_countries">제작국/지역</string>
+    <string name="detail_info_directors">감독</string>
+    <string name="detail_info_genres">장르</string>
     <string name="detail_cast_all_title">전체 출연진 및 제작진</string>
     <string name="detail_cast_close">닫기</string>
     <string name="detail_specials">스페셜</string>
@@ -548,7 +552,7 @@
     <string name="filter_time_7d">최근 7일</string>
     <string name="filter_time_30d">최근 30일</string>
     <string name="filter_time_all">전체</string>
-    <string name="filter_sort_order">정렬 방식</string>
+    <string name="filter_sort_order">정렬</string>
     <string name="filter_sort_desc">최신 순</string>
     <string name="filter_sort_asc">오래된 순</string>
     <string name="filter_reset">초기화</string>
@@ -556,6 +560,7 @@
     <string name="filter_genre">장르</string>
     <string name="filter_year">연도</string>
     <string name="filter_rating">Trakt 평점</string>
+    <string name="filter_rating_label">평점</string>
     <string name="douban_failure_search_hint">제목 또는 부제 검색</string>
     <string name="douban_failure_filter_reason">실패 원인</string>
 
@@ -893,4 +898,12 @@
     <string name="easter_msg_lantern_1">검색의 길을 밝혀줄게요</string>
     <string name="easter_msg_lantern_2">소원을 빌어봐~</string>
     <string name="easter_msg_lantern_3">따뜻하게 곁에, 밤은 더 이상 어둡지 않아</string>
+    <!-- 계정: Trakt 라벨 / Douban 항목 -->
+    <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_douban">Douban</string>
+    <string name="settings_account_douban_logged_in">Douban · 로그인됨</string>
+    <string name="settings_account_douban_login">Douban 로그인</string>
+    <string name="settings_account_douban_logout">로그아웃</string>
+    <string name="settings_douban_logout_done">Douban에서 로그아웃되었습니다</string>
+    <string name="settings_douban_login_hint">로그인하여豆瓣 마크를 Trakt에 동기화</string>
 </resources>

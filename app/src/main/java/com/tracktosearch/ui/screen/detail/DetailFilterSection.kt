@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -38,6 +39,8 @@ internal fun FilterSection(
     val view = LocalView.current
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
     val labelWidth = 64.dp
+    // 标签文字颜色跟随 LocalContentColor(由详情页根据 Tab 沉浸色自动设置)
+    val labelColor = LocalContentColor.current
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
         // 搜索源（横向滚动）
@@ -48,7 +51,7 @@ internal fun FilterSection(
             Text(
                 text = stringResource(R.string.detail_filter_sources),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
                 modifier = Modifier.width(labelWidth)
             )
             LazyRow(
@@ -85,7 +88,7 @@ internal fun FilterSection(
             Text(
                 text = stringResource(R.string.detail_filter_disk_types),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = labelColor,
                 modifier = Modifier.width(labelWidth)
             )
             LazyRow(

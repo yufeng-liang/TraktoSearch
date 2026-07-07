@@ -334,6 +334,10 @@
     <string name="detail_cast_as">as %1$s</string>
     <string name="detail_writer_tag">Writer</string>
     <string name="detail_producer_tag">Producer</string>
+    <string name="detail_info_year">Year</string>
+    <string name="detail_info_countries">Country</string>
+    <string name="detail_info_directors">Director</string>
+    <string name="detail_info_genres">Genre</string>
     <string name="detail_cast_all_title">All Cast &amp; Crew</string>
     <string name="detail_cast_close">Close</string>
     <string name="detail_specials">Specials</string>
@@ -392,7 +396,7 @@
 
     <!-- Accent Color -->
     <string name="settings_accent_color">Accent Color</string>
-    <string name="settings_accent_dynamic">Dynamic (default)</string>
+    <string name="settings_accent_dynamic">Dynamic</string>
     <!-- Accent Color Names -->
     <string name="accent_water_lily">Water Lily Purple</string>
     <string name="accent_sunrise">Sunrise Orange</string>
@@ -712,7 +716,7 @@ Config:
     <string name="filter_time_7d">Last 7 days</string>
     <string name="filter_time_30d">Last 30 days</string>
     <string name="filter_time_all">All</string>
-    <string name="filter_sort_order">Sort order</string>
+    <string name="filter_sort_order">Sort</string>
     <string name="filter_sort_desc">Newest first</string>
     <string name="filter_sort_asc">Oldest first</string>
     <string name="filter_reset">Reset</string>
@@ -720,6 +724,7 @@ Config:
     <string name="filter_genre">Genre</string>
     <string name="filter_year">Year</string>
     <string name="filter_rating">Trakt rating</string>
+    <string name="filter_rating_label">Rating</string>
     <string name="douban_failure_search_hint">Search title or subtitle</string>
     <string name="douban_failure_filter_reason">Failure reason</string>
 
@@ -1071,4 +1076,12 @@ Config:
     <string name="easter_msg_lantern_1">Lighting up your search path</string>
     <string name="easter_msg_lantern_2">Make a wish~</string>
     <string name="easter_msg_lantern_3">Warm company, night no longer dark</string>
+    <!-- 账户区：Trakt 标签 / 豆瓣一栏 -->
+    <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_douban">Douban</string>
+    <string name="settings_account_douban_logged_in">Douban · Logged in</string>
+    <string name="settings_account_douban_login">Login to Douban</string>
+    <string name="settings_account_douban_logout">Logout</string>
+    <string name="settings_douban_logout_done">Douban logged out</string>
+    <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
 </resources>

@@ -11,6 +11,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
+import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -24,6 +25,7 @@ import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
@@ -84,6 +86,8 @@ class SettingsViewModel @Inject constructor(
     private val customSearchService: CustomSearchService,
     private val panHubConfigStorage: PanHubConfigStorage,
     private val defaultTabStorage: DefaultTabStorage,
+    private val doubanAuthStorage: DoubanAuthStorage,
+    private val doubanRepository: DoubanRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -501,6 +505,42 @@ class SettingsViewModel @Inject constructor(
 
     private val _userProfile = MutableStateFlow<TraktUserProfileResponse?>(null)
     val userProfile: StateFlow<TraktUserProfileResponse?> = _userProfile.asStateFlow()
+
+    // ========== 豆瓣登录态（账户区展示用） ==========
+    val doubanLoggedIn: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
+
+    // 豆瓣 userId：登录态变化时从加密存储读取
+    val doubanUserId: StateFlow<String?> = doubanAuthStorage.isLoggedIn
+        .map { loggedIn -> if (loggedIn) doubanAuthStorage.getCredentials()?.userId else null }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    // 豆瓣用户资料（头像/昵称）：从加密存储恢复，登录后异步抓取
+    val doubanProfile: StateFlow<com.tracktosearch.data.local.DoubanUserProfile?> = doubanAuthStorage.doubanProfile
+
+    /** 清除豆瓣凭据（退出登录） */
+    fun clearDoubanCredentials() {
+        doubanAuthStorage.clearCredentials()
+    }
+
+    /**
+     * 异步抓取豆瓣用户主页，刷新头像/昵称并持久化。
+     * - 已登录但 profile 为空时触发（设置页打开或登录成功后调用）
+     * - 抓取失败静默忽略，UI 仍显示 ID 兜底
+     */
+    fun loadDoubanProfile() {
+        if (!doubanAuthStorage.isLoggedIn.value) return
+        // 已有 profile 不重复抓取（除非强制刷新）
+        if (doubanAuthStorage.doubanProfile.value != null) return
+        viewModelScope.launch {
+            val creds = doubanAuthStorage.getCredentials() ?: return@launch
+            val profile = try {
+                doubanRepository.fetchUserProfile(creds.userId, creds.cookie)
+            } catch (_: Exception) { null }
+            if (profile != null) {
+                doubanAuthStorage.saveUserProfile(profile.nickname, profile.avatarUrl)
+            }
+        }
+    }
 
     fun loadUserProfile() {
         if (_userProfile.value != null) return

@@ -39,6 +39,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -134,6 +136,8 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.rememberShimmerBrush
@@ -346,9 +350,17 @@ fun WatchlistScreen(
         }
     }
 
+    // 点击 token,确保只有被点击的卡片参与转场
+    var activeClickToken by remember { mutableStateOf(0) }
+
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+        LocalActivePosterClickSetter provides { id ->
+            activePosterTmdbId = id
+            activeClickToken += 1
+            activeClickToken
+        },
+        LocalActivePosterClickToken provides activeClickToken
     ) {
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -1121,68 +1133,75 @@ private fun WatchlistFilterSheet(
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-            // 年代多选(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = stringResource(R.string.filter_year),
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                FlowRow(
-                    // SpaceBetween:每行 chips 撑满宽度,6 个 → 3-3 两行均匀
-                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
-                    verticalArrangement = Arrangement.spacedBy(0.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    decadeOptions.forEach { decade ->
-                        FilterChip(
-                            selected = decade in filterState.selectedDecadeKeys,
-                            onClick = { onDecadeToggle(decade) },
-                            label = { Text("${decade}s") }
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-            // 评分 RangeSlider(步长 1,标题+评分值+滑动条同一行,右侧 padding 加大防边缘手势)
+            // 年代多选(标题左侧垂直居中 + chips 右侧固定每行最多 3 个,宽度跟随内容,每行内右对齐)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = stringResource(R.string.filter_rating),
+                    text = stringResource(R.string.filter_year),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(36.dp)
+                    fontWeight = FontWeight.Bold
                 )
+                // 右侧 chips 宽度跟随内容,每行最多 3 个(chip 不设 weight,用手动换行;每行内右对齐)
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    val rows = decadeOptions.chunked(3)
+                    rows.forEach { rowDecades ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                        ) {
+                            rowDecades.forEach { decade ->
+                                FilterChip(
+                                    selected = decade in filterState.selectedDecadeKeys,
+                                    onClick = { onDecadeToggle(decade) },
+                                    label = { Text("${decade}s") }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+            // 评分 RangeSlider(Trakt 评分 标题 + 滑动条同一行)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.filter_rating_label),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                // 滑动条占 65% 宽度,右对齐 0-10 评分值加大加粗
                 RangeSlider(
                     value = filterState.ratingRange,
                     onValueChange = { range -> onRatingRangeChange(range) },
                     valueRange = 0f..10f,
                     steps = 9,  // 步长 1（0,1,2,...,10）
-                    // 右侧 padding 加大,防止滑到边缘手势被系统返回拦截
                     modifier = Modifier
                         .weight(1f)
-                        .padding(end = 24.dp)
+                        .padding(end = 8.dp)
                 )
                 Text(
                     text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(40.dp)
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
             // 标记时间区间(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
             Row(
@@ -1216,9 +1235,9 @@ private fun WatchlistFilterSheet(
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-            // 排序方式(标题+SegmentedButton 同行,两个按钮各占 weight(1f) 撑满宽度)
+            // 排序方式(标题左侧 + SegmentedButtonRow 右侧对齐,按钮高度压缩为单行)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1227,22 +1246,29 @@ private fun WatchlistFilterSheet(
                 Text(
                     text = stringResource(R.string.filter_sort_order),
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(48.dp)
+                    fontWeight = FontWeight.Bold
                 )
+                Spacer(modifier = Modifier.weight(1f))
+                // 右侧 SegmentedButtonRow 靠右,固定最小高度保持单行
+                // wrapContentWidth 让 Row 宽度按内容撑开
+                // 给每个 button 加 widthIn(min) 防止 weight(1f) 把内容压缩到文字截断
                 SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .height(32.dp)
+                        .wrapContentWidth()
                 ) {
                     SegmentedButton(
                         selected = filterState.markedTimeOrder == SortOrder.DESC,
                         onClick = { onMarkedTimeOrderChange(SortOrder.DESC) },
                         shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        label = { Text(stringResource(R.string.filter_sort_desc)) },
+                        modifier = Modifier.widthIn(min = 100.dp),
+                        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
+                        label = { Text(stringResource(R.string.filter_sort_desc), maxLines = 1) },
                         icon = {
                             Icon(
                                 Icons.Default.ArrowDownward,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     )
@@ -1250,12 +1276,14 @@ private fun WatchlistFilterSheet(
                         selected = filterState.markedTimeOrder == SortOrder.ASC,
                         onClick = { onMarkedTimeOrderChange(SortOrder.ASC) },
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        label = { Text(stringResource(R.string.filter_sort_asc)) },
+                        modifier = Modifier.widthIn(min = 100.dp),
+                        contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
+                        label = { Text(stringResource(R.string.filter_sort_asc), maxLines = 1) },
                         icon = {
                             Icon(
                                 Icons.Default.ArrowUpward,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     )

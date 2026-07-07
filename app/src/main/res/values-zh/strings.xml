@@ -334,6 +334,10 @@
     <string name="detail_cast_as">饰 %1$s</string>
     <string name="detail_writer_tag">编剧</string>
     <string name="detail_producer_tag">制片人</string>
+    <string name="detail_info_year">年份</string>
+    <string name="detail_info_countries">制片国家/地区</string>
+    <string name="detail_info_directors">导演</string>
+    <string name="detail_info_genres">类型</string>
     <string name="detail_cast_all_title">全部演职员</string>
     <string name="detail_cast_close">关闭</string>
     <string name="detail_specials">特别篇</string>
@@ -392,7 +396,7 @@
 
     <!-- Accent Color -->
     <string name="settings_accent_color">应用色调</string>
-    <string name="settings_accent_dynamic">跟随壁纸取色（默认）</string>
+    <string name="settings_accent_dynamic">跟随壁纸取色</string>
     <!-- 应用色调 -->
     <string name="accent_water_lily">睡莲紫</string>
     <string name="accent_sunrise">日出橙</string>
@@ -712,7 +716,7 @@
     <string name="filter_time_7d">最近7天</string>
     <string name="filter_time_30d">最近30天</string>
     <string name="filter_time_all">全部</string>
-    <string name="filter_sort_order">排序方式</string>
+    <string name="filter_sort_order">排序</string>
     <string name="filter_sort_desc">最新优先</string>
     <string name="filter_sort_asc">最旧优先</string>
     <string name="filter_reset">重置</string>
@@ -720,6 +724,7 @@
     <string name="filter_genre">类型</string>
     <string name="filter_year">年份</string>
     <string name="filter_rating">Trakt 评分</string>
+    <string name="filter_rating_label">评分</string>
     <string name="douban_failure_search_hint">搜索标题或副标题</string>
     <string name="douban_failure_filter_reason">失败原因</string>
 
@@ -1071,4 +1076,12 @@
     <string name="easter_msg_lantern_1">照亮你的搜索之路</string>
     <string name="easter_msg_lantern_2">许个愿吧~</string>
     <string name="easter_msg_lantern_3">温暖相伴，夜不再黑</string>
+    <!-- 账户区：Trakt 标签 / 豆瓣一栏 -->
+    <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_douban">豆瓣</string>
+    <string name="settings_account_douban_logged_in">豆瓣 · 已登录</string>
+    <string name="settings_account_douban_login">登录豆瓣</string>
+    <string name="settings_account_douban_logout">退出</string>
+    <string name="settings_douban_logout_done">已退出豆瓣</string>
+    <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
 </resources>

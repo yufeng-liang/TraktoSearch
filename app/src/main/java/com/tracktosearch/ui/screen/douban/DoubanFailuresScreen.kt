@@ -32,6 +32,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -960,7 +962,7 @@ private fun FailureCard(
                     val imageRequest = remember(posterUrl) {
                         ImageRequest.Builder(context)
                             .data(posterUrl)
-                            .size(200)
+                            .size(264)
                             .crossfade(false)
                             .build()
                     }
@@ -1200,7 +1202,7 @@ private fun FailureFilterSheet(
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
         // 标记时间区间(标题+chips 共用一行,SpaceBetween 让每行均匀分布)
         Row(
@@ -1228,9 +1230,9 @@ private fun FailureFilterSheet(
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-        // 排序方式(标题+SegmentedButton 同行,两个按钮各占 weight(1f) 撑满宽度)
+        // 排序方式(标题左侧 + SegmentedButtonRow 右侧对齐,按钮高度压缩为单行)
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -1239,22 +1241,29 @@ private fun FailureFilterSheet(
             Text(
                 text = stringResource(R.string.filter_sort_order),
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(48.dp)
+                fontWeight = FontWeight.Bold
             )
+            Spacer(modifier = Modifier.weight(1f))
+            // 右侧 SegmentedButtonRow 靠右,固定最小高度保持单行
+            // wrapContentWidth 让 Row 宽度按内容撑开
+            // 给每个 button 加 widthIn(min) 防止 weight(1f) 把内容压缩到文字截断
             SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .height(32.dp)
+                    .wrapContentWidth()
             ) {
                 SegmentedButton(
                     selected = filterState.markedTimeOrder == SortOrder.DESC,
                     onClick = { onOrderChange(SortOrder.DESC) },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                    label = { Text(stringResource(R.string.filter_sort_desc)) },
+                    modifier = Modifier.widthIn(min = 100.dp),
+                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
+                    label = { Text(stringResource(R.string.filter_sort_desc), maxLines = 1) },
                     icon = {
                         Icon(
                             Icons.Default.ArrowDownward,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 )
@@ -1262,12 +1271,14 @@ private fun FailureFilterSheet(
                     selected = filterState.markedTimeOrder == SortOrder.ASC,
                     onClick = { onOrderChange(SortOrder.ASC) },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                    label = { Text(stringResource(R.string.filter_sort_asc)) },
+                    modifier = Modifier.widthIn(min = 100.dp),
+                    contentPadding = PaddingValues(start = 10.dp, end = 10.dp, top = 0.dp, bottom = 0.dp),
+                    label = { Text(stringResource(R.string.filter_sort_asc), maxLines = 1) },
                     icon = {
                         Icon(
                             Icons.Default.ArrowUpward,
                             contentDescription = null,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 )

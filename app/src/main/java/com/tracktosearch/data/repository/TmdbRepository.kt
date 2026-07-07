@@ -80,25 +80,27 @@ class TmdbRepository @Inject constructor(
 
     // 持久化缓存（永久，跨 App 重启保留）：海报路径、tmdbId、imdbId、演职员头像等不变字段
     // 缓存 key 已含语言后缀（如 "12345_zh-CN"），不同语言的海报/标题分别存储
+    // maxSize 放大到 1000:覆盖超大 watchlist(>1000 条)+ 已看历史,
+    // loadFromDisk 调 super.put 触发 LRU 淘汰,若 maxSize 小于磁盘条目数会导致第二次启动仍走网络
     private val movieDetailCache = persistentTtlCache<TmdbMovieDetail>(
-        TTL_DETAIL, 50, persistentDataStore, json, "movie_detail", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "movie_detail", persistentScope
     )
     private val tvDetailCache = persistentTtlCache<TmdbTvDetail>(
-        TTL_DETAIL, 50, persistentDataStore, json, "tv_detail", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "tv_detail", persistentScope
     )
     private val creditsCache = persistentTtlCache<TmdbCreditsResponse>(
-        TTL_CREDITS, 50, persistentDataStore, json, "credits", persistentScope
+        TTL_CREDITS, 500, persistentDataStore, json, "credits", persistentScope
     )
     private val personDetailCache = persistentTtlCache<TmdbPerson>(
-        TTL_PERSON, 50, persistentDataStore, json, "person_detail", persistentScope
+        TTL_PERSON, 500, persistentDataStore, json, "person_detail", persistentScope
     )
     // 别名（alternative_titles）持久化缓存：中文译名等不变字段，跨 App 重启复用，
     // 避免每个 watchlist 条目每次启动都重新请求 alternative_titles 接口
     private val movieAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
-        TTL_DETAIL, 100, persistentDataStore, json, "movie_alt_titles", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "movie_alt_titles", persistentScope
     )
     private val tvAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
-        TTL_DETAIL, 100, persistentDataStore, json, "tv_alt_titles", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "tv_alt_titles", persistentScope
     )
 
     // 持久化缓存（6 小时）：发现页 TMDB 列表类栏目，跨 App 重启保留
@@ -316,16 +318,18 @@ class TmdbRepository @Inject constructor(
     }
 
     private suspend fun resolveMovieChineseTitle(tmdbId: Int, originalTitle: String, detail: TmdbMovieDetail): String {
-        if (detail.title != detail.original_title && detail.title.isNotEmpty()) {
+        // TMDB 已按当前 language(zh-CN)本地化 title 字段,非空就直接用
+        // (原 != original_title 判断对中国本土影视失效:title 和 original_title 都是中文,相等被误判为未本地化)
+        if (detail.title.isNotEmpty()) {
             return detail.title
         }
-        // 别名持久化缓存：中文译名等不变字段，跨 App 重启复用
+        // 别名持久化缓存:中文译名等不变字段,跨 App 重启复用
         val altKey = langKey(tmdbId)
         movieAltTitlesCache.get(altKey)?.let { cached ->
             val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
             return cnTitle ?: originalTitle
         }
-        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判
+        // 缓存未命中时等待磁盘加载完成,避免 loadFromDisk 未完成时误判
         movieAltTitlesCache.awaitLoaded()
         movieAltTitlesCache.get(altKey)?.let { cached ->
             val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
@@ -347,16 +351,17 @@ class TmdbRepository @Inject constructor(
     }
 
     private suspend fun resolveTvChineseTitle(tmdbId: Int, originalName: String, detail: TmdbTvDetail): String {
-        if (detail.name != detail.original_name && detail.name.isNotEmpty()) {
+        // TMDB 已按当前 language(zh-CN)本地化 name 字段,非空就直接用(原因同上)
+        if (detail.name.isNotEmpty()) {
             return detail.name
         }
-        // 别名持久化缓存：中文译名等不变字段，跨 App 重启复用
+        // 别名持久化缓存:中文译名等不变字段,跨 App 重启复用
         val altKey = langKey(tmdbId)
         tvAltTitlesCache.get(altKey)?.let { cached ->
             val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title
             return cnTitle ?: originalName
         }
-        // 缓存未命中时等待磁盘加载完成，避免 loadFromDisk 未完成时误判
+        // 缓存未命中时等待磁盘加载完成,避免 loadFromDisk 未完成时误判
         tvAltTitlesCache.awaitLoaded()
         tvAltTitlesCache.get(altKey)?.let { cached ->
             val cnTitle = cached.titles.firstOrNull { it.iso_3166_1 == "CN" && it.title.isNotEmpty() }?.title

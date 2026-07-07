@@ -36,6 +36,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -49,6 +50,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -94,9 +97,17 @@ fun TraktListDetailScreen(
             }
     }
 
+    // 点击 token,确保只有被点击的卡片参与转场
+    var activeClickToken by remember { mutableStateOf(0) }
+
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
-        LocalActivePosterTmdbIdSetter provides { id -> activePosterTmdbId = id }
+        LocalActivePosterClickSetter provides { id ->
+            activePosterTmdbId = id
+            activeClickToken += 1
+            activeClickToken
+        },
+        LocalActivePosterClickToken provides activeClickToken
     ) {
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { padding ->
         Box(

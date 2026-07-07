@@ -2,6 +2,8 @@ package com.tracktosearch.data.remote.douban
 
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
 
 /** 豆瓣标记列表中解析出的单条条目（未含 imdbId，需详情页爬取补全） */
 data class DoubanMarkItem(
@@ -14,11 +16,14 @@ data class DoubanMarkItem(
     val posterUrl: String?
 )
 
-/** 详情页补充信息 */
+/** 详情页补充信息（含条目元数据，参考 Notion 备份字段清单） */
 data class DoubanDetailInfo(
     val imdbId: String?,
-    val isTvShow: Boolean,       // 类型含「电视剧」即为 true
-    val genres: List<String>
+    val isTvShow: Boolean,        // 类型含「电视剧」即为 true
+    val genres: List<String>,
+    val year: String?,           // 上映年份（4 位数字字符串）
+    val countries: List<String>, // 制片国家/地区
+    val directors: List<String>  // 导演
 )
 
 /** 列表页解析结果（条目列表 + 总条目数，总数解析失败时为 null） */
@@ -32,7 +37,7 @@ data class DoubanMarkListPage(
  *
  * 解析逻辑：
  * - parseMarkList：解析「想看/看过」分页列表 HTML，提取条目基本信息
- * - parseDetail：解析条目详情页 HTML，提取 IMDb ID 和类型（用于反查 Trakt）
+ * - parseDetail：解析条目详情页 HTML，提取 IMDb ID、年份、国家、导演、类型（用于反查 Trakt + 备份）
  * - isLoginPage：检测 HTML 是否为登录页（Cookie 过期时豆瓣会重定向到登录页）
  */
 object DoubanSpider {
@@ -75,7 +80,7 @@ object DoubanSpider {
         return DoubanMarkListPage(items, totalCount)
     }
 
-    /** 解析详情页 HTML，提取 imdbId 和类型 */
+    /** 解析详情页 HTML，提取 imdbId、类型、年份、国家、导演 */
     fun parseDetail(html: String): DoubanDetailInfo {
         val doc: Document = Jsoup.parse(html)
         val genres = doc.select("span[property=v:genre]").map { it.text() }
@@ -85,6 +90,53 @@ object DoubanSpider {
         val imdbId = doc.select("span.pl").firstOrNull { it.text().contains("IMDb") }
             ?.nextSibling()?.toString()?.trim()?.takeIf { it.startsWith("tt") }
 
-        return DoubanDetailInfo(imdbId, isTvShow, genres)
+        // 上映年份：优先 <span class="year">(2023)</span>，其次 h1 标题里的 (YYYY)
+        val year = doc.selectFirst("span.year")?.text()
+            ?.let { Regex("(\\d{4})").find(it)?.groupValues?.getOrNull(1) }
+            ?: doc.selectFirst("h1")?.text()
+                ?.let { Regex("""\((\d{4})\)""").find(it)?.groupValues?.getOrNull(1) }
+
+        // 制片国家/地区、导演：从 #info 区块里「<span class="pl">字段名:</span>」后面提取
+        val infoEl = doc.selectFirst("#info")
+        val countries = parseInfoField(infoEl, "制片国家/地区")
+            ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        val directors = parseInfoField(infoEl, "导演")
+            ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: emptyList()
+
+        return DoubanDetailInfo(imdbId, isTvShow, genres, year, countries, directors)
+    }
+
+    /**
+     * 从 #info 区块里查找「<span class="pl">字段名:</span>」后面的文本内容。
+     * 字段值可能跨多个兄弟节点（文本节点 + <a> 链接），拼接为单个字符串。
+     * 遇到下一个「<span class="pl">」字段标签时停止。
+     */
+    private fun parseInfoField(infoEl: Element?, fieldName: String): String? {
+        if (infoEl == null) return null
+        // :contains 匹配 span.pl 文本（如「制片国家/地区:」或「制片国家/地区」）
+        val pl = infoEl.select("span.pl").firstOrNull { it.text().contains(fieldName) }
+            ?: return null
+        val sb = StringBuilder()
+        var sibling = pl.nextSibling()
+        while (sibling != null) {
+            val text = when (sibling) {
+                is TextNode -> sibling.text()
+                is Element -> {
+                    // 遇到下一个字段标签 <span class="pl"> 停止
+                    if (sibling.tagName() == "span" && sibling.hasClass("pl")) break
+                    sibling.text()
+                }
+                else -> sibling.toString()
+            }
+            // 遇到「:」也视为字段分隔符，停止
+            if (sibling is TextNode && text.trimEnd().endsWith(":")) {
+                break
+            }
+            sb.append(text)
+            sibling = sibling.nextSibling()
+        }
+        return sb.toString().trim().takeIf { it.isNotEmpty() }
     }
 }
