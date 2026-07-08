@@ -351,7 +351,7 @@ fun WatchlistScreen(
     }
 
     // 点击 token,确保只有被点击的卡片参与转场
-    var activeClickToken by remember { mutableStateOf(0) }
+    var activeClickToken by rememberSaveable { mutableStateOf(0) }
 
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
@@ -728,8 +728,7 @@ fun WatchlistScreen(
                                         .offset(x = indicatorOffset)
                                         .width(indicatorWidth)
                                         .fillMaxHeight()
-                                        .padding(2.dp)
-                                        .clip(RoundedCornerShape(20.dp))
+                                        .clip(RoundedCornerShape(22.dp))
                                         .background(MaterialTheme.colorScheme.primary)
                                 )
                                 Row(modifier = Modifier.fillMaxSize()) {
@@ -1173,6 +1172,10 @@ private fun WatchlistFilterSheet(
             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
             // 评分 RangeSlider(Trakt 评分 标题 + 滑动条同一行)
+            val view = LocalView.current
+            // 跟踪上一次的整数值，仅在整数变化时触发触感反馈（避免拖动过程中频繁震动）
+            var lastRatingStart by remember(filterState.ratingRange.start) { mutableStateOf(filterState.ratingRange.start.toInt()) }
+            var lastRatingEnd by remember(filterState.ratingRange.endInclusive) { mutableStateOf(filterState.ratingRange.endInclusive.toInt()) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1184,15 +1187,51 @@ private fun WatchlistFilterSheet(
                     fontWeight = FontWeight.Bold
                 )
                 // 滑动条占 65% 宽度,右对齐 0-10 评分值加大加粗
-                RangeSlider(
-                    value = filterState.ratingRange,
-                    onValueChange = { range -> onRatingRangeChange(range) },
-                    valueRange = 0f..10f,
-                    steps = 9,  // 步长 1（0,1,2,...,10）
+                // 包一层拦截竖直滑动,避免拖动滑块时触发 sheet 上下移动
+                val ratingScrollConnection = remember {
+                    object : NestedScrollConnection {
+                        override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                            Offset(0f, available.y)
+
+                        override fun onPostScroll(
+                            consumed: Offset,
+                            available: Offset,
+                            source: NestedScrollSource
+                        ): Offset = Offset(0f, available.y)
+
+                        override suspend fun onPreFling(available: Velocity): Velocity =
+                            Velocity(0f, available.y)
+
+                        override suspend fun onPostFling(
+                            consumed: Velocity,
+                            available: Velocity
+                        ): Velocity = Velocity(0f, available.y)
+                    }
+                }
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .padding(end = 8.dp)
-                )
+                        .nestedScroll(ratingScrollConnection)
+                ) {
+                    RangeSlider(
+                        value = filterState.ratingRange,
+                        onValueChange = { range ->
+                            // 仅在整数值变化时触发触感反馈（参考 PanHubConfigDialog 的并发数滑动条）
+                            val newStart = range.start.toInt()
+                            val newEnd = range.endInclusive.toInt()
+                            if (newStart != lastRatingStart || newEnd != lastRatingEnd) {
+                                view.performHaptic(HapticType.TICK)
+                                lastRatingStart = newStart
+                                lastRatingEnd = newEnd
+                            }
+                            onRatingRangeChange(range)
+                        },
+                        valueRange = 0f..10f,
+                        steps = 9,  // 步长 1（0,1,2,...,10）
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
                 Text(
                     text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
                     style = MaterialTheme.typography.titleMedium,

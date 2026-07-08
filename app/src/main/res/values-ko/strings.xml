@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
+    <string name="splash_slogan">발견 · 추적 · 검색</string>
 
     <!-- Main Screen -->
     <string name="tab_search">검색</string>
@@ -72,6 +73,8 @@
     <string name="search_history_delete">삭제</string>
     <string name="search_popular_title">인기 검색</string>
     <string name="search_suggestions_title">제안</string>
+    <string name="search_loading_disk">클라우드 리소스 검색 중...</string>
+    <string name="search_loading_disk_progress">검색 중 %1$d/%2$d 소스...</string>
 
     <!-- Watchlist Screen -->
     <string name="watchlist_title">내 관심목록</string>
@@ -261,6 +264,9 @@
     <string name="settings_new_version">새 버전 v%1$s</string>
     <string name="settings_discover_sections">발견 섹션</string>
     <string name="settings_discover_sections_desc">발견 페이지 섹션 표시 및 정렬</string>
+    <string name="settings_discover_sections_hint">드래그로 정렬, 스위치로 표시/숨기기</string>
+    <string name="settings_detail_sections">사용자 정의 상세 페이지</string>
+    <string name="settings_detail_sections_desc">상세 페이지의 각 모듈 표시/숨기기 설정</string>
     <string name="settings_drag_to_reorder">드래그하여 정렬</string>
     <string name="settings_logout_button">로그아웃</string>
 
@@ -328,6 +334,19 @@
     <string name="trakt_search_hint_shows">Trakt에서 TV 프로그램 검색</string>
     <string name="trakt_search_no_movies">Trakt에서 영화를 찾을 수 없습니다</string>
     <string name="trakt_search_no_shows">Trakt에서 TV 프로그램을 찾을 수 없습니다</string>
+    <string name="trakt_search_result_count_movies">총 %d 편의 영화</string>
+    <string name="trakt_search_result_count_shows">총 %d 편의 TV 프로그램</string>
+    <string name="trakt_search_tab_movies">영화</string>
+    <string name="trakt_search_tab_shows">TV 프로그램</string>
+    <string name="trakt_search_tab_movies_count">영화(%d)</string>
+    <string name="trakt_search_tab_shows_count">TV 프로그램(%d)</string>
+    <string name="trakt_search_tab_persons">인물</string>
+    <string name="trakt_search_tab_persons_count">인물(%d)</string>
+    <string name="trakt_search_tab_disk">클라우드</string>
+    <string name="trakt_search_tab_disk_count">클라우드(%d)</string>
+    <string name="trakt_search_hint_disk">클라우드 리소스 검색</string>
+    <string name="trakt_search_hint_persons">Trakt에서 인물 검색</string>
+    <string name="trakt_search_no_persons">Trakt에서 인물을 찾을 수 없습니다</string>
 
     <!-- Detail Screen (추가) -->
     <string name="detail_mark_watchlist">관심목록</string>
@@ -411,6 +430,9 @@
     <string name="detail_comments">댓글</string>
     <string name="detail_no_comments">아직 댓글이 없습니다</string>
     <string name="detail_seasons">시즌</string>
+    <string name="detail_seasons_count">(총 %1$d시즌)</string>
+    <string name="detail_seasons_show_all">전체 %1$d시즌 표시</string>
+    <string name="detail_seasons_collapse">접기</string>
     <string name="detail_season">시즌 %1$d</string>
     <string name="detail_episode_count">%1$d 에피소드</string>
     <string name="detail_episode">제%1$d화 %2$s</string>
@@ -451,14 +473,40 @@
     <string name="detail_specials">스페셜</string>
     <string name="detail_actor">배우</string>
     <string name="detail_your_rating">내 평점</string>
+    <string name="detail_rating_dialog_title">평가</string>
+    <string name="detail_rating_confirm">확인</string>
+    <string name="detail_rating_cancel">취소</string>
+    <string name="detail_rating_no_rating">미평가</string>
+    <string name="detail_rating_hint">별 좌우를 탭하여 반점/전체 선택, 다시 탭하면 평가 취소</string>
+    <string name="detail_videos_section">예고편과 스크린샷</string>
+    <string name="detail_videos_all">전체(%1$d)</string>
+    <string name="detail_videos_all_title">예고편과 스크린샷</string>
+    <string name="detail_videos_trailers_section">예고편 (%1$d)</string>
+    <string name="detail_videos_backdrops_section">스크린샷 (%1$d)</string>
+    <string name="detail_video_trailer">예고편</string>
+    <string name="detail_video_teaser">티저 예고편</string>
+    <string name="detail_video_clip">클립</string>
+    <string name="detail_video_load_error">동영상 로드 실패, YouTube가 현재 지역에서 접근할 수 없을 수 있습니다</string>
+    <string name="detail_video_open_browser">브라우저에서 열기</string>
+    <string name="detail_video_play">재생</string>
+    <string name="detail_video_retry">재시도</string>
+    <string name="trailer_youtube_restricted">YouTube가 현재 지역에서 접근 제한됨\nVPN을 사용해 주세요</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">영화 출연</string>
     <string name="person_tv_credits">TV 출연</string>
     <string name="person_all">전체 ></string>
+    <string name="person_all_count">전체(%d) &gt;</string>
+    <string name="person_images">사진</string>
+    <string name="poster_already_saved">이미 저장됨</string>
     <string name="person_load_more">더 불러오기</string>
     <string name="detail_close">닫기</string>
     <string name="person_no_biography">약력이 없습니다</string>
+    <string name="person_age">세</string>
+    <string name="person_age_deceased">향년 %1$d 세</string>
+    <string name="person_gender_male">남성</string>
+    <string name="person_gender_female">여성</string>
+    <string name="person_gender_non_binary">논바이너리</string>
 
     <!-- Settings (추가) -->
     <string name="settings_clear_cache_confirm">모든 캐시 데이터를 삭제하시겠습니까?</string>
@@ -468,6 +516,24 @@
     <string name="settings_logout_confirm">로그아웃하시겠습니까?</string>
     <string name="settings_source_repo">소스 코드</string>
     <string name="settings_help">도움말 &amp; 팁</string>
+    <string name="help_title">도움말과 설명</string>
+    <string name="help_search">검색 기능</string>
+    <string name="help_watchlist">관심목록과 시청</string>
+    <string name="help_statistics">시청 통계</string>
+    <string name="help_notification">알림 리마인더</string>
+    <string name="help_data">데이터 관리</string>
+    <string name="help_detail">상세 페이지</string>
+    <string name="help_discover_filter">작품 필터</string>
+    <string name="help_tips">추가 팁</string>
+    <string name="help_search_b1">영화나 TV 프로그램 제목을 입력하여 클라우드 리소스 검색</string>
+    <string name="help_search_b2">Quark, Baidu, Aliyun, Xunlei, UC, 115 등 클라우드 드라이브 및 마그넷 링크 지원</string>
+    <string name="help_search_b3">클라우드 아이콘을 탭하면 해당 앱에서 리소스가 열립니다</string>
+    <string name="help_search_b4">검색 기록을 탭하여 빠르게 검색, 오른쪽 버튼으로 기록 삭제</string>
+    <string name="help_person_search">인물 검색: 검색 페이지에 「인물」 탭 추가, 배우/감독 등 인물 정보 검색 지원, 탭하여 인물 상세, 출연작 및 사진 보기</string>
+    <string name="help_watchlist_b1">상세 페이지에서 관심목록/시청 버튼을 탭하여 표시</string>
+    <string name="help_watchlist_b2">「마이」 페이지에서 목록 보기 및 관리</string>
+    <string name="help_watchlist_b3">시청 표시는 시즌별 에피소드 선택 가능, 시즌0 특별편은 마지막에 표시</string>
+    <string name="help_watchlist_b4">TV 프로그램 시청 횟수: 한 시즌의 모든 에피소드 시청 완료 시 카운트</string>
     <string name="settings_licenses">오픈소스 라이선스</string>
 
     <!-- Data Management (추가) -->
@@ -610,11 +676,32 @@
     <string name="help_statistics_b2">시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
+    <string name="help_notification_b1">알림을 켜면 신작 개봉과 새 시즌을 자동 알림</string>
+    <string name="help_notification_b2">Android 13 이상은 알림 권한 부여 필요</string>
+    <string name="help_notification_b3">알림은 Trakt 관심목록을 기반으로 합니다</string>
+    <string name="help_notification_b4">권한이 거부되면 스위치가 자동으로 꺼집니다</string>
 
     <!-- VPN -->
     <string name="help_vpn">VPN 안내</string>
     <string name="help_vpn_b1">일부 기능은 해외 서비스에 접근해야 합니다. VPN을 활성화하지 않으면 정상적으로 사용할 수 없는 경우가 있습니다</string>
     <string name="help_vpn_b2">해당 기능: 예고편 썸네일(YouTube), Trakt 데이터(인기/추천/기대榜), TMDB 데이터(영화 정보/포스터)</string>
+    <string name="settings_restart_onboarding">튜토리얼</string>
+    <string name="settings_restart_onboarding_desc">앱 기능 가이드 다시 보기</string>
+    <string name="onboarding_skip">건너뛰기</string>
+    <string name="onboarding_next">다음</string>
+    <string name="onboarding_done">확인</string>
+    <string name="onboarding_step1_title">검색</string>
+    <string name="onboarding_step1_desc">영화/TV 프로그램 리소스 검색, Quark, Baidu, Aliyun 등 클라우드 드라이브 소스 지원</string>
+    <string name="onboarding_step2_title">발견</string>
+    <string name="onboarding_step2_desc">더우반, TMDB 인기 차트 탐색</string>
+    <string name="onboarding_step3_title">마이</string>
+    <string name="onboarding_step3_desc">로그인 후 관심목록과 시청 목록 관리</string>
+    <string name="onboarding_step4_title">설정</string>
+    <string name="onboarding_step4_desc">테마, 언어, 검색 소스 등 사용자 정의</string>
+    <string name="onboarding_step5_title">시청 통계</string>
+    <string name="onboarding_step5_desc">「마이」 페이지 오른쪽 상단에서 시청 데이터와 히트맵 보기, TV 프로그램은 한 시즌 전체 시청 시 카운트</string>
+    <string name="onboarding_step6_title">상세 페이지 조작</string>
+    <string name="onboarding_step6_desc">포스터 탭하여 크게 보기 및 앨범에 저장, 출연진 아바타 탭하여 배우의 다른 작품 보기, 평가는 반점 선택 지원</string>
 
     <!-- Onboarding -->
     <string name="onboarding_step7_title">추가 팁</string>
@@ -665,6 +752,7 @@
     <string name="search_filter_movie">영화</string>
     <string name="search_filter_show">TV 프로그램</string>
     <string name="search_view_all">전체 보기</string>
+    <string name="search_view_all_count">전체 보기(%d)</string>
     <string name="error_no_data">데이터 없음</string>
 
     <!-- Statistics -->
@@ -744,11 +832,18 @@
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_nowplaying">상영중</string>
     <string name="discover_view_all">전체(%d) ></string>
+    <string name="discover_trakt_trending_movies">Trakt 트렌딩 영화</string>
+    <string name="discover_trakt_trending_shows">Trakt 트렌딩 TV 프로그램</string>
+    <string name="discover_trakt_anticipated">Trakt 가장 기대되는 작품</string>
+    <string name="discover_trakt_recommendations_shows">추천 TV 프로그램</string>
+    <string name="discover_watchers">%1$d명이 시청 중</string>
+    <string name="discover_list_count">%1$d개의 목록</string>
     <string name="discover_trending">트렌드 영화</string>
     <string name="discover_trending_day">오늘</string>
     <string name="discover_trending_week">이번 주</string>
     <string name="discover_trending_lists">커뮤니티 목록</string>
     <string name="discover_list_meta">%d편 · @%s · ❤%d</string>
+    <string name="discover_list_empty">아직 커뮤니티 인기 목록이 없습니다, 나중에 다시 확인해 보세요~</string>
     <string name="common_view_all">모두 보기</string>
 
     <!-- 발견 필터 -->
@@ -825,6 +920,27 @@
     <!-- Content Descriptions (Badge) -->
     <string name="cd_watched_badge">시청함</string>
     <string name="cd_watchlist_badge">보고 싶음</string>
+    <string name="status_released">개봉됨</string>
+    <string name="status_returning_series">갱신 중</string>
+    <string name="status_in_production">제작 중</string>
+    <string name="status_post_production">후반 제작</string>
+    <string name="status_pilot">파일럿</string>
+    <string name="status_planned">기획됨</string>
+    <string name="status_rumored">소문</string>
+    <string name="status_canceled">취소됨</string>
+    <string name="status_ended">종료</string>
+    <string name="widget_quick_search_hint">탭하여 앱 검색 열기</string>
+    <string name="notification_channel_release">개봉 알림</string>
+    <string name="notification_channel_new_season">새 시즌 알림</string>
+    <string name="notification_channel_release_desc">관심목록의 작품이 개봉/공개될 때 알림</string>
+    <string name="notification_channel_new_season_desc">관심 TV 프로그램의 새 시즌 방영 시작 시 알림</string>
+    <string name="notification_channel_apk_download">APK 다운로드</string>
+    <string name="notification_channel_apk_download_desc">앱 업데이트 다운로드 진행 상황</string>
+    <string name="download_preparing">다운로드 준비 중…</string>
+    <string name="download_failed_both">기본 URL과 대체 URL 모두 다운로드 실패</string>
+    <string name="download_failed">다운로드 실패</string>
+    <string name="search_test_keyword">유랑지구</string>
+    <string name="error_unknown">알 수 없는 오류</string>
 
     <!-- 빈 목록 가이드 -->
     <string name="watchlist_empty_title">Trakt 플랫폼에서 아직 관심 목록에 추가하지 않았습니다</string>
@@ -869,6 +985,82 @@
     <string name="help_dc_failures_entry">실패 항목 보기 페이지</string>
     <string name="help_dc_failures_fmt">JSON</string>
     <string name="help_dc_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 로컬로 가져오기</string>
+    <string name="help_custom_source">사용자 정의 검색 소스</string>
+    <string name="help_custom_source_b1">설정 → 검색 소스 → 사용자 정의 검색 소스 → 검색 소스 추가</string>
+    <string name="help_custom_source_b2">검색 소스는 URL을 조합하여 요청: {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수</string>
+    <string name="help_custom_source_b3">추가 후 활성화/비활성화 가능, 드래그로 정렬</string>
+    <string name="help_custom_source_params">매개변수 설명</string>
+    <string name="help_cs_table_param">매개변수명</string>
+    <string name="help_cs_table_desc">설명</string>
+    <string name="help_cs_table_example">예시</string>
+    <string name="help_cs_param_name">검색 소스명 (사용자 정의)</string>
+    <string name="help_cs_param_baseUrl">API 기본 주소</string>
+    <string name="help_cs_param_apiPath">API 요청 경로</string>
+    <string name="help_cs_param_keyword">검색 키워드 매개변수명</string>
+    <string name="help_cs_param_cloudTypes">클라우드 유형 매개변수명 (선택)</string>
+    <string name="help_cs_param_cloudTypesVal">클라우드 유형 값, 쉼표 구분</string>
+    <string name="help_cs_param_src">소스 매개변수명 (선택)</string>
+    <string name="help_cs_param_srcVal">소스 매개변수 값</string>
+    <string name="help_cs_param_parseMode">파싱 모드</string>
+    <string name="help_cs_param_listPath">JSONPath: 결과 목록 경로</string>
+    <string name="help_cs_param_namePath">JSONPath: 이름 필드 경로</string>
+    <string name="help_cs_param_urlPath">JSONPath: URL 필드 경로</string>
+    <string name="help_cs_param_diskTypePath">JSONPath: 클라우드 유형 필드 경로 (선택)</string>
+    <string name="help_cs_param_datePath">JSONPath: 날짜 필드 경로 (선택)</string>
+    <string name="help_custom_source_parse_title">파싱 모드 설명</string>
+    <string name="help_custom_source_parse_b1">pansou_template: PanSou API 응답 형식 호환. 리소스 목록은 data 필드 아래에 있으며, 각 리소스에는 title, url, type 등의 필드가 포함됩니다.</string>
+    <string name="help_custom_source_parse_b2">zreso_template: ZReso API 응답 형식 호환. 리소스 목록은 data.list 필드 아래에 있으며, 필드명이 다를 수 있습니다.</string>
+    <string name="help_custom_source_parse_b3">custom: 사용자 정의 모드, JSONPath 표현식(예: $.data.results)을 입력하여 JSON 응답을 직접 파싱.</string>
+    <string name="help_custom_source_parse_pansou_example">pansou_template 형식 예시:
+{
+  "data": [
+    {
+      "title": "영화명",
+      "url": "https://pan.quark.cn/xxx",
+      "type": "quark",
+      "datetime": "2024-01-01"
+    }
+  ]
+}</string>
+    <string name="help_custom_source_parse_zreso_example">zreso_template 형식 예시:
+{
+  "data": {
+    "list": [
+      {
+        "name": "영화명",
+        "url": "https://pan.baidu.cn/xxx",
+        "cloud_type": "baidu"
+      }
+    ]
+  }
+}</string>
+    <string name="help_custom_source_example_title">사용자 정의 모드 예시</string>
+    <string name="help_custom_source_example">API가 다음 JSON을 반환할 때:
+{"data": {"results": [{"title": "영화명", "url": "https://...", "type": "quark"}]}}
+
+설정:
+  parseMode = custom
+  listPath = $.data.results
+  namePath = $.title
+  urlPath = $.url
+  diskTypePath = $.type</string>
+    <string name="help_detail_custom">사용자 정의 상세 페이지: 설정에서 상세 페이지의 각 모듈(출연진, 예고편과 스크린샷, 줄거리, 내 평가, 댓글, 추천)의 표시/숨기기를 제어</string>
+    <string name="help_videos_images">예고편과 스크린샷: 상세 페이지에 예고편과 스틸컷 표시, 예고편 탭하여 브라우저에서 재생, 스크린샷 탭하여 크게 보기 및 앨범에 저장</string>
+    <string name="help_discover_filter_b1">작품 필터: 발견 페이지 제목 표시줄에서 필터 아이콘 탭, 또는 하단 「작품 필터 페이지로」 카드에서 필터 페이지로 이동</string>
+    <string name="help_discover_filter_b2">장르, 지역, 태그, 평점 범위, 연대별 필터링 지원, 인기도, 개봉일 또는 평점으로 정렬 가능</string>
+    <string name="help_discover_filter_b3">영화와 TV 프로그램의 필터 조건은 독립적, 탭 전환 시 각각의 필터 선택 유지</string>
+    <string name="help_discover_filter_b4">필터 조건이 변경되지 않으면 결과 새로고침 안 함(대화상자를 닫거나 적용을 탭할 때 조건이 변경되지 않았으면 중복 요청 건너뜀)</string>
+    <string name="help_discover_filter_b6">고급 필터에서 「미시청만 표시」를 켜면 시청 표시된 작품 숨김(로그인 필요)</string>
+    <string name="help_tips_b1">상태 표시줄을 탭하여 페이지 상단으로 이동</string>
+    <string name="help_tips_b2">평가는 반점 선택 지원(별 좌우 탭), 다시 탭하면 평가 취소</string>
+    <string name="help_tips_b3">TV 프로그램 상세 페이지에서 전체 시즌을 펼쳐 진행 상황 보기</string>
+    <string name="help_tips_b4">설정에서 발견 페이지 섹션 표시와 정렬 사용자 정의</string>
+    <string name="help_tips_b5">상세 페이지에서 포스터를 탭하여 크게 보기, 다시 탭하면 앨범에 저장</string>
+    <string name="help_tips_b6">이미 저장된 포스터는 다시 탭해도 중복 저장하지 않음</string>
+    <string name="help_tips_b7">상세 페이지의 출연진 아바타를 탭하여 해당 배우의 작품 보기</string>
+    <string name="help_tips_b8">인물 상세 페이지에서 좌우 스와이프로 여러 사진 보기, 사진 탭하여 전체 화면 보기 및 앨범에 저장</string>
+    <string name="help_tips_b9">온라인 검색은 중국어 인물명 검색 지원(TMDB 기반), 인물 검색 시 자동으로 관련 작품 표시</string>
+    <string name="help_tips_b10">발견 페이지 제목 표시줄 오른쪽을 탭하여 섹션 빠르게 사용자 정의</string>
 
     <!-- 이스터에그 메시지 (9애니메이션 × 3메시지) -->
     <string name="easter_msg_shy_1">찔렀어요, 간지러워!</string>
@@ -906,4 +1098,5 @@
     <string name="settings_account_douban_logout">로그아웃</string>
     <string name="settings_douban_logout_done">Douban에서 로그아웃되었습니다</string>
     <string name="settings_douban_login_hint">로그인하여豆瓣 마크를 Trakt에 동기화</string>
+    <string name="settings_guest_login_hint">Trakt에 로그인하여 관심목록, 시청완료, 평가 및豆瓣 동기화 기능 사용</string>
 </resources>

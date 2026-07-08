@@ -14,12 +14,14 @@ import com.tracktosearch.data.util.persistentTtlCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import retrofit2.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -282,6 +284,21 @@ class TraktRepository @Inject constructor(
         watchlistWatchedIdsCache, recommendationsCache, trendingMoviesCache, trendingShowsCache,
         anticipatedMoviesCache, anticipatedShowsCache, showRecommendationsCache, trendingListsCache
     )
+
+    /**
+     * 导出 IMDb→Trakt 映射的全部条目（用于跨设备云端同步上传）。
+     * key 格式: "{imdbId}_{MOVIE|SHOW}"，value: 对应的 TraktSearchResult 列表。
+     */
+    suspend fun snapshotImdbMappings(): Map<String, List<TraktSearchResult>> =
+        searchByImdbCache.snapshotFromDisk()
+
+    /**
+     * 批量合并 IMDb→Trakt 映射到本地缓存（不覆盖本地已有，本地新数据优先）。
+     * 用于从云端拉取后写入本地。
+     * @return 实际写入的条目数
+     */
+    suspend fun mergeImdbMappings(mappings: Map<String, List<TraktSearchResult>>): Int =
+        searchByImdbCache.putAll(mappings, overwrite = false)
 
     // 内存缓存（短期，App 进程内有效）
     private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS, maxSize = 50)
@@ -944,100 +961,56 @@ class TraktRepository @Inject constructor(
     }
 
     /**
-     * 批量添加到想看列表（Trakt API 原生支持批量，一次 POST 传多个 ids）。
+     * 批量同步操作通用模板（想看/已看的增删）。
      * @param movieTraktIds 电影 traktId 列表
      * @param showTraktIds 剧集 traktId 列表
+     * @param apiCall Trakt 同步 API 调用
+     * @param cacheUpdate 成功后缓存更新函数（traktId, tmdbId, type）
+     * @param errorLabel 错误消息中的方法名
      */
-    suspend fun batchAddToWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+    private suspend fun batchSync(
+        movieTraktIds: List<Int>,
+        showTraktIds: List<Int>,
+        apiCall: suspend (TraktSyncRequest) -> Response<TraktSyncResponse>,
+        cacheUpdate: (Int, Int, MediaType) -> Unit,
+        errorLabel: String
+    ): Result<TraktSyncResponse> {
         if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
         return try {
             val request = TraktSyncRequest(
                 movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
                 shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
             )
-            val response = traktApiService.addToWatchlist(request)
+            val response = apiCall(request)
             if (response.isSuccessful) {
-                movieTraktIds.forEach { addToWatchlistCache(it, 0, MediaType.MOVIE) }
-                showTraktIds.forEach { addToWatchlistCache(it, 0, MediaType.SHOW) }
+                movieTraktIds.forEach { cacheUpdate(it, 0, MediaType.MOVIE) }
+                showTraktIds.forEach { cacheUpdate(it, 0, MediaType.SHOW) }
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
-                Result.failure(Exception("batchAddToWatchlist failed: ${response.code()}"))
+                Result.failure(Exception("$errorLabel failed: ${response.code()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    /**
-     * 批量从想看列表移除。
-     */
-    suspend fun batchRemoveFromWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
-        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
-        return try {
-            val request = TraktSyncRequest(
-                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
-                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
-            )
-            val response = traktApiService.removeFromWatchlist(request)
-            if (response.isSuccessful) {
-                movieTraktIds.forEach { removeFromWatchlistCache(it, 0, MediaType.MOVIE) }
-                showTraktIds.forEach { removeFromWatchlistCache(it, 0, MediaType.SHOW) }
-                Result.success(response.body() ?: TraktSyncResponse())
-            } else {
-                Result.failure(Exception("batchRemoveFromWatchlist failed: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    /** 批量添加到想看列表（Trakt API 原生支持批量，一次 POST 传多个 ids）。 */
+    suspend fun batchAddToWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
+        batchSync(movieTraktIds, showTraktIds, traktApiService::addToWatchlist, ::addToWatchlistCache, "batchAddToWatchlist")
 
-    /**
-     * 批量标记已看（Trakt API 原生支持批量）。
-     * 注意：Trakt 的 addToHistory 不会自动从 watchlist 移除，需调用方显式调用 batchRemoveFromWatchlist。
-     */
-    suspend fun batchMarkAsWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
-        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
-        return try {
-            val request = TraktSyncRequest(
-                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
-                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
-            )
-            val response = traktApiService.addToHistory(request)
-            if (response.isSuccessful) {
-                movieTraktIds.forEach { addToWatchedCache(it, 0, MediaType.MOVIE) }
-                showTraktIds.forEach { addToWatchedCache(it, 0, MediaType.SHOW) }
-                Result.success(response.body() ?: TraktSyncResponse())
-            } else {
-                Result.failure(Exception("batchMarkAsWatched failed: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    /** 批量从想看列表移除。 */
+    suspend fun batchRemoveFromWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
+        batchSync(movieTraktIds, showTraktIds, traktApiService::removeFromWatchlist, ::removeFromWatchlistCache, "batchRemoveFromWatchlist")
 
-    /**
-     * 批量移除已看记录(模式 B/C 状态变化时调用)。
-     * 注意:Trakt 的 removeFromHistory 不会自动加回 watchlist,如需加回需调用方显式调用 batchAddToWatchlist。
-     */
-    suspend fun batchRemoveFromWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
-        if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
-        return try {
-            val request = TraktSyncRequest(
-                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
-                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
-            )
-            val response = traktApiService.removeFromHistory(request)
-            if (response.isSuccessful) {
-                movieTraktIds.forEach { removeFromWatchedCache(it, 0, MediaType.MOVIE) }
-                showTraktIds.forEach { removeFromWatchedCache(it, 0, MediaType.SHOW) }
-                Result.success(response.body() ?: TraktSyncResponse())
-            } else {
-                Result.failure(Exception("batchRemoveFromWatched failed: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    /** 批量标记已看。注意：Trakt 的 addToHistory 不会自动从 watchlist 移除，需调用方显式调用 batchRemoveFromWatchlist。 */
+    suspend fun batchMarkAsWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
+        batchSync(movieTraktIds, showTraktIds, traktApiService::addToHistory, ::addToWatchedCache, "batchMarkAsWatched")
+
+    /** 批量移除已看记录。注意:Trakt 的 removeFromHistory 不会自动加回 watchlist,如需加回需调用方显式调用 batchAddToWatchlist。 */
+    suspend fun batchRemoveFromWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
+        batchSync(movieTraktIds, showTraktIds, traktApiService::removeFromHistory, ::removeFromWatchedCache, "batchRemoveFromWatched")
 
     /**
      * 批量添加评分（1-10 分）。
@@ -1113,37 +1086,37 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** Trakt 文本搜索（电影） */
-    suspend fun searchMovies(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
+    /** 分页搜索通用模板（电影/电视剧/人物搜索结构一致，仅 API 调用不同） */
+    private suspend fun <T> searchPaginated(
+        apiCall: suspend (String, Int, Int) -> Response<List<T>>,
+        query: String,
+        page: Int,
+        limit: Int,
+        errorLabel: String
+    ): Result<Pair<List<T>, Int>> {
         return try {
-            val response = traktApiService.searchMovies(query, limit, page)
+            val response = apiCall(query, limit, page)
             if (response.isSuccessful) {
                 val items = response.body() ?: emptyList()
                 val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
                 Result.success(Pair(items, totalCount))
             } else {
-                Result.failure(Exception("Failed to search movies: ${response.code()}"))
+                Result.failure(Exception("Failed to $errorLabel: ${response.code()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    /** Trakt 文本搜索（电影） */
+    suspend fun searchMovies(query: String, page: Int = 1, limit: Int = 20) =
+        searchPaginated(traktApiService::searchMovies, query, page, limit, "search movies")
+
     /** Trakt 文本搜索（电视剧） */
-    suspend fun searchShows(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
-        return try {
-            val response = traktApiService.searchShows(query, limit, page)
-            if (response.isSuccessful) {
-                val items = response.body() ?: emptyList()
-                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
-                Result.success(Pair(items, totalCount))
-            } else {
-                Result.failure(Exception("Failed to search shows: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    suspend fun searchShows(query: String, page: Int = 1, limit: Int = 20) =
+        searchPaginated(traktApiService::searchShows, query, page, limit, "search shows")
 
     /** 个性化推荐（已登录用户） */
     suspend fun getRecommendations(limit: Int = 10): Result<List<TraktMovie>> {
@@ -1164,20 +1137,8 @@ class TraktRepository @Inject constructor(
     }
 
     /** 搜索人物（通过名字），返回搜索结果列表 */
-    suspend fun searchPeople(query: String, page: Int = 1, limit: Int = 20): Result<Pair<List<TraktSearchResult>, Int>> {
-        return try {
-            val response = traktApiService.searchPeople(query, limit, page)
-            if (response.isSuccessful) {
-                val items = response.body() ?: emptyList()
-                val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
-                Result.success(Pair(items, totalCount))
-            } else {
-                Result.failure(Exception("Failed to search people: ${response.code()}"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+    suspend fun searchPeople(query: String, page: Int = 1, limit: Int = 20) =
+        searchPaginated(traktApiService::searchPeople, query, page, limit, "search people")
 
     /** 获取人物详情（通过 slug 或 id） */
     suspend fun getPersonSummary(personSlug: String): Result<TraktPersonDetail> {

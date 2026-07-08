@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.listdetail
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
@@ -220,7 +221,7 @@ fun TraktListDetailScreen(
                                 title = item.title,
                                 year = item.year,
                                 genres = "",
-                                posterUrl = item.posterUrl?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                posterUrl = item.posterUrl?.let { TmdbImageUrls.build(it) },
                                 tmdbId = item.tmdbId,
                                 isInWatchlist = isInWatchlist,
                                 isWatched = isWatched,

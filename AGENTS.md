@@ -47,12 +47,6 @@
 - 数据格式变更时通过 key 版本号（如 `_v2` 后缀）让旧缓存自动失效
 - 缓存未命中时调用 `awaitLoaded()` 等待磁盘加载完成再查一次，避免 loadFromDisk 未完成时误判为缓存未命中导致重复网络请求
 
-## 版本更新检查策略
-
-- 启动时自动检查更新：24 小时内复用上次结果（`UpdateRepository.checkForUpdate(force=false)`），不重复请求 GitHub API
-- 设置页手动检查更新：强制走网络（`UpdateRepository.checkForUpdate(force=true)`），绕过 24 小时缓存
-- 缓存内容包括：最新版本号、changelog、是否有更新、下载链接，存储在 ChangelogStorage 的 DataStore 中
-
 ## 国际化规范
 
 - 所有用户可见文字必须使用 stringResource，不能硬编码
@@ -63,7 +57,7 @@
 
 - 优先使用项目已有的约定和模式，修改前先了解现有架构
 - 项目依赖统一用 gradle/libs.versions.toml 管理
-- 涉及 API、库/框架时，先用 Context7 查明用法，保证 API 使用正确
+- 当我需要库/API文档、代码生成、设置或配置步骤时，始终使用Context7 MCP，而无需我明确要求。
 
 ## 工作方式
 
@@ -74,7 +68,7 @@
 - 完成任务后简要总结改动内容
 - 有不确定的地方主动用 brainstorming 技能问清楚（添加新功能时必须调用头脑风暴技能）
 - 头脑风暴的可视化伴侣：涉及 UI 设计时，使用 PureShowWidget 内联展示设计效果（SVG/HTML）；前端新页面设计用 web-dev 技能生成实时预览（自动启动本地 HTTP 服务器并通过 OpenPreview 提供预览链接）
-- 安装软件后自动清理临时文件
+- 安装软件，程序后自动清理临时文件
 - 增加/修改/删除功能后，及时更新 App 内帮助与说明页，确保帮助与说明与实际情况一致
 - 发布流程参考 `.trae/rules/project_rules.md`
 

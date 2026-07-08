@@ -220,9 +220,9 @@ fun MainScreen(
         object : NestedScrollConnection {
             override fun onPreScroll(available: androidx.compose.ui.geometry.Offset, source: NestedScrollSource): androidx.compose.ui.geometry.Offset {
                 val delta = available.y
-                if (delta < -10) {
+                if (delta < -10 && isFabVisible != 0f) {
                     isFabVisible = 0f
-                } else if (delta > 10) {
+                } else if (delta > 10 && isFabVisible != 1f) {
                     isFabVisible = 1f
                 }
                 return androidx.compose.ui.geometry.Offset.Zero
@@ -342,9 +342,14 @@ fun MainScreen(
                         isLoggedIn = isLoggedIn,
                         onHelpClick = onHelpClick,
                         onRestartOnboarding = onRestartOnboarding,
-                        onDoubanResync = onDoubanResync,
+                        onDoubanResync = {
+                            // 触发同步后切换到 Watchlist tab，让用户通过横幅查看进度
+                            // 同步弹窗在 Watchlist 页点击横幅打开，转后台时消除弹窗
+                            scope.launch { pagerState.scrollToPage(2) }
+                        },
                         onDoubanFailures = onDoubanFailures,
                         onNavigateToDoubanLogin = onNavigateToDoubanLogin,
+                        onNavigateToLogin = onNavigateToLogin,
                         onStatisticsClick = onStatisticsClick,
                         modifier = Modifier.fillMaxSize()
                     )

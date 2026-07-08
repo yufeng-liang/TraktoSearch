@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.discover
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,7 +83,7 @@ internal fun MovieCard(
     val setActivePosterTmdbId = LocalActivePosterClickSetter.current
     // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
     val activeClickToken = LocalActivePosterClickToken.current
-    var myClickToken by remember { mutableStateOf(0) }
+    var myClickToken by rememberSaveable { mutableStateOf(0) }
     // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
     // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)
     val isCurrentTab = LocalIsCurrentTab.current
@@ -93,7 +95,7 @@ internal fun MovieCard(
     val posterUrl = posterPath?.let {
         if (it.startsWith("http")) it
         else if (it.toIntOrNull() != null) null // TMDB ID 无法直接拼海报 URL，需要通过详情接口获取
-        else "https://image.tmdb.org/t/p/w500$it"
+        else TmdbImageUrls.build(it)
     }
 
     Card(

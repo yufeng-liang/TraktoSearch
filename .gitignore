@@ -49,3 +49,9 @@ backup.kt
 # Local directories (not tracked in git)
 docs/
 .superpowers/
+
+# Perfetto / ART trace files (large, local performance analysis only)
+*.trace
+
+# WorkBuddy workspace data
+.workbuddy/

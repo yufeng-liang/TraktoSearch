@@ -170,12 +170,16 @@ class UpdateRepository @Inject constructor(
                 if (cached != null) {
                     cachedChangelog = cached.changelog
                     cachedLatestVersion = cached.latestVersion
+                    // 重要：不能用缓存的 hasUpdate，必须用当前 versionName 重新判断
+                    // 场景：用户在 v1.8.0 启动缓存了 hasUpdate=true（latest=1.9.0），
+                    // 升级到 v1.9.0 后再启动仍在 24h 内，若透传缓存值会继续提示"有更新到 1.9.0"
+                    val hasUpdate = isNewerVersion(cached.latestVersion, currentVersion)
                     return UpdateInfo(
                         latestVersion = cached.latestVersion,
                         downloadUrl = cached.downloadUrl,
                         changelog = cached.changelog,
                         fileSize = 0,
-                        hasUpdate = cached.hasUpdate
+                        hasUpdate = hasUpdate
                     )
                 }
             }

@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.person
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -123,7 +124,7 @@ fun PersonScreen(
                             PersonHeaderContent(
                                 personId = uiState.person?.id ?: personId,
                                 name = uiState.person?.name ?: personName,
-                                profileUrl = profileUrl ?: uiState.person?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                profileUrl = profileUrl ?: uiState.person?.profile_path?.let { TmdbImageUrls.build(it) },
                                 birthday = uiState.person?.birthday ?: uiState.traktPerson?.birthday,
                                 deathday = uiState.person?.deathday ?: uiState.traktPerson?.death,
                                 placeOfBirth = uiState.person?.place_of_birth,
@@ -265,7 +266,7 @@ fun PersonScreen(
                                                     title = credit.title,
                                                     subtitle = credit.character,
                                                     year = credit.release_date.take(4),
-                                                    posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                    posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
                                                         viewModel.resolveAndNavigate(
@@ -351,7 +352,7 @@ fun PersonScreen(
                                                     title = credit.name,
                                                     subtitle = credit.character,
                                                     year = credit.first_air_date.take(4),
-                                                    posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                                    posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
                                                     isResolving = uiState.resolvingTmdbId == credit.id,
                                                     onClick = {
                                                         viewModel.resolveAndNavigate(

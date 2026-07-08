@@ -69,8 +69,8 @@ import javax.inject.Inject
 /**
  * 豆瓣登录页 ViewModel：
  * - 监听 WebView 抓到的 dbcl2 cookie，解析出 userId
- * - 登录成功后保存凭据并自动触发一次同步
- * - 暴露同步进度，供 UI 显示 DoubanSyncDialog
+ * - 登录成功后保存凭据（不自动同步，由用户手动选择增量同步）
+ * - 检测云端是否有该豆瓣账号的失败数据（用于跨设备查看）
  */
 @HiltViewModel
 class DoubanLoginViewModel @Inject constructor(
@@ -91,8 +91,8 @@ class DoubanLoginViewModel @Inject constructor(
     fun onLoginSuccess(userId: String, cookie: String) {
         doubanAuthStorage.saveCredentials(userId, cookie)
         _loginSuccess.value = true
-        // 首次登录自动触发同步（Application scope，不依赖 ViewModel 生命周期）
-        doubanSyncManager.startSync()
+        // 不自动同步：由用户在设置页或 Watchlist 页手动选择增量同步
+        // 增量同步会自动拉取云端进度，接续上次同步，避免全量爬取豆瓣
         // 检测云端是否有该豆瓣账号的失败数据(用于跨设备查看)
         checkCloudFailures()
     }
@@ -141,8 +141,8 @@ class DoubanLoginViewModel @Inject constructor(
  * - 进入时请求通知权限（用于同步转后台时显示进度通知）
  * - 加载 https://accounts.douban.com/passport/login 直接登录页
  * - 显示安心说明（可展开查看数据流向、存储策略等详情）
- * - 监听 WebView 抓取 dbcl2 cookie，登录成功后显示 Snackbar 并自动触发同步
- * - 同步进行中/完成时显示 DoubanSyncDialog
+ * - 监听 WebView 抓取 dbcl2 cookie，登录成功后显示 Snackbar 并自动返回
+ * - 不自动同步：用户需手动在设置页或 Watchlist 页选择增量同步
  */
 @SuppressLint("SetJavaScriptEnabled")
 @OptIn(ExperimentalMaterial3Api::class)
@@ -154,9 +154,6 @@ fun DoubanLoginScreen(
     val context = LocalContext.current
     val isLoggedIn by viewModel.doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
-    val progress by viewModel.progress.collectAsStateWithLifecycle()
-    // 标记本次会话是否已触发同步（区分「本次触发」与「上次同步遗留的 isComplete」）
-    var syncTriggered by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     // Snackbar 状态：登录成功时显示提示
@@ -180,52 +177,16 @@ fun DoubanLoginScreen(
         }
     }
 
-    // 已登录豆瓣 → 自动触发同步（仅一次）
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn && !syncTriggered && !progress.isRunning) {
-            syncTriggered = true
-            viewModel.triggerSync()
-        }
-    }
-
-    // WebView 登录成功 → 标记同步已触发 + 显示 Snackbar
+    // WebView 登录成功 → 显示 Snackbar + 自动返回上一页
+    // 不自动同步：用户需手动在设置页或 Watchlist 页选择增量同步
     LaunchedEffect(loginSuccess) {
         if (loginSuccess) {
-            syncTriggered = true
             snackbarHostState.showSnackbar(
                 message = successMessage,
                 duration = androidx.compose.material3.SnackbarDuration.Short
             )
+            onBack()
         }
-    }
-
-    // 同步进行中或已完成（且本次会话触发）→ 显示同步对话框
-    if (syncTriggered && (progress.isRunning || progress.isComplete)) {
-        DoubanSyncDialog(
-            onDismiss = {
-                // Cookie 过期：重置到登录页（不退出）；正常完成：退出
-                if (progress.cookieExpired) {
-                    viewModel.resetForRelogin()
-                    syncTriggered = false
-                } else if (!progress.isRunning) {
-                    onBack()
-                }
-            },
-            onBackground = {
-                // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,留在当前页让用户继续操作
-                syncTriggered = false
-            },
-            onRelogin = {
-                viewModel.resetForRelogin()
-                syncTriggered = false
-            },
-            onTraktLogin = {
-                // 回到 LoginScreen 让用户登录 Trakt(本页是从 LoginScreen 跳过来的,onBack 即可)
-                syncTriggered = false
-                onBack()
-            }
-        )
-        return
     }
 
     // 云端失败数据检测弹窗:登录后发现云端有同豆瓣账号的失败数据,提示下载查看

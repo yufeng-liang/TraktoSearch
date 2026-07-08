@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -335,7 +336,7 @@ internal fun CollectionSection(
                 contentType = { "collection_movie" }
             ) { index ->
                 val part = collection.parts[index]
-                val posterUrl = part.poster_path?.let { "https://image.tmdb.org/t/p/w200$it" }
+                val posterUrl = part.poster_path?.let { TmdbImageUrls.build(it, TmdbImageUrls.W200) }
                 val isCurrent = part.id == currentTmdbId
                 Column(
                     modifier = Modifier

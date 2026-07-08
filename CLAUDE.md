@@ -23,6 +23,30 @@
 - 详情页/发现页/社区列表的 MovieCard 必须传递真实的 isInWatchlist/isWatched 状态，不能硬编码 false
 - 影视卡片想看/已看标记必须从 WatchlistWatchedIds 缓存计算，不能依赖路由参数中的 inWatchlist/isWatched（这些只是初始值）
 
+### 持久化缓存原则（重要）
+
+**核心原则：基本不变的数据用持久化缓存，省去不必要的请求。**
+
+以下数据视为"基本不变"，必须使用持久化缓存（跨 App 重启保留，TTL = 永久）：
+- **TMDB 详情**（`movieDetailCache`/`tvDetailCache`）：海报路径（`poster_path`）、`tmdbId`、`imdbId`、标题、概述等字段不会变
+- **演职员信息**（`movieCreditsCache`/`tvCreditsCache`）：演员头像、姓名、角色不会变
+- **TMDB↔Trakt ID 映射**（`searchByTmdbCache`/`searchByImdbCache`）：映射关系静态永久
+- **人物信息**（`personCache`）：演员/导演的基本信息、头像不会变
+
+以下数据使用短期缓存（6 小时，App 进程内有效即可）：
+- 豆瓣热榜（榜单排名会变）
+- Trakt 趋势/最受期待/社区列表（热度会变）
+- TMDB 热门/即将上映列表（随市场变化）
+- 评论、统计数据（频繁更新）
+- 想看/已看 ID 集合（6 小时 TTL，跨 App 重启复用，避免每次启动都发 4 个 /sync/* 请求；增删想看/已看时同步更新持久化缓存，退出登录时清除）
+
+持久化缓存实现要求：
+- 使用 DataStore 存储（key → JSON 字符串），启动时加载到内存 TtlCache
+- 写入内存缓存时同步写入 DataStore（异步，不阻塞返回）
+- 内存缓存作为一级缓存（秒进），DataStore 作为二级缓存（重启后恢复）
+- 数据格式变更时通过 key 版本号（如 `_v2` 后缀）让旧缓存自动失效
+- 缓存未命中时调用 `awaitLoaded()` 等待磁盘加载完成再查一次，避免 loadFromDisk 未完成时误判为缓存未命中导致重复网络请求
+
 ## 国际化规范
 
 - 所有用户可见文字必须使用 stringResource，不能硬编码
@@ -33,7 +57,7 @@
 
 - 优先使用项目已有的约定和模式，修改前先了解现有架构
 - 项目依赖统一用 gradle/libs.versions.toml 管理
-- 涉及 API、库/框架时，先用 Context7 查明用法，保证 API 使用正确
+- 当我需要库/API文档、代码生成、设置或配置步骤时，始终使用Context7 MCP，而无需我明确要求。
 
 ## 工作方式
 
@@ -42,9 +66,9 @@
 - 涉及大量原代码删除的改动，必须在改动前本地提交一次，方便回滚
 - 多步任务在最后统一完成后构建 debug 验证一次即可
 - 完成任务后简要总结改动内容
-- 有不确定的地方主动用 brainstorming 问清楚（添加新功能时必须调用头脑风暴技能）
-- 涉及 UI 设计时，使用 PureShowWidget 工具展示设计效果，前端新页面用 web-dev 技能生成实时预览
-- 安装软件后自动清理临时文件
+- 有不确定的地方主动用 brainstorming 技能问清楚（添加新功能时必须调用头脑风暴技能）
+- 头脑风暴的可视化伴侣：涉及 UI 设计时，使用 PureShowWidget 内联展示设计效果（SVG/HTML）；前端新页面设计用 web-dev 技能生成实时预览（自动启动本地 HTTP 服务器并通过 OpenPreview 提供预览链接）
+- 安装软件，程序后自动清理临时文件
 - 增加/修改/删除功能后，及时更新 App 内帮助与说明页，确保帮助与说明与实际情况一致
 - 发布流程参考 `.trae/rules/project_rules.md`
 
@@ -64,6 +88,7 @@
 - 深色模式下 BasicTextField 文字不可见：textStyle 必须显式设置 color = MaterialTheme.colorScheme.onSurface
 - Gitee Release 上传 APK 必须用 curl.exe（PowerShell multipart 会 UTF-8 重编码导致 APK 损坏）
 - Gitee Release body 不能含 markdown 格式符号（#/-），创建时用纯文本，创建后 PATCH 补回
+- Gitee Release body PATCH 同步 markdown 更新日志时，PowerShell 的 Invoke-RestMethod 对 PATCH 方法在本环境会卡住（GET/POST 正常），改用 curl.exe --data-binary @file 从 UTF-8 无 BOM 的 JSON 文件读取 body 可成功；JSON 文件用 Write 工具直接生成避免 PowerShell 编码问题
 
 ## Git 规范
 

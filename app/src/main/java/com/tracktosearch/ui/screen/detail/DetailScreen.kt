@@ -239,7 +239,7 @@ fun DetailScreen(
             }
             val tabContainerColor = if (isPinned) {
                 uiState.posterDominantColor?.let { c ->
-                    lerp(c, Color.White, 0.38f)
+                    lerp(c, Color.White, 0.37f)
                 } ?: MaterialTheme.colorScheme.surface
             } else {
                 Color.Transparent

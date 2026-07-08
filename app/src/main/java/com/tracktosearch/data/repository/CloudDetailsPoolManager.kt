@@ -1,0 +1,306 @@
+package com.tracktosearch.data.repository
+
+import android.util.Log
+import com.tracktosearch.data.remote.cloud.AesCrypto
+import com.tracktosearch.data.remote.cloud.GiteeContentRequest
+import com.tracktosearch.data.remote.cloud.GiteeContentResponse
+import com.tracktosearch.data.remote.cloud.GiteeContentsApi
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
+import com.tracktosearch.data.util.PersistentTtlCache
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * 全局豆瓣详情缓存池管理器（跨用户共享）。
+ *
+ * 核心目标：减少对豆瓣网站的整体请求量。任意用户爬过的豆瓣详情页（doubanId → imdbId/isTvShow 等）
+ * 上传到全局共享池后，其他用户命中即可跳过爬取。
+ *
+ * 分片策略：SHA-256(doubanId) 前 3 个十六进制字符 → 4096 分片（每片平均几十~几百条）。
+ * 文件路径：`details_pool/{prefix}.json`
+ *
+ * 数据流：
+ * - 上传：本地详情 → 按分片聚合 → GET 云端已有 → 合并新数据 → AES 加密 → PUT（乐观锁，重试 3 次）
+ * - 下载：按 doubanId 计算分片 → GET 对应分片 → 解密 → 提取目标条目
+ *
+ * 冲突处理：分片细（4096），冲突率极低；冲突时 GET 最新再合并重试。
+ *
+ * 安全说明：数据为豆瓣公开详情页信息（imdbId、isTvShow、类型、年份等），非用户私有数据，
+ * 加密仅为防止 Gitee token 泄露时被随意浏览，不要求强安全。
+ */
+@Singleton
+class CloudDetailsPoolManager @Inject constructor(
+    private val giteeContentsApi: GiteeContentsApi,
+    private val json: Json
+) {
+    companion object {
+        private const val TAG = "CloudDetailsPool"
+        private const val OWNER = "yufeng-liang"
+        private const val REPO = "TrackToSearch"
+        private const val PATH_PREFIX = "details_pool/"
+        private const val FILE_SUFFIX = ".json"
+        private const val SHARD_HASH_LENGTH = 3  // SHA-256 前 3 个十六进制字符 = 4096 分片
+        private const val MAX_RETRY = 3
+    }
+
+    @Serializable
+    private data class ShardPayload(
+        val version: Int = 1,
+        val total: Int,
+        /** key = doubanId，value = DoubanDetailCacheEntry 的 JSON 字符串 */
+        val entries: Map<String, String>
+    )
+
+    /** 分片上传互斥锁（同一分片串行上传，避免并发 PUT 互相覆盖） */
+    private val shardLocks = mutableMapOf<String, Mutex>()
+    private val shardLocksLock = Mutex()
+
+    private suspend fun getShardLock(shard: String): Mutex {
+        return shardLocksLock.withLock {
+            shardLocks.getOrPut(shard) { Mutex() }
+        }
+    }
+
+    /** 计算 doubanId 所属分片前缀 */
+    private fun shardPrefix(doubanId: String): String {
+        val hash = AesCrypto.hashUserId(doubanId)  // 复用 SHA-256 前 16 字节逻辑
+        return hash.substring(0, SHARD_HASH_LENGTH)
+    }
+
+    private fun buildPath(shard: String): String = "$PATH_PREFIX$shard$FILE_SUFFIX"
+
+    private fun parseContentResponse(element: kotlinx.serialization.json.JsonElement?): GiteeContentResponse? {
+        if (element == null) return null
+        if (element !is JsonObject) return null
+        return try {
+            json.decodeFromJsonElement(GiteeContentResponse.serializer(), element)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /**
+     * 批量上传详情到全局池（按分片聚合后上传）。
+     *
+     * @param entries doubanId → DoubanDetailCacheEntry 映射（通常来自 doubanDetailCache.snapshotFromDisk()）
+     * @param detailCache 本地缓存，上传成功后无需回写（数据来源就是它）
+     * @return 实际上传的分片数（用于日志统计）
+     */
+    suspend fun uploadDetails(entries: Map<String, DoubanDetailCacheEntry>): Int = withContext(Dispatchers.IO) {
+        if (entries.isEmpty()) return@withContext 0
+
+        // 按分片聚合
+        val byShard = entries.entries.groupBy { shardPrefix(it.key) }
+        var uploadedShards = 0
+
+        for ((shard, shardEntries) in byShard) {
+            if (shardEntries.isEmpty()) continue
+            val lock = getShardLock(shard)
+            val success = lock.withLock {
+                uploadShardWithRetry(shard, shardEntries.associate { it.key to it.value })
+            }
+            if (success) uploadedShards++
+        }
+        Log.d(TAG, "上传详情: ${entries.size} 条 → ${byShard.size} 分片，成功 $uploadedShards 片")
+        uploadedShards
+    }
+
+    /**
+     * 上传单个分片（带乐观锁重试）。
+     * - GET 云端已有 → 合并新条目 → PUT（带 sha）
+     * - 文件不存在 → POST 创建
+     * - 冲突（sha 不匹配）→ 重试 GET + 合并 + PUT
+     */
+    private suspend fun uploadShardWithRetry(shard: String, newEntries: Map<String, DoubanDetailCacheEntry>): Boolean {
+        val path = buildPath(shard)
+        var attempt = 0
+        while (attempt < MAX_RETRY) {
+            attempt++
+            try {
+                // 1. GET 云端已有
+                var existingSha: String? = null
+                var existingEntries: Map<String, DoubanDetailCacheEntry> = emptyMap()
+                try {
+                    val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
+                    if (resp.isSuccessful) {
+                        val body = parseContentResponse(resp.body())
+                        if (body != null) {
+                            existingSha = body.sha
+                            val content = body.content
+                            if (!content.isNullOrEmpty()) {
+                                val encrypted = String(
+                                    android.util.Base64.decode(content, android.util.Base64.NO_WRAP),
+                                    Charsets.UTF_8
+                                )
+                                val decrypted = AesCrypto.decrypt(encrypted)
+                                if (decrypted != null) {
+                                    existingEntries = parseShardPayload(decrypted)
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // GET 失败，视为文件不存在
+                }
+
+                // 2. 合并：新条目覆盖云端旧条目（同 doubanId 以新为准）
+                val merged = existingEntries.toMutableMap().apply { putAll(newEntries) }
+                if (merged.size == existingEntries.size && newEntries.all { existingEntries.containsKey(it.key) && existingEntries[it.key] == it.value }) {
+                    // 云端已包含全部新条目且内容一致，无需上传
+                    Log.d(TAG, "分片 $shard 无变化，跳过上传")
+                    return true
+                }
+
+                // 3. 序列化 + 加密 + 上传
+                val payload = ShardPayload(
+                    total = merged.size,
+                    entries = merged.mapValues { (_, v) ->
+                        json.encodeToString(DoubanDetailCacheEntry.serializer(), v)
+                    }
+                )
+                val jsonStr = json.encodeToString(ShardPayload.serializer(), payload)
+                val encrypted = AesCrypto.encrypt(jsonStr)
+                val base64Content = android.util.Base64.encodeToString(
+                    encrypted.toByteArray(Charsets.UTF_8),
+                    android.util.Base64.NO_WRAP
+                )
+
+                val request = if (existingSha != null) {
+                    GiteeContentRequest(
+                        content = base64Content,
+                        message = "details_pool/$shard: +${newEntries.size} (total ${merged.size})",
+                        sha = existingSha
+                    )
+                } else {
+                    GiteeContentRequest(
+                        content = base64Content,
+                        message = "details_pool/$shard: +${newEntries.size} (total ${merged.size})"
+                    )
+                }
+                val resp = if (existingSha != null) {
+                    giteeContentsApi.putFileContent(OWNER, REPO, path, request)
+                } else {
+                    giteeContentsApi.createFileContent(OWNER, REPO, path, request)
+                }
+                if (resp.isSuccessful) {
+                    Log.d(TAG, "分片 $shard 上传成功: +${newEntries.size} (total ${merged.size})")
+                    return true
+                }
+                // 409 / 422 等冲突错误 → 重试
+                if (resp.code() !in setOf(409, 422)) {
+                    Log.w(TAG, "分片 $shard 上传失败: ${resp.code()} ${resp.message()}")
+                    return false
+                }
+                Log.w(TAG, "分片 $shard 冲突，重试 $attempt/$MAX_RETRY")
+            } catch (e: Exception) {
+                Log.w(TAG, "分片 $shard 上传异常 (attempt=$attempt): ${e.message}")
+            }
+        }
+        Log.w(TAG, "分片 $shard 上传失败: 重试 $MAX_RETRY 次仍冲突")
+        return false
+    }
+
+    private fun parseShardPayload(jsonStr: String): Map<String, DoubanDetailCacheEntry> {
+        return try {
+            val payload = json.decodeFromString(ShardPayload.serializer(), jsonStr)
+            payload.entries.mapValues { (_, v) ->
+                json.decodeFromString(DoubanDetailCacheEntry.serializer(), v)
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    /**
+     * 按需下载多个 doubanId 的详情（按分片聚合 GET，提取目标条目）。
+     *
+     * @param doubanIds 需要查询的 doubanId 列表
+     * @return doubanId → DoubanDetailCacheEntry（仅包含命中的）
+     */
+    suspend fun downloadDetails(doubanIds: List<String>): Map<String, DoubanDetailCacheEntry> = withContext(Dispatchers.IO) {
+        if (doubanIds.isEmpty()) return@withContext emptyMap()
+        val result = mutableMapOf<String, DoubanDetailCacheEntry>()
+
+        // 按分片聚合
+        val byShard = doubanIds.groupBy { shardPrefix(it) }
+        for ((shard, ids) in byShard) {
+            val idSet = ids.toSet()
+            val shardEntries = downloadShard(shard) ?: continue
+            for (id in idSet) {
+                shardEntries[id]?.let { result[id] = it }
+            }
+        }
+        Log.d(TAG, "下载详情: 请求 ${doubanIds.size} 条，命中 ${result.size} 条")
+        result
+    }
+
+    /** 下载单条详情 */
+    suspend fun downloadDetail(doubanId: String): DoubanDetailCacheEntry? = withContext(Dispatchers.IO) {
+        val shard = shardPrefix(doubanId)
+        val shardEntries = downloadShard(shard) ?: return@withContext null
+        shardEntries[doubanId]
+    }
+
+    private suspend fun downloadShard(shard: String): Map<String, DoubanDetailCacheEntry>? {
+        val path = buildPath(shard)
+        return try {
+            val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
+            if (!resp.isSuccessful) {
+                if (resp.code() != 404) Log.w(TAG, "下载分片 $shard 失败: ${resp.code()}")
+                return null
+            }
+            val body = parseContentResponse(resp.body()) ?: return null
+            val base64Content = body.content ?: return null
+            val encrypted = String(
+                android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
+                Charsets.UTF_8
+            )
+            val decrypted = AesCrypto.decrypt(encrypted) ?: return null
+            parseShardPayload(decrypted)
+        } catch (e: Exception) {
+            Log.w(TAG, "下载分片 $shard 异常: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * 拉取全局池中指定 doubanId 的详情并合并到本地缓存（不覆盖本地已有）。
+     *
+     * 用于同步流程阶段 1 前置查询：本地缓存未命中时，先查全局池，命中则写入本地缓存秒回，
+     * 避免对豆瓣网站的爬取请求。
+     *
+     * @param doubanIds 需要补全详情的 doubanId 列表
+     * @param detailCache 本地持久化缓存
+     * @return 命中并写入本地缓存的条目数
+     */
+    suspend fun fetchAndMergeToLocal(
+        doubanIds: List<String>,
+        detailCache: PersistentTtlCache<DoubanDetailCacheEntry>
+    ): Int = withContext(Dispatchers.IO) {
+        if (doubanIds.isEmpty()) return@withContext 0
+        // 过滤掉本地已有的（避免不必要的分片 GET）
+        val needFetch = doubanIds.filter { detailCache.get(it) == null }
+        if (needFetch.isEmpty()) return@withContext 0
+
+        val cloudEntries = downloadDetails(needFetch)
+        if (cloudEntries.isEmpty()) return@withContext 0
+
+        // 写入本地缓存（不覆盖已有，虽然前面过滤了，但并发可能写入）
+        var written = 0
+        for ((id, entry) in cloudEntries) {
+            if (detailCache.get(id) == null) {
+                detailCache.put(id, entry)
+                written++
+            }
+        }
+        Log.d(TAG, "全局池 → 本地缓存: 请求 ${needFetch.size}，命中 ${cloudEntries.size}，写入 $written")
+        written
+    }
+}

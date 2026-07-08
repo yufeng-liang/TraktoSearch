@@ -1084,4 +1084,5 @@ Config:
     <string name="settings_account_douban_logout">Logout</string>
     <string name="settings_douban_logout_done">Douban logged out</string>
     <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
+    <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and Douban sync</string>
 </resources>

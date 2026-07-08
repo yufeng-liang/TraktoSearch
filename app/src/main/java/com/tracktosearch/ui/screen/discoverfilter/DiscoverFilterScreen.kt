@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -609,7 +610,7 @@ private fun DiscoverFilterListItem(
         (item.first_air_date ?: "").takeIf { it.length >= 4 }?.substring(0, 4)
     }
     val posterUrl = if (!item.poster_path.isNullOrBlank()) {
-        "https://image.tmdb.org/t/p/w200${item.poster_path}"
+        TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W200)
     } else null
 
     // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）

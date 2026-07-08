@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
@@ -13,6 +14,7 @@ import com.tracktosearch.data.util.persistentTtlCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
@@ -31,7 +33,7 @@ class TmdbRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
-        private const val IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+        private val IMAGE_BASE_URL = TmdbImageUrls.W500
         private const val TTL_DETAIL = Long.MAX_VALUE       // 详情（海报路径、tmdbId、imdbId 等不变字段）永久缓存
         private const val TTL_CREDITS = Long.MAX_VALUE      // 演职员信息永久缓存（头像、姓名、角色不变）
         private const val TTL_SEARCH = 60 * 60 * 1000L       // 搜索/ID转换 1 小时
@@ -345,7 +347,7 @@ class TmdbRepository @Inject constructor(
                 }?.title
                 cnTitle ?: originalTitle
             } else originalTitle
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             originalTitle
         }
     }
@@ -377,7 +379,7 @@ class TmdbRepository @Inject constructor(
                 }?.title
                 cnTitle ?: originalName
             } else originalName
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             originalName
         }
     }
@@ -413,7 +415,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.also { creditsCache.put(key, it) }
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -431,7 +433,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.also { reviewsCache.put(key, it) }
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -444,7 +446,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.also { personDetailCache.put(key, it) }
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -458,7 +460,7 @@ class TmdbRepository @Inject constructor(
                 personMovieCreditsCache.put(key, result)
                 result
             }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
         val start = (page - 1) * PERSON_CREDITS_PAGE_SIZE
@@ -476,7 +478,7 @@ class TmdbRepository @Inject constructor(
                 personTvCreditsCache.put(key, result)
                 result
             }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
         val start = (page - 1) * PERSON_CREDITS_PAGE_SIZE
@@ -502,7 +504,7 @@ class TmdbRepository @Inject constructor(
                 else -> Locale.SIMPLIFIED_CHINESE
             }
             Locale(lang.language, code).displayCountry.ifEmpty { code }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             code
         }
     }
@@ -518,7 +520,7 @@ class TmdbRepository @Inject constructor(
                     searchMovieCache.put(key, it)
                 }
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -530,7 +532,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.results ?: emptyList()
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -540,7 +542,7 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.searchMulti(query = query, language = getTmdbLanguage())
             if (response.isSuccessful) response.body() else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -559,7 +561,7 @@ class TmdbRepository @Inject constructor(
                 trendingMoviesCache.put(key, results)
                 results
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -575,7 +577,7 @@ class TmdbRepository @Inject constructor(
                 popularMoviesCache.put(key, results)
                 results
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -587,7 +589,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.results ?: emptyList()
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -603,7 +605,7 @@ class TmdbRepository @Inject constructor(
                 upcomingMoviesCache.put(key, results)
                 results
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -615,7 +617,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.results ?: emptyList()
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -631,7 +633,7 @@ class TmdbRepository @Inject constructor(
                 topRatedMoviesCache.put(key, results)
                 results
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -643,7 +645,7 @@ class TmdbRepository @Inject constructor(
             if (response.isSuccessful) {
                 response.body()?.results ?: emptyList()
             } else emptyList()
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -659,7 +661,7 @@ class TmdbRepository @Inject constructor(
                 detail?.let { movieDetailCache.put(key, it) }
                 detail
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -669,7 +671,7 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.getTvDetail(tvId, language = getTmdbLanguage())
             if (response.isSuccessful) response.body() else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -680,7 +682,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getMovieVideos(id, lang)
             if (response.isSuccessful) response.body()?.results ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     suspend fun getTvVideos(id: Int): List<TmdbVideo> {
@@ -689,7 +691,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getTvVideos(id, lang)
             if (response.isSuccessful) response.body()?.results ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     suspend fun getMovieImages(id: Int): List<TmdbImage> {
@@ -697,7 +699,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getMovieImages(id, "zh,null")
             if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     suspend fun getTvImages(id: Int): List<TmdbImage> {
@@ -705,7 +707,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getTvImages(id, "zh,null")
             if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     /** 获取人物图片（TMDB profiles） */
@@ -715,11 +717,11 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.getPersonImages(personId)
             if (response.isSuccessful) {
-                val urls = response.body()?.profiles?.map { "https://image.tmdb.org/t/p/h632${it.file_path}" } ?: emptyList()
+                val urls = response.body()?.profiles?.map { TmdbImageUrls.H632 + it.file_path } ?: emptyList()
                 personImagesCache.put(key, urls)
                 urls
             } else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     /** 获取人物被标注的图片（TMDB tagged images） */
@@ -729,11 +731,11 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.getPersonTaggedImages(personId, page = 1)
             if (response.isSuccessful) {
-                val urls = response.body()?.results?.map { "https://image.tmdb.org/t/p/w500${it.file_path}" } ?: emptyList()
+                val urls = response.body()?.results?.map { TmdbImageUrls.W500 + it.file_path } ?: emptyList()
                 personTaggedImagesCache.put(key, urls)
                 urls
             } else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     /** 获取相似电影（TMDB） */
@@ -742,7 +744,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getSimilarMovies(tmdbId, language = getTmdbLanguage())
             if (response.isSuccessful) response.body()?.results ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     /** 获取相似剧集（TMDB） */
@@ -751,7 +753,7 @@ class TmdbRepository @Inject constructor(
             val response = tmdbApiService.getSimilarShows(tmdbId, language = getTmdbLanguage())
             if (response.isSuccessful) response.body()?.results ?: emptyList()
             else emptyList()
-        } catch (_: Exception) { emptyList() }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
     }
 
     /** 获取系列信息（TMDB） */
@@ -759,7 +761,7 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.getCollection(collectionId, language = getTmdbLanguage())
             if (response.isSuccessful) response.body() else null
-        } catch (_: Exception) { null }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
     }
 
     /** 获取电视剧季详情（用于本地化集标题） */
@@ -767,7 +769,7 @@ class TmdbRepository @Inject constructor(
         return try {
             val response = tmdbApiService.getTvSeasonDetail(tvId, seasonNumber, language = getTmdbLanguage())
             if (response.isSuccessful) response.body() else null
-        } catch (_: Exception) { null }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
     }
 
     // ========== Discover API：按维度筛选影视 ==========
@@ -847,7 +849,7 @@ class TmdbRepository @Inject constructor(
                 val body = response.body() ?: TmdbSearchResponse()
                 DiscoverPage(body.results, body.total_pages, body.total_results)
             } else DiscoverPage(emptyList(), 0, 0)
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             DiscoverPage(emptyList(), 0, 0)
         }
     }

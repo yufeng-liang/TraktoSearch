@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.UpdateDialog
@@ -64,6 +65,12 @@ import javax.inject.Inject
 @InstallIn(SingletonComponent::class)
 interface DefaultTabEntryPoint {
     fun defaultTabStorage(): com.tracktosearch.data.local.DefaultTabStorage
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface GuestModeEntryPoint {
+    fun guestModeStorage(): com.tracktosearch.data.local.GuestModeStorage
 }
 
 object Routes {
@@ -163,6 +170,9 @@ fun AppNavigation(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
                                 onLoginSuccess()
+                                // 登录成功后清除访客模式标记
+                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
+                                scope.launch { guestModeStorage.setGuestMode(false) }
                                 // 新用户（未完成新手引导）登录后默认进搜索页(0)，避免我的页无谓加载 watchlist
                                 // 老用户默认进我的页(2)查看 watchlist
                                 scope.launch {
@@ -175,6 +185,9 @@ fun AppNavigation(
                                 }
                             },
                             onGuestMode = {
+                                // 持久化访客模式状态，跨 App 重启保留
+                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
+                                scope.launch { guestModeStorage.setGuestMode(true) }
                                 currentStartDest = Routes.MAIN
                                 navController.navigate(Routes.MAIN) {
                                     popUpTo(0) { inclusive = true }
@@ -266,17 +279,18 @@ fun AppNavigation(
                                 onDismiss = { pendingCount = 0 },
                                 onContinue = {
                                     // 继续同步:走 startResume,跳过列表爬取
+                                    // 留在 MainScreen，Watchlist 横幅会显示进度
                                     pendingCount = 0
-                                    navController.navigate(Routes.DOUBAN_LOGIN)
                                     doubanSyncManager.startResume()
                                 },
                                 onFullSync = {
-                                    // 完整同步:清空 pending items,走 startSync
+                                    // 完整同步:清空 pending items,走 FULL_REWRITE
+                                    // 留在 MainScreen，Watchlist 横幅会显示进度
                                     pendingCount = 0
                                     scope.launch {
                                         doubanSyncManager.clearPendingItems()
+                                        doubanSyncManager.startSync(SyncMode.FULL_REWRITE)
                                     }
-                                    navController.navigate(Routes.DOUBAN_LOGIN)
                                 }
                             )
                         }
@@ -330,7 +344,8 @@ fun AppNavigation(
                                 navController.navigate(Routes.DISCOVER_FILTER)
                             },
                             onDoubanResync = {
-                                navController.navigate(Routes.DOUBAN_LOGIN)
+                                // 不再导航到 DoubanLoginScreen
+                                // MainScreen 内部会切换到 Watchlist tab 显示同步横幅
                             },
                             onDoubanFailures = {
                                 navController.navigate(Routes.DOUBAN_FAILURES)

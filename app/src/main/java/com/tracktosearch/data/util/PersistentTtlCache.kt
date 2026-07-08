@@ -110,6 +110,69 @@ class PersistentTtlCache<T>(
     }
 
     /**
+     * 从磁盘 DataStore 导出本缓存所有条目（用于云端同步上传）。
+     *
+     * 直接读 DataStore 而非内存 cache，确保拿到磁盘上所有条目
+     * （内存 cache 可能因 LRU 淘汰丢失部分条目，但磁盘是完整的）。
+     *
+     * @return key → value 映射；磁盘读取失败返回空 Map
+     */
+    suspend fun snapshotFromDisk(): Map<String, T> {
+        return try {
+            val prefs = dataStore.data.first()
+            val result = mutableMapOf<String, T>()
+            prefs.asMap().forEach { (key, value) ->
+                val keyStr = key.name
+                if (!keyStr.startsWith("$keyPrefix:")) return@forEach
+                val cacheKey = keyStr.removePrefix("$keyPrefix:")
+                val jsonStr = value as? String ?: return@forEach
+                try {
+                    result[cacheKey] = json.decodeFromString(serializer, jsonStr)
+                } catch (_: Exception) {
+                    // 反序列化失败跳过
+                }
+            }
+            result
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    /**
+     * 批量写入条目（内存 + 磁盘），用于云端同步下载后合并到本地缓存。
+     * 仅写入不存在的 key（已有数据不覆盖，避免本地更新的数据被云端旧数据覆盖）。
+     *
+     * @param entries key → value 映射
+     * @param overwrite true=覆盖已有 key；false=只写入不存在的 key（默认）
+     * @return 实际写入的条目数
+     */
+    suspend fun putAll(entries: Map<String, T>, overwrite: Boolean = false): Int {
+        if (entries.isEmpty()) return 0
+        var written = 0
+        // 批量写入 DataStore（一次事务）
+        try {
+            dataStore.edit { prefs ->
+                entries.forEach { (key, value) ->
+                    val existing = prefs[stringPreferencesKey("$keyPrefix:$key")]
+                    if (!overwrite && existing != null) return@forEach  // 不覆盖已有
+                    val jsonStr = json.encodeToString(serializer, value)
+                    prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
+                    written++
+                }
+            }
+        } catch (_: Exception) {
+            // 磁盘写入失败静默
+        }
+        // 同步写入内存缓存
+        entries.forEach { (key, value) ->
+            if (overwrite || get(key) == null) {
+                super.put(key, value)
+            }
+        }
+        return written
+    }
+
+    /**
      * 估算本缓存在 DataStore 中占用的字节数（按 JSON 字符串长度近似）。
      * 用于设置页「缓存管理」展示各项大小。
      */

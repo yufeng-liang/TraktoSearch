@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -70,7 +71,7 @@ fun MovieCard(
     // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
     val activeClickToken = LocalActivePosterClickToken.current
     // 记录"我自己被点击时"获得的 token
-    var myClickToken by remember { mutableStateOf(0) }
+    var myClickToken by rememberSaveable { mutableStateOf(0) }
     // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
     // isCurrentTab 避免 HorizontalPager 常驻的非当前 tab 同 tmdbId 海报参与匹配
     // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)

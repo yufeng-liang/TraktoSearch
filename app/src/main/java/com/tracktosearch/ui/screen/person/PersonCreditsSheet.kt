@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.person
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,7 +82,7 @@ internal fun AllMovieCreditsSheet(
                         title = credit.title,
                         subtitle = credit.character,
                         year = credit.release_date.take(4),
-                        posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
                         isResolving = resolvingTmdbId == credit.id,
                         onClick = {
                             viewModel.resolveAndNavigate(
@@ -162,7 +163,7 @@ internal fun AllTvCreditsSheet(
                         title = credit.name,
                         subtitle = credit.character,
                         year = credit.first_air_date.take(4),
-                        posterUrl = credit.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                        posterUrl = credit.poster_path?.let { TmdbImageUrls.build(it) },
                         isResolving = resolvingTmdbId == credit.id,
                         onClick = {
                             viewModel.resolveAndNavigate(

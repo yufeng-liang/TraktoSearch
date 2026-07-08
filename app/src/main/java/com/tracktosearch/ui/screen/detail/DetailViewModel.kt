@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.remote.dto.DiskType
 import com.tracktosearch.data.remote.dto.ResourceItem
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import com.tracktosearch.data.remote.trakt.dto.TraktCommentUser
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
@@ -716,7 +717,7 @@ class DetailViewModel @Inject constructor(
 
                 // 合并截图：TMDB backdrops + Trakt fanart（去重）
                 val backdropUrls = images
-                    .map { "https://image.tmdb.org/t/p/w780${it.file_path}" }
+                    .map { TmdbImageUrls.build(it.file_path, TmdbImageUrls.W780) }
                     .toMutableList()
                 val traktFanartUrls = traktImagesData.fanart
                     .map { if (it.startsWith("http")) it else "https://$it" }

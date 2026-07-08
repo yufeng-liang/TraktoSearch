@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
@@ -8,10 +9,12 @@ import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemDao
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemEntity
+import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -87,6 +90,10 @@ class DoubanSyncManager @Inject constructor(
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
     private val doubanSyncPendingItemDao: DoubanSyncPendingItemDao,
     private val cloudFailureSyncManager: CloudFailureSyncManager,
+    private val cloudPersonalSyncManager: CloudPersonalSyncManager,
+    private val cloudDetailsPoolManager: CloudDetailsPoolManager,
+    private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val tokenStorage: TokenStorage
 ) {
     private val _progress = MutableStateFlow(DoubanSyncProgress())
@@ -101,8 +108,34 @@ class DoubanSyncManager @Inject constructor(
     @Volatile
     private var cancelled = false
 
-    /** 取消正在进行的同步 */
-    fun cancel() { cancelled = true }
+    /**
+     * 同步过程中新爬取的豆瓣详情 doubanId 集合（非缓存命中的）。
+     * 同步完成时一次性批量上传到全局详情池，避免每批次上传导致的多次网络请求。
+     * 线程安全：syncBatchToTrakt 的详情协程并发写入。
+     */
+    private val dirtyDetailIds = java.util.Collections.synchronizedSet(mutableSetOf<String>())
+
+    /**
+     * 取消正在进行的同步。
+     *
+     * 取消后异步上传当前进度到云端（pending items + synced items + sync_meta + dirty 详情池），
+     * 这样 B 手机登录同账号选择增量同步时可接续进度，避免全量爬取豆瓣。
+     * 上传失败不阻塞取消流程。
+     */
+    fun cancel() {
+        cancelled = true
+        // 异步上传当前进度（不阻塞取消，失败只记日志）
+        appScope.launch {
+            runCatching {
+                cloudPersonalSyncManager.uploadAll(
+                    lastSyncMode = "CANCELLED",
+                    isFullComplete = false
+                )
+                cloudFailureSyncManager.uploadIfHasFailures()
+                uploadDirtyDetails()
+            }
+        }
+    }
 
     /** 同步是否在运行中 */
     fun isRunning(): Boolean = syncJob?.isActive == true
@@ -142,6 +175,7 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(forceOverwrite: Boolean = false): Boolean {
         if (isRunning()) return false
         cancelled = false
+        dirtyDetailIds.clear()
         syncJob = appScope.launch {
             if (!checkTraktAvailable()) return@launch
             runSyncLegacy(forceOverwrite)
@@ -158,6 +192,7 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(mode: SyncMode): Boolean {
         if (isRunning()) return false
         cancelled = false
+        dirtyDetailIds.clear()
         syncJob = appScope.launch {
             if (!checkTraktAvailable()) return@launch
             runSync(mode)
@@ -180,6 +215,7 @@ class DoubanSyncManager @Inject constructor(
     fun startResume(): Boolean {
         if (isRunning()) return false
         cancelled = false
+        dirtyDetailIds.clear()
         syncJob = appScope.launch {
             if (!checkTraktAvailable()) return@launch
             runResume()
@@ -221,6 +257,7 @@ class DoubanSyncManager @Inject constructor(
     ): Boolean {
         if (isRunning()) return false
         cancelled = false
+        dirtyDetailIds.clear()
         syncJob = appScope.launch {
             if (!checkTraktAvailable()) return@launch
             runRetry(failures, selectedReasons)
@@ -246,15 +283,37 @@ class DoubanSyncManager @Inject constructor(
         val startTime = System.currentTimeMillis()
         _progress.value = _progress.value.copy(isRunning = true, startTimeMs = startTime, phase = "准备同步", isRetry = false)
 
+        // 跨设备云端同步：拉取 A 手机已同步的数据和进度（B 手机首次登录场景）
+        // forceOverwrite=true（完整重写）时跳过拉取，因为要重新处理全部条目
+        if (!forceOverwrite) {
+            _progress.value = _progress.value.copy(phase = "拉取云端同步数据")
+            pullFromCloudBeforeSync()
+        }
+
         // 加载 Trakt 已有标记缓存（用于冲突检测）
         traktRepository.loadWatchlistWatchedIds()
         val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
 
         // 加载已同步记录（断点续传：跳过已同步条目）
+        // 拉取云端后本地 synced_items 已包含 A 手机数据，B 手机可跳过已同步条目
         val syncedIds = if (!forceOverwrite) {
             doubanSyncedItemDao.getAllSyncedDoubanIds().toSet()
         } else {
             emptySet()
+        }
+
+        // 「近期跳过列表」策略：forceOverwrite=false 且云端最近完整同步 < 7 天且无 pending
+        // → 跳过豆瓣列表爬取（数据已由云端拉取，避免对豆瓣的请求）
+        if (!forceOverwrite && checkSkipListCrawl()) {
+            _progress.value = DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                phase = "已跳过列表爬取（数据来自云端，7天内已同步）",
+                startTimeMs = startTime,
+                skippedCount = syncedIds.size,
+                isRetry = false
+            )
+            return
         }
 
         val allFailed = mutableListOf<DoubanSyncFailure>()
@@ -378,8 +437,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
-        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
-        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+        // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
+        uploadToCloudAfterSync(mode = "LEGACY", isFullComplete = !cancelled)
     }
 
     private suspend fun runSyncIncremental(includeStatusChanges: Boolean) {
@@ -396,17 +455,34 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
 
+        // 跨设备云端同步：拉取 A 手机已同步的数据和进度（B 手机增量同步场景）
+        _progress.value = _progress.value.copy(phase = "拉取云端同步数据")
+        pullFromCloudBeforeSync()
+
         traktRepository.loadWatchlistWatchedIds()
         val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
 
-        // 模式 B:加载已同步记录用于状态对比
-        val syncedItemsList = if (includeStatusChanges) {
-            doubanSyncedItemDao.getAllSyncedItems()
-        } else {
-            emptyList()
-        }
+        // 加载已同步记录（模式 A 和模式 B 都需要）：
+        // - 模式 A：跳过已同步条目（与 forceOverwrite=false 语义一致，避免重复 POST Trakt）
+        // - 模式 B：额外用于状态变化对比（WISH↔COLLECT）
+        // 拉取云端后本地 synced_items 已包含 A 手机数据，B 手机可跳过已同步条目
+        val syncedItemsList = doubanSyncedItemDao.getAllSyncedItems()
         val syncedItemsMap = syncedItemsList.associateBy { it.doubanId }
         val syncedIds = syncedItemsMap.keys
+
+        // 「近期跳过列表」策略：模式 B 需要爬列表检测状态变化，不跳过；
+        // 仅模式 A 且云端最近完整同步 < 7 天且无 pending → 跳过列表爬取
+        if (!includeStatusChanges && checkSkipListCrawl()) {
+            _progress.value = DoubanSyncProgress(
+                isRunning = false,
+                isComplete = true,
+                phase = "已跳过列表爬取（数据来自云端，7天内已同步）",
+                startTimeMs = startTime,
+                skippedCount = syncedIds.size,
+                isRetry = false
+            )
+            return
+        }
 
         val allFailed = mutableListOf<DoubanSyncFailure>()
         val recentFailuresBuffer = ArrayDeque<DoubanSyncFailure>()
@@ -538,8 +614,9 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
-        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
-        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+        // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
+        val mode = if (includeStatusChanges) "INCREMENTAL_WITH_CHANGES" else "INCREMENTAL_ONLY"
+        uploadToCloudAfterSync(mode = mode, isFullComplete = !cancelled)
     }
 
     /**
@@ -782,8 +859,8 @@ class DoubanSyncManager @Inject constructor(
             isRetry = false
         )
         _progress.value = finalProgress
-        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
-        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+        // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
+        uploadToCloudAfterSync(mode = "RESUME", isFullComplete = !cancelled)
     }
 
     /**
@@ -896,8 +973,9 @@ class DoubanSyncManager @Inject constructor(
             isRetry = true
         )
         _progress.value = finalProgress
-        // 同步完成后:自动上传失败项到云端(失败不阻塞,只记日志)
-        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+        // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
+        // 重试不算完整同步（仅处理失败项），不更新 lastFullSyncAt，不上传 id_mappings
+        uploadToCloudAfterSync(mode = "RETRY", isFullComplete = false)
     }
 
     /**
@@ -923,6 +1001,89 @@ class DoubanSyncManager @Inject constructor(
             doubanSyncFailureDao.deleteByStatus(status.path)
             doubanSyncFailureDao.insertAll(items.map { it.toEntity() })
         }
+    }
+
+    /**
+     * 同步完成后上传个人数据到云端（跨设备同步）。
+     *
+     * 上传内容：synced_items、pending_items、sync_meta，可选 id_mappings。
+     * 同时上传失败项（复用 CloudFailureSyncManager）。
+     * 失败不阻塞主流程，只记日志。
+     *
+     * @param mode 同步模式标识（用于云端 sync_meta 记录）
+     * @param isFullComplete true=完整同步完成（更新 lastFullSyncAt，触发 id_mappings 上传）
+     */
+    private suspend fun uploadToCloudAfterSync(mode: String, isFullComplete: Boolean) {
+        // 先记录本地 sync_meta
+        runCatching { doubanSyncMetaStorage.recordLocalSync(mode, isFullComplete) }
+        // 上传个人数据
+        runCatching {
+            cloudPersonalSyncManager.uploadAll(
+                lastSyncMode = mode,
+                isFullComplete = isFullComplete,
+                uploadIdMappings = isFullComplete  // 仅完整同步完成时上传 IMDb 映射
+            )
+        }
+        // 上传失败项（保留原有逻辑）
+        runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
+        // 一次性批量上传 dirty 详情到全局池
+        runCatching { uploadDirtyDetails() }
+    }
+
+    /**
+     * 将同步过程中新爬取的 dirty 详情批量上传到全局详情池。
+     *
+     * 从 [dirtyDetailIds] 收集 doubanId，查本地缓存获取详情数据，
+     * 按分片聚合后一次性上传（CloudDetailsPoolManager 内部按分片 GET→合并→PUT）。
+     * 上传后清空 dirty 集合。
+     */
+    private suspend fun uploadDirtyDetails() {
+        if (dirtyDetailIds.isEmpty()) return
+        val entries = mutableMapOf<String, DoubanDetailCacheEntry>()
+        val ids = dirtyDetailIds.toList()
+        dirtyDetailIds.clear()
+        for (id in ids) {
+            doubanDetailCache.get(id)?.let { entries[id] = it }
+        }
+        if (entries.isNotEmpty()) {
+            cloudDetailsPoolManager.uploadDetails(entries)
+        }
+    }
+
+    /**
+     * 同步开始前从云端拉取个人数据并合并到本地（B 手机跨设备接续）。
+     *
+     * 拉取内容：synced_items、pending_items、id_mappings、sync_meta。
+     * 合并后本地即拥有 A 手机的同步进度，增量同步时可跳过已同步条目，
+     * 配合 [checkSkipListCrawl] 决策可跳过豆瓣列表爬取。
+     *
+     * 失败不阻塞主流程，只记日志。
+     *
+     * @return PullResult，失败时返回空的 PullResult
+     */
+    private suspend fun pullFromCloudBeforeSync(): CloudPersonalSyncManager.PullResult {
+        return runCatching { cloudPersonalSyncManager.downloadAndMerge() }
+            .getOrElse {
+                CloudPersonalSyncManager.PullResult()
+            }
+    }
+
+    /**
+     * 判断是否可跳过豆瓣列表爬取（「近期跳过列表」策略核心）。
+     *
+     * 条件：
+     * 1. 上次完整同步距今 < 7 天（sync_meta.canSkipListCrawl）
+     * 2. 本地 pending items 为空（若有未处理完的待续传数据，应先处理 pending）
+     *
+     * 满足条件时跳过列表爬取，直接返回（不发起任何豆瓣请求），
+     * 用户已同步的数据由云端拉取获得，新增条目等下次超过阈值时再校验。
+     *
+     * @return true=可跳过列表爬取；false=需要爬列表
+     */
+    private suspend fun checkSkipListCrawl(): Boolean {
+        val pendingCount = doubanSyncPendingItemDao.count()
+        if (pendingCount > 0) return false
+        return doubanSyncMetaStorage.canSkipListCrawl()
     }
 
     /** 单条同步结果 */
@@ -977,6 +1138,14 @@ class DoubanSyncManager @Inject constructor(
             return BatchSyncResult(0, emptyList(), skippedCount, 0)
         }
 
+        // ===== 全局详情池前置查询：批量从云端拉取本批次 doubanId 的详情，写入本地缓存（不覆盖已有） =====
+        // 这样阶段 1 的 fetchDetail 会命中本地缓存秒回，避免对豆瓣的反爬爬取。
+        // 失败不阻塞主流程（最坏情况是阶段1重新爬取豆瓣详情页）。
+        runCatching {
+            val pendingDoubanIds = pending.map { it.doubanId }
+            cloudDetailsPoolManager.fetchAndMergeToLocal(pendingDoubanIds, doubanDetailCache)
+        }
+
         // 用 Channel 连接阶段 1(详情页)→ 阶段 2(Trakt 查询)
         val detailChannel = Channel<SyncResolve>(capacity = pending.size)
         val detailSemaphore = Semaphore(3)
@@ -996,6 +1165,10 @@ class DoubanSyncManager @Inject constructor(
                             doubanRepository.fetchDetail(item.doubanUrl, cookie, item.title) { _, _ -> }
                         }
                         if (isCacheHit) detailCacheHit.incrementAndGet()
+                        else {
+                            // 非缓存命中 = 新爬取的详情，标记为 dirty 供同步完成后批量上传到全局池
+                            dirtyDetailIds.add(item.doubanId)
+                        }
                         if (detail == null) {
                             val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                             synchronized(failed) { failed.add(failure) }
@@ -1062,6 +1235,7 @@ class DoubanSyncManager @Inject constructor(
             traktJobs.awaitAll()
         }
 
+        // 详情池上传已优化：不再每批次上传，改为同步完成时一次性批量上传（uploadToCloudAfterSync）
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, detailCacheHit.get())
 
         val withTraktId = resolvedTraktList

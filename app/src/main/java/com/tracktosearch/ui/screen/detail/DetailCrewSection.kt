@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -93,7 +94,7 @@ internal fun CrewSection(
         ) {
             // 导演
             itemsIndexed(directors, key = { index, person -> "director_${person.id}_$index" }) { _, person ->
-                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_director_tag),
@@ -104,7 +105,7 @@ internal fun CrewSection(
             }
             // 演员
             itemsIndexed(cast, key = { index, person -> "cast_${person.id}_${person.character}_$index" }) { _, person ->
-                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                 CastCard(
                     name = person.name,
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
@@ -115,7 +116,7 @@ internal fun CrewSection(
             }
             // 编剧
             itemsIndexed(writers, key = { index, person -> "writer_${person.id}_$index" }) { _, person ->
-                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_writer_tag),
@@ -126,7 +127,7 @@ internal fun CrewSection(
             }
             // 制片人
             itemsIndexed(producers, key = { index, person -> "producer_${person.id}_$index" }) { _, person ->
-                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                 CastCard(
                     name = person.name,
                     role = stringResource(R.string.detail_producer_tag),
@@ -279,7 +280,7 @@ internal fun FullCastCrewSheet(
                 if (directors.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_director_tag)} (${directors.size})") }
                     itemsIndexed(directors, key = { index, person -> "director_${person.id}_$index" }) { _, person ->
-                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                        val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -294,7 +295,7 @@ internal fun FullCastCrewSheet(
                 if (cast.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_actor)} (${cast.size})") }
                     itemsIndexed(cast, key = { index, person -> "cast_${person.id}_${person.character}_$index" }) { _, person ->
-                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                        val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -309,7 +310,7 @@ internal fun FullCastCrewSheet(
                 if (writers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_writer_tag)} (${writers.size})") }
                     itemsIndexed(writers, key = { index, person -> "writer_${person.id}_$index" }) { _, person ->
-                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                        val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,
@@ -324,7 +325,7 @@ internal fun FullCastCrewSheet(
                 if (producers.isNotEmpty()) {
                     item { SectionHeader("${stringResource(R.string.detail_producer_tag)} (${producers.size})") }
                     itemsIndexed(producers, key = { index, person -> "producer_${person.id}_$index" }) { _, person ->
-                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                        val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                         FullCastItem(
                             name = person.name,
                             originalName = person.original_name,

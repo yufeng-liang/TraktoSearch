@@ -16,7 +16,6 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -45,7 +44,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -57,6 +55,8 @@ import androidx.core.os.LocaleListCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
@@ -105,6 +105,11 @@ class MainActivity : AppCompatActivity() {
     companion object {
         // 最小 splash 显示时间（动画时长），实际切换条件 = max(最小时间, 预取数据就绪)
         private const val MIN_SPLASH_DURATION_MS = 800L
+        // 启动动画时序：各元素入场延迟（ms）
+        private const val SPLASH_GLOW_DELAY_MS = 100L
+        private const val SPLASH_TITLE_DELAY_MS = 200L
+        private const val SPLASH_SLOGAN_DELAY_MS = 400L
+        private const val SPLASH_VERSION_DELAY_MS = 600L
     }
 
     @Inject
@@ -262,31 +267,31 @@ class MainActivity : AppCompatActivity() {
                         }
                         // 光晕：从图标中心向外扩散后消失
                         launch {
-                            delay(100)
+                            delay(SPLASH_GLOW_DELAY_MS)
                             glowScale.animateTo(2.8f, tween(900, easing = Easing { it * it }))
                             glowAlpha.animateTo(0f, tween(900))
                         }
                         // App 名：弹性上移 + 淡入
                         launch {
-                            delay(200)
+                            delay(SPLASH_TITLE_DELAY_MS)
                             titleAlpha.animateTo(1f, tween(500))
                         }
                         launch {
-                            delay(200)
+                            delay(SPLASH_TITLE_DELAY_MS)
                             titleOffset.animateTo(0f, spring(dampingRatio = 0.7f, stiffness = 200f))
                         }
                         // Slogan：淡入 + 轻微上移
                         launch {
-                            delay(400)
+                            delay(SPLASH_SLOGAN_DELAY_MS)
                             sloganAlpha.animateTo(1f, tween(500))
                         }
                         launch {
-                            delay(400)
+                            delay(SPLASH_SLOGAN_DELAY_MS)
                             sloganOffset.animateTo(0f, tween(500, easing = Easing { 1f - (1f - it).pow(3) }))
                         }
                         // 版本号：淡入
                         launch {
-                            delay(600)
+                            delay(SPLASH_VERSION_DELAY_MS)
                             versionAlpha.animateTo(1f, tween(500))
                         }
                     }
@@ -348,23 +353,24 @@ class MainActivity : AppCompatActivity() {
                                         )
                                 )
                                 val context = LocalContext.current
-                                val launcherBitmap = remember {
-                                    android.graphics.BitmapFactory.decodeResource(
-                                        context.resources, R.drawable.ic_search_cloud
-                                    )?.asImageBitmap()
+                                // 开屏图标改用 Coil 异步加载并按显示尺寸(211dp)降采样，
+                                // 替代主线程 BitmapFactory.decodeResource（原图 1536x1536 同步解码曾造成启动期约 828ms 卡顿）。
+                                val iconRequest = remember {
+                                    ImageRequest.Builder(context)
+                                        .data(R.drawable.ic_search_cloud)
+                                        .crossfade(false)
+                                        .build()
                                 }
-                                if (launcherBitmap != null) {
-                                    Image(
-                                        bitmap = launcherBitmap,
-                                        contentDescription = "App Icon",
-                                        modifier = Modifier
-                                            .size(211.dp)
-                                            .scale(iconScale.value)
-                                            .alpha(iconAlpha.value)
-                                            .clip(RoundedCornerShape(24.dp)),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
+                                AsyncImage(
+                                    model = iconRequest,
+                                    contentDescription = "App Icon",
+                                    modifier = Modifier
+                                        .size(211.dp)
+                                        .scale(iconScale.value)
+                                        .alpha(iconAlpha.value)
+                                        .clip(RoundedCornerShape(24.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
                             }
                             Spacer(modifier = Modifier.height(20.dp))
                             Text(

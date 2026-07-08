@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.dto.ResourceType
 import com.tracktosearch.data.repository.ResourceRepository
@@ -231,7 +232,7 @@ class TraktSearchViewModel @Inject constructor(
                             withTimeoutOrNull(8_000) {
                                 val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
                                 val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                                val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                                 TraktSearchUiItem(
                                     traktId = traktPerson?.ids?.trakt ?: 0,
                                     tmdbId = person.id,
@@ -266,7 +267,7 @@ class TraktSearchViewModel @Inject constructor(
                                     tmdbId = r.id,
                                     title = r.name ?: r.title ?: "",
                                     displayTitle = r.title ?: r.name ?: "",
-                                    posterUrl = r.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                    posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
                                     year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
                                 )
                             }
@@ -285,7 +286,7 @@ class TraktSearchViewModel @Inject constructor(
                                     tmdbId = r.id,
                                     title = r.name ?: r.title ?: "",
                                     displayTitle = r.title ?: r.name ?: "",
-                                    posterUrl = r.poster_path?.let { "https://image.tmdb.org/t/p/w500$it" },
+                                    posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
                                     year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
                                 )
                             }
@@ -307,7 +308,7 @@ class TraktSearchViewModel @Inject constructor(
                                 withTimeoutOrNull(8_000) {
                                     val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
                                     val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                                    val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                    val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                                     TraktSearchUiItem(
                                         traktId = traktPerson?.ids?.trakt ?: 0,
                                         tmdbId = person.id,
@@ -417,7 +418,7 @@ class TraktSearchViewModel @Inject constructor(
                                 withTimeoutOrNull(8_000) {
                                     val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
                                     val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                                    val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                    val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                                     TraktSearchUiItem(
                                         traktId = traktPerson?.ids?.trakt ?: 0,
                                         tmdbId = person.id,
@@ -446,7 +447,7 @@ class TraktSearchViewModel @Inject constructor(
                                     withTimeoutOrNull(8_000) {
                                         val traktLookup = traktRepository.searchByTmdb(person.id, MediaType.PERSON)
                                         val traktPerson = traktLookup.getOrNull()?.firstOrNull()?.person
-                                        val profileUrl = person.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                                        val profileUrl = person.profile_path?.let { TmdbImageUrls.build(it) }
                                         TraktSearchUiItem(
                                             traktId = traktPerson?.ids?.trakt ?: 0,
                                             tmdbId = person.id,
@@ -615,7 +616,7 @@ class TraktSearchViewModel @Inject constructor(
                     val person = result.person ?: return@withPermit TraktSearchUiItem()
                     val tmdbId = person.ids.tmdb
                     val tmdbPerson = if (tmdbId > 0) tmdbRepository.getPersonDetail(tmdbId) else null
-                    val profileUrl = tmdbPerson?.profile_path?.let { "https://image.tmdb.org/t/p/w500$it" }
+                    val profileUrl = tmdbPerson?.profile_path?.let { TmdbImageUrls.build(it) }
                     TraktSearchUiItem(
                         traktId = person.ids.trakt,
                         tmdbId = tmdbId,
