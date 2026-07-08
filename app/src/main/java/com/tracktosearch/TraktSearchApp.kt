@@ -10,6 +10,7 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
+import coil.request.ImageRequest
 import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.config.RemoteConfigManager
@@ -65,6 +66,21 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 traktRepository.persistentCaches.forEach { it.loadFromDisk() }
                 doubanHotCache.loadFromDisk()
                 doubanDetailCache.loadFromDisk()
+            }
+            // 独立协程预热开屏图标到 Coil 内存缓存：按显示尺寸(211dp)降采样解码，
+            // 使 splash 的 AsyncImage 命中缓存秒显，避免异步加载时序冲突导致图标不显示
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                runCatching {
+                    val density = resources.displayMetrics.density
+                    val sizePx = (211 * density).toInt()
+                    coil.Coil.imageLoader(this@TraktSearchApp).execute(
+                        ImageRequest.Builder(this@TraktSearchApp)
+                            .data(R.drawable.ic_search_cloud)
+                            .size(sizePx)
+                            .crossfade(false)
+                            .build()
+                    )
+                }
             }
         }
     }

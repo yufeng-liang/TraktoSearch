@@ -152,8 +152,9 @@ class RemoteConfigManager @Inject constructor(
             if (combined.size < GCM_IV_LENGTH + GCM_TAG_LENGTH) return null
 
             val iv = combined.copyOfRange(0, GCM_IV_LENGTH)
-            val tag = combined.copyOfRange(combined.size - GCM_TAG_LENGTH, combined.size)
-            val ciphertext = combined.copyOfRange(GCM_IV_LENGTH, combined.size - GCM_TAG_LENGTH)
+            // Java GCM 契约: doFinal 输入必须是 ciphertext || tag,引擎从末尾 16 字节取 tag 校验
+            // 服务端封包格式: iv(12) || ciphertext || tag(16),故 [12, size) 即为所需
+            val cipherPayload = combined.copyOfRange(GCM_IV_LENGTH, combined.size)
 
             val keyBytes = hexToBytes(BuildConfig.CONFIG_AES_KEY)
             if (keyBytes.size != 32) return null
@@ -163,7 +164,7 @@ class RemoteConfigManager @Inject constructor(
 
             val cipher = Cipher.getInstance(CIPHER_ALGORITHM)
             cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
-            val decrypted = cipher.doFinal(ciphertext)
+            val decrypted = cipher.doFinal(cipherPayload)
             String(decrypted, StandardCharsets.UTF_8)
         } catch (e: Exception) {
             Log.w(TAG, "AES-GCM 解密失败", e)

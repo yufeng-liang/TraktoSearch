@@ -25,15 +25,20 @@
     </queries>
 
     <application
-        android:name=".TraktSearchApp"
-        android:allowBackup="false"
-        android:enableOnBackInvokedCallback="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.TraktToSearch"
-        android:usesCleartextTraffic="false">
+            android:name=".TraktSearchApp"
+            android:allowBackup="false"
+            android:enableOnBackInvokedCallback="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:supportsRtl="true"
+            android:theme="@style/Theme.TraktToSearch"
+            android:usesCleartextTraffic="false">
+
+        <!-- 极光推送默认通知图标，避免 JPushInterface.init 用 0 资源 ID 报 Invalid resource ID -->
+        <meta-data
+            android:name="JPUSH_DEFAULT_ICON"
+            android:resource="@mipmap/ic_launcher" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
