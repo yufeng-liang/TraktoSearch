@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -250,6 +251,20 @@ fun DetailScreen(
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
+            // 回调 lambda remember 化:避免每次重组都新建实例(与 MovieCard 一致),
+            // 减少分配并为后续按字段跳过重组打基础。置于 LazyColumn 之前(@Composable 上下文)。
+            val onToggleWatched = remember { { viewModel.toggleWatched() } }
+            val onToggleWatchlist = remember { { viewModel.toggleWatchlist() } }
+            val onShowRatingDialog = remember { { showRatingDialog = true } }
+            val onDismissRatingDialog = remember { { showRatingDialog = false; viewModel.dismissRatingDialog() } }
+            val onRatingSelected = remember { { rating: Int? -> if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating) } }
+            val onPosterClick = remember { { showPosterFullscreen = true } }
+            val onToggleSeason = remember { { season: Int -> viewModel.toggleSeason(season) } }
+            val onToggleEpisodeWatched = remember { { season: Int, episode: Int, traktId: Int -> viewModel.toggleEpisodeWatched(season, episode, traktId) } }
+            val onVideoClick = remember { { video: TmdbVideo -> playingVideoKey = video.key } }
+            val onBackdropClick = remember { { index: Int -> selectedBackdropIndex = index } }
+            val onShowAllVideos = remember { { showAllVideos = true } }
+            val onCollectionMovieClick = remember(onMovieClick) { { movieTmdbId: Int, movieTitle: String -> onMovieClick(0, movieTmdbId, movieTitle, "", 0.0) } }
             // 单 LazyColumn：头部(item) + TabRow(stickyHeader) + 内容(根据Tab切换)
             // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型/找到xx个资源等文字可自适应
             androidx.compose.runtime.CompositionLocalProvider(
@@ -270,30 +285,21 @@ fun DetailScreen(
                         tmdbId = tmdbId,
                         isMarkedWatched = uiState.isMarkedWatched,
                         isMarkingWatched = uiState.isMarkingWatched,
-                        onToggleWatched = { viewModel.toggleWatched() },
+                        onToggleWatched = onToggleWatched,
                         isMarkedWatchlist = uiState.isMarkedWatchlist,
                         isMarkingWatchlist = uiState.isMarkingWatchlist,
-                        onToggleWatchlist = { viewModel.toggleWatchlist() },
-                        onShowRatingDialog = { showRatingDialog = true },
-                        onDismissRatingDialog = {
-                            showRatingDialog = false
-                            viewModel.dismissRatingDialog()
-                        },
-                        onRatingSelected = { rating ->
-                            if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating)
-                        },
-                        onPosterClick = { showPosterFullscreen = true },
+                        onToggleWatchlist = onToggleWatchlist,
+                        onShowRatingDialog = onShowRatingDialog,
+                        onDismissRatingDialog = onDismissRatingDialog,
+                        onRatingSelected = onRatingSelected,
+                        onPosterClick = onPosterClick,
                         onPersonClick = onPersonClick,
-                        onToggleSeason = { viewModel.toggleSeason(it) },
-                        onToggleEpisodeWatched = { season, episode, traktId ->
-                            viewModel.toggleEpisodeWatched(season, episode, traktId)
-                        },
-                        onVideoClick = { video -> playingVideoKey = video.key },
-                        onBackdropClick = { index -> selectedBackdropIndex = index },
-                        onShowAllVideos = { showAllVideos = true },
-                        onCollectionMovieClick = { movieTmdbId, movieTitle ->
-                            onMovieClick(0, movieTmdbId, movieTitle, "", 0.0)
-                        },
+                        onToggleSeason = onToggleSeason,
+                        onToggleEpisodeWatched = onToggleEpisodeWatched,
+                        onVideoClick = onVideoClick,
+                        onBackdropClick = onBackdropClick,
+                        onShowAllVideos = onShowAllVideos,
+                        onCollectionMovieClick = onCollectionMovieClick,
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
