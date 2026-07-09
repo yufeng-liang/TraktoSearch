@@ -9,6 +9,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,14 +26,27 @@ private val Context.sharedTransitionDataStore: DataStore<Preferences> by prefere
 class SharedTransitionStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    /** 内存缓存：App 启动时预加载，供 collectAsStateWithLifecycle 用作 initialValue，消除跳变 */
+    @Volatile
+    var cachedEnabled: Boolean = DEFAULT_ENABLED
+        private set
+
     val enabled: Flow<Boolean> = context.sharedTransitionDataStore.data.map { prefs ->
         prefs[KEY_ENABLED] ?: DEFAULT_ENABLED
     }.distinctUntilChanged()
+
+    /** 预加载：在 AppNavigation 组合前同步读取 DataStore 首值，填入 cachedEnabled 并返回 */
+    suspend fun preloadAndGetValue(): Boolean {
+        val value = enabled.first()
+        cachedEnabled = value
+        return value
+    }
 
     suspend fun setEnabled(value: Boolean) {
         context.sharedTransitionDataStore.edit { prefs ->
             prefs[KEY_ENABLED] = value
         }
+        cachedEnabled = value
     }
 
     companion object {

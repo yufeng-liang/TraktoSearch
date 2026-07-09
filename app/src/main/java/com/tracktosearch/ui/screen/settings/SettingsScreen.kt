@@ -67,6 +67,7 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
@@ -623,7 +624,7 @@ fun SettingsScreen(
                 }
                 item(key = "douban_resync") {
                     SettingsItemCard(
-                        icon = Icons.Rounded.FileDownload,
+                        icon = Icons.Rounded.Sync,
                         title = stringResource(R.string.settings_douban_resync),
                         subtitle = stringResource(R.string.settings_douban_resync_desc),
                         onClick = {
@@ -732,6 +733,35 @@ fun SettingsScreen(
                 }
             }
 
+            // 账户：已登录用户显示 Trakt+豆瓣账号信息；访客显示"登录 Trakt"入口
+            item(key = "header_account") { SettingsSectionHeader(stringResource(R.string.settings_account)) }
+            item(key = "account") {
+                if (isLoggedIn) {
+                    AccountItem(
+                        viewModel = viewModel,
+                        onTraktLogout = { showLogoutDialog = true },
+                        onDoubanLogin = { onNavigateToDoubanLogin() },
+                        onDoubanLogout = { showDoubanLogoutDialog = true }
+                    )
+                } else {
+                    // 访客模式：显示登录 Trakt 入口（豆瓣导入需先登录 Trakt）
+                    GuestLoginItem(onNavigateToLogin = onNavigateToLogin)
+                }
+            }
+
+            // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
+            item(key = "header_storage") { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
+            item(key = "cache_management") {
+                CacheManagementSectionItem(
+                    viewModel = viewModel,
+                    onClearCategory = { category ->
+                        pendingClearCategory = category
+                        showClearCategoryDialog = true
+                    },
+                    onClearAll = { showClearCacheDialog = true }
+                )
+            }
+
             // 关于
             item(key = "header_about") { SettingsSectionHeader(stringResource(R.string.settings_about)) }
             item(key = "about") {
@@ -756,35 +786,6 @@ fun SettingsScreen(
                     subtitle = "yufeng-liang/TrackToSearch-release",
                     onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") }
                 )
-            }
-
-            // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
-            item(key = "header_storage") { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
-            item(key = "cache_management") {
-                CacheManagementSectionItem(
-                    viewModel = viewModel,
-                    onClearCategory = { category ->
-                        pendingClearCategory = category
-                        showClearCategoryDialog = true
-                    },
-                    onClearAll = { showClearCacheDialog = true }
-                )
-            }
-
-            // 账户：已登录用户显示 Trakt+豆瓣账号信息；访客显示"登录 Trakt"入口
-            item(key = "header_account") { SettingsSectionHeader(stringResource(R.string.settings_account)) }
-            item(key = "account") {
-                if (isLoggedIn) {
-                    AccountItem(
-                        viewModel = viewModel,
-                        onTraktLogout = { showLogoutDialog = true },
-                        onDoubanLogin = { onNavigateToDoubanLogin() },
-                        onDoubanLogout = { showDoubanLogoutDialog = true }
-                    )
-                } else {
-                    // 访客模式：显示登录 Trakt 入口（豆瓣导入需先登录 Trakt）
-                    GuestLoginItem(onNavigateToLogin = onNavigateToLogin)
-                }
             }
         }
             // 普通标题栏（含状态栏）
@@ -1143,6 +1144,7 @@ fun SettingsScreen(
                 showCooldownGuidance = false
                 pendingCooldownMode = null
             },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
@@ -1172,6 +1174,7 @@ fun SettingsScreen(
     if (showDoubanLoginPrompt) {
         AlertDialog(
             onDismissRequest = { showDoubanLoginPrompt = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {

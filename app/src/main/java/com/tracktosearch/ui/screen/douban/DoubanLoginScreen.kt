@@ -198,7 +198,7 @@ fun DoubanLoginScreen(
         if (count > 0) {
             AlertDialog(
                 onDismissRequest = { viewModel.dismissCloudFailures() },
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 title = { Text(stringResource(R.string.cloud_failures_detected_title)) },
                 text = {
                     Text(stringResource(R.string.cloud_failures_detected_desc, count))

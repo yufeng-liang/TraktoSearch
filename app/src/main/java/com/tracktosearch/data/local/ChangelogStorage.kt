@@ -20,7 +20,7 @@ private val Context.changelogDataStore: DataStore<Preferences> by preferencesDat
 class ChangelogStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val key = stringPreferencesKey("full_changelog")
+    private val key = stringPreferencesKey("full_changelog_v2")
     private val lastCheckTsKey = longPreferencesKey("last_update_check_ts")
     private val cachedVersionKey = stringPreferencesKey("cached_latest_version")
     private val cachedChangelogKey = stringPreferencesKey("cached_update_changelog")

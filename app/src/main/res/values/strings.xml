@@ -199,6 +199,11 @@
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>
     <string name="douban_import_require_trakt_cancel">Cancel</string>
+    <string name="login_what_is_trakt">What is Trakt</string>
+    <string name="login_what_is_trakt_title">What is Trakt?</string>
+    <string name="login_what_is_trakt_desc">Trakt is an international movie and TV tracking platform, similar to Douban\'s marking feature. You can record movies and shows you want to watch or have watched, track viewing progress, and get personalized recommendations.\n\nAfter logging in to Trakt in this app, you can:\n• Sync and manage your watchlist/watched list\n• Import marks from Douban to Trakt in one tap\n• Sync your viewing records across devices\n• View watching statistics and recommendations\n\nIf you don\'t have a Trakt account yet, tap the button below to register.</string>
+    <string name="login_what_is_trakt_register">Register a Trakt account</string>
+    <string name="login_what_is_trakt_close">Close</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">Login to Douban</string>

@@ -315,6 +315,7 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
     if (showError) {
         AlertDialog(
             onDismissRequest = { showError = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.error_detail_title)) },
             text = {
                 Text(

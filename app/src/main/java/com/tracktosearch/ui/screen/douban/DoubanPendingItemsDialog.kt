@@ -52,6 +52,7 @@ fun DoubanPendingItemsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_resume_title)) },
         text = {
             Column {

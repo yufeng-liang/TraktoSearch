@@ -3,7 +3,9 @@ package com.tracktosearch.ui.screen.login
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -31,6 +34,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -127,6 +131,8 @@ fun LoginScreen(
     var showDoubanImportRequireLoginDialog by remember { mutableStateOf(false) }
     // 标记 OAuth 成功后是否自动跳转豆瓣登录页(用户在引导对话框中确认走 OAuth 流程)
     var pendingDoubanImportAfterLogin by remember { mutableStateOf(false) }
+    // 「什么是 Trakt」说明弹窗
+    var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     // 如果 redirectToBrowser 为 true，直接进入浏览器授权
     LaunchedEffect(redirectToBrowser) {
@@ -177,7 +183,26 @@ fun LoginScreen(
             .statusBarsPadding(),
         color = MaterialTheme.colorScheme.background
     ) {
-        Column(
+        Box(modifier = Modifier.fillMaxSize()) {
+            // 右上角「什么是 Trakt」入口
+            TextButton(
+                onClick = { showWhatIsTraktDialog = true },
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.login_what_is_trakt),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.size(4.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(32.dp),
@@ -349,13 +374,14 @@ fun LoginScreen(
                 }
             }
         }
+        }
     }
 
     // 「从豆瓣导入」需要先登录 Trakt 的引导对话框
     if (showDoubanImportRequireLoginDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanImportRequireLoginDialog = false },
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_import_require_trakt_title)) },
             text = { Text(stringResource(R.string.douban_import_require_trakt_desc)) },
             confirmButton = {
@@ -375,6 +401,47 @@ fun LoginScreen(
             dismissButton = {
                 TextButton(onClick = { showDoubanImportRequireLoginDialog = false }) {
                     Text(stringResource(R.string.douban_import_require_trakt_cancel))
+                }
+            }
+        )
+    }
+
+    // 「什么是 Trakt」说明弹窗
+    if (showWhatIsTraktDialog) {
+        AlertDialog(
+            onDismissRequest = { showWhatIsTraktDialog = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.HelpOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text(stringResource(R.string.login_what_is_trakt_title))
+                }
+            },
+            text = {
+                Text(
+                    text = stringResource(R.string.login_what_is_trakt_desc),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showWhatIsTraktDialog = false
+                    val registerUrl = "https://trakt.tv/auth/join"
+                    val customTabsIntent = CustomTabsIntent.Builder().build()
+                    customTabsIntent.launchUrl(context, Uri.parse(registerUrl))
+                }) {
+                    Text(stringResource(R.string.login_what_is_trakt_register))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showWhatIsTraktDialog = false }) {
+                    Text(stringResource(R.string.login_what_is_trakt_close))
                 }
             }
         )

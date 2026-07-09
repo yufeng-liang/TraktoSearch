@@ -781,6 +781,7 @@ fun DoubanFailuresScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.screen_douban_failures_clear_all)) },
             text = { Text(stringResource(R.string.screen_douban_failures_clear_all_confirm)) },
             confirmButton = {
@@ -1089,6 +1090,7 @@ private fun FailureActionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Text(
                 text = failure.title,

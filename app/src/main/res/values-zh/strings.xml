@@ -199,6 +199,11 @@
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号,标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt?</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
     <string name="douban_import_require_trakt_cancel">取消</string>
+    <string name="login_what_is_trakt">什么是 Trakt</string>
+    <string name="login_what_is_trakt_title">什么是 Trakt？</string>
+    <string name="login_what_is_trakt_desc">Trakt 是一个国外的影视追踪平台，类似于国内的豆瓣标记功能。你可以记录想看、已看的电影和剧集，追踪观看进度，获取个性化推荐。\n\n在本应用中登录 Trakt 后，你可以：\n• 同步和管理你的想看/已看列表\n• 从豆瓣一键导入标记到 Trakt\n• 跨设备同步你的观影记录\n• 查看观看统计和推荐内容\n\n如果你还没有 Trakt 账号，点击下方按钮即可前往注册。</string>
+    <string name="login_what_is_trakt_register">前往注册 Trakt 账号</string>
+    <string name="login_what_is_trakt_close">关闭</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">登录豆瓣</string>

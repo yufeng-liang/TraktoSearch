@@ -144,6 +144,7 @@ class AuthStateHolder @Inject constructor(
 fun AppNavigation(
     startDestination: String,
     initialTab: Int = 0,
+    initialSharedTransitionEnabled: Boolean = false,
     authStateHolder: AuthStateHolder,
     onLoginSuccess: () -> Unit = {},
     onLogout: () -> Unit = {}
@@ -154,9 +155,9 @@ fun AppNavigation(
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
     val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle(initialValue = DefaultTabStorage.DEFAULT_TAB_SEARCH)
-    // 共享元素转场动画开关(默认关闭):关闭时所有 sharedElement/sharedBounds 不附加修饰符
+    // 共享元素转场动画开关：initialValue 由 MainActivity 预加载后传入，避免 collectAsStateWithLifecycle initialValue 与 DataStore 首值不一致导致跳变
     val sharedTransitionStorage = EntryPointAccessors.fromApplication(context, SharedTransitionEntryPoint::class.java).sharedTransitionStorage()
-    val sharedTransitionEnabled by sharedTransitionStorage.enabled.collectAsStateWithLifecycle(initialValue = com.tracktosearch.data.local.SharedTransitionStorage.DEFAULT_ENABLED)
+    val sharedTransitionEnabled by sharedTransitionStorage.enabled.collectAsStateWithLifecycle(initialValue = initialSharedTransitionEnabled)
     // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
     // 监听默认启动页设置变化

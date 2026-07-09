@@ -111,6 +111,11 @@
     <string name="douban_import_require_trakt_desc">더우반 마크 가져오기에는 Trakt 로그인이 필요합니다. 마크는 Trakt 관심목록/시청 목록에 동기화됩니다. Trakt에 로그인하시겠습니까?</string>
     <string name="douban_import_require_trakt_login">Trakt 로그인</string>
     <string name="douban_import_require_trakt_cancel">취소</string>
+    <string name="login_what_is_trakt">Trakt란</string>
+    <string name="login_what_is_trakt_title">Trakt란?</string>
+    <string name="login_what_is_trakt_desc">Trakt는 해외 영화·드라마 추적 플랫폼으로, 중국 더우반의 마크 기능과 비슷합니다. 보고 싶거나 본 영화·드라마를 기록하고, 시청 진행 상황을 추적하며, 맞춤 추천을 받을 수 있습니다.\n\n이 앱에서 Trakt에 로그인하면:\n• 관심목록/시청 완료 목록 동기화 및 관리\n• 더우반에서 Trakt로 마크 일괄 가져오기\n• 기기 간 시청 기록 동기화\n• 시청 통계 및 추천 확인\n\nTrakt 계정이 없다면 아래 버튼을 눌러 가입하세요.</string>
+    <string name="login_what_is_trakt_register">Trakt 계정 가입하기</string>
+    <string name="login_what_is_trakt_close">닫기</string>
 
     <!-- Douban Sync -->
     <string name="douban_login_title">더우반 로그인</string>

@@ -120,6 +120,7 @@ class UpdateRepository @Inject constructor(
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val inputFormats = arrayOf(
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
+            SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US),
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
             SimpleDateFormat("yyyy-MM-dd", Locale.US)
         )

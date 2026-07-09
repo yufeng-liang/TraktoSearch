@@ -321,7 +321,7 @@ fun ChangelogDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        title = { Text(stringResource(R.string.settings_changelog)) },
+        title = null,
         text = {
             Box(
                 modifier = Modifier

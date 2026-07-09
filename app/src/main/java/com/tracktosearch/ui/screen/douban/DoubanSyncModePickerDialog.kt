@@ -60,7 +60,7 @@ fun DoubanSyncModePickerDialog(
     if (showFullRewriteConfirm) {
         AlertDialog(
             onDismissRequest = { showFullRewriteConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
             text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
             confirmButton = {
@@ -83,7 +83,7 @@ fun DoubanSyncModePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {
@@ -144,8 +144,10 @@ private fun ModeOptionItem(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = MaterialTheme.shapes.small
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.small,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 2.dp
     ) {
         Row(
             verticalAlignment = Alignment.Top,

@@ -144,6 +144,7 @@ fun DoubanSyncDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()
         },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
             Column {
