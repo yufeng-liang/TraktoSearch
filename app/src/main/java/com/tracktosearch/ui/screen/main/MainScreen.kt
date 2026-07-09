@@ -25,10 +25,10 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -235,10 +235,10 @@ fun MainScreen(
 
     // Tab 数据
     val tabs = listOf(
-        TabData(Icons.Default.Search, R.string.tab_search),
-        TabData(Icons.Default.Explore, R.string.tab_discover),
-        TabData(Icons.Default.Person, R.string.tab_me),
-        TabData(Icons.Default.Settings, R.string.tab_settings)
+        TabData(Icons.Rounded.Search, R.string.tab_search),
+        TabData(Icons.Rounded.Explore, R.string.tab_discover),
+        TabData(Icons.Rounded.Person, R.string.tab_me),
+        TabData(Icons.Rounded.Settings, R.string.tab_settings)
     )
 
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { innerPadding ->

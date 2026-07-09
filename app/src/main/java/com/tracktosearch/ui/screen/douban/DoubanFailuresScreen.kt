@@ -44,17 +44,17 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Block
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -587,7 +587,7 @@ fun DoubanFailuresScreen(
                                                     if (searchQuery.isNotEmpty()) {
                                                         IconButton(onClick = { searchQuery = "" }) {
                                                             Icon(
-                                                                Icons.Filled.Close,
+                                                                Icons.Rounded.Close,
                                                                 contentDescription = stringResource(R.string.content_desc_clear),
                                                                 modifier = Modifier.size(19.dp)
                                                             )
@@ -621,7 +621,7 @@ fun DoubanFailuresScreen(
                                 }
                             }) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = stringResource(R.string.douban_retry_cancel)
                                 )
                             }
@@ -638,7 +638,7 @@ fun DoubanFailuresScreen(
                                 }
                             }) {
                                 Icon(
-                                    imageVector = if (isSearchExpanded) Icons.Default.Close else Icons.Default.Search,
+                                    imageVector = if (isSearchExpanded) Icons.Rounded.Close else Icons.Rounded.Search,
                                     contentDescription = stringResource(R.string.douban_failure_search_hint)
                                 )
                             }
@@ -648,7 +648,7 @@ fun DoubanFailuresScreen(
                                 importFailuresLauncher.launch(arrayOf("application/json"))
                             }) {
                                 Icon(
-                                    imageVector = Icons.Default.FileUpload,
+                                    imageVector = Icons.Rounded.FileUpload,
                                     contentDescription = stringResource(R.string.douban_retry_option_json)
                                 )
                             }
@@ -658,7 +658,7 @@ fun DoubanFailuresScreen(
                                 showFilterSheet = true
                             }) {
                                 Icon(
-                                    imageVector = Icons.Default.Tune,
+                                    imageVector = Icons.Rounded.Tune,
                                     contentDescription = stringResource(R.string.filter_title),
                                     tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary
                                     else androidx.compose.material3.LocalContentColor.current
@@ -670,7 +670,7 @@ fun DoubanFailuresScreen(
                                 showClearConfirm = true
                             }) {
                                 Icon(
-                                    imageVector = Icons.Default.DeleteSweep,
+                                    imageVector = Icons.Rounded.DeleteSweep,
                                     contentDescription = stringResource(R.string.screen_douban_failures_clear_all)
                                 )
                             }
@@ -737,6 +737,8 @@ fun DoubanFailuresScreen(
         ModalBottomSheet(
             onDismissRequest = { showFilterSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            // 统一背景色与发现页查看全部 sheet 一致
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             // 去除默认 drag 条,内容更紧凑
             dragHandle = null
         ) {
@@ -898,7 +900,7 @@ private fun EmptyStateView(
         ) {
             // 空图标(参考 Watchlist 空白页布局,以后统一用这个风格)
             Icon(
-                imageVector = Icons.Outlined.Inbox,
+                imageVector = Icons.Rounded.Inbox,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
@@ -1029,7 +1031,7 @@ private fun FailureCard(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (reason.recoverable) Icons.Default.Warning else Icons.Default.Block,
+                        imageVector = if (reason.recoverable) Icons.Rounded.Warning else Icons.Rounded.Block,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(14.dp)
@@ -1261,7 +1263,7 @@ private fun FailureFilterSheet(
                     label = { Text(stringResource(R.string.filter_sort_desc), maxLines = 1) },
                     icon = {
                         Icon(
-                            Icons.Default.ArrowDownward,
+                            Icons.Rounded.ArrowDownward,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
@@ -1276,7 +1278,7 @@ private fun FailureFilterSheet(
                     label = { Text(stringResource(R.string.filter_sort_asc), maxLines = 1) },
                     icon = {
                         Icon(
-                            Icons.Default.ArrowUpward,
+                            Icons.Rounded.ArrowUpward,
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )

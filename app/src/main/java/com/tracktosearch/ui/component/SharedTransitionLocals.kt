@@ -10,6 +10,13 @@ val LocalSharedTransitionScope = compositionLocalOf<SharedTransitionScope?> { nu
 val LocalAnimatedVisibilityScope = compositionLocalOf<AnimatedVisibilityScope?> { null }
 
 /**
+ * 共享元素转场动画是否启用(全局开关,默认 false)。
+ * 关闭时所有 sharedElement/sharedBounds 使用点不附加修饰符,降级为 NavHost 默认过渡。
+ * 各使用点应在判空条件中加 `&& LocalSharedTransitionEnabled.current`。
+ */
+val LocalSharedTransitionEnabled = compositionLocalOf<Boolean> { false }
+
+/**
  * 当前活跃的海报 tmdbId,用于确保只有用户点击的卡片参与共享元素转场,避免跨页面/同页面重复海报 key 冲突。
  * - -1:哨兵值(默认),所有卡片都不启用 sharedElement(页面初始状态,点击前)
  * - 具体 tmdbId:只有 tmdbId 匹配的卡片启用 sharedElement(用户点击后)

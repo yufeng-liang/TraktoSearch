@@ -23,15 +23,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileOpen
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -172,7 +172,7 @@ fun HelpScreen(
                                 .padding(8.dp)
                         ) {
                             HelpDataCard(
-                                icon = Icons.Filled.FileDownload,
+                                icon = Icons.Rounded.FileDownload,
                                 title = stringResource(R.string.help_dc_export_t),
                                 entry = stringResource(R.string.help_dc_export_entry),
                                 format = stringResource(R.string.help_dc_export_fmt),
@@ -180,7 +180,7 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Filled.FileUpload,
+                                icon = Icons.Rounded.FileUpload,
                                 title = stringResource(R.string.help_dc_imdb_t),
                                 entry = stringResource(R.string.help_dc_imdb_entry),
                                 format = stringResource(R.string.help_dc_imdb_fmt),
@@ -188,7 +188,7 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Filled.CloudUpload,
+                                icon = Icons.Rounded.CloudUpload,
                                 title = stringResource(R.string.help_dc_upload_t),
                                 entry = stringResource(R.string.help_dc_upload_entry),
                                 format = stringResource(R.string.help_dc_upload_fmt),
@@ -196,7 +196,7 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Filled.CloudDownload,
+                                icon = Icons.Rounded.CloudDownload,
                                 title = stringResource(R.string.help_dc_download_t),
                                 entry = stringResource(R.string.help_dc_download_entry),
                                 format = stringResource(R.string.help_dc_download_fmt),
@@ -204,7 +204,7 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Filled.Sync,
+                                icon = Icons.Rounded.Sync,
                                 title = stringResource(R.string.help_dc_douban_t),
                                 entry = stringResource(R.string.help_dc_douban_entry),
                                 format = stringResource(R.string.help_dc_douban_fmt),
@@ -212,13 +212,15 @@ fun HelpScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             HelpDataCard(
-                                icon = Icons.Filled.FileOpen,
+                                icon = Icons.Rounded.FileOpen,
                                 title = stringResource(R.string.help_dc_failures_t),
                                 entry = stringResource(R.string.help_dc_failures_entry),
                                 format = stringResource(R.string.help_dc_failures_fmt),
                                 description = stringResource(R.string.help_dc_failures_desc)
                             )
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        HelpBullet(stringResource(R.string.help_dc_cooldown))
                     }
                 }
 
@@ -333,7 +335,7 @@ fun HelpScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                                 contentDescription = "Back",
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -373,7 +375,7 @@ private fun HelpSection(
                 modifier = Modifier.weight(1f)
             )
             Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

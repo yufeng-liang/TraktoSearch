@@ -104,45 +104,50 @@ class UpdateRepository @Inject constructor(
     }
 
     private fun formatAllChangelogs(releases: List<ReleaseInfo>): String {
+        return releases
+            .filter { it.body.isNotBlank() }
+            .joinToString("\n\n---\n\n") { release ->
+                injectDateIntoChangelog(release.tagName, release.body, release.createdAt)
+            }
+    }
+
+    /**
+     * 将发布日期注入到 changelog 标题末尾,供更新弹窗与设置页共用同一渲染规则。
+     * - body 已按规范以 "## vX.X.X 更新内容" 开头:复用自带标题,仅把日期追加到该标题行末尾(替换已有日期括号)
+     * - body 无标题:补一个外层 header "## vX.X.X 更新内容（日期）"
+     */
+    private fun injectDateIntoChangelog(tagName: String, body: String, createdAt: String): String {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val inputFormats = arrayOf(
             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US),
             SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US),
             SimpleDateFormat("yyyy-MM-dd", Locale.US)
         )
-
-        return releases
-            .filter { it.body.isNotBlank() }
-            .joinToString("\n\n---\n\n") { release ->
-                val dateStr = release.createdAt.takeIf { it.isNotBlank() }?.let { dateStr ->
-                    inputFormats.firstNotNullOfOrNull { fmt ->
-                        try { fmt.parse(dateStr)?.let { dateFormat.format(it) } } catch (_: Exception) { null }
-                    }
-                } ?: ""
-                val cleanBody = sanitizeChangelog(release.body)
-                // body 已按 project_rules.md 规范以 "## vX.X.X 更新内容" 开头时:
-                // 复用 body 自带标题(避免外层 wrapper 重复),仅把日期注入到该标题行末尾(替换或追加)
-                // body 无标题时:补一个外层 header(legacy 兼容)
-                val firstLine = cleanBody.lineSequence().firstOrNull()
-                val firstLineIsSectionHeader = firstLine?.trimStart()?.startsWith("## ") == true
-                if (firstLineIsSectionHeader && firstLine != null) {
-                    if (dateStr.isNotBlank()) {
-                        // 移除已有的尾部日期括号(若有),再追加 (dateStr)
-                        val titleWithoutDate = firstLine.replace(Regex("（[^）]*\\d{4}-\\d{2}-\\d{2}[^）]*）$"), "").trimEnd()
-                        val restBody = cleanBody.substringAfter('\n')
-                        "$titleWithoutDate（$dateStr）\n$restBody"
-                    } else {
-                        cleanBody
-                    }
-                } else {
-                    val header = if (dateStr.isNotBlank()) {
-                        "## ${release.tagName} 更新内容（$dateStr）"
-                    } else {
-                        "## ${release.tagName} 更新内容"
-                    }
-                    "$header\n\n$cleanBody"
-                }
+        val dateStr = createdAt.takeIf { it.isNotBlank() }?.let { rawDate ->
+            inputFormats.firstNotNullOfOrNull { fmt ->
+                try { fmt.parse(rawDate)?.let { dateFormat.format(it) } } catch (_: Exception) { null }
             }
+        } ?: ""
+        val cleanBody = sanitizeChangelog(body)
+        val firstLine = cleanBody.lineSequence().firstOrNull()
+        val firstLineIsSectionHeader = firstLine?.trimStart()?.startsWith("## ") == true
+        return if (firstLineIsSectionHeader && firstLine != null) {
+            if (dateStr.isNotBlank()) {
+                // 移除已有的尾部日期括号(若有),再追加 (dateStr)
+                val titleWithoutDate = firstLine.replace(Regex("（[^）]*\\d{4}-\\d{2}-\\d{2}[^）]*）$"), "").trimEnd()
+                val restBody = cleanBody.substringAfter('\n')
+                "$titleWithoutDate（$dateStr）\n$restBody"
+            } else {
+                cleanBody
+            }
+        } else {
+            val header = if (dateStr.isNotBlank()) {
+                "## $tagName 更新内容（$dateStr）"
+            } else {
+                "## $tagName 更新内容"
+            }
+            "$header\n\n$cleanBody"
+        }
     }
 
     private data class ReleaseInfo(
@@ -237,13 +242,16 @@ class UpdateRepository @Inject constructor(
     /**
      * 将新版本的 changelog 追加到完整更新日志缓存（磁盘 + 内存）开头。
      * 如果该版本已存在则跳过。这样设置页打开更新日志时直接用缓存，无需再次请求网络。
+     * 注意:传入的 changelog 已由 tryFetchFromGitHub/Gitee 经 injectDateIntoChangelog 注入日期标题,
+     * 这里直接作为 entry,不再外包 header,避免重复标题。
      */
     private suspend fun appendToFullChangelog(version: String, changelog: String) {
         if (changelog.isBlank()) return
-        val entry = "## v$version 更新内容\n\n$changelog"
+        val entry = changelog
         val existing = cachedFullChangelog ?: changelogStorage.getChangelog() ?: ""
-        // 检查是否已包含该版本
-        if (existing.contains("## v$version 更新内容")) return
+        // 检查是否已包含该版本(匹配 "## v$version 更新内容" 前缀,兼容带日期括号的情况)
+        val versionHeaderPrefix = "## v$version 更新内容"
+        if (existing.contains(versionHeaderPrefix)) return
         val updated = if (existing.isBlank()) entry else "$entry\n\n---\n\n$existing"
         cachedFullChangelog = updated
         changelogStorage.saveChangelog(updated)
@@ -282,7 +290,7 @@ class UpdateRepository @Inject constructor(
             UpdateInfo(
                 latestVersion = release.tag_name.removePrefix("v"),
                 downloadUrl = "",
-                changelog = sanitizeChangelog(release.body),
+                changelog = injectDateIntoChangelog(release.tag_name, release.body, release.created_at),
                 fileSize = 0,
                 hasUpdate = false
             )
@@ -299,7 +307,7 @@ class UpdateRepository @Inject constructor(
             UpdateInfo(
                 latestVersion = release.tag_name.removePrefix("v"),
                 downloadUrl = "",
-                changelog = sanitizeChangelog(release.body),
+                changelog = injectDateIntoChangelog(release.tag_name, release.body, release.created_at),
                 fileSize = 0,
                 hasUpdate = false
             )

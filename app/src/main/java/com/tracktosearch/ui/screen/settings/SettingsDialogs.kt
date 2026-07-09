@@ -21,8 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DragIndicator
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DragIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -162,7 +162,7 @@ internal fun AccentColorDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         if (currentAccent == null) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                         }
                     }
                     Spacer(modifier = Modifier.width(10.dp))
@@ -197,7 +197,7 @@ internal fun AccentColorDialog(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (currentAccent == accent) {
-                                        Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                        Icon(Icons.Rounded.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
                                     }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -451,7 +451,7 @@ private fun DiscoverSectionRow(
             modifier = Modifier.weight(1f)
         )
         Icon(
-            imageVector = Icons.Default.DragIndicator,
+            imageVector = Icons.Rounded.DragIndicator,
             contentDescription = stringResource(R.string.settings_drag_to_reorder),
             modifier = dragHandleModifier.padding(8.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant

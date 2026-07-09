@@ -23,9 +23,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -76,7 +76,8 @@ import javax.inject.Inject
 class DoubanLoginViewModel @Inject constructor(
     val doubanAuthStorage: DoubanAuthStorage,
     val doubanSyncManager: DoubanSyncManager,
-    val cloudFailureSyncManager: com.tracktosearch.data.repository.CloudFailureSyncManager
+    val cloudFailureSyncManager: com.tracktosearch.data.repository.CloudFailureSyncManager,
+    private val cloudPersonalSyncManager: com.tracktosearch.data.repository.CloudPersonalSyncManager
 ) : ViewModel() {
 
     val progress = doubanSyncManager.progress
@@ -95,6 +96,8 @@ class DoubanLoginViewModel @Inject constructor(
         // 增量同步会自动拉取云端进度，接续上次同步，避免全量爬取豆瓣
         // 检测云端是否有该豆瓣账号的失败数据(用于跨设备查看)
         checkCloudFailures()
+        // 登录后刷新云端 sync_meta,确保跨设备冷却期(lastFullSyncAt)最新
+        viewModelScope.launch { runCatching { cloudPersonalSyncManager.refreshMetaOnly() } }
     }
 
     /**
@@ -233,7 +236,7 @@ fun DoubanLoginScreen(
                 title = { Text(stringResource(R.string.douban_login_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.content_desc_back))
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.content_desc_back))
                     }
                 }
             )
@@ -262,7 +265,7 @@ fun DoubanLoginScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 0.dp)
                 ) {
                     Icon(
-                        if (privacyExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        if (privacyExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = null,
                         modifier = Modifier.padding(end = 4.dp)
                     )

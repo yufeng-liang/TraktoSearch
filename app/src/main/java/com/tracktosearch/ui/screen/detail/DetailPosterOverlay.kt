@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -175,7 +175,7 @@ internal fun PosterFullscreenOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.detail_back),
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
@@ -212,14 +212,14 @@ internal fun PosterFullscreenOverlay(
                 ) {
                     if (isSaved == true) {
                         Icon(
-                            Icons.Filled.Check,
+                            Icons.Rounded.Check,
                             contentDescription = stringResource(R.string.content_desc_saved),
                             tint = Color(0xFF4CAF50), // 绿色
                             modifier = Modifier.size(22.dp)
                         )
                     } else {
                         Icon(
-                            Icons.Default.Download,
+                            Icons.Rounded.Download,
                             contentDescription = stringResource(R.string.content_desc_save),
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)

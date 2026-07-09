@@ -24,7 +24,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -56,6 +56,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.R
@@ -135,7 +136,7 @@ fun TraktListDetailScreen(
                         }
 
                         // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                        val loadingHeaderModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0) {
+                        val loadingHeaderModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
                             with(sharedTransitionScope) {
                                 Modifier.sharedBounds(
                                     sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
@@ -163,7 +164,7 @@ fun TraktListDetailScreen(
                             ) {
                                 IconButton(onClick = onBack) {
                                     Icon(
-                                        Icons.AutoMirrored.Filled.ArrowBack,
+                                        Icons.AutoMirrored.Rounded.ArrowBack,
                                         contentDescription = stringResource(R.string.search_back),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
@@ -253,7 +254,7 @@ fun TraktListDetailScreen(
                     )
 
                     // Haze 模糊标题栏（与发现页社区列表卡片配对 sharedBounds 转场）
-                    val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0) {
+                    val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && uiState.listId > 0 && LocalSharedTransitionEnabled.current) {
                         with(sharedTransitionScope) {
                             Modifier.sharedBounds(
                                 sharedContentState = rememberSharedContentState(key = "trakt-list-card-${uiState.listId}"),
@@ -281,7 +282,7 @@ fun TraktListDetailScreen(
                         ) {
                             IconButton(onClick = onBack) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = stringResource(R.string.content_desc_back),
                                     tint = MaterialTheme.colorScheme.primary
                                 )

@@ -2,7 +2,7 @@ package com.tracktosearch.ui.screen.main
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,7 +26,7 @@ fun LoginPromptScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Default.Movie,
+            imageVector = Icons.Rounded.Movie,
             contentDescription = null,
             modifier = Modifier.size(80.dp),
             tint = MaterialTheme.colorScheme.primary

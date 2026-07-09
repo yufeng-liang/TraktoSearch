@@ -12,6 +12,8 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanSyncMetaStorage
+import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
 import com.tracktosearch.data.local.DetailSectionStorage
@@ -19,6 +21,7 @@ import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.NotificationStorage
 import com.tracktosearch.data.local.PanHubConfigStorage
 import com.tracktosearch.data.local.SearchSourceStorage
+import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.OfflineCacheManager
@@ -30,6 +33,7 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.data.repository.CloudPersonalSyncManager
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -86,6 +90,9 @@ class SettingsViewModel @Inject constructor(
     private val defaultTabStorage: DefaultTabStorage,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanRepository: DoubanRepository,
+    private val cloudPersonalSyncManager: CloudPersonalSyncManager,
+    private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val sharedTransitionStorage: SharedTransitionStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -162,6 +169,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setZresoEnabled(enabled: Boolean) {
         viewModelScope.launch { searchSourceStorage.setZresoEnabled(enabled) }
+    }
+
+    fun setSharedTransitionEnabled(enabled: Boolean) {
+        viewModelScope.launch { sharedTransitionStorage.setEnabled(enabled) }
     }
 
     // ========== PanHub 配置 ==========
@@ -504,6 +515,41 @@ class SettingsViewModel @Inject constructor(
 
     // 豆瓣用户资料（头像/昵称）：从加密存储恢复，登录后异步抓取
     val doubanProfile: StateFlow<com.tracktosearch.data.local.DoubanUserProfile?> = doubanAuthStorage.doubanProfile
+
+    // ========== 增量同步冷却期状态(跨设备同步显示) ==========
+    private val _cooldownStatus = MutableStateFlow<CooldownStatus?>(null)
+    val cooldownStatus: StateFlow<CooldownStatus?> = _cooldownStatus.asStateFlow()
+
+    /**
+     * 刷新冷却期状态:先轻量拉云端 sync_meta 合并到本地(确保跨设备 lastFullSyncAt 准确),
+     * 再读本地冷却状态。用户点击「重新同步豆瓣」弹出模式选择对话框前调用。
+     */
+    fun refreshCooldownStatus() {
+        viewModelScope.launch {
+            // 豆瓣未登录时不显示冷却状态
+            if (!doubanAuthStorage.isLoggedIn.value) {
+                _cooldownStatus.value = null
+                return@launch
+            }
+            // 先尝试合并云端 meta(失败也继续,用本地值兜底)
+            runCatching { cloudPersonalSyncManager.refreshMetaOnly() }
+            _cooldownStatus.value = doubanSyncMetaStorage.getCooldownStatus()
+        }
+    }
+
+    /**
+     * 仅从本地读取冷却期状态(不发网络请求)。
+     * 供设置页首次进入时显示冷却期标签,云端 meta 已在豆瓣登录后/上次同步时刷新。
+     */
+    fun loadCooldownStatusFromLocal() {
+        viewModelScope.launch {
+            if (!doubanAuthStorage.isLoggedIn.value) {
+                _cooldownStatus.value = null
+                return@launch
+            }
+            _cooldownStatus.value = doubanSyncMetaStorage.getCooldownStatus()
+        }
+    }
 
     /** 清除豆瓣凭据（退出登录） */
     fun clearDoubanCredentials() {

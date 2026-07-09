@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -64,7 +64,7 @@ fun DoubanPendingItemsDialog(
 
                 // 选项 1:继续同步(推荐)
                 ResumeOptionItem(
-                    icon = Icons.Default.PlayArrow,
+                    icon = Icons.Rounded.PlayArrow,
                     title = stringResource(R.string.douban_resume_continue),
                     subtitle = stringResource(R.string.douban_resume_continue_desc),
                     onClick = {
@@ -78,7 +78,7 @@ fun DoubanPendingItemsDialog(
 
                 // 选项 2:完整同步
                 ResumeOptionItem(
-                    icon = Icons.Default.Refresh,
+                    icon = Icons.Rounded.Refresh,
                     title = stringResource(R.string.douban_resume_full),
                     subtitle = stringResource(R.string.douban_resume_full_desc),
                     onClick = {
@@ -147,7 +147,7 @@ private fun ResumeOptionItem(
                 )
             }
             Icon(
-                Icons.Default.ChevronRight,
+                Icons.Rounded.ChevronRight,
                 contentDescription = null,
                 tint = titleColor,
                 modifier = Modifier.size(20.dp)

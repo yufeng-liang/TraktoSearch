@@ -31,9 +31,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -82,6 +82,7 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -146,7 +147,7 @@ fun DiscoverFilterScreen(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                     with(sharedTransitionScope) {
                         Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "discover-filter-entry-card"),
@@ -257,7 +258,7 @@ fun DiscoverFilterScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 「返回箭头 + 标题」作为整体与发现页右上角筛选图标配对（sharedBounds）
-                val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                     with(sharedTransitionScope) {
                         Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "discover-filter-entry-icon"),
@@ -273,7 +274,7 @@ fun DiscoverFilterScreen(
                 ) {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            Icons.AutoMirrored.Rounded.ArrowBack,
                             contentDescription = stringResource(R.string.search_back),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -380,7 +381,7 @@ fun DiscoverFilterScreen(
                 // 高级筛选图标
                 IconButton(onClick = { viewModel.toggleAdvanced() }) {
                     Icon(
-                        Icons.Default.Tune,
+                        Icons.Rounded.Tune,
                         contentDescription = stringResource(R.string.discover_filter_advanced),
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -614,7 +615,7 @@ private fun DiscoverFilterListItem(
     } else null
 
     // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
-    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+    val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
         with(sharedTransitionScope) {
             Modifier
                 .width(80.dp)
@@ -699,7 +700,7 @@ private fun DiscoverFilterListItem(
             // 评分
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Filled.Star,
+                    Icons.Rounded.Star,
                     contentDescription = null,
                     tint = Color(0xFFFFC107),
                     modifier = Modifier.size(16.dp)

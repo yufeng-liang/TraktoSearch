@@ -2,8 +2,8 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudOff
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.CloudOff
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,7 +19,7 @@ fun ErrorStateView(
     message: String,
     onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    icon: ImageVector = Icons.Default.CloudOff
+    icon: ImageVector = Icons.Rounded.CloudOff
 ) {
     Column(
         modifier = modifier
@@ -44,7 +44,7 @@ fun ErrorStateView(
         if (onRetry != null) {
             Spacer(Modifier.height(16.dp))
             Button(onClick = onRetry) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(stringResource(R.string.error_retry))
             }

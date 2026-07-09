@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -91,7 +91,7 @@ fun SettingsItem(
         if (onClick != null) {
             Spacer(modifier = Modifier.width(8.dp))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -108,7 +108,8 @@ internal fun SettingsItemCard(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null
 ) {
     val view = LocalView.current
     Surface(
@@ -145,8 +146,14 @@ internal fun SettingsItemCard(
                     )
                 }
             }
+            // 可选 trailing 内容(如冷却期状态标签),显示在右箭头左侧
+            if (trailing != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                trailing()
+                Spacer(modifier = Modifier.width(4.dp))
+            }
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -209,7 +216,7 @@ fun PanHubSettingsItem(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    Icons.Default.Tune,
+                    Icons.Rounded.Tune,
                     contentDescription = stringResource(R.string.settings_panhub_config),
                     modifier = Modifier.size(24.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -310,10 +317,10 @@ fun CustomSearchSourceItem(
                 }
             }
             IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.cd_edit), modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.cd_edit), modifier = Modifier.size(20.dp))
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
             }
             Switch(
                 checked = source.enabled,
@@ -485,7 +492,7 @@ internal fun SearchSourceCard(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        Icons.Default.Tune,
+                        Icons.Rounded.Tune,
                         contentDescription = configContentDescription,
                         modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -530,7 +537,7 @@ internal fun SearchSourceAddCard(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                Icons.Default.Add,
+                Icons.Rounded.Add,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
@@ -568,7 +575,7 @@ internal fun StatisticsCard(modifier: Modifier = Modifier, onClick: () -> Unit) 
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.BarChart,
+                imageVector = Icons.Rounded.BarChart,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -586,7 +593,7 @@ internal fun StatisticsCard(modifier: Modifier = Modifier, onClick: () -> Unit) 
                 )
             }
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

@@ -18,9 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.StarHalf
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarBorder
+import androidx.compose.material.icons.automirrored.rounded.StarHalf
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -116,7 +116,7 @@ internal fun RatingBadge(label: String, color: Color, value: String, modifier: M
     ) {
         when (label) {
             "TMDB" -> Icon(
-                Icons.Filled.Star, contentDescription = null,
+                Icons.Rounded.Star, contentDescription = null,
                 modifier = Modifier.size(14.dp), tint = color
             )
             "IMDb" -> Surface(
@@ -225,9 +225,9 @@ internal fun UserRatingBar(
                     }
                     Icon(
                         imageVector = when (starType) {
-                            "full" -> Icons.Filled.Star
-                            "half" -> Icons.AutoMirrored.Filled.StarHalf
-                            else -> Icons.Filled.StarBorder
+                            "full" -> Icons.Rounded.Star
+                            "half" -> Icons.AutoMirrored.Rounded.StarHalf
+                            else -> Icons.Rounded.StarBorder
                         },
                         contentDescription = null,
                         modifier = Modifier.size(22.dp),
@@ -309,9 +309,9 @@ internal fun RatingDialog(
                         ) {
                             Icon(
                                 imageVector = when (starType) {
-                                    "full" -> Icons.Filled.Star
-                                    "half" -> Icons.AutoMirrored.Filled.StarHalf
-                                    else -> Icons.Filled.StarBorder
+                                    "full" -> Icons.Rounded.Star
+                                    "half" -> Icons.AutoMirrored.Rounded.StarHalf
+                                    else -> Icons.Rounded.StarBorder
                                 },
                                 contentDescription = null,
                                 modifier = Modifier.size(36.dp),

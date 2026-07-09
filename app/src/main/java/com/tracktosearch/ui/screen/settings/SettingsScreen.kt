@@ -36,38 +36,39 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DragIndicator
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.NewReleases
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.School
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.BrokenImage
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.DragIndicator
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.automirrored.rounded.EventNote
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Palette
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -124,6 +125,7 @@ import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.douban.CloudSyncEvent
@@ -166,6 +168,9 @@ fun SettingsScreen(
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
+    // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
+    // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
+    val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -176,8 +181,16 @@ fun SettingsScreen(
     val doubanRetryState by doubanRetryViewModel.retryState.collectAsStateWithLifecycle()
     val cloudSyncLoading by doubanRetryViewModel.cloudSyncLoading.collectAsStateWithLifecycle()
     val cloudSyncEvent by doubanRetryViewModel.cloudSyncEvent.collectAsStateWithLifecycle()
+    // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
+    val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
+    // 增量同步冷却期状态(跨设备同步显示)
+    val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
+    var showDoubanLoginPrompt by remember { mutableStateOf(false) }
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
+    // 冷却期内点击增量同步时的引导对话框
+    var showCooldownGuidance by remember { mutableStateOf(false) }
+    var pendingCooldownMode by remember { mutableStateOf<com.tracktosearch.data.repository.SyncMode?>(null) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     // snackbarHostState 在 importFailuresLauncher 之前声明,供 launcher 回调内使用
@@ -219,11 +232,16 @@ fun SettingsScreen(
     // 不使用 LifecycleResumeEffect：导航到帮助页再返回时生命周期 STARTED→RESUMED 会重新触发，
     // 导致缓存大小等数据更新引起 LazyColumn 项高度微调，滚动位置偏移
     // 用 rememberSaveable 标记确保仅真正首次组合才刷新；重新组合(跨页面导航)后标记已存，避免重复刷新导致列表高度变化
+    // 注意:不在此处刷新冷却期状态。冷却期数据(跨设备 lastFullSyncAt)仅在以下时机请求 gitee:
+    // 1. 豆瓣登录后拉取云端数据时一并刷新 meta
+    // 2. 用户点击「重新同步豆瓣」弹出模式选择对话框前刷新一次
     val cacheRefreshed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!cacheRefreshed) {
             viewModel.refreshCacheInfo()
             doubanRetryViewModel.refreshRetryState()
+            // 仅从本地读取冷却期状态(不发网络请求),云端 meta 已在豆瓣登录后刷新
+            viewModel.loadCooldownStatusFromLocal()
         }
     }
     // 账户资料加载：从账户 item 内上提，避免 item 滑出/滑入时重复触发网络请求
@@ -232,6 +250,13 @@ fun SettingsScreen(
             viewModel.loadUserProfile()
             viewModel.loadDoubanProfile()
         }
+    }
+    // 豆瓣登录态变化时刷新失败项状态:登录后若云端失败数据已下载合并到本地,
+    // 返回设置页时 doubanLoggedIn 从 false→true 触发刷新,「查看同步失败项」入口卡片及时显示
+    // 冷却期仅从本地读取(豆瓣登录后已刷新云端 meta 到本地)
+    LaunchedEffect(doubanLoggedIn) {
+        doubanRetryViewModel.refreshRetryState()
+        viewModel.loadCooldownStatusFromLocal()
     }
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
@@ -335,23 +360,27 @@ fun SettingsScreen(
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
     val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
 
-    // 用 rememberSaveable 持久化滚动位置(跨页面导航可靠恢复)
-    // 显式保存 index+offset 比 LazyListState.Saver 在 HorizontalPager + Nav 跨页场景下更稳定
+    // 滚动位置持久化 + scrollGate 仅在共享元素转场启用时需要:
+    // 这些机制是为了对抗 SharedTransitionLayout 重激活期间的"幽灵 scroll",
+    // 关闭转场后幽灵 scroll 不存在,移除持久化和延迟开闸,设置页滚动更轻量
     val savedFirstVisibleItemIndex = rememberSaveable { mutableIntStateOf(0) }
     val savedFirstVisibleItemScrollOffset = rememberSaveable { mutableIntStateOf(0) }
+    // 关闭转场时用普通 listState(无 saved 初始值),开启时用 saved 初始值
     val settingsListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = savedFirstVisibleItemIndex.intValue,
-        initialFirstVisibleItemScrollOffset = savedFirstVisibleItemScrollOffset.intValue
+        initialFirstVisibleItemIndex = if (sharedTransitionEnabled) savedFirstVisibleItemIndex.intValue else 0,
+        initialFirstVisibleItemScrollOffset = if (sharedTransitionEnabled) savedFirstVisibleItemScrollOffset.intValue else 0
     )
     // scroll gate:返回设置页后,SharedTransitionLayout/HorizontalPager 重激活期间会产生
     // "幽灵 scroll"(layout 修正导致 position 跳变)。延迟打开写入窗口,窗口期内丢弃 snapshotFlow 收集到的位置
-    var scrollGateOpen by remember { mutableStateOf(false) }
+    // 关闭转场时 gate 始终打开(无需延迟),直接记录滚动位置
+    var scrollGateOpen by remember { mutableStateOf(!sharedTransitionEnabled) }
     // force restore 的目标位置(从 saved 读取,跨页导航可靠恢复)
     val targetRestoreIndex = savedFirstVisibleItemIndex.intValue
     val targetRestoreOffset = savedFirstVisibleItemScrollOffset.intValue
     // 尽早恢复:layout 有 items 后立即 scrollToItem,减少用户看到错误位置的时间
     // 注意:此处不打开 scrollGate,否则 pager 幽灵 scroll 会立即污染 saved 值
-    if (targetRestoreIndex > 0 || targetRestoreOffset > 0) {
+    // 关闭转场时跳过此逻辑(无幽灵 scroll 需要对抗)
+    if (sharedTransitionEnabled && (targetRestoreIndex > 0 || targetRestoreOffset > 0)) {
         LaunchedEffect(targetRestoreIndex, targetRestoreOffset) {
             // 轮询直到 layout 完成,最多 20 次 * 50ms = 1s
             repeat(20) {
@@ -370,17 +399,20 @@ fun SettingsScreen(
     }
     // 延迟打开 scrollGate,打开前再 force restore 一次,覆盖 pager 幽灵 scroll
     // 这样窗口期内 pager 拉到的错误位置不会写入 saved,打开时位置已被纠正
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(SCROLL_GATE_DELAY_MS)
-        if (targetRestoreIndex > 0 || targetRestoreOffset > 0) {
-            val maxIndex = (settingsListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-            val safeIndex = targetRestoreIndex.coerceAtMost(maxIndex)
-            try {
-                settingsListState.scrollToItem(safeIndex, targetRestoreOffset)
-            } catch (_: Exception) {
+    // 关闭转场时跳过此逻辑(gate 已在初始化时打开)
+    if (sharedTransitionEnabled) {
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(SCROLL_GATE_DELAY_MS)
+            if (targetRestoreIndex > 0 || targetRestoreOffset > 0) {
+                val maxIndex = (settingsListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
+                val safeIndex = targetRestoreIndex.coerceAtMost(maxIndex)
+                try {
+                    settingsListState.scrollToItem(safeIndex, targetRestoreOffset)
+                } catch (_: Exception) {
+                }
             }
+            scrollGateOpen = true
         }
-        scrollGateOpen = true
     }
     // 滚动时持续保存最新位置(保证实时性)
     LaunchedEffect(settingsListState) {
@@ -442,7 +474,7 @@ fun SettingsScreen(
             // 观看统计（第一位，独占整行卡片，无类目 Header）
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
             item(key = "statistics_entry") {
-                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                     with(sharedTransitionScope) {
                         Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
@@ -479,16 +511,21 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.DarkMode, title = stringResource(R.string.settings_theme), subtitle = themeName, mergeTitleAndSubtitle = true, onClick = { showThemeDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Palette, title = stringResource(R.string.settings_accent_color), subtitle = accentName, mergeTitleAndSubtitle = true, onClick = { showAccentColorDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.DarkMode, title = stringResource(R.string.settings_theme), subtitle = themeName, mergeTitleAndSubtitle = true, onClick = { showThemeDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Palette, title = stringResource(R.string.settings_accent_color), subtitle = accentName, mergeTitleAndSubtitle = true, onClick = { showAccentColorDialog = true })
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Language, title = stringResource(R.string.settings_language), subtitle = languageName, mergeTitleAndSubtitle = true, onClick = { showLanguageDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Home, title = stringResource(R.string.settings_default_tab), subtitle = tabName, mergeTitleAndSubtitle = true, onClick = { showDefaultTabDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Language, title = stringResource(R.string.settings_language), subtitle = languageName, mergeTitleAndSubtitle = true, onClick = { showLanguageDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Home, title = stringResource(R.string.settings_default_tab), subtitle = tabName, mergeTitleAndSubtitle = true, onClick = { showDefaultTabDialog = true })
                 }
+                // 共享元素转场动画开关(默认关闭):关闭时所有页面间转场降级为 NavHost 默认过渡
+                SharedTransitionSwitchCard(
+                    enabled = sharedTransitionEnabled,
+                    onToggle = { viewModel.setSharedTransitionEnabled(it) }
+                )
             }
 
             // 搜索源
@@ -503,7 +540,8 @@ fun SettingsScreen(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "Zreso", checked = zresoEnabled, onCheckedChange = { viewModel.setZresoEnabled(it) })
                     SearchSourceAddCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), title = stringResource(R.string.settings_add_source), onClick = {
@@ -549,8 +587,8 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Explore, title = stringResource(R.string.settings_discover_page), onClick = { showDiscoverSectionsDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.Movie, title = stringResource(R.string.settings_detail_page), onClick = { showDetailSectionsDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Explore, title = stringResource(R.string.settings_discover_page), onClick = { showDiscoverSectionsDialog = true })
+                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Movie, title = stringResource(R.string.settings_detail_page), onClick = { showDetailSectionsDialog = true })
                 }
             }
 
@@ -585,19 +623,49 @@ fun SettingsScreen(
                 }
                 item(key = "douban_resync") {
                     SettingsItemCard(
-                        icon = Icons.Default.FileDownload,
+                        icon = Icons.Rounded.FileDownload,
                         title = stringResource(R.string.settings_douban_resync),
                         subtitle = stringResource(R.string.settings_douban_resync_desc),
                         onClick = {
-                            // 重新同步:弹模式选择对话框(A/B/C)
-                            showSyncModePicker = true
+                            // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
+                            if (doubanLoggedIn) {
+                                // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
+                                scope.launch { viewModel.refreshCooldownStatus() }
+                                showSyncModePicker = true
+                            } else {
+                                showDoubanLoginPrompt = true
+                            }
+                        },
+                        trailing = {
+                            // 冷却期状态标签(右对齐):从未同步不显示,冷却中显示剩余天数,可同步显示可同步
+                            cooldownStatus?.let { status ->
+                                if (!status.neverSynced) {
+                                    Surface(
+                                        shape = MaterialTheme.shapes.small,
+                                        color = if (status.isCoolingDown)
+                                            MaterialTheme.colorScheme.tertiaryContainer
+                                        else MaterialTheme.colorScheme.secondaryContainer
+                                    ) {
+                                        Text(
+                                            text = if (status.isCoolingDown)
+                                                stringResource(R.string.cooldown_remaining_days, status.remainingDays)
+                                            else stringResource(R.string.cooldown_available),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (status.isCoolingDown)
+                                                MaterialTheme.colorScheme.onTertiaryContainer
+                                            else MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     )
                 }
                 item(key = "douban_retry") {
                     if (doubanRetryState.hasFailures) {
                         SettingsItemCard(
-                            icon = Icons.Default.Replay,
+                            icon = Icons.Rounded.Replay,
                             title = stringResource(R.string.settings_douban_retry_failures),
                             subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
                             onClick = {
@@ -611,7 +679,7 @@ fun SettingsScreen(
                     // 「查看同步失败项」入口:仅在有失败项时显示,卡片独占一行
                     if (doubanRetryState.hasFailures) {
                         SettingsItemCard(
-                            icon = Icons.Default.BrokenImage,
+                            icon = Icons.Rounded.BrokenImage,
                             title = stringResource(R.string.settings_douban_view_failures),
                             subtitle = stringResource(
                                 R.string.settings_douban_view_failures_desc,
@@ -683,7 +751,7 @@ fun SettingsScreen(
             // 源代码仓库（卡片独占一行，保留小字）
             item(key = "source_repo") {
                 SettingsItemCard(
-                    icon = Icons.Default.Code,
+                    icon = Icons.Rounded.Code,
                     title = stringResource(R.string.settings_source_repo),
                     subtitle = "yufeng-liang/TrackToSearch-release",
                     onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") }
@@ -1049,15 +1117,129 @@ fun SettingsScreen(
     if (showSyncModePicker) {
         DoubanSyncModePickerDialog(
             syncedCount = 0,
+            cooldownStatus = cooldownStatus,
             onDismiss = { showSyncModePicker = false },
             onModeSelected = { mode ->
                 showSyncModePicker = false
-                scope.launch {
-                    doubanRetryViewModel.doubanSyncManager.startSync(mode)
-                    onDoubanResync()
+                // 冷却期内选择增量同步(模式 A/B)时弹引导:跳过或强制同步
+                val isCooling = cooldownStatus?.isCoolingDown == true
+                if (isCooling && mode != com.tracktosearch.data.repository.SyncMode.FULL_REWRITE) {
+                    pendingCooldownMode = mode
+                    showCooldownGuidance = true
+                } else {
+                    scope.launch {
+                        doubanRetryViewModel.doubanSyncManager.startSync(mode)
+                        onDoubanResync()
+                    }
                 }
             }
         )
+    }
+
+    // 冷却期内选择增量同步:弹引导对话框,提供「跳过」和「强制同步」
+    if (showCooldownGuidance) {
+        AlertDialog(
+            onDismissRequest = {
+                showCooldownGuidance = false
+                pendingCooldownMode = null
+            },
+            title = { Text(stringResource(R.string.cooldown_guidance_title)) },
+            text = { Text(stringResource(R.string.cooldown_guidance_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val mode = pendingCooldownMode
+                    showCooldownGuidance = false
+                    pendingCooldownMode = null
+                    if (mode != null) {
+                        scope.launch {
+                            // 强制同步:forceCrawl=true 跳过 7 天冷却
+                            doubanRetryViewModel.doubanSyncManager.startSync(mode, forceCrawl = true)
+                            onDoubanResync()
+                        }
+                    }
+                }) { Text(stringResource(R.string.cooldown_force_sync)) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showCooldownGuidance = false
+                    pendingCooldownMode = null
+                }) { Text(stringResource(R.string.cooldown_skip)) }
+            }
+        )
+    }
+
+    // 未登录豆瓣时点「重新同步豆瓣」:弹确认框引导前往登录
+    if (showDoubanLoginPrompt) {
+        AlertDialog(
+            onDismissRequest = { showDoubanLoginPrompt = false },
+            title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
+            text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDoubanLoginPrompt = false
+                    onNavigateToDoubanLogin()
+                }) { Text(stringResource(R.string.settings_douban_not_logged_in_login)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDoubanLoginPrompt = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            }
+        )
+    }
+}
+
+/**
+ * 共享元素转场动画开关卡片(外观分组下,独占一行)。
+ * 开关状态收集局部化到本函数,切换时只重组本卡片。
+ */
+@Composable
+private fun SharedTransitionSwitchCard(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    val view = LocalView.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_shared_transition),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.settings_shared_transition_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = enabled,
+                onCheckedChange = { value ->
+                    view.performHaptic(HapticType.CLICK)
+                    onToggle(value)
+                },
+                colors = appSwitchColors()
+            )
+        }
     }
 }
 
@@ -1092,7 +1274,7 @@ private fun NotificationItem(viewModel: SettingsViewModel) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.Notifications,
+                    Icons.Rounded.Notifications,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -1201,13 +1383,13 @@ private fun DataFlowGridItem(
     ) {
         DataFlowCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Default.FileUpload,
+            icon = Icons.Rounded.FileUpload,
             title = stringResource(R.string.settings_export_marks_data),
             onClick = onExport
         )
         DataFlowCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Default.FileDownload,
+            icon = Icons.Rounded.FileDownload,
             title = stringResource(R.string.settings_import_imdb),
             onClick = onImportImdb
         )
@@ -1218,13 +1400,13 @@ private fun DataFlowGridItem(
     ) {
         DataFlowCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Default.CloudUpload,
+            icon = Icons.Rounded.CloudUpload,
             title = stringResource(R.string.settings_douban_upload_cloud),
             onClick = onUploadCloud
         )
         DataFlowCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Default.CloudDownload,
+            icon = Icons.Rounded.CloudDownload,
             title = stringResource(R.string.settings_douban_download_cloud),
             onClick = onDownloadCloud
         )
@@ -1258,7 +1440,7 @@ private fun AboutItem(
     ) {
         SettingsCard(
             modifier = Modifier.weight(1f),
-            icon = Icons.Default.Info,
+            icon = Icons.Rounded.Info,
             title = stringResource(R.string.settings_version),
             subtitle = versionSubtitle,
             mergeTitleAndSubtitle = true,
@@ -1266,14 +1448,14 @@ private fun AboutItem(
             subtitleColor = versionSubtitleColor,
             onClick = onVersionClick
         )
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.NewReleases, title = stringResource(R.string.settings_changelog), onClick = onChangelogClick)
+        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.AutoMirrored.Rounded.EventNote, title = stringResource(R.string.settings_changelog), onClick = onChangelogClick)
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Outlined.HelpOutline, title = stringResource(R.string.settings_help), onClick = onHelpClick)
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Default.AutoAwesome, title = stringResource(R.string.settings_restart_onboarding), onClick = onRestartOnboarding)
+        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.AutoMirrored.Rounded.HelpOutline, title = stringResource(R.string.settings_help), onClick = onHelpClick)
+        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.School, title = stringResource(R.string.settings_restart_onboarding), onClick = onRestartOnboarding)
     }
 }
 

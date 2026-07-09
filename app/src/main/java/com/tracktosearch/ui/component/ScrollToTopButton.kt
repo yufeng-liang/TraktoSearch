@@ -12,7 +12,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -170,7 +170,7 @@ private fun ScrollToTopButtonContent(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Filled.KeyboardArrowUp,
+                imageVector = Icons.Rounded.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
                 modifier = Modifier.size(32.dp)
@@ -182,7 +182,7 @@ private fun ScrollToTopButtonContent(
             shape = CircleShape
         ) {
             Icon(
-                imageVector = Icons.Filled.KeyboardArrowUp,
+                imageVector = Icons.Rounded.KeyboardArrowUp,
                 contentDescription = stringResource(R.string.scroll_to_top),
                 tint = arrowTint,
                 modifier = Modifier.size(32.dp)

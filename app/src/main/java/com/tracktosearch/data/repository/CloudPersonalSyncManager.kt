@@ -13,6 +13,8 @@ import com.tracktosearch.data.remote.cloud.GiteeContentResponse
 import com.tracktosearch.data.remote.cloud.GiteeContentsApi
 import com.tracktosearch.data.remote.trakt.dto.TraktSearchResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -60,7 +62,14 @@ class CloudPersonalSyncManager @Inject constructor(
         private const val FILE_PENDING = "pending_items.json"
         private const val FILE_ID_MAPPINGS = "id_mappings.json"
         private const val FILE_META = "sync_meta.json"
+        // 节流窗口:5 秒内的重复 refreshMetaOnly 调用只发一次网络请求
+        // (设置页 LaunchedEffect(Unit) 和 LaunchedEffect(doubanLoggedIn) 首次会并发触发两次)
+        private const val META_REFRESH_THROTTLE_MS = 5_000L
     }
+
+    // 节流锁 + 上次成功刷新时间戳,避免并发/短时重复请求 gitee
+    private val metaRefreshMutex = Mutex()
+    @Volatile private var lastMetaRefreshAt: Long = 0L
 
     // ===== 数据模型 =====
 
@@ -374,6 +383,39 @@ class CloudPersonalSyncManager @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "解析 sync_meta 失败: ${e.message}")
             null
+        }
+    }
+
+    /**
+     * 轻量刷新:仅拉取云端 sync_meta 并合并到本地,不下载 synced/pending/mappings。
+     * 供设置页显示「冷却期」状态前调用,确保跨设备 lastFullSyncAt 准确。
+     *
+     * 节流:5 秒内的重复调用只发一次网络请求(设置页两个 LaunchedEffect 首次会并发触发)。
+     * @return true=云端 meta 拉取并合并成功;false=未登录/云端无数据/失败
+     */
+    suspend fun refreshMetaOnly(): Boolean = metaRefreshMutex.withLock {
+        // 节流:窗口内直接返回 true(上次已成功刷新,冷却期数据不会在 5 秒内变化)
+        if (System.currentTimeMillis() - lastMetaRefreshAt < META_REFRESH_THROTTLE_MS) {
+            return@withLock true
+        }
+        val success = doRefreshMetaOnly()
+        if (success) lastMetaRefreshAt = System.currentTimeMillis()
+        success
+    }
+
+    private suspend fun doRefreshMetaOnly(): Boolean = withContext(Dispatchers.IO) {
+        val payload = checkCloudMeta() ?: return@withContext false
+        try {
+            doubanSyncMetaStorage.updateFromCloud(
+                cloudLastFullSyncAt = payload.lastFullSyncAt,
+                cloudLastSyncAt = payload.lastSyncAt,
+                cloudLastSyncMode = payload.lastSyncMode
+            )
+            Log.d(TAG, "refreshMetaOnly: 已合并云端 meta lastFull=${payload.lastFullSyncAt}")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshMetaOnly 合并失败: ${e.message}")
+            false
         }
     }
 

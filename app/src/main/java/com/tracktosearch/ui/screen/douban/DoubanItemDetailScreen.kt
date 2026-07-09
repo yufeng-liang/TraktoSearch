@@ -32,16 +32,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.OpenInBrowser
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Tv
-import androidx.compose.material.icons.outlined.Label
-import androidx.compose.material.icons.outlined.Star
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.OpenInBrowser
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -219,8 +218,9 @@ class DoubanItemDetailViewModel @Inject constructor(
                 _uiState.value = DoubanItemDetailUiState(
                     isLoading = false,
                     failure = failure,
-                    // 默认开启「同时用子标题搜索」(仅当 subtitle 非空时才生效)
-                    searchWithSubtitle = !failure.subtitle.isNullOrBlank()
+                    // 默认开启「同时用子标题搜索」(subtitle 非空,或 title 含 "/" 可拆出外文标题时生效)
+                    searchWithSubtitle = !failure.subtitle.isNullOrBlank() ||
+                        failure.title.split("/").map { it.trim() }.filter { it.isNotBlank() }.size > 1
                 )
                 // 尽早从缓存预查海报主色,让沉浸背景在海报图片加载前显示
                 prefetchPosterColor(failure.posterUrl)
@@ -301,14 +301,18 @@ class DoubanItemDetailViewModel @Inject constructor(
             val isShow = failure.mediaType == "show"
 
             // 构造关键词列表（最多 4 个）：主标题(原/去季) + 子标题(原/去季)
+            // 豆瓣条目标题常含 "/" 分隔中文/外文标题（如"王朝 第一季 / Dynasties Season 1"），
+            // 自动拆分出外文标题作为子标题候选；用户手动编辑的 subtitle 优先
             val keywords = mutableListOf<String>()
-            val mainTitle = failure.title
+            val titleParts = failure.title.split("/").map { it.trim() }.filter { it.isNotBlank() }
+            val mainTitle = titleParts.getOrElse(0) { failure.title }
+            val titleForeignName = titleParts.getOrNull(1)
             val mainNoSeason = removeSeasonInfo(mainTitle)
             keywords.add(mainTitle)
             if (mainNoSeason != mainTitle) {
                 keywords.add(mainNoSeason)
             }
-            val subtitle = failure.subtitle
+            val subtitle = failure.subtitle ?: titleForeignName
             if (subtitle != null && subtitle.isNotBlank() && _uiState.value.searchWithSubtitle) {
                 val subNoSeason = removeSeasonInfo(subtitle)
                 keywords.add(subtitle)
@@ -890,7 +894,7 @@ fun DoubanItemDetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -942,7 +946,7 @@ fun DoubanItemDetailScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Label,
+                            imageVector = Icons.Rounded.Edit,
                             contentDescription = stringResource(R.string.screen_douban_failures_mark_as_movie),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(20.dp)
@@ -954,7 +958,7 @@ fun DoubanItemDetailScreen(
                     ) {
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.screen_douban_failures_mark_as_movie)) },
-                            leadingIcon = { Icon(Icons.Default.Movie, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Rounded.Movie, contentDescription = null) },
                             onClick = {
                                 viewModel.setMediaType("movie")
                                 showMarkMenu = false
@@ -962,7 +966,7 @@ fun DoubanItemDetailScreen(
                         )
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.screen_douban_failures_mark_as_show)) },
-                            leadingIcon = { Icon(Icons.Default.Tv, contentDescription = null) },
+                            leadingIcon = { Icon(Icons.Rounded.Tv, contentDescription = null) },
                             onClick = {
                                 viewModel.setMediaType("show")
                                 showMarkMenu = false
@@ -1031,7 +1035,7 @@ fun DoubanItemDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Filled.Share,
+                        Icons.Rounded.Share,
                         contentDescription = stringResource(R.string.detail_share),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp)
@@ -1300,7 +1304,7 @@ private fun DoubanStarRating(rating: Int, textColor: Color) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         for (i in 1..5) {
             Icon(
-                imageVector = if (i <= rating) Icons.Filled.Star else Icons.Outlined.Star,
+                imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.Star,
                 contentDescription = null,
                 tint = if (i <= rating) Color(0xFFFFC107) else textColor.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
@@ -1555,7 +1559,7 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
                 view.performHaptic(HapticType.CLICK)
                 onRetry()
             }) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.detail_retry))
             }
@@ -1583,7 +1587,7 @@ private fun DoubanDetailInfoTab(
             },
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Default.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.screen_douban_item_detail_open_douban))
         }
@@ -1599,7 +1603,7 @@ private fun DoubanDetailInfoTab(
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.screen_douban_item_detail_retry))
             }
@@ -1616,7 +1620,7 @@ private fun DoubanDetailInfoTab(
                 contentColor = MaterialTheme.colorScheme.error
             )
         ) {
-            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
             Text(stringResource(R.string.screen_douban_item_detail_delete))
         }

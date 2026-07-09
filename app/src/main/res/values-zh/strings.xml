@@ -424,6 +424,8 @@
     <!-- Settings -->
     <string name="settings_title">设置</string>
     <string name="settings_appearance">外观</string>
+    <string name="settings_shared_transition">共享元素转场动画</string>
+    <string name="settings_shared_transition_subtitle">在页面间为共享元素添加转场动画。默认关闭，以降低性能开销。</string>
     <string name="settings_search">搜索源</string>
     <string name="settings_storage">存储</string>
     <string name="settings_clear_cache">清除缓存</string>
@@ -501,6 +503,7 @@
     <string name="help_dc_failures_entry">失败查看页</string>
     <string name="help_dc_failures_fmt">JSON</string>
     <string name="help_dc_failures_desc">从其他设备导出的失败项JSON文件导入本地查看</string>
+    <string name="help_dc_cooldown">冷却期：豆瓣有反爬机制，频繁多次爬取可能导致你的 IP 地址被列入黑名单。完整爬取后设置 7 天冷却期以降低请求频率。冷却期内增量同步复用云端数据，不再重新爬取；你可以自行承担风险强制同步。</string>
     <string name="help_custom_source">自定义搜索源</string>
     <string name="help_custom_source_b1">设置 → 搜索源 → 自定义搜索源 → 添加搜索源</string>
     <string name="help_custom_source_b2">搜索源会拼接 URL 发送请求：{baseUrl}/{apiPath}?{keywordParam}=搜索词&amp;其他参数</string>
@@ -643,6 +646,16 @@
     <string name="settings_view_statistics">观看统计</string>
     <string name="settings_douban_resync">重新同步豆瓣</string>
     <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
+    <string name="settings_douban_not_logged_in_title">未登录豆瓣</string>
+    <string name="settings_douban_not_logged_in_message">重新同步豆瓣需要先登录豆瓣,是否前往登录?</string>
+    <string name="settings_douban_not_logged_in_login">前往登录</string>
+    <!-- 增量同步冷却期(7天) -->
+    <string name="cooldown_remaining_days">冷却中·剩%1$d天</string>
+    <string name="cooldown_available">可同步</string>
+    <string name="cooldown_guidance_title">处于冷却期内</string>
+    <string name="cooldown_guidance_message">7 天内已同步过列表爬取,增量同步将被跳过(数据来自云端)。是否强制同步重新爬取豆瓣列表?\n\n豆瓣有反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。强制同步请自行承担风险。</string>
+    <string name="cooldown_force_sync">强制同步</string>
+    <string name="cooldown_skip">跳过</string>
     <string name="settings_douban_retry_failures">重试上次失败项</string>
 
     <!-- Douban sync mode picker -->

@@ -232,6 +232,8 @@
     <!-- Settings -->
     <string name="settings_title">설정</string>
     <string name="settings_appearance">외관</string>
+    <string name="settings_shared_transition">공유 요소 전환 애니메이션</string>
+    <string name="settings_shared_transition_subtitle">화면 간 공유 요소에 전환 애니메이션을 적용합니다. 성능 오버헤드를 줄이기 위해 기본값은 꺼짐입니다.</string>
     <string name="settings_search">검색</string>
     <string name="settings_storage">저장소</string>
     <string name="settings_clear_cache">캐시 지우기</string>
@@ -545,6 +547,16 @@
     <string name="settings_view_statistics">시청 통계</string>
     <string name="settings_douban_resync">더우반 재동기화</string>
     <string name="settings_douban_resync_desc">동기화 모드를 선택하고 더우반 상태 변화 처리</string>
+    <string name="settings_douban_not_logged_in_title">더우반 미로그인</string>
+    <string name="settings_douban_not_logged_in_message">더우반 재동기화에는 로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?</string>
+    <string name="settings_douban_not_logged_in_login">로그인으로</string>
+    <!-- 증분 동기화 쿨다운(7일) -->
+    <string name="cooldown_remaining_days">쿨다운·남%1$d일</string>
+    <string name="cooldown_available">동기화 가능</string>
+    <string name="cooldown_guidance_title">쿨다운 기간 중</string>
+    <string name="cooldown_guidance_message">7일 이내에 리스트 크롤링을 동기화했습니다. 증분 동기화는 건너뛰며(데이터는 클라우드에서). 강제 동기화로 더우반 리스트를 다시 크롤링하시겠습니까?\n\n더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 강제 동기화는 본인 책임하에.</string>
+    <string name="cooldown_force_sync">강제 동기화</string>
+    <string name="cooldown_skip">건너뛰기</string>
     <string name="settings_douban_retry_failures">이전 실패 항목 재시도</string>
 
     <!-- Douban sync mode picker -->
@@ -985,6 +997,7 @@
     <string name="help_dc_failures_entry">실패 항목 보기 페이지</string>
     <string name="help_dc_failures_fmt">JSON</string>
     <string name="help_dc_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 로컬로 가져오기</string>
+    <string name="help_dc_cooldown">쿨다운: 더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 전체 크롤링 후 7일 쿨다운을 설정해 요청 빈도를 낮춥니다. 쿨다운 중 증분 동기화는 클라우드 데이터를 재사용하며 재크롤링하지 않습니다. 본인 책임하에 강제 동기화 가능.</string>
     <string name="help_custom_source">사용자 정의 검색 소스</string>
     <string name="help_custom_source_b1">설정 → 검색 소스 → 사용자 정의 검색 소스 → 검색 소스 추가</string>
     <string name="help_custom_source_b2">검색 소스는 URL을 조합하여 요청: {baseUrl}/{apiPath}?{keywordParam}=검색어&amp;기타 매개변수</string>

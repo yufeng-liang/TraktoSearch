@@ -37,8 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Help
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -85,6 +85,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -261,7 +262,7 @@ fun StatisticsScreen(
             }
             // Haze模糊渐变TopAppBar（含状态栏）
             // 「标题+返回箭头」整体与设置页观看统计入口配对（sharedBounds）
-            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            val headerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                 with(sharedTransitionScope) {
                     Modifier.sharedBounds(
                         sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
@@ -288,7 +289,7 @@ fun StatisticsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
                 }
                 Text(stringResource(R.string.statistics_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.width(4.dp))
@@ -297,7 +298,7 @@ fun StatisticsScreen(
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Help,
+                        imageVector = Icons.AutoMirrored.Rounded.Help,
                         contentDescription = stringResource(R.string.statistics_info),
                         modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary

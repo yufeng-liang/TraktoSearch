@@ -50,17 +50,17 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -110,6 +110,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -382,7 +385,7 @@ fun WatchlistScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = Icons.Rounded.Refresh,
                         contentDescription = null,
                         modifier = Modifier.size(26.dp),
                         tint = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
@@ -411,7 +414,7 @@ fun WatchlistScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Outlined.Movie,
+                            imageVector = Icons.Rounded.Movie,
                             contentDescription = null,
                             modifier = Modifier.size(64.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
@@ -538,7 +541,7 @@ fun WatchlistScreen(
                                 ) {
                                     if (isSelected) {
                                         Icon(
-                                            imageVector = Icons.Filled.CheckCircle,
+                                            imageVector = Icons.Rounded.CheckCircle,
                                             contentDescription = null,
                                             tint = Color.White,
                                             modifier = Modifier.size(22.dp)
@@ -672,13 +675,13 @@ fun WatchlistScreen(
                                             if (searchQuery.isNotEmpty()) {
                                                 IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
                                                     Icon(
-                                                        Icons.Filled.Close,
+                                                        Icons.Rounded.Close,
                                                         contentDescription = stringResource(R.string.content_desc_clear),
                                                         modifier = Modifier.size(19.dp)
                                                     )
                                                 }
                                             } else {
-                                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
+                                                Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
                                             }
                                         },
                                         contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
@@ -697,7 +700,7 @@ fun WatchlistScreen(
                             // 筛选按钮（有筛选条件生效时图标变 primary 色）
                             IconButton(onClick = { showFilterSheet = true }) {
                                 Icon(
-                                    Icons.Default.Tune,
+                                    Icons.Rounded.Tune,
                                     contentDescription = stringResource(R.string.filter_title),
                                     tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                                     modifier = Modifier.size(32.dp)
@@ -816,7 +819,7 @@ fun WatchlistScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = if (syncProgress.isRunning) Icons.Default.Sync else Icons.Default.CheckCircle,
+                                        imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
                                         contentDescription = null,
                                         tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
                                             else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -871,7 +874,7 @@ fun WatchlistScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        Icons.Default.Warning,
+                                        Icons.Rounded.Warning,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onErrorContainer,
                                         modifier = Modifier.size(16.dp)
@@ -907,7 +910,7 @@ fun WatchlistScreen(
                         ) {
                             IconButton(onClick = { isMultiSelectMode = false }) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    Icons.AutoMirrored.Rounded.ArrowBack,
                                     contentDescription = stringResource(R.string.common_cancel),
                                     tint = MaterialTheme.colorScheme.primary
                                 )
@@ -1088,6 +1091,8 @@ private fun WatchlistFilterSheet(
     ModalBottomSheet(
         onDismissRequest = onApply,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        // 统一背景色与发现页查看全部 sheet 一致
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         // 去除默认 drag 条,内容更紧凑
         dragHandle = null
     ) {
@@ -1213,6 +1218,17 @@ private fun WatchlistFilterSheet(
                         .weight(1f)
                         .padding(end = 8.dp)
                         .nestedScroll(ratingScrollConnection)
+                        // 拦截竖直拖拽:RangeSlider 拖动是 pointerInput 级别,不走 nestedScroll。
+                        // 斜向拖动时竖直分量会冒泡到 ModalBottomSheet 的 anchoredDraggable 触发 sheet 移动。
+                        // 用 draggable(Vertical, startDragImmediately=true) 跳过 touch slop,
+                        // 在第一个 move 事件就立即消费竖直分量,使 anchoredDraggable 永远无法累积
+                        // 竖直 slop 启动拖拽。RangeSlider(子节点,Main pass 先处理)仍能正常检测水平拖拽。
+                        .draggable(
+                            state = rememberDraggableState { _ -> },
+                            orientation = Orientation.Vertical,
+                            startDragImmediately = true,
+                            enabled = true
+                        )
                 ) {
                     RangeSlider(
                         value = filterState.ratingRange,
@@ -1305,7 +1321,7 @@ private fun WatchlistFilterSheet(
                         label = { Text(stringResource(R.string.filter_sort_desc), maxLines = 1) },
                         icon = {
                             Icon(
-                                Icons.Default.ArrowDownward,
+                                Icons.Rounded.ArrowDownward,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
@@ -1320,7 +1336,7 @@ private fun WatchlistFilterSheet(
                         label = { Text(stringResource(R.string.filter_sort_asc), maxLines = 1) },
                         icon = {
                             Icon(
-                                Icons.Default.ArrowUpward,
+                                Icons.Rounded.ArrowUpward,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )

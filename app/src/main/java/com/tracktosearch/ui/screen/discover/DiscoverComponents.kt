@@ -18,10 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -59,6 +59,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -116,7 +117,7 @@ internal fun MovieCard(
     ) {
         Column {
             // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
-            val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                 with(sharedTransitionScope) {
                     Modifier
                         .fillMaxWidth()
@@ -179,7 +180,7 @@ internal fun MovieCard(
                     ) {
                         if (isWatched) {
                             Icon(
-                                imageVector = Icons.Filled.CheckCircle,
+                                imageVector = Icons.Rounded.CheckCircle,
                                 contentDescription = null,
                                 modifier = Modifier.size(12.dp),
                                 tint = Color.White
@@ -191,7 +192,7 @@ internal fun MovieCard(
                             )
                         } else {
                             Icon(
-                                imageVector = Icons.Filled.Bookmark,
+                                imageVector = Icons.Rounded.Bookmark,
                                 contentDescription = null,
                                 modifier = Modifier.size(10.dp),
                                 tint = Color.White
@@ -297,7 +298,7 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
             modifier = Modifier.size(20.dp)
         ) {
             Icon(
-                Icons.Outlined.Info,
+                Icons.Rounded.Info,
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.error
@@ -305,7 +306,7 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
         }
         Spacer(Modifier.width(4.dp))
         TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
         }

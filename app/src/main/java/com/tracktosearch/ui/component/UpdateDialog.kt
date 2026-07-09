@@ -343,7 +343,7 @@ fun UpdateDialog(
     AlertDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        title = { Text(stringResource(R.string.update_new_version, updateInfo.latestVersion)) },
+        title = null,
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 // 可滚动的更新日志区域

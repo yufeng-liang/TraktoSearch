@@ -102,8 +102,39 @@ class DoubanSyncMetaStorage @Inject constructor(
         return age < maxAgeMillis
     }
 
+    /**
+     * 获取冷却期状态(供 UI 显示)。
+     *
+     * @param maxAgeMillis 冷却窗口,默认 7 天
+     * @return [CooldownStatus] neverNull=true 表示从未完整同步过(不显示冷却状态)
+     */
+    suspend fun getCooldownStatus(maxAgeMillis: Long = 7 * 24 * 60 * 60 * 1000L): CooldownStatus {
+        val lastFull = getLastFullSyncAt()
+        if (lastFull <= 0L) return CooldownStatus(neverSynced = true)
+        val age = System.currentTimeMillis() - lastFull
+        val remaining = maxAgeMillis - age
+        return if (remaining > 0L) {
+            CooldownStatus(isCoolingDown = true, remainingDays = (remaining / (24 * 60 * 60 * 1000L)).toInt() + 1)
+        } else {
+            CooldownStatus(isCoolingDown = false, remainingDays = 0)
+        }
+    }
+
     /** 清除（退出登录时调用） */
     suspend fun clear() {
         context.doubanSyncMetaStore.edit { it.clear() }
     }
 }
+
+/**
+ * 冷却期状态(供设置页与模式选择对话框显示)。
+ *
+ * @param neverSynced true=从未完整同步过,不显示冷却状态
+ * @param isCoolingDown true=处于 7 天冷却期内
+ * @param remainingDays 剩余天数(冷却期内才有意义,向上取整,如剩 1 小时显示 1 天)
+ */
+data class CooldownStatus(
+    val neverSynced: Boolean = false,
+    val isCoolingDown: Boolean = false,
+    val remainingDays: Int = 0
+)

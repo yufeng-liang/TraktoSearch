@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -81,7 +81,7 @@ internal fun CommentItem(
                 if (comment.user_rating != null) {
                     Spacer(modifier = Modifier.width(6.dp))
                     Icon(
-                        Icons.Filled.Star,
+                        Icons.Rounded.Star,
                         contentDescription = null,
                         modifier = Modifier.size(12.dp),
                         tint = Color(0xFFFFC107)

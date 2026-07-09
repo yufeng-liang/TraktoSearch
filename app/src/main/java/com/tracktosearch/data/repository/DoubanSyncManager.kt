@@ -188,14 +188,16 @@ class DoubanSyncManager @Inject constructor(
      * - [SyncMode.INCREMENTAL_ONLY]: 等价于 forceOverwrite=false
      * - [SyncMode.INCREMENTAL_WITH_CHANGES]: 跳过已同步且状态一致的,处理状态变化的
      * - [SyncMode.FULL_REWRITE]: 先清空已同步标记,再 forceOverwrite=true
+     *
+     * @param forceCrawl true=强制爬取豆瓣列表,忽略 7 天冷却期(用户在冷却期内选择「强制同步」时用)
      */
-    fun startSync(mode: SyncMode): Boolean {
+    fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean {
         if (isRunning()) return false
         cancelled = false
         dirtyDetailIds.clear()
         syncJob = appScope.launch {
             if (!checkTraktAvailable()) return@launch
-            runSync(mode)
+            runSync(mode, forceCrawl)
         }
         return true
     }
@@ -265,10 +267,10 @@ class DoubanSyncManager @Inject constructor(
         return true
     }
 
-    private suspend fun runSync(mode: SyncMode) {
+    private suspend fun runSync(mode: SyncMode, forceCrawl: Boolean = false) {
         when (mode) {
-            SyncMode.INCREMENTAL_ONLY -> runSyncIncremental(includeStatusChanges = false)
-            SyncMode.INCREMENTAL_WITH_CHANGES -> runSyncIncremental(includeStatusChanges = true)
+            SyncMode.INCREMENTAL_ONLY -> runSyncIncremental(includeStatusChanges = false, forceCrawl = forceCrawl)
+            SyncMode.INCREMENTAL_WITH_CHANGES -> runSyncIncremental(includeStatusChanges = true, forceCrawl = forceCrawl)
             SyncMode.FULL_REWRITE -> runSyncFullRewrite()
         }
     }
@@ -441,7 +443,7 @@ class DoubanSyncManager @Inject constructor(
         uploadToCloudAfterSync(mode = "LEGACY", isFullComplete = !cancelled)
     }
 
-    private suspend fun runSyncIncremental(includeStatusChanges: Boolean) {
+    private suspend fun runSyncIncremental(includeStatusChanges: Boolean, forceCrawl: Boolean = false) {
         val creds = doubanAuthStorage.getCredentials()
             ?: run {
                 _progress.value = DoubanSyncProgress(isComplete = true, phase = "未登录豆瓣")
@@ -472,7 +474,8 @@ class DoubanSyncManager @Inject constructor(
 
         // 「近期跳过列表」策略：模式 B 需要爬列表检测状态变化，不跳过；
         // 仅模式 A 且云端最近完整同步 < 7 天且无 pending → 跳过列表爬取
-        if (!includeStatusChanges && checkSkipListCrawl()) {
+        // forceCrawl=true 时强制爬取(用户在冷却期内选择「强制同步」)
+        if (!includeStatusChanges && !forceCrawl && checkSkipListCrawl()) {
             _progress.value = DoubanSyncProgress(
                 isRunning = false,
                 isComplete = true,

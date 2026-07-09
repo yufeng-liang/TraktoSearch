@@ -17,10 +17,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -64,7 +64,7 @@ fun VersionItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Info,
+            imageVector = Icons.Rounded.Info,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -176,7 +176,7 @@ internal fun AccountRow(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Person,
+                            imageVector = Icons.Rounded.Person,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp)
@@ -195,7 +195,7 @@ internal fun AccountRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Movie,
+                    imageVector = Icons.Rounded.Movie,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp)
@@ -360,7 +360,7 @@ fun LogoutItem(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.Logout,
+            imageVector = Icons.AutoMirrored.Rounded.Logout,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )

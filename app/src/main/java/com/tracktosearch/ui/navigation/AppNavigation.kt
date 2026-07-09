@@ -69,6 +69,12 @@ interface DefaultTabEntryPoint {
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
+interface SharedTransitionEntryPoint {
+    fun sharedTransitionStorage(): com.tracktosearch.data.local.SharedTransitionStorage
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
 interface GuestModeEntryPoint {
     fun guestModeStorage(): com.tracktosearch.data.local.GuestModeStorage
 }
@@ -148,6 +154,9 @@ fun AppNavigation(
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
     val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle(initialValue = DefaultTabStorage.DEFAULT_TAB_SEARCH)
+    // 共享元素转场动画开关(默认关闭):关闭时所有 sharedElement/sharedBounds 不附加修饰符
+    val sharedTransitionStorage = EntryPointAccessors.fromApplication(context, SharedTransitionEntryPoint::class.java).sharedTransitionStorage()
+    val sharedTransitionEnabled by sharedTransitionStorage.enabled.collectAsStateWithLifecycle(initialValue = com.tracktosearch.data.local.SharedTransitionStorage.DEFAULT_ENABLED)
     // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
     // 监听默认启动页设置变化
@@ -157,7 +166,10 @@ fun AppNavigation(
     val scope = rememberCoroutineScope()
 
     SharedTransitionLayout {
-        CompositionLocalProvider(LocalSharedTransitionScope provides this@SharedTransitionLayout) {
+        CompositionLocalProvider(
+            LocalSharedTransitionScope provides this@SharedTransitionLayout,
+            com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
+        ) {
             Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             NavHost(
                 navController = navController,

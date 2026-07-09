@@ -46,14 +46,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -479,7 +479,7 @@ private fun SearchBarTop(
     ) {
         if (onBack != null) {
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.width(4.dp))
         }
@@ -528,7 +528,7 @@ private fun SearchBarTop(
                                 maxLines = 1
                             )
                             Icon(
-                                Icons.Default.ArrowDropDown,
+                                Icons.Rounded.ArrowDropDown,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
                                 tint = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50)
@@ -557,7 +557,7 @@ private fun SearchBarTop(
                                             )
                                             if (type == searchSourceType) {
                                                 Spacer(modifier = Modifier.width(8.dp))
-                                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                             }
                                         }
                                     },
@@ -584,7 +584,7 @@ private fun SearchBarTop(
                 ) {
                     if (searchQuery.isEmpty()) {
                         Icon(
-                            Icons.Default.Search,
+                            Icons.Rounded.Search,
                             contentDescription = null,
                             modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -595,7 +595,7 @@ private fun SearchBarTop(
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                Icons.Default.Close,
+                                Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.search_clear_input),
                                 modifier = Modifier.size(18.dp)
                             )
@@ -688,7 +688,7 @@ private fun SearchHistoryInline(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    Icons.Default.History,
+                                    Icons.Rounded.History,
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -719,7 +719,7 @@ private fun SearchHistoryInline(
                                     modifier = Modifier.size(22.dp)
                                 ) {
                                     Icon(
-                                        Icons.Default.Close,
+                                        Icons.Rounded.Close,
                                         contentDescription = stringResource(R.string.search_history_delete),
                                         modifier = Modifier.size(12.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -761,7 +761,7 @@ private fun SearchSuggestionsInline(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    Icons.Default.Search,
+                    Icons.Rounded.Search,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -869,7 +869,7 @@ fun DoubanHotCategorySection(
                 )
                 Spacer(Modifier.width(12.dp))
                 TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(4.dp))
                     Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
                 }
@@ -904,7 +904,7 @@ fun DoubanHotCategorySection(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.ArrowForwardIos,
+                                    Icons.AutoMirrored.Rounded.ArrowForwardIos,
                                     contentDescription = stringResource(R.string.content_desc_view_all),
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -968,7 +968,7 @@ fun DoubanHotCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.Search,
+                            Icons.Rounded.Search,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
@@ -1137,7 +1137,7 @@ private fun DoubanHotGridItem(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            Icons.Default.Search,
+                            Icons.Rounded.Search,
                             contentDescription = null,
                             modifier = Modifier.size(28.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)

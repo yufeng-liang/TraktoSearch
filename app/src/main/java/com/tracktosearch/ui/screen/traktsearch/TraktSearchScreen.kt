@@ -47,10 +47,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -91,6 +91,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -438,7 +439,7 @@ fun TraktSearchScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
                     }
                     val searchInteractionSource = remember { MutableInteractionSource() }
                     BasicTextField(
@@ -481,7 +482,7 @@ fun TraktSearchScreen(
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
                                             Icon(
-                                                Icons.Filled.Close,
+                                                Icons.Rounded.Close,
                                                 contentDescription = stringResource(R.string.content_desc_clear),
                                                 modifier = Modifier.size(19.dp)
                                             )
@@ -493,7 +494,7 @@ fun TraktSearchScreen(
                                             }
                                         }) {
                                             Icon(
-                                                Icons.Default.Search,
+                                                Icons.Rounded.Search,
                                                 contentDescription = stringResource(R.string.watchlist_search),
                                                 modifier = Modifier.size(19.dp)
                                             )
@@ -616,7 +617,7 @@ fun TraktSearchScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.KeyboardArrowUp,
+                        imageVector = Icons.Rounded.KeyboardArrowUp,
                         contentDescription = stringResource(R.string.scroll_to_top),
                         tint = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0xFF616161) else Color.White,
                         modifier = Modifier.size(32.dp)
@@ -884,7 +885,7 @@ private fun PersonSearchCard(
             ) {
                 if (profileUrl != null) {
                     // 启用 sharedElement 转场:key 与 PersonHeaderContent 一致("person-avatar-$personId")
-                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                         with(sharedTransitionScope) {
                             Modifier
                                 .sharedElement(
@@ -997,7 +998,7 @@ private fun SearchLoadingAnimation() {
     )
 
     Icon(
-        imageVector = Icons.Default.Search,
+        imageVector = Icons.Rounded.Search,
         contentDescription = null,
         modifier = Modifier
             .size(48.dp)

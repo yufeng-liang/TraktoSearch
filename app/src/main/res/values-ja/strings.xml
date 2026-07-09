@@ -232,6 +232,8 @@
     <!-- Settings -->
     <string name="settings_title">設定</string>
     <string name="settings_appearance">外観</string>
+    <string name="settings_shared_transition">共有要素トランジション</string>
+    <string name="settings_shared_transition_subtitle">画面間で共有要素にトランジションアニメーションを適用。パフォーマンスオーバーヘッドを下げるためデフォルトはオフ。</string>
     <string name="settings_search">検索</string>
     <string name="settings_storage">ストレージ</string>
     <string name="settings_clear_cache">キャッシュクリア</string>
@@ -545,6 +547,16 @@
     <string name="settings_view_statistics">視聴統計</string>
     <string name="settings_douban_resync">豆瓣を再同期</string>
     <string name="settings_douban_resync_desc">同期モードを選択し、豆瓣の状態変化を処理</string>
+    <string name="settings_douban_not_logged_in_title">豆瓣に未ログイン</string>
+    <string name="settings_douban_not_logged_in_message">豆瓣の再同期にはログインが必要です。ログインページへ移動しますか?</string>
+    <string name="settings_douban_not_logged_in_login">ログインへ</string>
+    <!-- 増分同期クールダウン(7日) -->
+    <string name="cooldown_remaining_days">クールダウン·残り%1$d日</string>
+    <string name="cooldown_available">同期可能</string>
+    <string name="cooldown_guidance_title">クールダウン期間中</string>
+    <string name="cooldown_guidance_message">7日以内にリストクロールを同期済みです。増分同期はスキップされます(データはクラウドから)。強制同期で豆瓣リストを再クロールしますか?\n\n豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。強制同期は自己責任で。</string>
+    <string name="cooldown_force_sync">強制同期</string>
+    <string name="cooldown_skip">スキップ</string>
     <string name="settings_douban_retry_failures">前回の失敗項目を再試行</string>
 
     <!-- Douban sync mode picker -->
@@ -985,6 +997,7 @@
     <string name="help_dc_failures_entry">失敗項目表示ページ</string>
     <string name="help_dc_failures_fmt">JSON</string>
     <string name="help_dc_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをローカルにインポート</string>
+    <string name="help_dc_cooldown">クールダウン：豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。完全クロール後に7日間のクールダウンを設けリクエスト頻度を下げます。クールダウン中の増分同期はクラウドデータを再利用し再クロールしません。自己責任で強制同期可能。</string>
     <string name="help_custom_source">カスタム検索ソース</string>
     <string name="help_custom_source_b1">設定 → 検索ソース → カスタム検索ソース → 検索ソースを追加</string>
     <string name="help_custom_source_b2">検索ソースはURLを構築してリクエスト：{baseUrl}/{apiPath}?{keywordParam}=検索語&amp;その他のパラメータ</string>

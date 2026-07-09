@@ -10,9 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AddCircle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.rounded.AddCircle
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.repository.SyncMode
 
 /**
@@ -43,10 +44,13 @@ import com.tracktosearch.data.repository.SyncMode
  * - C: 完全重写(清空已同步标记后重新应用,需二次确认)
  *
  * 每个选项附说明 + 示例,帮助用户理解后选择。
+ *
+ * @param cooldownStatus 冷却期状态,非 null 且 isCoolingDown 时在增量同步选项标题右侧显示剩余天数
  */
 @Composable
 fun DoubanSyncModePickerDialog(
     syncedCount: Int,
+    cooldownStatus: CooldownStatus? = null,
     onDismiss: () -> Unit,
     onModeSelected: (SyncMode) -> Unit
 ) {
@@ -84,29 +88,31 @@ fun DoubanSyncModePickerDialog(
         text = {
             Column {
                 ModeOptionItem(
-                    icon = Icons.Default.AddCircle,
+                    icon = Icons.Rounded.AddCircle,
                     title = stringResource(R.string.douban_sync_mode_a_title),
                     desc = stringResource(R.string.douban_sync_mode_a_desc),
                     example = stringResource(R.string.douban_sync_mode_a_example),
                     onClick = {
                         onDismiss()
                         onModeSelected(SyncMode.INCREMENTAL_ONLY)
-                    }
+                    },
+                    trailing = { CooldownBadge(cooldownStatus) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 ModeOptionItem(
-                    icon = Icons.Default.Refresh,
+                    icon = Icons.Rounded.Refresh,
                     title = stringResource(R.string.douban_sync_mode_b_title),
                     desc = stringResource(R.string.douban_sync_mode_b_desc),
                     example = stringResource(R.string.douban_sync_mode_b_example),
                     onClick = {
                         onDismiss()
                         onModeSelected(SyncMode.INCREMENTAL_WITH_CHANGES)
-                    }
+                    },
+                    trailing = { CooldownBadge(cooldownStatus) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 ModeOptionItem(
-                    icon = Icons.Default.Replay,
+                    icon = Icons.Rounded.Replay,
                     title = stringResource(R.string.douban_sync_mode_c_title),
                     desc = stringResource(R.string.douban_sync_mode_c_desc),
                     example = stringResource(R.string.douban_sync_mode_c_example, syncedCount),
@@ -131,7 +137,8 @@ private fun ModeOptionItem(
     title: String,
     desc: String,
     example: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    trailing: @Composable (() -> Unit)? = null
 ) {
     Surface(
         modifier = Modifier
@@ -152,11 +159,18 @@ private fun ModeOptionItem(
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (trailing != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        trailing()
+                    }
+                }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     desc,
@@ -169,6 +183,34 @@ private fun ModeOptionItem(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     fontStyle = FontStyle.Italic
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 冷却期状态徽章:冷却中显示剩余天数,可同步显示可同步,从未同步或 null 不显示。
+ */
+@Composable
+private fun CooldownBadge(cooldownStatus: CooldownStatus?) {
+    cooldownStatus?.let { status ->
+        if (!status.neverSynced) {
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = if (status.isCoolingDown)
+                    MaterialTheme.colorScheme.tertiaryContainer
+                else MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Text(
+                    text = if (status.isCoolingDown)
+                        stringResource(R.string.cooldown_remaining_days, status.remainingDays)
+                    else stringResource(R.string.cooldown_available),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (status.isCoolingDown)
+                        MaterialTheme.colorScheme.onTertiaryContainer
+                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
         }

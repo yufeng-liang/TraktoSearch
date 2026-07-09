@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
@@ -168,7 +168,7 @@ internal fun MarkWatchedDialog(
                                 )
                                 Spacer(modifier = Modifier.width(2.dp))
                                 Icon(
-                                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant

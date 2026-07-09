@@ -25,10 +25,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BookmarkBorder
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -64,6 +64,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.data.util.PosterColorExtractor
@@ -139,7 +140,7 @@ internal fun DetailHeaderContent(
                         var posterScale by remember { mutableFloatStateOf(1f) }
                         val sharedTransitionScope = LocalSharedTransitionScope.current
                         val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
-                        val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                        val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                             with(sharedTransitionScope) {
                                 Modifier
                                     .sharedElement(
@@ -188,7 +189,7 @@ internal fun DetailHeaderContent(
                     } else {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
-                                imageVector = Icons.Filled.Search,
+                                imageVector = Icons.Rounded.Search,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -380,7 +381,7 @@ internal fun DetailHeaderContent(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = if (isMarkedWatchlist) Icons.Filled.Check else Icons.Filled.BookmarkBorder,
+                                        imageVector = if (isMarkedWatchlist) Icons.Rounded.Check else Icons.Rounded.BookmarkBorder,
                                         contentDescription = null,
                                         modifier = Modifier.size(15.dp),
                                         tint = if (isMarkedWatchlist) MaterialTheme.colorScheme.primary
@@ -439,7 +440,7 @@ internal fun DetailHeaderContent(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = if (isMarkedWatched) Icons.Filled.Check else Icons.Filled.Visibility,
+                                        imageVector = if (isMarkedWatched) Icons.Rounded.Check else Icons.Rounded.Visibility,
                                         contentDescription = null,
                                         modifier = Modifier.size(15.dp),
                                         tint = if (isMarkedWatched) MaterialTheme.colorScheme.primary

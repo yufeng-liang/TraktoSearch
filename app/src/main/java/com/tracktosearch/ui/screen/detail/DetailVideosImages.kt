@@ -31,12 +31,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.rounded.BrokenImage
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -170,7 +170,7 @@ internal fun VideoCard(
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(
-                            imageVector = Icons.Default.BrokenImage,
+                            imageVector = Icons.Rounded.BrokenImage,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(32.dp)
@@ -207,7 +207,7 @@ internal fun VideoCard(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Filled.PlayArrow,
+                imageVector = Icons.Rounded.PlayArrow,
                 contentDescription = null,
                 tint = Color.Black,
                 modifier = Modifier.size(28.dp)
@@ -440,7 +440,7 @@ internal fun FullVideoItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Filled.PlayArrow,
+                    imageVector = Icons.Rounded.PlayArrow,
                     contentDescription = null,
                     tint = Color.Black,
                     modifier = Modifier.size(20.dp)
@@ -552,7 +552,7 @@ internal fun YouTubePlayerOverlay(
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Icon(
-                                    imageVector = Icons.Default.BrokenImage,
+                                    imageVector = Icons.Rounded.BrokenImage,
                                     contentDescription = null,
                                     tint = Color.White.copy(alpha = 0.7f),
                                     modifier = Modifier.size(48.dp)
@@ -580,7 +580,7 @@ internal fun YouTubePlayerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Filled.PlayArrow,
+                        Icons.Rounded.PlayArrow,
                         contentDescription = stringResource(R.string.detail_video_play),
                         tint = Color.White,
                         modifier = Modifier.size(40.dp)
@@ -609,7 +609,7 @@ internal fun YouTubePlayerOverlay(
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(watchUrl))
                 context.startActivity(intent)
             }) {
-                Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(stringResource(R.string.detail_video_open_browser), maxLines = 1)
             }
@@ -624,7 +624,7 @@ internal fun YouTubePlayerOverlay(
                 .background(Color.Black.copy(alpha = 0.4f), CircleShape)
         ) {
             Icon(
-                Icons.Filled.Close,
+                Icons.Rounded.Close,
                 contentDescription = stringResource(R.string.detail_close),
                 tint = Color.White,
                 modifier = Modifier.size(24.dp)
@@ -751,7 +751,7 @@ internal fun BackdropPagerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        Icons.Rounded.Close,
                         contentDescription = stringResource(R.string.detail_back),
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
@@ -780,7 +780,7 @@ internal fun BackdropPagerOverlay(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        if (isSaved) Icons.Filled.Check else Icons.Default.Download,
+                        if (isSaved) Icons.Rounded.Check else Icons.Rounded.Download,
                         contentDescription = if (isSaved) stringResource(R.string.detail_saved) else stringResource(R.string.detail_save),
                         tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
                         modifier = Modifier.size(22.dp)

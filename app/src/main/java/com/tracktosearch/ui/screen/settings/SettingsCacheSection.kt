@@ -12,12 +12,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -70,7 +70,7 @@ fun CacheManagementItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = Icons.Default.Storage,
+                    imageVector = Icons.Rounded.Storage,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -89,7 +89,7 @@ fun CacheManagementItem(
                 }
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = null
                     )
                 }
@@ -99,21 +99,21 @@ fun CacheManagementItem(
             AnimatedVisibility(visible = expanded) {
                 Column {
                     CacheCategoryRow(
-                        icon = Icons.Default.Image,
+                        icon = Icons.Rounded.Image,
                         labelRes = R.string.settings_cache_category_image,
                         descRes = R.string.settings_cache_category_image_desc,
                         sizeBytes = breakdown.imageBytes,
                         onClear = { onClearCategory(SettingsViewModel.CacheCategory.IMAGE) }
                     )
                     CacheCategoryRow(
-                        icon = Icons.Default.Movie,
+                        icon = Icons.Rounded.Movie,
                         labelRes = R.string.settings_cache_category_media_data,
                         descRes = R.string.settings_cache_category_media_data_desc,
                         sizeBytes = breakdown.mediaDataBytes,
                         onClear = { onClearCategory(SettingsViewModel.CacheCategory.MEDIA_DATA) }
                     )
                     CacheCategoryRow(
-                        icon = Icons.Default.CloudDownload,
+                        icon = Icons.Rounded.CloudDownload,
                         labelRes = R.string.settings_cache_category_http,
                         descRes = R.string.settings_cache_category_http_desc,
                         sizeBytes = breakdown.httpBytes,

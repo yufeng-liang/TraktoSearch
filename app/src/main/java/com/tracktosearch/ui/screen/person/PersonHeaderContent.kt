@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +44,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.SocialMediaIcon
 
 private data class AgeInfo(val age: Int, val isDeceased: Boolean)
@@ -143,7 +144,7 @@ internal fun PersonHeaderContent(
                     .height(180.dp)
             ) {
                 if (profileUrl != null) {
-                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                         with(sharedTransitionScope) {
                             Modifier
                                 .sharedElement(
@@ -177,7 +178,7 @@ internal fun PersonHeaderContent(
                         error = {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    Icons.Filled.Person,
+                                    Icons.Rounded.Person,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(28.dp)
@@ -188,7 +189,7 @@ internal fun PersonHeaderContent(
                 } else {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                         Icon(
-                            Icons.Filled.Person,
+                            Icons.Rounded.Person,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(28.dp)

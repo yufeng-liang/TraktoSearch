@@ -28,9 +28,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
+import androidx.compose.material.icons.rounded.FilterList
+import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -73,6 +73,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -522,7 +523,7 @@ fun DiscoverScreen(
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             uiState.trendingLists.take(5).forEach { listResponse ->
                                                 // 社区列表卡片与详情页标题栏整体配对（sharedBounds 转场）
-                                                val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                                val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                                                     with(sharedTransitionScope) {
                                                         Modifier.sharedBounds(
                                                             sharedContentState = rememberSharedContentState(key = "trakt-list-card-${listResponse.list.ids.trakt}"),
@@ -564,7 +565,7 @@ fun DiscoverScreen(
                                                     modifier = Modifier.align(Alignment.End)
                                                 ) {
                                                     Text(stringResource(R.string.common_view_all))
-                                                    Icon(Icons.AutoMirrored.Filled.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                    Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
                                                 }
                                             }
                                         }
@@ -577,7 +578,7 @@ fun DiscoverScreen(
                 // 底部：去影视筛选页入口卡片
                 item(key = "discover_filter_entry") {
                     // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
-                    val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card") {
+                    val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card" && LocalSharedTransitionEnabled.current) {
                         with(sharedTransitionScope) {
                             Modifier
                                 .fillMaxWidth()
@@ -650,7 +651,7 @@ fun DiscoverScreen(
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
-                        val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon") {
+                        val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
                             with(sharedTransitionScope) {
                                 Modifier.sharedElement(
                                     rememberSharedContentState(key = "discover-filter-entry-icon"),
@@ -668,14 +669,14 @@ fun DiscoverScreen(
                             modifier = iconModifier
                         ) {
                             Icon(
-                                Icons.Default.FilterList,
+                                Icons.Rounded.FilterList,
                                 contentDescription = stringResource(R.string.discover_filter_title),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         IconButton(onClick = { showDiscoverSectionsDialog = true }) {
                             Icon(
-                                Icons.Default.Tune,
+                                Icons.Rounded.FormatListNumbered,
                                 contentDescription = stringResource(R.string.settings_discover_sections),
                                 tint = MaterialTheme.colorScheme.onSurface
                             )

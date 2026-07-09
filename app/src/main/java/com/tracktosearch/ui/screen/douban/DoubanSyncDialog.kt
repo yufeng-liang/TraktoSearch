@@ -16,9 +16,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
@@ -263,7 +263,7 @@ fun DoubanSyncDialog(
                                 },
                                 leadingIcon = {
                                     Icon(
-                                        Icons.Default.FileDownload,
+                                        Icons.Rounded.FileDownload,
                                         contentDescription = null,
                                         modifier = Modifier.size(14.dp)
                                     )
@@ -437,7 +437,7 @@ private fun FailureGroupHeader(
             .padding(vertical = 4.dp)
     ) {
         Icon(
-            if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+            if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
             contentDescription = null,
             tint = tint,
             modifier = Modifier.size(16.dp)
@@ -472,7 +472,7 @@ private fun FailureSubGroupHeader(
                 .padding(start = 24.dp, top = 4.dp, bottom = 4.dp, end = 8.dp)
         ) {
             Icon(
-                if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(14.dp)

@@ -27,9 +27,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -185,7 +185,7 @@ internal fun PersonImagePagerOverlay(
                     .background(Color.Black.copy(alpha = 0.4f), CircleShape)
             ) {
                 Icon(
-                    Icons.Filled.Close,
+                    Icons.Rounded.Close,
                     contentDescription = stringResource(R.string.detail_close),
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -212,7 +212,7 @@ internal fun PersonImagePagerOverlay(
                     .background(Color.Black.copy(alpha = 0.4f), CircleShape)
             ) {
                 Icon(
-                    if (isSaved) Icons.Filled.Check else Icons.Default.Download,
+                    if (isSaved) Icons.Rounded.Check else Icons.Rounded.Download,
                     contentDescription = if (isSaved) stringResource(R.string.cd_saved) else stringResource(R.string.cd_save),
                     tint = if (isSaved) Color(0xFF4CAF50) else Color.White,
                     modifier = Modifier.size(24.dp)

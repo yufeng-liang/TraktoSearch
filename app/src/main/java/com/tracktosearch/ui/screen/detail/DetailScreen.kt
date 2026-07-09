@@ -29,9 +29,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -689,7 +689,7 @@ fun DetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
+                    Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = stringResource(R.string.detail_back),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
@@ -755,7 +755,7 @@ fun DetailScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    Icons.Filled.Share,
+                    Icons.Rounded.Share,
                     contentDescription = stringResource(R.string.detail_share),
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
@@ -917,7 +917,7 @@ private fun EmptyState(onRetry: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedButton(onClick = { view.performHaptic(HapticType.CLICK); onRetry() }) {
-                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(stringResource(R.string.detail_retry))
             }

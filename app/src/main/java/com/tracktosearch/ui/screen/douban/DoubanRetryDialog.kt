@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -220,7 +220,7 @@ fun DoubanRetryDialog(
 
                 // 选项 1:重试上次失败
                 RetryOptionItem(
-                    icon = Icons.Default.Replay,
+                    icon = Icons.Rounded.Replay,
                     title = stringResource(R.string.douban_retry_option_local, state.totalFailures),
                     subtitle = stringResource(
                         R.string.douban_retry_option_local_desc,
@@ -234,7 +234,7 @@ fun DoubanRetryDialog(
 
                 // 选项 2:导入 JSON 重试
                 RetryOptionItem(
-                    icon = Icons.Default.FileUpload,
+                    icon = Icons.Rounded.FileUpload,
                     title = stringResource(R.string.douban_retry_option_json),
                     subtitle = stringResource(R.string.douban_retry_option_json_desc),
                     onClick = {
@@ -247,7 +247,7 @@ fun DoubanRetryDialog(
 
                 // 选项 3:导出失败记录(从本地 Room 读取,生成 JSON 触发分享)
                 RetryOptionItem(
-                    icon = Icons.Default.FileDownload,
+                    icon = Icons.Rounded.FileDownload,
                     title = stringResource(R.string.douban_retry_option_export),
                     subtitle = stringResource(R.string.douban_retry_option_export_desc),
                     onClick = {
@@ -447,7 +447,7 @@ private fun RetryOptionItem(
                 )
             }
             Icon(
-                Icons.Default.ChevronRight,
+                Icons.Rounded.ChevronRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp)

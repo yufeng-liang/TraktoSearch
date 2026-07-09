@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +50,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 
 // ==================== 演职员 ====================
 
@@ -160,7 +161,7 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
                 .height(95.dp)
         ) {
             if (profileUrl != null) {
-                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                     with(sharedTransitionScope) {
                         Modifier
                             .sharedElement(
@@ -194,7 +195,7 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
                     error = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                             Icon(
-                                Icons.Filled.Person,
+                                Icons.Rounded.Person,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(22.dp)
@@ -205,7 +206,7 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
             } else {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                     Icon(
-                        Icons.Filled.Person,
+                        Icons.Rounded.Person,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(22.dp)
@@ -385,13 +386,13 @@ internal fun FullCastItem(name: String, originalName: String, role: String, prof
                     },
                     error = {
                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Icon(Icons.Rounded.Person, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 )
             } else {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(Icons.Filled.Person, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Icon(Icons.Rounded.Person, contentDescription = null, modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

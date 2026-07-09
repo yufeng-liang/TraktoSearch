@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -185,7 +185,7 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Movie,
+                imageVector = Icons.Rounded.Movie,
                 contentDescription = null,
                 modifier = Modifier.size(80.dp),
                 tint = MaterialTheme.colorScheme.primary

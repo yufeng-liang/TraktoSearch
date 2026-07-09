@@ -8,8 +8,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -173,7 +173,7 @@ fun MovieCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null) {
+            val imageModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                 with(sharedTransitionScope) {
                     Modifier
                         .sharedElement(
@@ -219,7 +219,7 @@ fun MovieCard(
                     ) {
                         if (isWatched) {
                             Icon(
-                                imageVector = Icons.Filled.CheckCircle,
+                                imageVector = Icons.Rounded.CheckCircle,
                                 contentDescription = null,
                                 modifier = Modifier.size(12.dp),
                                 tint = Color.White
@@ -231,7 +231,7 @@ fun MovieCard(
                             )
                         } else {
                             Icon(
-                                imageVector = Icons.Filled.Bookmark,
+                                imageVector = Icons.Rounded.Bookmark,
                                 contentDescription = null,
                                 modifier = Modifier.size(10.dp),
                                 tint = Color.White

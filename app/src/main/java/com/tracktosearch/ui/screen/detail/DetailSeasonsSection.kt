@@ -23,10 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -162,7 +162,7 @@ internal fun SeasonsSection(
                     )
                     Spacer(modifier = Modifier.width(2.dp))
                     Icon(
-                        imageVector = if (showAllSeasons) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        imageVector = if (showAllSeasons) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = null,
                         modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
@@ -220,7 +220,7 @@ internal fun SeasonsSection(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            imageVector = if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                             contentDescription = null,
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -300,7 +300,7 @@ internal fun EpisodeRow(
             )
         } else {
             Icon(
-                imageVector = Icons.Filled.CheckCircle,
+                imageVector = Icons.Rounded.CheckCircle,
                 contentDescription = if (isWatched) stringResource(R.string.detail_watched) else stringResource(R.string.detail_not_watched),
                 modifier = Modifier.size(18.dp),
                 tint = if (isWatched) Color(0xFF4CAF50)
@@ -362,7 +362,7 @@ internal fun CollectionSection(
                         } else {
                             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                                 Icon(
-                                    Icons.Filled.Search,
+                                    Icons.Rounded.Search,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
