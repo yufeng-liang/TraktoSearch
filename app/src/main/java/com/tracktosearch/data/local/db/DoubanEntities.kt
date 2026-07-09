@@ -109,6 +109,14 @@ interface DoubanSyncFailureDao {
     @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId = :doubanId")
     suspend fun updateMediaType(doubanId: String, mediaType: String?)
 
+    /** 查询所有 mediaType 为 null 的失败项 doubanId(用于同步后从全局池填充类型) */
+    @Query("SELECT doubanId FROM douban_sync_failures WHERE mediaType IS NULL")
+    suspend fun getDoubanIdsWithNullMediaType(): List<String>
+
+    /** 批量更新媒体类型(全局池填充用，仅更新 null → 非 null) */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId = :doubanId AND mediaType IS NULL")
+    suspend fun updateMediaTypeIfNull(doubanId: String, mediaType: String)
+
     /** 更新单条子标题(用于资源搜索) */
     @Query("UPDATE douban_sync_failures SET subtitle = :subtitle WHERE doubanId = :doubanId")
     suspend fun updateSubtitle(doubanId: String, subtitle: String?)

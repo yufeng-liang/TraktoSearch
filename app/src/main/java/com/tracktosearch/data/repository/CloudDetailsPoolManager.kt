@@ -271,6 +271,41 @@ class CloudDetailsPoolManager @Inject constructor(
     }
 
     /**
+     * 上传单条用户标注的媒体类型到全局池。
+     *
+     * 用户在失败项详情页/列表页标注 movie/show 后立即调用。
+     * 映射：movie → isTvShow=false，show → isTvShow=true。
+     * 上传时 GET 对应分片 → 合并（用户标注覆盖 isTvShow，其他字段保留池中原值）→ PUT。
+     * 若池中无该 doubanId，则创建仅含 isTvShow 的条目。
+     *
+     * @param doubanId 豆瓣条目 ID
+     * @param isTvShow true=电视剧，false=电影
+     * @return 是否上传成功
+     */
+    suspend fun uploadUserMarkedType(doubanId: String, isTvShow: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val shard = shardPrefix(doubanId)
+        val lock = getShardLock(shard)
+        lock.withLock {
+            // 构造仅含 isTvShow 的条目；其他字段尝试保留池中原值
+            val existing = downloadShard(shard) ?: emptyMap()
+            val existingEntry = existing[doubanId]
+            val newEntry = if (existingEntry != null) {
+                // 覆盖 isTvShow，保留其他字段
+                existingEntry.copy(isTvShow = isTvShow)
+            } else {
+                // 池中无该条目，创建仅含 isTvShow 的条目
+                DoubanDetailCacheEntry(imdbId = null, isTvShow = isTvShow)
+            }
+            // 若 isTvShow 与池中一致则跳过上传
+            if (existingEntry != null && existingEntry.isTvShow == isTvShow) {
+                Log.d(TAG, "用户标注 $doubanId isTvShow=$isTvShow 与池中一致，跳过上传")
+                return@withLock true
+            }
+            uploadShardWithRetry(shard, mapOf(doubanId to newEntry))
+        }
+    }
+
+    /**
      * 拉取全局池中指定 doubanId 的详情并合并到本地缓存（不覆盖本地已有）。
      *
      * 用于同步流程阶段 1 前置查询：本地缓存未命中时，先查全局池，命中则写入本地缓存秒回，

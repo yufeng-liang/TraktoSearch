@@ -68,7 +68,10 @@ data class TraktSyncRequest(
 
 @Serializable
 data class TraktSyncItem(
-    val ids: TraktIds
+    val ids: TraktIds,
+    // 仅 addToHistory(/sync/history POST)时传递,标记真实观看时间;
+    // 其他场景(watchlist add/remove)留 null 不序列化
+    val watched_at: String? = null
 )
 
 @Serializable
@@ -168,7 +171,10 @@ data class TraktEpisode(
 data class RatingItem(
     val ids: TraktIds,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
-    val rating: Int? = null
+    val rating: Int? = null,
+    // 评分时间(ISO 8601),留 null 不序列化
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val rated_at: String? = null
 )
 
 @Serializable

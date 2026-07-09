@@ -28,12 +28,14 @@
 **核心原则：基本不变的数据用持久化缓存，省去不必要的请求。**
 
 以下数据视为"基本不变"，必须使用持久化缓存（跨 App 重启保留，TTL = 永久）：
+
 - **TMDB 详情**（`movieDetailCache`/`tvDetailCache`）：海报路径（`poster_path`）、`tmdbId`、`imdbId`、标题、概述等字段不会变
 - **演职员信息**（`movieCreditsCache`/`tvCreditsCache`）：演员头像、姓名、角色不会变
 - **TMDB↔Trakt ID 映射**（`searchByTmdbCache`/`searchByImdbCache`）：映射关系静态永久
 - **人物信息**（`personCache`）：演员/导演的基本信息、头像不会变
 
 以下数据使用短期缓存（6 小时，App 进程内有效即可）：
+
 - 豆瓣热榜（榜单排名会变）
 - Trakt 趋势/最受期待/社区列表（热度会变）
 - TMDB 热门/即将上映列表（随市场变化）
@@ -41,6 +43,7 @@
 - 想看/已看 ID 集合（6 小时 TTL，跨 App 重启复用，避免每次启动都发 4 个 /sync/* 请求；增删想看/已看时同步更新持久化缓存，退出登录时清除）
 
 持久化缓存实现要求：
+
 - 使用 DataStore 存储（key → JSON 字符串），启动时加载到内存 TtlCache
 - 写入内存缓存时同步写入 DataStore（异步，不阻塞返回）
 - 内存缓存作为一级缓存（秒进），DataStore 作为二级缓存（重启后恢复）
@@ -85,7 +88,6 @@
 - TtlCache 缓存命中但 UI 仍转圈：缓存查询必须在 viewModelScope.launch 之前，否则协程启动后才设 resolving 状态
 - 回调签名与实际状态不同步：新增状态字段后必须同步更新所有回调签名和调用点，不能在中间层硬编码默认值
 - 数据类缓存路径遗漏字段：所有缓存路径必须与网络请求路径字段一致（如 TvEnrichment 缓存漏 status 字段导致二次打开无状态信息）
-- 深色模式下 BasicTextField 文字不可见：textStyle 必须显式设置 color = MaterialTheme.colorScheme.onSurface
 - Gitee Release 上传 APK 必须用 curl.exe（PowerShell multipart 会 UTF-8 重编码导致 APK 损坏）
 - Gitee Release body 不能含 markdown 格式符号（#/-），创建时用纯文本，创建后 PATCH 补回
 - Gitee Release body PATCH 同步 markdown 更新日志时，PowerShell 的 Invoke-RestMethod 对 PATCH 方法在本环境会卡住（GET/POST 正常），改用 curl.exe --data-binary @file 从 UTF-8 无 BOM 的 JSON 文件读取 body 可成功；JSON 文件用 Write 工具直接生成避免 PowerShell 编码问题
@@ -103,7 +105,3 @@
 ## 想清楚再写
 
 不要瞎猜，把权衡讲出来。假设要明说，不确定就问。多种理解都摆出来，别悄悄选一个。有更简单的做法直说，该反对时反对。
-
-## 外科手术式改动
-
-只动必须动的，只收拾自己制造的乱。不去"改进"没让你碰的内容，不翻新没坏的东西。跟着原有风格走。每一处改动都要能直接追溯到需求。

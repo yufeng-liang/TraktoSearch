@@ -169,7 +169,6 @@ class MainActivity : AppCompatActivity() {
         var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
-        var initialSharedTransitionEnabled by mutableStateOf(false)
 
         lifecycleScope.launch {
             val splashStartTime = System.currentTimeMillis()
@@ -190,8 +189,8 @@ class MainActivity : AppCompatActivity() {
             val language = languageStorage.language.first()
             applyLanguage(language)
 
-            // 预加载共享元素转场开关，消除设置页开关跳变
-            initialSharedTransitionEnabled = sharedTransitionStorage.preloadAndGetValue()
+            // 预加载共享元素转场开关，填充 StateFlow 真实值，消除设置页开关跳变
+            sharedTransitionStorage.preloadAndGetValue()
 
             // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
             val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
@@ -240,7 +239,6 @@ class MainActivity : AppCompatActivity() {
                     AppNavigation(
                         startDestination = currentDestination,
                         initialTab = initialTab,
-                        initialSharedTransitionEnabled = initialSharedTransitionEnabled,
                         authStateHolder = authStateHolder,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN

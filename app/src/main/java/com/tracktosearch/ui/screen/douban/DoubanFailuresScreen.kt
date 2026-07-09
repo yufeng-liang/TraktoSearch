@@ -201,6 +201,16 @@ class DoubanFailuresViewModel @Inject constructor(
                     failures = list,
                     error = null
                 )
+                // 后台静默从全局池刷新其他用户标注的类型，有更新则重新加载列表
+                launch {
+                    val updated = runCatching {
+                        doubanRetryManager.refreshMediaTypesFromCloudPool()
+                    }.getOrElse { 0 }
+                    if (updated > 0) {
+                        val refreshed = doubanRetryManager.getAllFailures()
+                        _uiState.value = _uiState.value.copy(failures = refreshed)
+                    }
+                }
             } catch (e: Exception) {
                 _uiState.value = DoubanFailuresUiState(
                     isLoading = false,

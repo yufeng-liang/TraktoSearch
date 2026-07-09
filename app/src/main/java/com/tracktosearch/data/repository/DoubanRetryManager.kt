@@ -62,7 +62,8 @@ data class RetryState(
 @Singleton
 class DoubanRetryManager @Inject constructor(
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
-    private val doubanSyncManager: DoubanSyncManager
+    private val doubanSyncManager: DoubanSyncManager,
+    private val cloudDetailsPoolManager: CloudDetailsPoolManager
 ) {
     private val _retryState = MutableStateFlow(RetryState())
     val retryState: StateFlow<RetryState> = _retryState.asStateFlow()
@@ -127,14 +128,45 @@ class DoubanRetryManager @Inject constructor(
         doubanSyncFailureDao.getAll().map { DoubanSyncFailure.fromEntity(it) }
     }
 
+    /**
+     * 从全局详情池批量刷新本地未标注类型(mediaType IS NULL)的失败项。
+     *
+     * 进入失败项查看页时后台调用：其他用户已标注类型的条目自动填充到本地，
+     * 仅更新 null → 非 null(不覆盖用户已手动标注的值)。
+     *
+     * @return 本次实际填充的条目数(用于调用方决定是否刷新 UI)
+     */
+    suspend fun refreshMediaTypesFromCloudPool(): Int = withContext(Dispatchers.IO) {
+        val nullIds = doubanSyncFailureDao.getDoubanIdsWithNullMediaType()
+        if (nullIds.isEmpty()) return@withContext 0
+        val pooled = runCatching {
+            cloudDetailsPoolManager.downloadDetails(nullIds)
+        }.getOrElse { return@withContext 0 }
+        if (pooled.isEmpty()) return@withContext 0
+        var updated = 0
+        for ((doubanId, entry) in pooled) {
+            val mediaType = if (entry.isTvShow) "show" else "movie"
+            doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, mediaType)
+            updated++
+        }
+        updated
+    }
+
     /** 按 doubanId 加载单条失败项(用于豆瓣条目详情页) */
     suspend fun getFailure(doubanId: String): DoubanSyncFailure? = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.getById(doubanId)?.let { DoubanSyncFailure.fromEntity(it) }
     }
 
-    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/清除标注) */
+    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/清除标注)，并异步上传到全局共享池 */
     suspend fun updateMediaType(doubanId: String, mediaType: String?) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateMediaType(doubanId, mediaType)
+        // 用户标注为 movie/show 时，异步上传到全局池供其他用户复用
+        // 清除标注(null)不上传，避免误删池中其他用户的有效数据
+        if (mediaType != null) {
+            runCatching {
+                cloudDetailsPoolManager.uploadUserMarkedType(doubanId, isTvShow = mediaType == "show")
+            }
+        }
     }
 
     /** 更新单条子标题(用于资源搜索) */

@@ -113,6 +113,7 @@ import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.ui.component.ResourceItemCard
+import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.copyResourceLink
@@ -665,6 +666,7 @@ fun DoubanItemDetailScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
+                        .statusBarsPadding()
                         .hazeSource(state = hazeState),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
@@ -1052,6 +1054,17 @@ fun DoubanItemDetailScreen(
                     onDismiss = { showPosterFullscreen = false }
                 )
             }
+
+            // 资源搜索 Tab 快速回顶按钮(仅资源搜索 Tab 显示,详情信息 Tab 内容少不需要)
+            if (selectedTab == 0) {
+                ScrollToTopButton(
+                    listState = listState,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 16.dp, end = 16.dp),
+                    hazeState = hazeState
+                )
+            }
         }
     }
 
@@ -1146,8 +1159,7 @@ private fun DoubanItemHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 顶部留白 = 状态栏 + TopAppBar 高度(64dp),避免海报被标题栏遮住
-            .statusBarsPadding()
+            // 顶部留白 = TopAppBar 高度(64dp),状态栏 padding 由 LazyColumn 统一处理
             .padding(top = 64.dp)
             .padding(horizontal = 16.dp)
     ) {

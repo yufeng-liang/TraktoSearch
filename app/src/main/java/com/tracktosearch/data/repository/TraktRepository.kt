@@ -973,13 +973,19 @@ class TraktRepository @Inject constructor(
         showTraktIds: List<Int>,
         apiCall: suspend (TraktSyncRequest) -> Response<TraktSyncResponse>,
         cacheUpdate: (Int, Int, MediaType) -> Unit,
-        errorLabel: String
+        errorLabel: String,
+        // 仅 addToHistory 时传递,Map<traktId, watchedAtIso>;空 Map 或 null 表示不传 watched_at
+        watchedAtByTraktId: Map<Int, String>? = null
     ): Result<TraktSyncResponse> {
         if (movieTraktIds.isEmpty() && showTraktIds.isEmpty()) return Result.success(TraktSyncResponse())
         return try {
             val request = TraktSyncRequest(
-                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) },
-                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map { TraktSyncItem(TraktIds(trakt = it)) }
+                movies = movieTraktIds.takeIf { it.isNotEmpty() }?.map {
+                    TraktSyncItem(TraktIds(trakt = it), watched_at = watchedAtByTraktId?.get(it))
+                },
+                shows = showTraktIds.takeIf { it.isNotEmpty() }?.map {
+                    TraktSyncItem(TraktIds(trakt = it), watched_at = watchedAtByTraktId?.get(it))
+                }
             )
             val response = apiCall(request)
             if (response.isSuccessful) {
@@ -1008,6 +1014,29 @@ class TraktRepository @Inject constructor(
     suspend fun batchMarkAsWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
         batchSync(movieTraktIds, showTraktIds, traktApiService::addToHistory, ::addToWatchedCache, "batchMarkAsWatched")
 
+    /**
+     * 批量标记已看(带观看时间)。
+     * @param movieItems 电影 (traktId, watchedAtIso) 列表,watchedAtIso 为 ISO 8601 UTC 字符串
+     * @param showItems 剧集 (traktId, watchedAtIso) 列表
+     */
+    suspend fun batchMarkAsWatchedAt(
+        movieItems: List<Pair<Int, String?>>,
+        showItems: List<Pair<Int, String?>>
+    ): Result<TraktSyncResponse> {
+        val watchedAtMap = buildMap<Int, String> {
+            movieItems.forEach { (id, ts) -> ts?.let { put(id, it) } }
+            showItems.forEach { (id, ts) -> ts?.let { put(id, it) } }
+        }
+        return batchSync(
+            movieTraktIds = movieItems.map { it.first },
+            showTraktIds = showItems.map { it.first },
+            apiCall = traktApiService::addToHistory,
+            cacheUpdate = ::addToWatchedCache,
+            errorLabel = "batchMarkAsWatchedAt",
+            watchedAtByTraktId = watchedAtMap.takeIf { it.isNotEmpty() }
+        )
+    }
+
     /** 批量移除已看记录。注意:Trakt 的 removeFromHistory 不会自动加回 watchlist,如需加回需调用方显式调用 batchAddToWatchlist。 */
     suspend fun batchRemoveFromWatched(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
         batchSync(movieTraktIds, showTraktIds, traktApiService::removeFromHistory, ::removeFromWatchedCache, "batchRemoveFromWatched")
@@ -1032,6 +1061,36 @@ class TraktRepository @Inject constructor(
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("batchAddRatings failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 批量添加评分(带评分时间)。
+     * @param movieRatings 电影 (traktId, rating, ratedAtIso) 列表
+     * @param showRatings 剧集 (traktId, rating, ratedAtIso) 列表
+     */
+    suspend fun batchAddRatingsAt(
+        movieRatings: List<Triple<Int, Int, String?>>,
+        showRatings: List<Triple<Int, Int, String?>>
+    ): Result<Unit> {
+        if (movieRatings.isEmpty() && showRatings.isEmpty()) return Result.success(Unit)
+        return try {
+            val request = RatingRequest(
+                movies = movieRatings.takeIf { it.isNotEmpty() }?.map { (id, r, ts) ->
+                    RatingItem(TraktIds(trakt = id), r, ts)
+                },
+                shows = showRatings.takeIf { it.isNotEmpty() }?.map { (id, r, ts) ->
+                    RatingItem(TraktIds(trakt = id), r, ts)
+                }
+            )
+            val response = traktApiService.addRating(request)
+            if (response.isSuccessful) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("batchAddRatingsAt failed: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

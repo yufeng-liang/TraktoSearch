@@ -30,6 +30,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeout
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -664,9 +667,12 @@ class DoubanSyncManager @Inject constructor(
                         traktRepository.batchAddToWatchlist(movieIds, showIds)
                     }
                     DoubanMarkStatus.COLLECT -> {
-                        // WISH → COLLECT: removeFromWatchlist + markAsWatched
+                        // WISH → COLLECT: removeFromWatchlist + markAsWatched(带豆瓣标记时间)
                         traktRepository.batchRemoveFromWatchlist(movieIds, showIds)
-                        traktRepository.batchMarkAsWatched(movieIds, showIds)
+                        val watchedAtIso = markedAtToIso(item.markedAt)
+                        val movieItems = if (mediaType == MediaType.MOVIE) listOf(traktId to watchedAtIso) else emptyList()
+                        val showItems = if (mediaType == MediaType.SHOW) listOf(traktId to watchedAtIso) else emptyList()
+                        traktRepository.batchMarkAsWatchedAt(movieItems, showItems)
                     }
                 }
 
@@ -1031,6 +1037,8 @@ class DoubanSyncManager @Inject constructor(
         runCatching { cloudFailureSyncManager.uploadIfHasFailures() }
         // 一次性批量上传 dirty 详情到全局池
         runCatching { uploadDirtyDetails() }
+        // 从全局池批量填充本地未标注类型的失败项（其他用户已标注的类型）
+        runCatching { fillMediaTypeFromCloudPool() }
     }
 
     /**
@@ -1051,6 +1059,45 @@ class DoubanSyncManager @Inject constructor(
         if (entries.isNotEmpty()) {
             cloudDetailsPoolManager.uploadDetails(entries)
         }
+    }
+
+    /**
+     * 从全局详情池批量填充本地未标注类型（mediaType IS NULL）的失败项。
+     *
+     * 同步完成后调用：查询本地所有 mediaType 为 null 的失败项 doubanId，
+     * 从全局池批量下载，将命中的 isTvShow 映射回 mediaType（true→"show"，false→"movie"），
+     * 仅更新 null → 非 null（不覆盖用户已手动标注的值）。
+     *
+     * 这样其他用户已标注类型的条目，本机用户无需再手动标注。
+     * 失败不阻塞主流程。
+     */
+    private suspend fun fillMediaTypeFromCloudPool() {
+        val nullIds = doubanSyncFailureDao.getDoubanIdsWithNullMediaType()
+        if (nullIds.isEmpty()) return
+        val pooled = cloudDetailsPoolManager.downloadDetails(nullIds)
+        if (pooled.isEmpty()) return
+        for ((doubanId, entry) in pooled) {
+            val mediaType = if (entry.isTvShow) "show" else "movie"
+            doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, mediaType)
+        }
+    }
+
+    /**
+     * 豆瓣标记时间(yyyy-MM-dd) → Trakt watched_at/rated_at 用的 ISO 8601 UTC 字符串。
+     *
+     * 补本地 12:00:00 再转 UTC:正负 12 小时时区偏移下日期也不会跨日,热力图聚合最稳定。
+     * 解析失败或空串返回 null(Trakt 会用服务端当前时间兜底)。
+     */
+    private fun markedAtToIso(markedAt: String): String? {
+        if (markedAt.isBlank()) return null
+        return runCatching {
+            val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+            inputFormat.timeZone = TimeZone.getDefault()
+            val date = inputFormat.parse("$markedAt 12:00:00") ?: return null
+            val outputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
+            outputFormat.timeZone = TimeZone.getTimeZone("UTC")
+            outputFormat.format(date)
+        }.getOrNull()
     }
 
     /**
@@ -1250,17 +1297,21 @@ class DoubanSyncManager @Inject constructor(
         // ===== 阶段 3：冲突分类（按豆瓣优先覆盖策略） =====
         val wishMovieIds = mutableListOf<Int>()
         val wishShowIds = mutableListOf<Int>()
-        val collectMovieIds = mutableListOf<Int>()
-        val collectShowIds = mutableListOf<Int>()
+        // COLLECT(看过) 带观看时间,传给 Trakt watched_at(豆瓣标记时间,非同步执行时间)
+        val collectMovieItems = mutableListOf<Pair<Int, String?>>()
+        val collectShowItems = mutableListOf<Pair<Int, String?>>()
         val removeFromWatchlistMovieIds = mutableListOf<Int>()
         val removeFromWatchlistShowIds = mutableListOf<Int>()
-        val movieRatings = mutableListOf<Pair<Int, Int>>()
-        val showRatings = mutableListOf<Pair<Int, Int>>()
+        // 评分带 rated_at(豆瓣标记时间)
+        val movieRatings = mutableListOf<Triple<Int, Int, String?>>()
+        val showRatings = mutableListOf<Triple<Int, Int, String?>>()
         val batchToInsert = mutableListOf<DoubanSyncedItem>()
 
         for (r in withTraktId) {
             val isInWatchlist = watchlistWatchedIds?.isInWatchlist(r.traktId, null, r.mediaType) == true
             val isWatched = watchlistWatchedIds?.isWatched(r.traktId, null, r.mediaType) == true
+            // 豆瓣标记时间 → ISO 8601 UTC(本地 12:00 转 UTC,避免跨日)
+            val watchedAtIso = markedAtToIso(r.item.markedAt)
 
             when (status) {
                 DoubanMarkStatus.WISH -> {
@@ -1284,8 +1335,8 @@ class DoubanSyncManager @Inject constructor(
                     }
                     if (!isWatched) {
                         when (r.mediaType) {
-                            MediaType.MOVIE -> collectMovieIds.add(r.traktId)
-                            MediaType.SHOW -> collectShowIds.add(r.traktId)
+                            MediaType.MOVIE -> collectMovieItems.add(r.traktId to watchedAtIso)
+                            MediaType.SHOW -> collectShowItems.add(r.traktId to watchedAtIso)
                             else -> {}
                         }
                     }
@@ -1295,8 +1346,8 @@ class DoubanSyncManager @Inject constructor(
             if (r.item.rating != null && r.item.rating > 0) {
                 val traktRating = r.item.rating * 2
                 when (r.mediaType) {
-                    MediaType.MOVIE -> movieRatings.add(r.traktId to traktRating)
-                    MediaType.SHOW -> showRatings.add(r.traktId to traktRating)
+                    MediaType.MOVIE -> movieRatings.add(Triple(r.traktId, traktRating, watchedAtIso))
+                    MediaType.SHOW -> showRatings.add(Triple(r.traktId, traktRating, watchedAtIso))
                     else -> {}
                 }
             }
@@ -1326,10 +1377,10 @@ class DoubanSyncManager @Inject constructor(
                     }
                     DoubanMarkStatus.COLLECT -> {
                         traktRepository.batchRemoveFromWatchlist(removeFromWatchlistMovieIds, removeFromWatchlistShowIds)
-                        traktRepository.batchMarkAsWatched(collectMovieIds, collectShowIds)
+                        traktRepository.batchMarkAsWatchedAt(collectMovieItems, collectShowItems)
                     }
                 }
-                traktRepository.batchAddRatings(movieRatings, showRatings)
+                traktRepository.batchAddRatingsAt(movieRatings, showRatings)
 
                 if (batchToInsert.isNotEmpty()) {
                     doubanSyncedItemDao.insertAll(batchToInsert)
