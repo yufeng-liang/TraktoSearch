@@ -223,8 +223,8 @@ class MainActivity : AppCompatActivity() {
         setupStatusBarTapListener()
 
         setContent {
-            val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle(initialValue = "system")
-            val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle(initialValue = null)
+            val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle()
+            val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle()
             TraktToSearchTheme(themeMode = themeMode, accentColor = accentColor) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 // 自定义启动页渲染后，系统启动页立即消失

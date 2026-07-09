@@ -35,10 +35,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
@@ -131,8 +133,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
@@ -143,6 +148,15 @@ import java.util.Locale
 import javax.inject.Inject
 
 // ==================== ViewModel ====================
+
+/**
+ * 豆瓣详情加载阶段（详情Tab内联状态用）。
+ * - IDLE: 初始/未开始
+ * - FETCHING: 正在爬取豆瓣详情页（3-5秒反爬延迟+网络请求）
+ * - DONE: 完成（含缓存命中；detailInfo 为 null 表示爬取失败但已尝试）
+ * - FAILED: 爬取失败（显示重试按钮）
+ */
+enum class DetailLoadPhase { IDLE, FETCHING, DONE, FAILED }
 
 /**
  * 豆瓣条目详情页 UI 状态
@@ -171,7 +185,9 @@ data class DoubanItemDetailUiState(
     // 海报主色调(沉浸式渐变背景用,null 表示尚未提取)
     val posterDominantColor: Color? = null,
     // 豆瓣详情补充信息(年份/制片国家/地区/导演/类型),命中缓存秒回,失败或未加载为 null
-    val detailInfo: DoubanDetailInfo? = null
+    val detailInfo: DoubanDetailInfo? = null,
+    // 豆瓣详情加载阶段(详情Tab内联状态用)
+    val detailLoadPhase: DetailLoadPhase = DetailLoadPhase.IDLE
 )
 
 /**
@@ -197,6 +213,10 @@ class DoubanItemDetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DoubanItemDetailUiState())
     val uiState: StateFlow<DoubanItemDetailUiState> = _uiState.asStateFlow()
+
+    // 一次性 Toast 事件(传 R.string 资源 ID),用 extraBufferCapacity 避免背压丢消息
+    private val _toastEvent = MutableSharedFlow<Int>(extraBufferCapacity = 4)
+    val toastEvent: SharedFlow<Int> = _toastEvent.asSharedFlow()
 
     private var currentDoubanId: String = ""
     private var searchJob: Job? = null
@@ -239,25 +259,76 @@ class DoubanItemDetailViewModel @Inject constructor(
     }
 
     /**
-     * 加载豆瓣详情补充信息(年份/制片国家/地区/导演/类型)。
-     * 优先命中持久化缓存(秒回);缓存未命中且 cookie 过期时静默失败,detailInfo 保持 null。
+     * 加载豆瓣详情补充信息(年份/制片国家/地区/导演/类型/评分/简介/集数等)。
+     * 查询链路:内存缓存 → 磁盘缓存 → 全局池 → 爬豆瓣(成功后异步上传全局池)。
+     * 通过 onProgress 回调映射到 [detailLoadPhase],驱动详情Tab内联状态UI。
+     * 成功后根据集数自动推断媒体类型(不覆盖用户已标注的值,静默刷新)。
      */
     private fun loadDetailInfo(failure: DoubanSyncFailure) {
         viewModelScope.launch {
+            // 入口标记为 FETCHING(重试时从 FAILED 回到 FETCHING)
+            _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+            // 记录是否来自实际爬取(用于决定是否弹乐观 Toast)
+            var fromNetwork = false
             try {
-                val cookie = doubanAuthStorage.getCredentials()?.cookie ?: return@launch
+                val cookie = doubanAuthStorage.getCredentials()?.cookie ?: run {
+                    // Cookie 不存在,直接标记失败
+                    _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
+                    return@launch
+                }
                 val result = doubanRepository.fetchDetail(
                     doubanUrl = failure.doubanUrl,
                     cookie = cookie,
-                    title = failure.title
+                    title = failure.title,
+                    onProgress = { phase, _ ->
+                        when (phase) {
+                            "cache_hit" -> {
+                                // 缓存命中(本地或全局池),秒回,不弹 Toast
+                                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.DONE)
+                            }
+                            "fetching" -> {
+                                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+                                fromNetwork = true
+                            }
+                            "done" -> {
+                                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.DONE)
+                                fromNetwork = true
+                            }
+                            "failed" -> {
+                                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
+                            }
+                        }
+                    }
                 )
                 result.first?.let { info ->
                     _uiState.value = _uiState.value.copy(detailInfo = info)
+                    // 根据集数自动推断媒体类型(不覆盖用户已标注的值,静默)
+                    // 推断成功则刷新 failure 状态,让 UI 的 mediaType 标注按钮同步更新
+                    val inferred = runCatching {
+                        doubanRetryManager.inferMediaTypeFromDetail(failure.doubanId, info)
+                    }.getOrDefault(false)
+                    if (inferred) {
+                        val refreshed = doubanRetryManager.getFailure(failure.doubanId)
+                        if (refreshed != null) {
+                            _uiState.value = _uiState.value.copy(failure = refreshed)
+                        }
+                    }
+                    // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
+                    if (fromNetwork) {
+                        _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+                    }
                 }
             } catch (_: Exception) {
-                // 静默失败:不影响主流程,detailInfo 保持 null
+                // 异常:标记失败,不阻塞主流程
+                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
             }
         }
+    }
+
+    /** 重试加载豆瓣详情(详情Tab失败时用户点击重试按钮触发) */
+    fun retryLoadDetailInfo() {
+        val failure = _uiState.value.failure ?: return
+        loadDetailInfo(failure)
     }
 
     /** 更新子标题,持久化后刷新本地状态并自动重新搜索 */
@@ -299,7 +370,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                 customSourceNames = customNames
             )
 
-            val isShow = failure.mediaType == "show"
+            // 综艺/纪录片也按电视剧模式搜索(多季资源优先)
+            val isShow = failure.mediaType in setOf("show", "variety", "documentary")
 
             // 构造关键词列表（最多 4 个）：主标题(原/去季) + 子标题(原/去季)
             // 豆瓣条目标题常含 "/" 分隔中文/外文标题（如"王朝 第一季 / Dynasties Season 1"），
@@ -529,14 +601,31 @@ class DoubanItemDetailViewModel @Inject constructor(
         }
     }
 
-    /** 手动标注当前条目的媒体类型(movie/show/null),用于资源搜索时按类型筛选 */
+    /**
+     * 手动标注当前条目的媒体类型(movie/show/variety/documentary/null)。
+     * - 标注为具体类型:持久化 + 上传全局池(updateMediaType 内部完成) → Toast「已标注为XX,已同步全局池」
+     * - 清除标注(null):仅持久化,不上传全局池 → Toast「已清除标注」
+     */
     fun setMediaType(mediaType: String?) {
         val failure = _uiState.value.failure ?: return
         viewModelScope.launch {
-            doubanRetryManager.updateMediaType(failure.doubanId, mediaType)
-            _uiState.value = _uiState.value.copy(
-                failure = failure.copy(mediaType = mediaType)
-            )
+            try {
+                doubanRetryManager.updateMediaType(failure.doubanId, mediaType)
+                _uiState.value = _uiState.value.copy(
+                    failure = failure.copy(mediaType = mediaType)
+                )
+                _toastEvent.tryEmit(
+                    if (mediaType != null) when (mediaType) {
+                        "movie" -> R.string.douban_detail_marked_and_synced_movie
+                        "show" -> R.string.douban_detail_marked_and_synced_show
+                        "variety" -> R.string.douban_detail_marked_and_synced_variety
+                        "documentary" -> R.string.douban_detail_marked_and_synced_documentary
+                        else -> R.string.douban_detail_mark_cleared
+                    } else R.string.douban_detail_mark_cleared
+                )
+            } catch (_: Exception) {
+                _toastEvent.tryEmit(R.string.douban_detail_mark_failed)
+            }
         }
     }
 
@@ -609,6 +698,13 @@ fun DoubanItemDetailScreen(
         viewModel.loadFailure(doubanId)
     }
 
+    // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { resId ->
+            context.showToast(context.getString(resId))
+        }
+    }
+
     // 加载完成后若 failure == null(条目已被删除/不存在),自动返回
     LaunchedEffect(uiState.failure, uiState.isLoading) {
         if (!uiState.isLoading && uiState.failure == null && uiState.error == null) {
@@ -670,10 +766,11 @@ fun DoubanItemDetailScreen(
                         .hazeSource(state = hazeState),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    // 头部区域:海报 + 标题 + 子标题 + 评分 + 标记信息 + 短评
+                    // 头部区域:海报 + 标题 + 子标题 + 豆瓣评分 + 我的评分 + 标记信息 + 短评
                     item(key = "header") {
                         DoubanItemHeader(
                             failure = failure,
+                            detailInfo = uiState.detailInfo,
                             posterColor = uiState.posterDominantColor,
                             onPosterClick = { showPosterFullscreen = true },
                             onSubtitleClick = {
@@ -820,6 +917,7 @@ fun DoubanItemDetailScreen(
                                     DoubanDetailInfoTab(
                                         failure = failure,
                                         detailInfo = uiState.detailInfo,
+                                        detailLoadPhase = uiState.detailLoadPhase,
                                         onOpenDouban = {
                                             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(failure.doubanUrl))
                                             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -832,7 +930,8 @@ fun DoubanItemDetailScreen(
                                             }
                                         },
                                         onRetry = { viewModel.retrySingle() },
-                                        onDelete = { viewModel.showDeleteConfirm(true) }
+                                        onDelete = { viewModel.showDeleteConfirm(true) },
+                                        onRetryLoadDetail = { viewModel.retryLoadDetailInfo() }
                                     )
                                 }
                             }
@@ -971,6 +1070,22 @@ fun DoubanItemDetailScreen(
                             leadingIcon = { Icon(Icons.Rounded.Tv, contentDescription = null) },
                             onClick = {
                                 viewModel.setMediaType("show")
+                                showMarkMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_variety)) },
+                            leadingIcon = { Icon(Icons.Rounded.TheaterComedy, contentDescription = null) },
+                            onClick = {
+                                viewModel.setMediaType("variety")
+                                showMarkMenu = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_documentary)) },
+                            leadingIcon = { Icon(Icons.Rounded.Nature, contentDescription = null) },
+                            onClick = {
+                                viewModel.setMediaType("documentary")
                                 showMarkMenu = false
                             }
                         )
@@ -1134,6 +1249,7 @@ fun DoubanItemDetailScreen(
 @Composable
 private fun DoubanItemHeader(
     failure: DoubanSyncFailure,
+    detailInfo: DoubanDetailInfo?,
     posterColor: Color?,
     onPosterClick: () -> Unit,
     onSubtitleClick: () -> Unit,
@@ -1261,7 +1377,17 @@ private fun DoubanItemHeader(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // 评分(5★)
+                // 豆瓣评分(10 分制,详情页抓取)
+                if (detailInfo?.doubanRating != null) {
+                    DoubanRatingRow(
+                        rating = detailInfo.doubanRating,
+                        ratingCount = detailInfo.ratingCount,
+                        textColor = onPosterVariantColor
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                // 我的评分(5★,用户标记评分)
                 if (failure.rating != null) {
                     DoubanStarRating(rating = failure.rating, textColor = onPosterVariantColor)
                     Spacer(modifier = Modifier.height(6.dp))
@@ -1328,6 +1454,57 @@ private fun DoubanStarRating(rating: Int, textColor: Color) {
             style = MaterialTheme.typography.labelSmall,
             color = textColor
         )
+    }
+}
+
+/**
+ * 豆瓣评分行(10 分制)。
+ *
+ * 展示格式: `豆瓣 9.2 ★★★★☆ (12,345人评价)`
+ * - 评分数字加粗突出
+ * - 5 星按 10 分制映射(每 2 分一星,半星精度用 alpha 区分)
+ * - 评分人数可选,为 null 时只显示评分+星级
+ */
+@Composable
+private fun DoubanRatingRow(rating: Double, ratingCount: Int?, textColor: Color) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = stringResource(R.string.detail_info_douban_rating),
+            style = MaterialTheme.typography.labelSmall,
+            color = textColor.copy(alpha = 0.8f)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = String.format(Locale.getDefault(), "%.1f", rating),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFFFFC107)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        // 5 星按 10 分制映射:每星 2 分,半星用 alpha 0.5 区分
+        val filledStars = (rating / 2.0).toInt()
+        val hasHalf = (rating / 2.0) - filledStars >= 0.5
+        for (i in 1..5) {
+            val tint = when {
+                i <= filledStars -> Color(0xFFFFC107)
+                i == filledStars + 1 && hasHalf -> Color(0xFFFFC107).copy(alpha = 0.5f)
+                else -> textColor.copy(alpha = 0.3f)
+            }
+            Icon(
+                imageVector = Icons.Rounded.Star,
+                contentDescription = null,
+                tint = tint,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+        if (ratingCount != null) {
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = stringResource(R.string.detail_info_rating_count, ratingCount),
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor.copy(alpha = 0.6f)
+            )
+        }
     }
 }
 
@@ -1585,9 +1762,11 @@ private fun DoubanEmptyState(onRetry: () -> Unit) {
 private fun DoubanDetailInfoTab(
     failure: DoubanSyncFailure,
     detailInfo: DoubanDetailInfo?,
+    detailLoadPhase: DetailLoadPhase,
     onOpenDouban: () -> Unit,
     onRetry: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onRetryLoadDetail: () -> Unit
 ) {
     val view = LocalView.current
     Column(modifier = Modifier.padding(16.dp)) {
@@ -1665,6 +1844,77 @@ private fun DoubanDetailInfoTab(
             }
         }
 
+        // 豆瓣详情加载状态(仅 detailInfo == null 时显示,有详情时字段卡片自身展示)
+        if (detailInfo == null) {
+            when (detailLoadPhase) {
+                DetailLoadPhase.FETCHING -> {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = stringResource(R.string.douban_detail_fetching),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
+                DetailLoadPhase.FAILED -> {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = stringResource(R.string.douban_detail_fetch_failed),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            TextButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                onRetryLoadDetail()
+                            }) {
+                                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.douban_detail_retry))
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    // IDLE / DONE 且 detailInfo == null:静默不显示
+                }
+            }
+        }
+
         // 详情字段卡片(仅在 detailInfo 不为空且有可展示字段时显示)
         if (detailInfo != null) {
             val hasAnyField = detailInfo.year != null
@@ -1672,6 +1922,14 @@ private fun DoubanDetailInfoTab(
                 || detailInfo.directors.isNotEmpty()
                 || detailInfo.genres.isNotEmpty()
                 || !detailInfo.imdbId.isNullOrBlank()
+                || detailInfo.aka.isNotEmpty()
+                || !detailInfo.runtime.isNullOrBlank()
+                || detailInfo.episodeCount != null
+                || !detailInfo.episodeDuration.isNullOrBlank()
+                || detailInfo.writers.isNotEmpty()
+                || detailInfo.cast.isNotEmpty()
+                || detailInfo.languages.isNotEmpty()
+                || detailInfo.initialReleaseDates.isNotEmpty()
             if (hasAnyField) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(
@@ -1696,6 +1954,13 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
+                        if (detailInfo.genres.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_genres),
+                                value = detailInfo.genres.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
                         if (detailInfo.countries.isNotEmpty()) {
                             MetaRow(
                                 label = stringResource(R.string.detail_info_countries),
@@ -1710,10 +1975,229 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
-                        if (detailInfo.genres.isNotEmpty()) {
+                        // 又名
+                        if (detailInfo.aka.isNotEmpty()) {
                             MetaRow(
-                                label = stringResource(R.string.detail_info_genres),
-                                value = detailInfo.genres.joinToString(" / ")
+                                label = stringResource(R.string.detail_info_aka),
+                                value = detailInfo.aka.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 片长(电影)
+                        if (!detailInfo.runtime.isNullOrBlank()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_runtime),
+                                value = detailInfo.runtime
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 集数(电视剧)
+                        if (detailInfo.episodeCount != null) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_episode_count),
+                                value = detailInfo.episodeCount.toString()
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 单集片长(电视剧)
+                        if (!detailInfo.episodeDuration.isNullOrBlank()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_episode_duration),
+                                value = detailInfo.episodeDuration
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 编剧
+                        if (detailInfo.writers.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_writers),
+                                value = detailInfo.writers.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 主演
+                        if (detailInfo.cast.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_cast),
+                                value = detailInfo.cast.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 语言
+                        if (detailInfo.languages.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_languages),
+                                value = detailInfo.languages.joinToString(" / ")
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                        // 首播日期
+                        if (detailInfo.initialReleaseDates.isNotEmpty()) {
+                            MetaRow(
+                                label = stringResource(R.string.detail_info_initial_release_dates),
+                                value = detailInfo.initialReleaseDates.joinToString(" / ")
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 剧情简介独立卡片
+        if (detailInfo?.summary != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.detail_info_summary),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = detailInfo.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+
+        // 评分分布卡片(5星→1星条形图)
+        if (detailInfo?.ratingDistribution?.isNotEmpty() == true) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = stringResource(R.string.detail_info_rating_distribution),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val labels = listOf("5★", "4★", "3★", "2★", "1★")
+                    val maxPct = detailInfo.ratingDistribution.maxOrNull() ?: 1.0
+                    detailInfo.ratingDistribution.forEachIndexed { index, pct ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = labels.getOrElse(index) { "" },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(28.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                            ) {
+                                val fraction = if (maxPct > 0) (pct / maxPct).toFloat() else 0f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(fraction)
+                                        .fillMaxHeight()
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${pct.toInt()}%",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.width(36.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 演职员卡片(横向滚动头像列表)
+        if (detailInfo?.celebrities?.isNotEmpty() == true) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = stringResource(R.string.detail_info_celebrities),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp)
+            ) {
+                items(detailInfo.celebrities) { celebrity ->
+                    Column(
+                        modifier = Modifier.width(72.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            if (!celebrity.avatarUrl.isNullOrBlank()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(celebrity.avatarUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = celebrity.name,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.TheaterComedy,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(28.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = celebrity.name,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (!celebrity.role.isNullOrBlank()) {
+                            Text(
+                                text = celebrity.role,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }

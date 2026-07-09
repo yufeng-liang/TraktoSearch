@@ -475,6 +475,19 @@
     <string name="detail_info_countries">제작국/지역</string>
     <string name="detail_info_directors">감독</string>
     <string name="detail_info_genres">장르</string>
+    <string name="detail_info_douban_rating">더우반</string>
+    <string name="detail_info_rating_count">(%1$d명 평가)</string>
+    <string name="detail_info_aka">다른 이름</string>
+    <string name="detail_info_runtime">상영시간</string>
+    <string name="detail_info_episode_count">에피소드 수</string>
+    <string name="detail_info_episode_duration">에피소드 시간</string>
+    <string name="detail_info_summary">줄거리</string>
+    <string name="detail_info_writers">각본</string>
+    <string name="detail_info_cast">주연</string>
+    <string name="detail_info_languages">언어</string>
+    <string name="detail_info_initial_release_dates">방영일</string>
+    <string name="detail_info_rating_distribution">평점 분포</string>
+    <string name="detail_info_celebrities">출연진·스태프</string>
     <string name="detail_cast_all_title">전체 출연진 및 제작진</string>
     <string name="detail_cast_close">닫기</string>
     <string name="detail_specials">스페셜</string>
@@ -621,13 +634,59 @@
     <string name="screen_douban_failures_empty_movie">영화 목록이 비어 있습니다</string>
     <string name="screen_douban_failures_empty_show">드라마 목록이 비어 있습니다</string>
     <string name="screen_douban_failures_empty_uncategorized">미분류 목록이 비어 있습니다</string>
+    <string name="screen_douban_failures_empty_variety">예능 목록이 비어 있습니다</string>
+    <string name="screen_douban_failures_empty_documentary">다큐멘터리 목록이 비어 있습니다</string>
     <string name="screen_douban_failures_clear_all">전체 비우기</string>
     <string name="screen_douban_failures_clear_all_confirm">모든 실패 기록을 비우시겠습니까? 이 작업은 되돌릴 수 없습니다.</string>
     <string name="screen_douban_failures_mark_as_movie">영화로 표시</string>
     <string name="screen_douban_failures_mark_as_show">TV 드라마로 표시</string>
+    <string name="screen_douban_failures_mark_as_variety">예능으로 표시</string>
+    <string name="screen_douban_failures_mark_as_documentary">다큐멘터리로 표시</string>
     <string name="screen_douban_failures_clear_mark">유형 표시 지우기</string>
     <string name="screen_douban_failures_delete_item">이 항목 삭제</string>
     <string name="screen_douban_failures_tab_uncategorized">미분류</string>
+    <string name="screen_douban_failures_tab_variety">예능</string>
+    <string name="screen_douban_failures_tab_documentary">다큐멘터리</string>
+    <string name="screen_douban_failures_selected_count">%1$d개 선택됨</string>
+    <string name="screen_douban_failures_select_all">전체 선택</string>
+
+    <!--豆瓣 상세 페이지:크롤링 진행률 및 라벨링 알림 -->
+    <string name="douban_detail_fetching">두반 상세 정보 불러오는 중…</string>
+    <string name="douban_detail_fetch_failed">두반 상세 정보 불러오기 실패</string>
+    <string name="douban_detail_retry">재시도</string>
+    <string name="douban_detail_updated_and_synced">두반 상세 정보가 업데이트되고 글로벌 풀에 동기화되었습니다</string>
+    <string name="douban_detail_marked_and_synced_movie">영화로 표시됨, 글로벌 풀에 동기화됨</string>
+    <string name="douban_detail_marked_and_synced_show">TV 드라마로 표시됨, 글로벌 풀에 동기화됨</string>
+    <string name="douban_detail_marked_and_synced_variety">예능으로 표시됨, 글로벌 풀에 동기화됨</string>
+    <string name="douban_detail_marked_and_synced_documentary">다큐멘터리로 표시됨, 글로벌 풀에 동기화됨</string>
+    <string name="douban_detail_mark_cleared">유형 표시가 삭제되었습니다</string>
+    <string name="douban_detail_mark_failed">유형 표시 실패</string>
+
+    <!--豆瓣 크롤링 테스트 페이지 -->
+    <string name="douban_spider_test_title">豆瓣 크롤링 테스트</string>
+    <string name="douban_spider_test_cookie_section">Cookie 정보</string>
+    <string name="douban_spider_test_not_logged_in">豆瓣에 로그인되지 않음</string>
+    <string name="douban_spider_test_logged_in">로그인됨 · userId: %1$s</string>
+    <string name="douban_spider_test_url_section">크롤링 대상</string>
+    <string name="douban_spider_test_preset">빠른 선택</string>
+    <string name="douban_spider_test_url_preset_item">영상 작품</string>
+    <string name="douban_spider_test_url_preset_user">사용자 홈</string>
+    <string name="douban_spider_test_ua_pc">데스크톱</string>
+    <string name="douban_spider_test_ua_mobile">모바일</string>
+    <string name="douban_spider_test_fetch">크롤링</string>
+    <string name="douban_spider_test_fetching">크롤링 중…</string>
+    <string name="douban_spider_test_tab_fields">추출 필드</string>
+    <string name="douban_spider_test_tab_html">원본 HTML</string>
+    <string name="douban_spider_test_tab_preview">웹 미리보기</string>
+    <string name="douban_spider_test_copy_html">모두 복사</string>
+    <string name="douban_spider_test_empty">비어있음</string>
+    <string name="douban_spider_test_copied">HTML이 클립보드에 복사되었습니다</string>
+    <string name="douban_spider_test_export_txt">TXT 내보내기</string>
+    <string name="douban_spider_test_export_html">HTML 내보내기</string>
+    <string name="douban_spider_test_exported">내보냈습니다</string>
+    <string name="douban_spider_test_pick_cached">캐시된 항목 선택</string>
+    <string name="douban_spider_test_pick_cached_title">캐시된 더우반 항목</string>
+    <string name="douban_spider_test_no_cached">캐시된 항목이 아직 없습니다</string>
 
     <!--豆瓣 실패 항목 조회 페이지: 필터와 검색 -->
     <string name="filter_title">필터</string>
@@ -689,7 +748,7 @@
     <string name="statistics_info_ratings">Q: 평점 통계란?\nA: Trakt에서의 평점 수, 평균 평점, 평점 분포를 표시합니다. 평점이 매겨진 작품만 카운트됩니다.</string>
 
     <!-- Help Statistics -->
-    <string name="help_statistics_b1">"마이" 페이지 오른쪽 상단에서 통계에 접근</string>
+    <string name="help_statistics_b1">"설정" 페이지 첫 번째 행에서 통계에 접근</string>
     <string name="help_statistics_b2">시청 개요 (전체, 이번 달, 올해), 시청 시간, 평가 통계 확인</string>
     <string name="help_statistics_b3">장르 분포 파이 차트와 순위로 시청 취향 표시</string>
     <string name="help_statistics_b4">히트맵으로 지난 1년간의 매일 시청 활동 표시</string>
@@ -716,7 +775,7 @@
     <string name="onboarding_step4_title">설정</string>
     <string name="onboarding_step4_desc">테마, 언어, 검색 소스 등 사용자 정의</string>
     <string name="onboarding_step5_title">시청 통계</string>
-    <string name="onboarding_step5_desc">「마이」 페이지 오른쪽 상단에서 시청 데이터와 히트맵 보기, TV 프로그램은 한 시즌 전체 시청 시 카운트</string>
+    <string name="onboarding_step5_desc">「설정」 페이지 첫 번째 행에서 시청 데이터와 히트맵 보기, TV 프로그램은 한 시즌 전체 시청 시 카운트</string>
     <string name="onboarding_step6_title">상세 페이지 조작</string>
     <string name="onboarding_step6_desc">포스터 탭하여 크게 보기 및 앨범에 저장, 출연진 아바타 탭하여 배우의 다른 작품 보기, 평가는 반점 선택 지원</string>
 

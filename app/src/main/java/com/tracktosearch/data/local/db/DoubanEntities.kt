@@ -120,6 +120,14 @@ interface DoubanSyncFailureDao {
     /** 更新单条子标题(用于资源搜索) */
     @Query("UPDATE douban_sync_failures SET subtitle = :subtitle WHERE doubanId = :doubanId")
     suspend fun updateSubtitle(doubanId: String, subtitle: String?)
+
+    /** 批量删除(多选模式删除用) */
+    @Query("DELETE FROM douban_sync_failures WHERE doubanId IN (:ids)")
+    suspend fun deleteByDoubanIds(ids: List<String>)
+
+    /** 批量更新媒体类型(多选模式标注用,覆盖更新) */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId IN (:ids)")
+    suspend fun updateMediaTypeBatch(ids: List<String>, mediaType: String?)
 }
 
 /**

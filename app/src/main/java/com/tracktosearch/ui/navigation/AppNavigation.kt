@@ -31,9 +31,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
@@ -44,6 +42,7 @@ import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanFailuresScreen
 import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
+import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
@@ -93,6 +92,7 @@ object Routes {
     const val DOUBAN_LOGIN = "doubanLogin"
     const val DOUBAN_FAILURES = "doubanFailures"
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
+    const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
@@ -134,9 +134,7 @@ object Routes {
 class AuthStateHolder @Inject constructor(
     private val tokenStorage: TokenStorage
 ) {
-    val isLoggedIn: Flow<Boolean> = tokenStorage.accessToken.map { token ->
-        !token.isNullOrEmpty()
-    }
+    val isLoggedIn: kotlinx.coroutines.flow.StateFlow<Boolean> = tokenStorage.isLoggedInState
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -153,7 +151,7 @@ fun AppNavigation(
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
-    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle(initialValue = DefaultTabStorage.DEFAULT_TAB_SEARCH)
+    val storedDefaultTab by defaultTabStorage.defaultTab.collectAsStateWithLifecycle()
     // 共享元素转场动画开关：StateFlow 在 MainActivity 预加载后已持有磁盘真实值，collectAsStateWithLifecycle 无需 initialValue，首次组合即为真实值
     val sharedTransitionStorage = EntryPointAccessors.fromApplication(context, SharedTransitionEntryPoint::class.java).sharedTransitionStorage()
     val sharedTransitionEnabled by sharedTransitionStorage.enabledState.collectAsStateWithLifecycle()
@@ -214,7 +212,7 @@ fun AppNavigation(
 
                 composable(Routes.MAIN) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
+                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle()
 
                         // 从详情页返回时，按变更类型分别刷新想看列表或已看历史
                         // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry
@@ -317,7 +315,12 @@ fun AppNavigation(
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
                             onSearchClick = { keyword ->
-                                navController.navigate(Routes.searchRoute(keyword))
+                                // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页
+                                if (keyword.trim() == "13638719007") {
+                                    navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                                } else {
+                                    navController.navigate(Routes.searchRoute(keyword))
+                                }
                             },
                             onNavigateToLogin = {
                                 navController.navigate(Routes.LOGIN) {
@@ -364,6 +367,9 @@ fun AppNavigation(
                             },
                             onNavigateToDoubanLogin = {
                                 navController.navigate(Routes.DOUBAN_LOGIN)
+                            },
+                            onSpiderTest = {
+                                navController.navigate(Routes.DOUBAN_SPIDER_TEST)
                             }
                         )
                     }
@@ -616,6 +622,12 @@ fun AppNavigation(
                             // 这里仅 popUp 到失败项查看页,让用户返回查看进度
                             navController.popBackStack()
                         }
+                    )
+                }
+
+                composable(Routes.DOUBAN_SPIDER_TEST) {
+                    DoubanSpiderTestScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
             }

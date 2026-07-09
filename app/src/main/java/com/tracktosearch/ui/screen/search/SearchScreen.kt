@@ -144,6 +144,7 @@ fun SearchScreen(
     onBack: (() -> Unit)? = null,
     onSearchClick: ((String) -> Unit)? = null,
     onTraktSearch: ((SearchSourceType, String) -> Unit)? = null,
+    onSpiderTest: (() -> Unit)? = null,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit = { _, _, _, _, _, _, _ -> },
     searchSourceType: SearchSourceType = SearchSourceType.DISK,
     onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
@@ -422,8 +423,13 @@ fun SearchScreen(
                         searchQuery = searchQuery,
                         onQueryChange = { searchQuery = it },
                         onSearch = {
-                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                            onTraktSearch?.invoke(searchSourceType, searchQuery)
+                            // 调试入口:输入特定数字串进入豆瓣爬取测试页
+                            if (searchQuery.trim() == "13638719007") {
+                                onSpiderTest?.invoke()
+                            } else {
+                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                                onTraktSearch?.invoke(searchSourceType, searchQuery)
+                            }
                             focusManager.clearFocus()
                         },
                         onClear = { searchQuery = "" },

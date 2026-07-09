@@ -96,37 +96,26 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    // 用 stateIn 硬编码默认值作为初始值，DataStore 真实值到达后自动更新，
-    // 避免在主线程 runBlocking 阻塞启动（设置页延迟构造时 DataStore 已热，跳变不明显）
+    // Storage 已在 init 中预加载 DataStore 首值到 StateFlow,直接暴露无需 stateIn,消除默认值跳变
     val themeMode: StateFlow<String> = themeStorage.themeMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeStorage.MODE_SYSTEM)
 
     val accentColor: StateFlow<com.tracktosearch.ui.theme.MonetAccent?> = themeStorage.accentColor
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val defaultTab: StateFlow<Int> = defaultTabStorage.defaultTab
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DefaultTabStorage.DEFAULT_TAB_SEARCH)
 
     val language: StateFlow<String> = languageStorage.language
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LanguageStorage.LANGUAGE_SYSTEM)
 
     val pansouEnabled: StateFlow<Boolean> = searchSourceStorage.pansouEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val panhubEnabled: StateFlow<Boolean> = searchSourceStorage.panhubEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val zresoEnabled: StateFlow<Boolean> = searchSourceStorage.zresoEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val notificationEnabled: StateFlow<Boolean> = notificationStorage.enabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val releaseReminderEnabled: StateFlow<Boolean> = notificationStorage.releaseReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val newSeasonReminderEnabled: StateFlow<Boolean> = notificationStorage.newSeasonReminderEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
@@ -177,9 +166,7 @@ class SettingsViewModel @Inject constructor(
 
     // ========== PanHub 配置 ==========
 
-    private val initialPanHubConfig: PanHubConfig = PanHubConfig()
     val panHubConfig: StateFlow<PanHubConfig> = panHubConfigStorage.config
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), initialPanHubConfig)
 
     fun setPanHubConcurrency(value: Int) {
         viewModelScope.launch { panHubConfigStorage.setConcurrency(value) }
@@ -199,13 +186,7 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 自定义搜索源 ==========
 
-    private val initialCustomSources: List<CustomSearchSource> = emptyList()
     val customSources: StateFlow<List<CustomSearchSource>> = customSearchSourceStorage.sources
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            initialCustomSources
-        )
 
     fun addCustomSource(source: CustomSearchSource) {
         viewModelScope.launch { customSearchSourceStorage.addSource(source) }
@@ -636,16 +617,7 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 发现页栏目设置 ==========
 
-    private val initialDiscoverSections: List<DiscoverSectionConfig> =
-        DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
-            DiscoverSectionConfig(id = id, visible = true, order = index)
-        }
     val discoverSections: StateFlow<List<DiscoverSectionConfig>> = discoverSectionStorage.sectionConfigs
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            initialDiscoverSections
-        )
 
     fun setSectionVisible(id: String, visible: Boolean) {
         viewModelScope.launch { discoverSectionStorage.setSectionVisible(id, visible) }
@@ -657,16 +629,7 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 详情页模块设置 ==========
 
-    private val initialDetailSections: List<DetailSectionConfig> =
-        DetailSectionStorage.ALL_SECTION_IDS.map { id ->
-            DetailSectionConfig(id = id, visible = true)
-        }
     val detailSections: StateFlow<List<DetailSectionConfig>> = detailSectionStorage.sectionConfigs
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5000),
-            initialDetailSections
-        )
 
     fun setDetailSectionVisible(id: String, visible: Boolean) {
         viewModelScope.launch { detailSectionStorage.setSectionVisible(id, visible) }

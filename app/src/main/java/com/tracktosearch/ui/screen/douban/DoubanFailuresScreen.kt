@@ -5,10 +5,16 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -38,6 +44,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -48,15 +55,23 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Block
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -68,6 +83,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -90,6 +106,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -252,6 +269,31 @@ class DoubanFailuresViewModel @Inject constructor(
         }
     }
 
+    /** 批量更新媒体类型(多选模式标注用) */
+    fun batchSetMediaType(doubanIds: List<String>, mediaType: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            doubanRetryManager.batchUpdateMediaType(doubanIds, mediaType)
+            // 本地同步更新
+            val idSet = doubanIds.toSet()
+            _uiState.value = _uiState.value.copy(
+                failures = _uiState.value.failures.map {
+                    if (it.doubanId in idSet) it.copy(mediaType = mediaType) else it
+                }
+            )
+        }
+    }
+
+    /** 批量删除失败项(多选模式删除用) */
+    fun batchDeleteFailures(doubanIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            doubanRetryManager.batchDeleteFailures(doubanIds)
+            val idSet = doubanIds.toSet()
+            _uiState.value = _uiState.value.copy(
+                failures = _uiState.value.failures.filterNot { it.doubanId in idSet }
+            )
+        }
+    }
+
     fun updateSelectedReasons(reasons: Set<FailureReason>) {
         _filterState.value = _filterState.value.copy(selectedReasons = reasons)
     }
@@ -307,8 +349,12 @@ fun DoubanFailuresScreen(
 
     // 0=想看(WISH), 1=已看(COLLECT)
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
-    // 0=电影, 1=电视剧, 2=未分类
+    // 0=电影, 1=电视剧, 2=综艺, 3=纪录片, 4=未分类
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // 多选模式状态
+    var isMultiSelectMode by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+    val selectedItems = remember { mutableStateMapOf<String, Boolean>() }
     var searchQuery by remember { mutableStateOf("") }
     var showFilterSheet by remember { mutableStateOf(false) }
     // 搜索框展开状态:未展开显示放大镜图标,展开时搜索框向左扩展遮住标题
@@ -337,9 +383,28 @@ fun DoubanFailuresScreen(
         }
     }
 
-    // 返回手势拦截:搜索框展开时,第一次返回收起搜索框,第二次返回才真正返回
-    BackHandler(enabled = isSearchExpanded) {
-        collapseSearch()
+    // 返回手势拦截:多选模式优先,其次搜索框展开
+    BackHandler(enabled = isMultiSelectMode || isSearchExpanded) {
+        when {
+            isMultiSelectMode -> {
+                isMultiSelectMode = false
+                isProcessing = false
+            }
+            isSearchExpanded -> collapseSearch()
+        }
+    }
+
+    // 退出多选时清空选中
+    LaunchedEffect(isMultiSelectMode) {
+        if (!isMultiSelectMode) selectedItems.clear()
+    }
+
+    // 切 Tab / 切模式时自动退出多选
+    LaunchedEffect(selectedMode, selectedTab) {
+        if (isMultiSelectMode) {
+            isMultiSelectMode = false
+            isProcessing = false
+        }
     }
 
     // 进入页面时加载
@@ -384,6 +449,8 @@ fun DoubanFailuresScreen(
                 when (selectedTab) {
                     0 -> failure.mediaType == "movie"
                     1 -> failure.mediaType == "show"
+                    2 -> failure.mediaType == "variety"
+                    3 -> failure.mediaType == "documentary"
                     else -> failure.mediaType == null
                 }
         }
@@ -416,6 +483,12 @@ fun DoubanFailuresScreen(
     val showCount = remember(uiState.failures, selectedMode) {
         uiState.failures.count { it.status == currentStatus && it.mediaType == "show" }
     }
+    val varietyCount = remember(uiState.failures, selectedMode) {
+        uiState.failures.count { it.status == currentStatus && it.mediaType == "variety" }
+    }
+    val documentaryCount = remember(uiState.failures, selectedMode) {
+        uiState.failures.count { it.status == currentStatus && it.mediaType == "documentary" }
+    }
     val uncategorizedCount = remember(uiState.failures, selectedMode) {
         uiState.failures.count { it.status == currentStatus && it.mediaType == null }
     }
@@ -447,6 +520,8 @@ fun DoubanFailuresScreen(
                 val currentTabCount = when (selectedTab) {
                     0 -> movieCount
                     1 -> showCount
+                    2 -> varietyCount
+                    3 -> documentaryCount
                     else -> uncategorizedCount
                 }
                 // 是否有激活的筛选条件(失败原因多选 + 标记时间区间预设)
@@ -468,6 +543,8 @@ fun DoubanFailuresScreen(
                         when (selectedTab) {
                             0 -> R.string.screen_douban_failures_empty_movie
                             1 -> R.string.screen_douban_failures_empty_show
+                            2 -> R.string.screen_douban_failures_empty_variety
+                            3 -> R.string.screen_douban_failures_empty_documentary
                             else -> R.string.screen_douban_failures_empty_uncategorized
                         }
                     else -> null
@@ -506,17 +583,72 @@ fun DoubanFailuresScreen(
                             contentType = { "failure_card" }
                         ) { index ->
                             val failure = filtered[index]
-                            FailureCard(
-                                failure = failure,
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    onItemClick(failure.doubanId)
-                                },
-                                onLongClick = {
-                                    view.performHaptic(HapticType.HEAVY_CLICK)
-                                    menuFailure = failure
+                            val isSelected = selectedItems.containsKey(failure.doubanId)
+                            Box {
+                                FailureCard(
+                                    failure = failure,
+                                    onClick = {
+                                        if (isMultiSelectMode) {
+                                            view.performHaptic(HapticType.CLICK)
+                                            if (isSelected) selectedItems.remove(failure.doubanId)
+                                            else selectedItems[failure.doubanId] = true
+                                            if (selectedItems.isEmpty()) {
+                                                isMultiSelectMode = false
+                                            }
+                                        } else {
+                                            view.performHaptic(HapticType.CLICK)
+                                            onItemClick(failure.doubanId)
+                                        }
+                                    },
+                                    onLongClick = {
+                                        view.performHaptic(HapticType.HEAVY_CLICK)
+                                        if (!isMultiSelectMode) {
+                                            isMultiSelectMode = true
+                                        }
+                                        selectedItems[failure.doubanId] = true
+                                    }
+                                )
+                                // 多选模式下的选中遮罩 + 勾选标记(参考 WatchlistScreen)
+                                if (isMultiSelectMode) {
+                                    Box(
+                                        modifier = Modifier
+                                            .matchParentSize()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+                                                else Color.Transparent
+                                            )
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(4.dp)
+                                            .size(24.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isSelected) MaterialTheme.colorScheme.primary
+                                                else Color.Transparent
+                                            )
+                                            .then(
+                                                if (!isSelected) Modifier.border(
+                                                    2.dp,
+                                                    Color.White.copy(alpha = 0.7f),
+                                                    CircleShape
+                                                ) else Modifier
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isSelected) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
                     // 快速回顶按钮(参考社区列表查看页)
@@ -527,6 +659,177 @@ fun DoubanFailuresScreen(
                             .padding(bottom = 16.dp, end = 16.dp),
                         hazeState = hazeState
                     )
+                }
+            }
+
+            // 多选操作栏(顶部滑入,参考 WatchlistScreen)
+            AnimatedVisibility(
+                visible = isMultiSelectMode,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.thin()
+                        )
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                ) {
+                    // 状态栏 Spacer
+                    Spacer(modifier = Modifier.statusBarsPadding())
+                    // 第一行:返回 + 选中数 + 全选 + 取消
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(onClick = {
+                            isMultiSelectMode = false
+                            isProcessing = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.screen_douban_failures_selected_count,
+                                selectedItems.size
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // 全选当前 Tab
+                            TextButton(
+                                onClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    filtered.forEach { selectedItems[it.doubanId] = true }
+                                },
+                                enabled = !isProcessing
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.SelectAll,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.screen_douban_failures_select_all))
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            TextButton(
+                                onClick = {
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                },
+                                enabled = !isProcessing
+                            ) {
+                                Text(stringResource(R.string.douban_retry_cancel))
+                            }
+                        }
+                    }
+                    // 第二行:标注为电影 / 标注为电视剧 / 清除标注
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_movie),
+                            icon = Icons.Rounded.Movie,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "movie")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_show),
+                            icon = Icons.Rounded.Tv,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "show")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_clear_mark),
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, null)
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                    }
+                    // 第三行:标注为综艺 / 标注为纪录片 / 删除
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_variety),
+                            icon = Icons.Rounded.TheaterComedy,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "variety")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_documentary),
+                            icon = Icons.Rounded.Nature,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "documentary")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_delete_item),
+                            icon = Icons.Rounded.Delete,
+                            enabled = !isProcessing,
+                            isDestructive = true,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchDeleteFailures(ids)
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
@@ -701,10 +1004,11 @@ fun DoubanFailuresScreen(
                         }
                     )
 
-                    // PrimaryTabRow:电影 / 电视剧 / 未分类(带数量徽标)
-                    PrimaryTabRow(
+                    // ScrollableTabRow:电影 / 电视剧 / 综艺 / 纪录片 / 未分类(带数量徽标)
+                    ScrollableTabRow(
                         selectedTabIndex = selectedTab,
-                        containerColor = Color.Transparent
+                        containerColor = Color.Transparent,
+                        edgePadding = 0.dp
                     ) {
                         Tab(
                             selected = selectedTab == 0,
@@ -731,6 +1035,26 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
                                 selectedTab = 2
+                            },
+                            text = {
+                                Text("${stringResource(R.string.screen_douban_failures_tab_variety)}($varietyCount)")
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 3,
+                            onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = 3
+                            },
+                            text = {
+                                Text("${stringResource(R.string.screen_douban_failures_tab_documentary)}($documentaryCount)")
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 4,
+                            onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                selectedTab = 4
                             },
                             text = {
                                 Text("${stringResource(R.string.screen_douban_failures_tab_uncategorized)}($uncategorizedCount)")
@@ -774,6 +1098,14 @@ fun DoubanFailuresScreen(
             },
             onMarkShow = {
                 viewModel.setMediaType(failure.doubanId, "show")
+                menuFailure = null
+            },
+            onMarkVariety = {
+                viewModel.setMediaType(failure.doubanId, "variety")
+                menuFailure = null
+            },
+            onMarkDocumentary = {
+                viewModel.setMediaType(failure.doubanId, "documentary")
                 menuFailure = null
             },
             onClearMark = {
@@ -930,6 +1262,54 @@ private fun EmptyStateView(
                 }
             }
         }
+    }
+}
+
+/**
+ * 多选操作栏按钮(图标 + 文字,可标红)。
+ */
+@Composable
+private fun MultiSelectActionButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    enabled: Boolean = true,
+    isDestructive: Boolean = false,
+    onClick: () -> Unit
+) {
+    val containerColor = if (isDestructive) MaterialTheme.colorScheme.errorContainer
+        else MaterialTheme.colorScheme.surfaceVariant
+    val contentColor = if (isDestructive) MaterialTheme.colorScheme.error
+        else MaterialTheme.colorScheme.onSurfaceVariant
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor,
+            disabledContainerColor = containerColor.copy(alpha = 0.5f),
+            disabledContentColor = contentColor.copy(alpha = 0.5f)
+        ),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            horizontal = 4.dp,
+            vertical = 8.dp
+        )
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1095,6 +1475,8 @@ private fun FailureActionDialog(
     onDismiss: () -> Unit,
     onMarkMovie: () -> Unit,
     onMarkShow: () -> Unit,
+    onMarkVariety: () -> Unit,
+    onMarkDocumentary: () -> Unit,
     onClearMark: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -1115,6 +1497,12 @@ private fun FailureActionDialog(
                 }
                 ActionItem(stringResource(R.string.screen_douban_failures_mark_as_show)) {
                     onMarkShow()
+                }
+                ActionItem(stringResource(R.string.screen_douban_failures_mark_as_variety)) {
+                    onMarkVariety()
+                }
+                ActionItem(stringResource(R.string.screen_douban_failures_mark_as_documentary)) {
+                    onMarkDocumentary()
                 }
                 ActionItem(stringResource(R.string.screen_douban_failures_clear_mark)) {
                     onClearMark()

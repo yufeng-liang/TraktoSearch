@@ -475,6 +475,19 @@
     <string name="detail_info_countries">製作国/地域</string>
     <string name="detail_info_directors">監督</string>
     <string name="detail_info_genres">ジャンル</string>
+    <string name="detail_info_douban_rating">豆瓣</string>
+    <string name="detail_info_rating_count">(%1$d 件の評価)</string>
+    <string name="detail_info_aka">別名</string>
+    <string name="detail_info_runtime">上映時間</string>
+    <string name="detail_info_episode_count">話数</string>
+    <string name="detail_info_episode_duration">1話あたりの時間</string>
+    <string name="detail_info_summary">あらすじ</string>
+    <string name="detail_info_writers">脚本</string>
+    <string name="detail_info_cast">主演</string>
+    <string name="detail_info_languages">言語</string>
+    <string name="detail_info_initial_release_dates">公開日</string>
+    <string name="detail_info_rating_distribution">評価分布</string>
+    <string name="detail_info_celebrities">キャスト・スタッフ</string>
     <string name="detail_cast_all_title">キャスト＆スタッフ一覧</string>
     <string name="detail_cast_close">閉じる</string>
     <string name="detail_specials">スペシャル</string>
@@ -621,13 +634,59 @@
     <string name="screen_douban_failures_empty_movie">映画リストは空です</string>
     <string name="screen_douban_failures_empty_show">ドラマリストは空です</string>
     <string name="screen_douban_failures_empty_uncategorized">未分類リストは空です</string>
+    <string name="screen_douban_failures_empty_variety">バラエティリストは空です</string>
+    <string name="screen_douban_failures_empty_documentary">ドキュメンタリーリストは空です</string>
     <string name="screen_douban_failures_clear_all">全てクリア</string>
     <string name="screen_douban_failures_clear_all_confirm">全ての失敗記録をクリアします?この操作は取り消せません。</string>
     <string name="screen_douban_failures_mark_as_movie">映画としてマーク</string>
     <string name="screen_douban_failures_mark_as_show">TVドラマとしてマーク</string>
+    <string name="screen_douban_failures_mark_as_variety">バラエティとしてマーク</string>
+    <string name="screen_douban_failures_mark_as_documentary">ドキュメンタリーとしてマーク</string>
     <string name="screen_douban_failures_clear_mark">タイプマークをクリア</string>
     <string name="screen_douban_failures_delete_item">この項目を削除</string>
     <string name="screen_douban_failures_tab_uncategorized">未分類</string>
+    <string name="screen_douban_failures_tab_variety">バラエティ</string>
+    <string name="screen_douban_failures_tab_documentary">ドキュメンタリー</string>
+    <string name="screen_douban_failures_selected_count">%1$d件選択中</string>
+    <string name="screen_douban_failures_select_all">全て選択</string>
+
+    <!-- 豆瓣詳細ページ:クロール進捗とラベル付け通知 -->
+    <string name="douban_detail_fetching">豆瓣詳細を取得中…</string>
+    <string name="douban_detail_fetch_failed">豆瓣詳細の取得に失敗しました</string>
+    <string name="douban_detail_retry">再試行</string>
+    <string name="douban_detail_updated_and_synced">豆瓣詳細を更新し、グローバルプールに同期しました</string>
+    <string name="douban_detail_marked_and_synced_movie">映画としてマーク、グローバルプールに同期しました</string>
+    <string name="douban_detail_marked_and_synced_show">テレビドラマとしてマーク、グローバルプールに同期しました</string>
+    <string name="douban_detail_marked_and_synced_variety">バラエティとしてマーク、グローバルプールに同期しました</string>
+    <string name="douban_detail_marked_and_synced_documentary">ドキュメンタリーとしてマーク、グローバルプールに同期しました</string>
+    <string name="douban_detail_mark_cleared">タイプマークをクリアしました</string>
+    <string name="douban_detail_mark_failed">タイプのマークに失敗しました</string>
+
+    <!-- 豆瓣クロールテストページ -->
+    <string name="douban_spider_test_title">豆瓣クロールテスト</string>
+    <string name="douban_spider_test_cookie_section">Cookie情報</string>
+    <string name="douban_spider_test_not_logged_in">豆瓣に未ログイン</string>
+    <string name="douban_spider_test_logged_in">ログイン済み · userId: %1$s</string>
+    <string name="douban_spider_test_url_section">クロール対象</string>
+    <string name="douban_spider_test_preset">クイック選択</string>
+    <string name="douban_spider_test_url_preset_item">映像作品</string>
+    <string name="douban_spider_test_url_preset_user">ユーザーホーム</string>
+    <string name="douban_spider_test_ua_pc">デスクトップ版</string>
+    <string name="douban_spider_test_ua_mobile">モバイル版</string>
+    <string name="douban_spider_test_fetch">クロール</string>
+    <string name="douban_spider_test_fetching">クロール中…</string>
+    <string name="douban_spider_test_tab_fields">抽出フィールド</string>
+    <string name="douban_spider_test_tab_html">生HTML</string>
+    <string name="douban_spider_test_tab_preview">Webプレビュー</string>
+    <string name="douban_spider_test_copy_html">すべてコピー</string>
+    <string name="douban_spider_test_empty">空</string>
+    <string name="douban_spider_test_copied">HTMLをクリップボードにコピーしました</string>
+    <string name="douban_spider_test_export_txt">TXT書き出し</string>
+    <string name="douban_spider_test_export_html">HTML書き出し</string>
+    <string name="douban_spider_test_exported">書き出しました</string>
+    <string name="douban_spider_test_pick_cached">キャッシュ済みアイテムを選択</string>
+    <string name="douban_spider_test_pick_cached_title">キャッシュ済み豆瓣アイテム</string>
+    <string name="douban_spider_test_no_cached">キャッシュ済みアイテムはまだありません</string>
 
     <!-- 豆瓣失敗項查看頁:フィルターと検索 -->
     <string name="filter_title">フィルター</string>
@@ -689,7 +748,7 @@
     <string name="statistics_info_ratings">Q：評価統計とは？\nA：Traktでの評価数、平均評価、評価分布を表示します。評価した作品のみカウントされます。</string>
 
     <!-- Help Statistics -->
-    <string name="help_statistics_b1">「マイ」ページの右上角から統計にアクセス</string>
+    <string name="help_statistics_b1">「設定」ページの先頭行から統計にアクセス</string>
     <string name="help_statistics_b2">視聴概要（合計、今月、今年）、視聴時間、評価統計を確認</string>
     <string name="help_statistics_b3">ジャンル分布の円グラフとランキングで視聴嗜好を表示</string>
     <string name="help_statistics_b4">ヒートマップで過去1年間の毎日の視聴活動を表示</string>
@@ -716,7 +775,7 @@
     <string name="onboarding_step4_title">設定</string>
     <string name="onboarding_step4_desc">テーマ、言語、検索ソースなどをカスタマイズ</string>
     <string name="onboarding_step5_title">視聴統計</string>
-    <string name="onboarding_step5_desc">「マイ」ページの右上で視聴データとヒートマップを表示、テレビ番組は1シーズン全話視聴でカウント</string>
+    <string name="onboarding_step5_desc">「設定」ページの先頭行で視聴データとヒートマップを表示、テレビ番組は1シーズン全話視聴でカウント</string>
     <string name="onboarding_step6_title">詳細ページの操作</string>
     <string name="onboarding_step6_desc">ポスターをタップして拡大表示・アルバムに保存、キャストアバターをタップして俳優の他の作品を表示、評価はハーフスター選択に対応</string>
 

@@ -19,11 +19,35 @@ data class DoubanMarkItem(
 /** 详情页补充信息（含条目元数据，参考 Notion 备份字段清单） */
 data class DoubanDetailInfo(
     val imdbId: String?,
-    val isTvShow: Boolean,        // 类型含「电视剧」即为 true
+    val isTvShow: Boolean,        // 集数不为空即电视剧
+    val title: String? = null,           // 条目标题(og:title)
+    val posterUrl: String? = null,       // 海报地址(og:image)
     val genres: List<String>,
     val year: String?,           // 上映年份（4 位数字字符串）
     val countries: List<String>, // 制片国家/地区
-    val directors: List<String>  // 导演
+    val directors: List<String>,  // 导演
+    // 扩展字段（豆瓣条目页额外提取，用于详情页展示与集数自动分类）
+    val doubanRating: Double? = null,      // 豆瓣评分（10 分制，如 9.2；null 表示暂无评分）
+    val ratingCount: Int? = null,          // 评分人数
+    val summary: String? = null,           // 剧情简介
+    val episodeCount: Int? = null,         // 集数（电视剧才有）
+    val episodeDuration: String? = null,   // 单集片长（电视剧才有，如"45分钟"）
+    val aka: List<String> = emptyList(),   // 又名/译名
+    val runtime: String? = null,           // 片长（电影才有，如"120分钟"）
+    val writers: List<String> = emptyList(),   // 编剧
+    val cast: List<String> = emptyList(),     // 主演名列表
+    val languages: List<String> = emptyList(), // 语言
+    val initialReleaseDates: List<String> = emptyList(),  // 首播日期(可能多个,如"2026-04-18(韩国)")
+    val ratingDistribution: List<Double> = emptyList(),   // 评分分布 5星→1星百分比
+    val celebrities: List<DoubanCelebrity> = emptyList()  // 演职员(导演/编剧/主演,含头像和角色)
+)
+
+/** 豆瓣演职员条目(导演/编剧/主演统一结构) */
+data class DoubanCelebrity(
+    val name: String,               // 中文名
+    val doubanPersonageUrl: String?, // 豆瓣 personage 链接
+    val avatarUrl: String?,         // 头像 URL
+    val role: String?               // 角色,如"导演" / "饰 黄东万" / null
 )
 
 /** 列表页解析结果（条目列表 + 总条目数，总数解析失败时为 null） */
@@ -80,11 +104,19 @@ object DoubanSpider {
         return DoubanMarkListPage(items, totalCount)
     }
 
-    /** 解析详情页 HTML，提取 imdbId、类型、年份、国家、导演 */
+    /** 解析详情页 HTML，提取 imdbId、类型、年份、国家、导演、评分、简介、集数等 */
     fun parseDetail(html: String): DoubanDetailInfo {
         val doc: Document = Jsoup.parse(html)
         val genres = doc.select("span[property=v:genre]").map { it.text() }
-        val isTvShow = genres.any { it.contains("电视剧") || it.contains("综艺") }
+
+        // 条目标题:优先 og:title(纯净),其次 #mainpic 旁的 h1(可能含年份)
+        val title = doc.selectFirst("meta[property=og:title]")?.attr("content")?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: doc.selectFirst("h1")?.text()?.trim()?.takeIf { it.isNotEmpty() }
+        // 海报:优先 og:image,其次 #mainpic img src
+        val posterUrl = doc.selectFirst("meta[property=og:image]")?.attr("content")?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: doc.selectFirst("#mainpic img")?.absUrl("src")?.takeIf { it.isNotEmpty() }
 
         // IMDb ID 在 <span class="pl">IMDb:</span> 后面的文本节点
         val imdbId = doc.select("span.pl").firstOrNull { it.text().contains("IMDb") }
@@ -96,7 +128,7 @@ object DoubanSpider {
             ?: doc.selectFirst("h1")?.text()
                 ?.let { Regex("""\((\d{4})\)""").find(it)?.groupValues?.getOrNull(1) }
 
-        // 制片国家/地区、导演：从 #info 区块里「<span class="pl">字段名:</span>」后面提取
+        // 制片国家/地区、导演、编剧、又名、集数、单集片长、语言：从 #info 区块里「<span class="pl">字段名:</span>」后面提取
         val infoEl = doc.selectFirst("#info")
         val countries = parseInfoField(infoEl, "制片国家/地区")
             ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
@@ -104,8 +136,91 @@ object DoubanSpider {
         val directors = parseInfoField(infoEl, "导演")
             ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
             ?: emptyList()
+        val writers = parseInfoField(infoEl, "编剧")
+            ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        val aka = parseInfoField(infoEl, "又名")
+            ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        val languages = parseInfoField(infoEl, "语言")
+            ?.split("/")?.map { it.trim() }?.filter { it.isNotEmpty() }
+            ?: emptyList()
 
-        return DoubanDetailInfo(imdbId, isTvShow, genres, year, countries, directors)
+        // 集数（电视剧）：从 #info 里「集数:」字段提取数字
+        val episodeCount = parseInfoField(infoEl, "集数")
+            ?.let { Regex("(\\d+)").find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+        // isTvShow:集数不为空即为电视剧
+        val isTvShow = episodeCount != null
+        // 单集片长（电视剧）：从 #info 里「单集片长:」字段提取（如"45分钟"）
+        val episodeDuration = parseInfoField(infoEl, "单集片长")?.trim()?.takeIf { it.isNotEmpty() }
+
+        // 主演:从 #info 里 rel="v:starring" 的 <a> 提取(比纯文本分割更准)
+        val cast = doc.select("#info a[rel=v:starring]").map { it.text() }
+
+        // 首播日期:<span property="v:initialReleaseDate" content="2026-04-18(韩国)">,可能多个
+        val initialReleaseDates = doc.select("#info span[property=v:initialReleaseDate]")
+            .map { it.attr("content").ifBlank { it.text() } }
+            .filter { it.isNotEmpty() }
+
+        // 豆瓣评分（10 分制）：<strong class="ll rating_num" property="v:average">9.2</strong>
+        val doubanRating = doc.selectFirst("strong.rating_num")?.text()?.trim()
+            ?.let { it.toDoubleOrNull()?.takeIf { d -> d in 0.0..10.0 } }
+        // 评分人数：<span property="v:votes">12345</span>
+        val ratingCount = doc.selectFirst("span[property=v:votes]")?.text()?.trim()?.toIntOrNull()
+
+        // 评分分布:5星→1星百分比,div.ratings-on-weight span.rating_per
+        val ratingDistribution = doc.select("div.ratings-on-weight span.rating_per")
+            .mapNotNull { it.text().replace("%", "").toDoubleOrNull() }
+
+        // 剧情简介：<span property="v:summary" class="...">...</span>，需清理豆瓣的 <br> 和空白
+        val summary = doc.selectFirst("span[property=v:summary]")?.let { el ->
+            el.html()
+                .replace("<br>", "\n")
+                .replace("<br/>", "\n")
+                .replace("<br />", "\n")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .takeIf { it.isNotEmpty() }
+        }
+
+        // 片长（电影）：<span property="v:runtime" content="120">120分钟</span>
+        val runtime = doc.selectFirst("span[property=v:runtime]")?.text()?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+        // 演职员:#celebrities li.celebrity,含头像和角色
+        val celebrities = doc.select("#celebrities li.celebrity").mapNotNull { li ->
+            val name = li.selectFirst("div.info a.name")?.text() ?: return@mapNotNull null
+            val personageUrl = li.selectFirst("a[href*=/personage/]")?.absUrl("href")
+            // 头像:div.avatar 的 style="background-image: url(...)"
+            val avatarUrl = li.selectFirst("div.avatar")?.attr("style")
+                ?.let { Regex("url\\(([^)]+)\\)").find(it)?.groupValues?.getOrNull(1) }
+            val role = li.selectFirst("span.role")?.attr("title")?.takeIf { it.isNotBlank() }
+            DoubanCelebrity(name, personageUrl, avatarUrl, role)
+        }
+
+        return DoubanDetailInfo(
+            imdbId = imdbId,
+            isTvShow = isTvShow,
+            title = title,
+            posterUrl = posterUrl,
+            genres = genres,
+            year = year,
+            countries = countries,
+            directors = directors,
+            doubanRating = doubanRating,
+            ratingCount = ratingCount,
+            summary = summary,
+            episodeCount = episodeCount,
+            episodeDuration = episodeDuration,
+            aka = aka,
+            runtime = runtime,
+            writers = writers,
+            cast = cast,
+            languages = languages,
+            initialReleaseDates = initialReleaseDates,
+            ratingDistribution = ratingDistribution,
+            celebrities = celebrities
+        )
     }
 
     /**

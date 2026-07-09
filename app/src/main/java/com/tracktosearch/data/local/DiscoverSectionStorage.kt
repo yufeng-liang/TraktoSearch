@@ -8,10 +8,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,6 +31,8 @@ data class DiscoverSectionConfig(
 class DiscoverSectionStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     companion object {
         // 所有发现页栏目 ID（默认顺序）
         val ALL_SECTION_IDS = listOf(
@@ -48,23 +54,42 @@ class DiscoverSectionStorage @Inject constructor(
         private fun visibilityKey(id: String) = booleanPreferencesKey("visible_$id")
     }
 
-    /** 获取所有栏目的配置列表（按排序顺序） */
-    val sectionConfigs: Flow<List<DiscoverSectionConfig>> = context.discoverSectionDataStore.data.map { prefs ->
+    /** 默认配置（全部可见，默认顺序） */
+    private val defaultConfigs: List<DiscoverSectionConfig> =
+        ALL_SECTION_IDS.mapIndexed { index, id ->
+            DiscoverSectionConfig(id = id, visible = true, order = index)
+        }
+
+    private val _sectionConfigs = MutableStateFlow(defaultConfigs)
+    val sectionConfigs: StateFlow<List<DiscoverSectionConfig>> = _sectionConfigs.asStateFlow()
+
+    init {
+        // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
+        scope.launch {
+            val prefs = context.discoverSectionDataStore.data.first()
+            _sectionConfigs.value = readConfigs(prefs)
+        }
+    }
+
+    private fun readConfigs(prefs: Preferences): List<DiscoverSectionConfig> {
         val orderStr = prefs[KEY_ORDER] ?: ALL_SECTION_IDS.joinToString(",")
         val orderedIds = orderStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
         val allIds = (orderedIds + ALL_SECTION_IDS).distinct()
-        allIds.mapIndexed { index, id ->
+        return allIds.mapIndexed { index, id ->
             DiscoverSectionConfig(
                 id = id,
                 visible = prefs[visibilityKey(id)] ?: true,
                 order = index
             )
         }
-    }.distinctUntilChanged()
+    }
 
     suspend fun setSectionVisible(id: String, visible: Boolean) {
         context.discoverSectionDataStore.edit { prefs ->
             prefs[visibilityKey(id)] = visible
+        }
+        _sectionConfigs.value = _sectionConfigs.value.map {
+            if (it.id == id) it.copy(visible = visible) else it
         }
     }
 
@@ -73,11 +98,14 @@ class DiscoverSectionStorage @Inject constructor(
         context.discoverSectionDataStore.edit { prefs ->
             prefs[KEY_ORDER] = orderedIds.joinToString(",")
         }
+        _sectionConfigs.value = readConfigs(
+            context.discoverSectionDataStore.data.first()
+        )
     }
 
     /** 将指定栏目上移 */
     suspend fun moveUp(id: String) {
-        val configs = sectionConfigs.first()
+        val configs = _sectionConfigs.value
         val ids = configs.map { it.id }.toMutableList()
         val index = ids.indexOf(id)
         if (index > 0) {
@@ -88,7 +116,7 @@ class DiscoverSectionStorage @Inject constructor(
 
     /** 将指定栏目下移 */
     suspend fun moveDown(id: String) {
-        val configs = sectionConfigs.first()
+        val configs = _sectionConfigs.value
         val ids = configs.map { it.id }.toMutableList()
         val index = ids.indexOf(id)
         if (index >= 0 && index < ids.size - 1) {

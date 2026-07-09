@@ -1,0 +1,851 @@
+package com.tracktosearch.ui.screen.douban
+
+import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ExpandCircleDown
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewModelScope
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.tracktosearch.R
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.remote.douban.DoubanDetailInfo
+import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanSpider
+import com.tracktosearch.data.remote.douban.TestFetchResult
+import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.showToast
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+
+// ==================== 数据类 ====================
+
+enum class UrlPreset { ITEM, USER_HOME }
+enum class TestUa { PC, MOBILE }
+
+data class SpiderTestResult(
+    val statusCode: Int,
+    val durationMs: Long,
+    val html: String,
+    val isLoginPage: Boolean,
+    val parsed: DoubanDetailInfo?,
+    val parseError: String?
+)
+
+data class SpiderTestUiState(
+    val cookie: String = "",
+    val isLoggedIn: Boolean = false,
+    val userId: String = "",
+    val url: String = "https://movie.douban.com/subject/37335468/",
+    val urlPreset: UrlPreset = UrlPreset.ITEM,
+    val ua: TestUa = TestUa.PC,
+    val isFetching: Boolean = false,
+    val result: SpiderTestResult? = null,
+    val error: String? = null
+)
+
+/** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
+data class CachedDoubanItem(
+    val doubanId: String,
+    val title: String?,
+    val posterUrl: String?,
+    val doubanUrl: String
+)
+
+// ==================== ViewModel ====================
+
+@HiltViewModel
+class DoubanSpiderTestViewModel @Inject constructor(
+    private val doubanRepository: DoubanRepository,
+    private val doubanAuthStorage: DoubanAuthStorage
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(SpiderTestUiState())
+    val uiState: StateFlow<SpiderTestUiState> = _uiState.asStateFlow()
+
+    /** 本地已缓存的豆瓣条目列表(快选弹窗用) */
+    private val _cachedItems = MutableStateFlow<List<CachedDoubanItem>>(emptyList())
+    val cachedItems: StateFlow<List<CachedDoubanItem>> = _cachedItems.asStateFlow()
+
+    init {
+        // 初始化:读取 cookie 和登录状态
+        val cred = doubanAuthStorage.getCredentials()
+        _uiState.value = _uiState.value.copy(
+            cookie = cred?.cookie ?: "",
+            isLoggedIn = cred != null,
+            userId = cred?.userId ?: ""
+        )
+    }
+
+    fun updateUrl(url: String) {
+        _uiState.value = _uiState.value.copy(url = url)
+    }
+
+    fun updateUrlPreset(preset: UrlPreset) {
+        val template = when (preset) {
+            UrlPreset.ITEM -> "https://movie.douban.com/subject/37335468/"
+            UrlPreset.USER_HOME -> "https://www.douban.com/people/${_uiState.value.userId.ifBlank { "your_user_id" } }/"
+        }
+        _uiState.value = _uiState.value.copy(
+            urlPreset = preset,
+            url = template
+        )
+    }
+
+    fun updateUa(ua: TestUa) {
+        _uiState.value = _uiState.value.copy(ua = ua)
+    }
+
+    /** 加载本地已缓存的豆瓣条目快照(快选弹窗用) */
+    fun loadCachedItems() {
+        viewModelScope.launch {
+            val snapshot = doubanRepository.getDetailSnapshot()
+            _cachedItems.value = snapshot.entries.map { (id, entry) ->
+                CachedDoubanItem(
+                    doubanId = id,
+                    title = entry.title,
+                    posterUrl = entry.posterUrl,
+                    doubanUrl = "https://movie.douban.com/subject/$id/"
+                )
+            }.sortedByDescending { it.doubanId }  // doubanId 大的(通常是较新条目)在前
+        }
+    }
+
+    /** 触发爬取(不走缓存,每次真实请求) */
+    fun fetch() {
+        val current = _uiState.value
+        _uiState.value = current.copy(isFetching = true, error = null, result = null)
+        viewModelScope.launch {
+            try {
+                val fetchResult: TestFetchResult = doubanRepository.fetchHtmlForTest(
+                    url = current.url,
+                    cookie = current.cookie,
+                    useMobileUa = current.ua == TestUa.MOBILE
+                )
+                // 解析(parseDetail 异常隔离)
+                val isLogin = DoubanSpider.isLoginPage(fetchResult.html)
+                val (parsed, parseError) = try {
+                    Pair(DoubanSpider.parseDetail(fetchResult.html), null)
+                } catch (e: Exception) {
+                    Pair(null, e.stackTraceToString())
+                }
+                _uiState.value = _uiState.value.copy(
+                    isFetching = false,
+                    result = SpiderTestResult(
+                        statusCode = fetchResult.statusCode,
+                        durationMs = fetchResult.durationMs,
+                        html = fetchResult.html,
+                        isLoginPage = isLogin,
+                        parsed = parsed,
+                        parseError = parseError
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isFetching = false,
+                    error = e.stackTraceToString()
+                )
+            }
+        }
+    }
+}
+
+// ==================== Composable ====================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DoubanSpiderTestScreen(
+    onBack: () -> Unit,
+    viewModel: DoubanSpiderTestViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val cachedItems by viewModel.cachedItems.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var showPickerDialog by remember { mutableStateOf(false) }
+
+    // 各 Tab 独立的滚动状态,切换 Tab 时各自保留位置
+    val fieldsScrollState = rememberScrollState()
+    val htmlScrollState = rememberScrollState()
+
+    BackHandler(enabled = true) { onBack() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.douban_spider_test_title),
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Text(
+                                text = "DEBUG",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+        ) {
+            // ── 顶部区:Cookie + URL + 错误(可滚动,内容多时不溢出) ──
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+            // ── Cookie 信息区 ──
+            SectionCard(title = stringResource(R.string.douban_spider_test_cookie_section)) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surface
+                ) {
+                    Text(
+                        text = uiState.cookie.ifBlank { "(empty)" },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 5
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val dotColor = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    Surface(shape = RoundedCornerShape(50), color = dotColor, modifier = Modifier.size(8.dp)) {}
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (uiState.isLoggedIn)
+                            stringResource(R.string.douban_spider_test_logged_in, uiState.userId)
+                        else
+                            stringResource(R.string.douban_spider_test_not_logged_in),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
+                    )
+                }
+            }
+
+            // ── 爬取目标区 ──
+            SectionCard(title = stringResource(R.string.douban_spider_test_url_section)) {
+                OutlinedTextField(
+                    value = uiState.url,
+                    onValueChange = viewModel::updateUrl,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 13.sp
+                    )
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.douban_spider_test_preset),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilterChip(
+                        selected = uiState.urlPreset == UrlPreset.ITEM,
+                        onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
+                        label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
+                    )
+                    FilterChip(
+                        selected = uiState.urlPreset == UrlPreset.USER_HOME,
+                        onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
+                        label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    IconButton(onClick = {
+                        view.performHaptic(HapticType.CLICK)
+                        viewModel.loadCachedItems()
+                        showPickerDialog = true
+                    }) {
+                        Icon(
+                            imageVector = Icons.Rounded.ExpandCircleDown,
+                            contentDescription = stringResource(R.string.douban_spider_test_pick_cached),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "User-Agent",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = uiState.ua == TestUa.PC,
+                        onClick = { viewModel.updateUa(TestUa.PC) },
+                        label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
+                    )
+                    FilterChip(
+                        selected = uiState.ua == TestUa.MOBILE,
+                        onClick = { viewModel.updateUa(TestUa.MOBILE) },
+                        label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
+                    )
+                }
+                Spacer(modifier = Modifier.height(14.dp))
+                Button(
+                    onClick = {
+                        view.performHaptic(HapticType.CLICK)
+                        viewModel.fetch()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !uiState.isFetching
+                ) {
+                    if (uiState.isFetching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.douban_spider_test_fetching))
+                    } else {
+                        Text(stringResource(R.string.douban_spider_test_fetch))
+                    }
+                }
+            }
+
+            // ── 错误区(网络异常) ──
+            if (uiState.error != null) {
+                SectionCard(title = "Error") {
+                    Text(
+                        text = uiState.error!!,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+            } // 顶部滚动 Column 结束
+
+            // ── 结果区(weight 1f 占满剩余高度,各 Tab 独立滚动保留位置) ──
+            uiState.result?.let { result ->
+                // meta-stats 行
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val okColor = Color(0xFF4CAF50)
+                        Text(
+                            text = "HTTP ${result.statusCode}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (result.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
+                        )
+                        Text(
+                            text = "${result.durationMs}ms",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "isLoginPage: ${result.isLoginPage}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (result.isLoginPage) MaterialTheme.colorScheme.error else okColor
+                        )
+                    }
+                }
+
+                // Tab
+                val tabs = listOf(
+                    stringResource(R.string.douban_spider_test_tab_fields),
+                    stringResource(R.string.douban_spider_test_tab_html),
+                    stringResource(R.string.douban_spider_test_tab_preview)
+                )
+                TabRow(selectedTabIndex = selectedTab) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = { Text(title, style = MaterialTheme.typography.labelMedium) }
+                        )
+                    }
+                }
+
+                when (selectedTab) {
+                    0 -> FieldsTab(result, fieldsScrollState)
+                    1 -> HtmlTab(result.html, context, htmlScrollState)
+                    2 -> PreviewTab(uiState.url, uiState.cookie, uiState.ua)
+                }
+            }
+
+            // 快选已有条目弹窗
+            if (showPickerDialog) {
+                CachedItemsPickerDialog(
+                    items = cachedItems,
+                    onPick = { url ->
+                        view.performHaptic(HapticType.CLICK)
+                        viewModel.updateUrl(url)
+                        showPickerDialog = false
+                    },
+                    onDismiss = { showPickerDialog = false }
+                )
+            }
+        }
+    }
+}
+
+// ==================== 子组件 ====================
+
+@Composable
+private fun SectionCard(title: String, content: @Composable () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "── $title",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            content()
+        }
+    }
+}
+
+/** 提取字段 Tab:逐行展示 DoubanDetailInfo,空值标红 */
+@Composable
+private fun FieldsTab(result: SpiderTestResult, scrollState: ScrollState) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .verticalScroll(scrollState)
+            .navigationBarsPadding()
+    ) {
+        // parseDetail 异常时显示堆栈
+        result.parseError?.let { err ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.errorContainer
+            ) {
+                Text(
+                    text = err,
+                    modifier = Modifier.padding(10.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+            return
+        }
+        val info = result.parsed ?: run {
+            Text(
+                text = "parseDetail returned null",
+                modifier = Modifier.padding(10.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return
+        }
+        Text(
+            text = "DoubanDetailInfo:",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+        FieldRow("imdbId", info.imdbId)
+        FieldRow("isTvShow", info.isTvShow.toString())
+        FieldRow("title", info.title)
+        FieldRow("posterUrl", info.posterUrl)
+        FieldRow("doubanRating", info.doubanRating?.toString())
+        FieldRow("ratingCount", info.ratingCount?.toString())
+        FieldRow("summary", info.summary)
+        FieldRow("episodeCount", info.episodeCount?.toString())
+        FieldRow("episodeDuration", info.episodeDuration)
+        FieldRow("aka", info.aka.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("runtime", info.runtime)
+        FieldRow("genres", info.genres.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("year", info.year)
+        FieldRow("countries", info.countries.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("directors", info.directors.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("writers", info.writers.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("cast", info.cast.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("languages", info.languages.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("initialReleaseDates", info.initialReleaseDates.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow("ratingDistribution", info.ratingDistribution.takeIf { it.isNotEmpty() }?.toString())
+        FieldRow(
+            "celebrities",
+            info.celebrities.takeIf { it.isNotEmpty() }?.joinToString("\n") { c ->
+                "${c.name} | ${c.role ?: "-"} | ${c.avatarUrl ?: "-"} | ${c.doubanPersonageUrl ?: "-"}"
+            }
+        )
+    }
+}
+
+@Composable
+private fun FieldRow(label: String, value: String?) {
+    val isEmpty = value.isNullOrBlank()
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        shape = RoundedCornerShape(8.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(modifier = Modifier.padding(8.dp)) {
+            Text(
+                text = label,
+                modifier = Modifier.width(110.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = if (isEmpty) "(${stringResource(R.string.douban_spider_test_empty)})" else value!!,
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                color = if (isEmpty) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (isEmpty) FontWeight.Normal else FontWeight.Normal
+            )
+        }
+    }
+}
+
+/** 原始 HTML Tab:等宽字体可滚动 + 复制/导出按钮 */
+@Composable
+private fun HtmlTab(html: String, context: Context, scrollState: ScrollState) {
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val txtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            scope.launch {
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { os ->
+                        os.write(html.toByteArray(Charsets.UTF_8))
+                    }
+                }
+                context.showToast(context.getString(R.string.douban_spider_test_exported))
+            }
+        }
+    }
+    val htmlLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
+        if (uri != null) {
+            scope.launch {
+                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri)?.use { os ->
+                        os.write(html.toByteArray(Charsets.UTF_8))
+                    }
+                }
+                context.showToast(context.getString(R.string.douban_spider_test_exported))
+            }
+        }
+    }
+    val ts = remember { System.currentTimeMillis() }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(onClick = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("html", html))
+                context.showToast(context.getString(R.string.douban_spider_test_copied))
+            }) {
+                Text(stringResource(R.string.douban_spider_test_copy_html))
+            }
+            OutlinedButton(onClick = { txtLauncher.launch("douban_$ts.txt") }) {
+                Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.douban_spider_test_export_txt))
+            }
+            OutlinedButton(onClick = { htmlLauncher.launch("douban_$ts.html") }) {
+                Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.douban_spider_test_export_html))
+            }
+        }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFF0A0C10)
+        ) {
+            Text(
+                text = html,
+                modifier = Modifier
+                    .padding(10.dp)
+                    .verticalScroll(scrollState),
+                style = androidx.compose.ui.text.TextStyle(
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                ),
+                color = Color(0xFF9AA0A6)
+            )
+        }
+    }
+}
+
+/** 网页预览 Tab:WebView 用同 UA + cookie 加载同一 URL */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun PreviewTab(url: String, cookie: String, ua: TestUa) {
+    val pcUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    val mobileUa = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+    AndroidView(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(8.dp)),
+        factory = { ctx ->
+            // 同步 cookie 到 WebView
+            CookieManager.getInstance().setAcceptCookie(true)
+            if (cookie.isNotBlank()) {
+                CookieManager.getInstance().setCookie(url, cookie)
+            }
+            CookieManager.getInstance().flush()
+            WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.userAgentString = if (ua == TestUa.PC) pcUa else mobileUa
+                webViewClient = WebViewClient()
+                loadUrl(url)
+            }
+        },
+        update = { webView ->
+            // URL 变化时重新加载
+            if (webView.url != url) {
+                CookieManager.getInstance().setCookie(url, cookie)
+                CookieManager.getInstance().flush()
+                webView.loadUrl(url)
+            }
+        }
+    )
+}
+
+/** 快选已有豆瓣条目弹窗:grid 3 列展示海报+名字,点击填入爬取地址 */
+@Composable
+private fun CachedItemsPickerDialog(
+    items: List<CachedDoubanItem>,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.douban_spider_test_pick_cached_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                if (items.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.douban_spider_test_no_cached),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier.heightIn(max = 420.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(items) { item ->
+                            CachedItemCard(item = item, onClick = { onPick(item.doubanUrl) })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CachedItemCard(item: CachedDoubanItem, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(132.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            if (!item.posterUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(item.posterUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Rounded.Movie,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = item.title ?: item.doubanId,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}

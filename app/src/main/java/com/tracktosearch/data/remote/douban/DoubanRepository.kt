@@ -1,9 +1,12 @@
 package com.tracktosearch.data.remote.douban
 
 import com.tracktosearch.data.local.DoubanUserProfile
+import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
@@ -23,10 +26,41 @@ import kotlin.random.Random
 data class DoubanDetailCacheEntry(
     val imdbId: String?,
     val isTvShow: Boolean,
+    val title: String? = null,         // 条目标题(用于快选列表展示)
+    val posterUrl: String? = null,     // 海报地址(用于快选列表展示)
     val genres: List<String> = emptyList(),
     val year: String? = null,
     val countries: List<String> = emptyList(),
-    val directors: List<String> = emptyList()
+    val directors: List<String> = emptyList(),
+    /**
+     * 细分媒体类型: "movie"/"show"/"variety"/"documentary"/null。
+     * 用户标注后上传全局池时填充,其他用户拉取后优先读此字段;
+     * 为 null 时降级用 isTvShow 映射(true→"show", false→"movie")。
+     */
+    val mediaType: String? = null,
+    // 扩展字段（豆瓣条目页额外提取，用于详情页展示与集数自动分类）
+    val doubanRating: Double? = null,      // 豆瓣评分（10 分制，如 9.2；null 表示暂无评分）
+    val ratingCount: Int? = null,          // 评分人数
+    val summary: String? = null,           // 剧情简介
+    val episodeCount: Int? = null,         // 集数（电视剧才有）
+    val episodeDuration: String? = null,   // 单集片长（电视剧才有，如"45分钟"）
+    val aka: List<String> = emptyList(),   // 又名/译名
+    val runtime: String? = null,           // 片长（电影才有，如"120分钟"）
+    val writers: List<String> = emptyList(),   // 编剧
+    val cast: List<String> = emptyList(),      // 主演名列表
+    val languages: List<String> = emptyList(), // 语言
+    val initialReleaseDates: List<String> = emptyList(),  // 首播日期(可能多个)
+    val ratingDistribution: List<Double> = emptyList(),   // 评分分布 5星→1星百分比
+    val celebrities: List<DoubanCelebrityCacheEntry> = emptyList()  // 演职员
+)
+
+/** 演职员持久化缓存条目(与 DoubanCelebrity 对应,独立序列化) */
+@Serializable
+data class DoubanCelebrityCacheEntry(
+    val name: String,
+    val doubanPersonageUrl: String? = null,
+    val avatarUrl: String? = null,
+    val role: String? = null
 )
 
 /**
@@ -37,10 +71,14 @@ data class DoubanDetailCacheEntry(
  * - 爬取条目详情页补全 imdbId（带持久化缓存，避免重复爬取）
  * - 反爬延迟（列表页 5-10 秒，详情页 3-5 秒）
  *
+ * fetchDetail 查询链路（减少豆瓣爬取次数）：
+ * 内存缓存 → 磁盘缓存（awaitLoaded）→ 全局池 → 爬豆瓣（成功后异步上传全局池）
+ *
  * 使用独立的 OkHttpClient（不走 Trakt 拦截器），设置豆瓣所需的 Cookie/UA/Referer。
  */
 class DoubanRepository(
-    private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>
+    private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
+    private val cloudDetailsPoolManager: CloudDetailsPoolManager? = null
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -125,36 +163,34 @@ class DoubanRepository(
         // 从 URL 解析 doubanId 作为缓存 key
         val doubanId = Regex("""subject/(\d+)""").find(doubanUrl)?.groupValues?.get(1) ?: doubanUrl
 
-        // 优先查缓存(命中则跳过详情页爬取,省 3-5 秒反爬延迟)
+        // 优先查本地缓存(命中则跳过详情页爬取,省 3-5 秒反爬延迟)
         detailCache.get(doubanId)?.let { entry ->
-            val info = DoubanDetailInfo(
-                imdbId = entry.imdbId,
-                isTvShow = entry.isTvShow,
-                genres = entry.genres,
-                year = entry.year,
-                countries = entry.countries,
-                directors = entry.directors
-            )
             onProgress("cache_hit", title)
-            return Pair(info, true) // 命中缓存
+            return Pair(entry.toDetailInfo(), true) // 命中本地缓存
         }
         // 缓存未命中时等待磁盘加载完成再查一次,避免 loadFromDisk 未完成时误判为缓存未命中
         // 导致不必要的 3-5 秒反爬延迟与详情页爬取
         detailCache.awaitLoaded()
         detailCache.get(doubanId)?.let { entry ->
-            val info = DoubanDetailInfo(
-                imdbId = entry.imdbId,
-                isTvShow = entry.isTvShow,
-                genres = entry.genres,
-                year = entry.year,
-                countries = entry.countries,
-                directors = entry.directors
-            )
             onProgress("cache_hit", title)
-            return Pair(info, true) // 命中缓存
+            return Pair(entry.toDetailInfo(), true) // 命中本地磁盘缓存
         }
 
-        // 未命中缓存，爬取详情页（带一次重试）
+        // 本地缓存未命中 → 查全局池(减少豆瓣爬取次数,用户A爬过的条目用户B直接复用)
+        val pool = cloudDetailsPoolManager
+        if (pool != null) {
+            val cloudEntry = runCatching {
+                pool.downloadDetail(doubanId)
+            }.getOrNull()
+            if (cloudEntry != null && cloudEntry.imdbId != null) {
+                // 全局池命中,写入本地缓存(永久),后续直接命中本地
+                detailCache.put(doubanId, cloudEntry)
+                onProgress("cache_hit", title)
+                return Pair(cloudEntry.toDetailInfo(), true) // 命中全局池
+            }
+        }
+
+        // 本地缓存 + 全局池都未命中 → 爬取豆瓣详情页（带一次重试）
         onProgress("fetching", title)
         var lastHtml: String? = null
         for (attempt in 0..1) {
@@ -169,17 +205,43 @@ class DoubanRepository(
             val parsed = DoubanSpider.parseDetail(html)
             if (parsed.imdbId != null) {
                 // 写入持久化缓存（永久，下次再导入同一部影片直接命中；保留所有字段）
-                detailCache.put(
-                    doubanId,
-                    DoubanDetailCacheEntry(
-                        imdbId = parsed.imdbId,
-                        isTvShow = parsed.isTvShow,
-                        genres = parsed.genres,
-                        year = parsed.year,
-                        countries = parsed.countries,
-                        directors = parsed.directors
-                    )
+                val entry = DoubanDetailCacheEntry(
+                    imdbId = parsed.imdbId,
+                    isTvShow = parsed.isTvShow,
+                    title = parsed.title,
+                    posterUrl = parsed.posterUrl,
+                    genres = parsed.genres,
+                    year = parsed.year,
+                    countries = parsed.countries,
+                    directors = parsed.directors,
+                    doubanRating = parsed.doubanRating,
+                    ratingCount = parsed.ratingCount,
+                    summary = parsed.summary,
+                    episodeCount = parsed.episodeCount,
+                    episodeDuration = parsed.episodeDuration,
+                    aka = parsed.aka,
+                    runtime = parsed.runtime,
+                    writers = parsed.writers,
+                    cast = parsed.cast,
+                    languages = parsed.languages,
+                    initialReleaseDates = parsed.initialReleaseDates,
+                    ratingDistribution = parsed.ratingDistribution,
+                    celebrities = parsed.celebrities.map {
+                        DoubanCelebrityCacheEntry(
+                            name = it.name,
+                            doubanPersonageUrl = it.doubanPersonageUrl,
+                            avatarUrl = it.avatarUrl,
+                            role = it.role
+                        )
+                    }
                 )
+                detailCache.put(doubanId, entry)
+                // 异步上传到全局池,供其他用户复用(失败不阻塞主流程)
+                cloudDetailsPoolManager?.let { p ->
+                    GlobalScope.launch(Dispatchers.IO) {
+                        runCatching { p.uploadDetailEntry(doubanId, entry) }
+                    }
+                }
                 onProgress("done", title)
                 return Pair(parsed, false)
             }
@@ -191,6 +253,51 @@ class DoubanRepository(
         return Pair(lastHtml?.let { DoubanSpider.parseDetail(it) }, false)
     }
 
+    /**
+     * 获取本地所有已缓存的豆瓣详情条目快照（doubanId → entry）。
+     *
+     * 供爬取测试页「快选已有条目」弹窗使用：列出已爬取过的条目（标题+海报），
+     * 点击即填入对应豆瓣条目页 URL，便于快速选条目调试。
+     */
+    suspend fun getDetailSnapshot(): Map<String, DoubanDetailCacheEntry> {
+        detailCache.awaitLoaded()
+        return detailCache.snapshotFromDisk()
+    }
+
+    /** 缓存条目转运行时详情信息 */
+    private fun DoubanDetailCacheEntry.toDetailInfo(): DoubanDetailInfo {
+        return DoubanDetailInfo(
+            imdbId = imdbId,
+            isTvShow = isTvShow,
+            title = title,
+            posterUrl = posterUrl,
+            genres = genres,
+            year = year,
+            countries = countries,
+            directors = directors,
+            doubanRating = doubanRating,
+            ratingCount = ratingCount,
+            summary = summary,
+            episodeCount = episodeCount,
+            episodeDuration = episodeDuration,
+            aka = aka,
+            runtime = runtime,
+            writers = writers,
+            cast = cast,
+            languages = languages,
+            initialReleaseDates = initialReleaseDates,
+            ratingDistribution = ratingDistribution,
+            celebrities = celebrities.map {
+                com.tracktosearch.data.remote.douban.DoubanCelebrity(
+                    name = it.name,
+                    doubanPersonageUrl = it.doubanPersonageUrl,
+                    avatarUrl = it.avatarUrl,
+                    role = it.role
+                )
+            }
+        )
+    }
+
     private suspend fun fetchHtml(url: String, cookie: String): String = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(url)
@@ -200,6 +307,36 @@ class DoubanRepository(
             .build()
         client.newCall(request).execute().use { response ->
             response.body?.string() ?: ""
+        }
+    }
+
+    // 移动端 UA(测试页用)
+    private val mobileUa =
+        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
+    /**
+     * 测试用:用指定 UA 抓取 URL,返回完整响应(状态码+HTML+耗时)。
+     * 不走缓存,不写缓存,不上传全局池。仅爬取测试页调用。
+     */
+    suspend fun fetchHtmlForTest(
+        url: String,
+        cookie: String,
+        useMobileUa: Boolean
+    ): TestFetchResult = withContext(Dispatchers.IO) {
+        val startMs = System.currentTimeMillis()
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", if (useMobileUa) mobileUa else ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val html = response.body?.string() ?: ""
+            TestFetchResult(
+                statusCode = response.code,
+                html = html,
+                durationMs = System.currentTimeMillis() - startMs
+            )
         }
     }
 
@@ -307,6 +444,18 @@ class DoubanRepository(
         return s.trim().ifBlank { raw }
     }
 }
+
+/**
+ * 测试页抓取结果。
+ * @param statusCode HTTP 状态码
+ * @param html 响应体
+ * @param durationMs 耗时(毫秒)
+ */
+data class TestFetchResult(
+    val statusCode: Int,
+    val html: String,
+    val durationMs: Long
+)
 
 /** 豆瓣标记状态 */
 enum class DoubanMarkStatus(val path: String) {

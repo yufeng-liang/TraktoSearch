@@ -94,13 +94,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -145,9 +143,6 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 import java.text.SimpleDateFormat
 import java.util.Locale
-
-/** 返回设置页后,SharedTransitionLayout/HorizontalPager 重激活期间会产生幽灵 scroll。延迟打开写入窗口,覆盖 SharedTransition 动画时长 + pager layout 稳定时间。 */
-private const val SCROLL_GATE_DELAY_MS = 800L
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -361,80 +356,8 @@ fun SettingsScreen(
     val isCheckingUpdate by viewModel.isCheckingUpdate.collectAsStateWithLifecycle()
     val latestVersion by viewModel.latestVersion.collectAsStateWithLifecycle()
 
-    // 滚动位置持久化 + scrollGate 仅在共享元素转场启用时需要:
-    // 这些机制是为了对抗 SharedTransitionLayout 重激活期间的"幽灵 scroll",
-    // 关闭转场后幽灵 scroll 不存在,移除持久化和延迟开闸,设置页滚动更轻量
-    val savedFirstVisibleItemIndex = rememberSaveable { mutableIntStateOf(0) }
-    val savedFirstVisibleItemScrollOffset = rememberSaveable { mutableIntStateOf(0) }
-    // 关闭转场时用普通 listState(无 saved 初始值),开启时用 saved 初始值
-    val settingsListState = rememberLazyListState(
-        initialFirstVisibleItemIndex = if (sharedTransitionEnabled) savedFirstVisibleItemIndex.intValue else 0,
-        initialFirstVisibleItemScrollOffset = if (sharedTransitionEnabled) savedFirstVisibleItemScrollOffset.intValue else 0
-    )
-    // scroll gate:返回设置页后,SharedTransitionLayout/HorizontalPager 重激活期间会产生
-    // "幽灵 scroll"(layout 修正导致 position 跳变)。延迟打开写入窗口,窗口期内丢弃 snapshotFlow 收集到的位置
-    // 关闭转场时 gate 始终打开(无需延迟),直接记录滚动位置
-    var scrollGateOpen by remember { mutableStateOf(!sharedTransitionEnabled) }
-    // force restore 的目标位置(从 saved 读取,跨页导航可靠恢复)
-    val targetRestoreIndex = savedFirstVisibleItemIndex.intValue
-    val targetRestoreOffset = savedFirstVisibleItemScrollOffset.intValue
-    // 尽早恢复:layout 有 items 后立即 scrollToItem,减少用户看到错误位置的时间
-    // 注意:此处不打开 scrollGate,否则 pager 幽灵 scroll 会立即污染 saved 值
-    // 关闭转场时跳过此逻辑(无幽灵 scroll 需要对抗)
-    if (sharedTransitionEnabled && (targetRestoreIndex > 0 || targetRestoreOffset > 0)) {
-        LaunchedEffect(targetRestoreIndex, targetRestoreOffset) {
-            // 轮询直到 layout 完成,最多 20 次 * 50ms = 1s
-            repeat(20) {
-                if (settingsListState.layoutInfo.totalItemsCount > 0) {
-                    val maxIndex = (settingsListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                    val safeIndex = targetRestoreIndex.coerceAtMost(maxIndex)
-                    try {
-                        settingsListState.scrollToItem(safeIndex, targetRestoreOffset)
-                    } catch (_: Exception) {
-                    }
-                    return@LaunchedEffect
-                }
-                kotlinx.coroutines.delay(50)
-            }
-        }
-    }
-    // 延迟打开 scrollGate,打开前再 force restore 一次,覆盖 pager 幽灵 scroll
-    // 这样窗口期内 pager 拉到的错误位置不会写入 saved,打开时位置已被纠正
-    // 关闭转场时跳过此逻辑(gate 已在初始化时打开)
-    if (sharedTransitionEnabled) {
-        LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(SCROLL_GATE_DELAY_MS)
-            if (targetRestoreIndex > 0 || targetRestoreOffset > 0) {
-                val maxIndex = (settingsListState.layoutInfo.totalItemsCount - 1).coerceAtLeast(0)
-                val safeIndex = targetRestoreIndex.coerceAtMost(maxIndex)
-                try {
-                    settingsListState.scrollToItem(safeIndex, targetRestoreOffset)
-                } catch (_: Exception) {
-                }
-            }
-            scrollGateOpen = true
-        }
-    }
-    // 滚动时持续保存最新位置(保证实时性)
-    LaunchedEffect(settingsListState) {
-        snapshotFlow {
-            settingsListState.firstVisibleItemIndex to settingsListState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-            if (scrollGateOpen) {
-                savedFirstVisibleItemIndex.intValue = index
-                savedFirstVisibleItemScrollOffset.intValue = offset
-            }
-        }
-    }
-    // dispose 时同步再保存一次最终 scroll 值
-    // snapshotFlow 的 collect 在 dispose 时会丢弃最后一个 in-flight emit,导致最终 scroll 值丢失
-    // onDispose 同步读取 settingsListState 当前值,这是离开时用户看到的最终位置
-    DisposableEffect(settingsListState) {
-        onDispose {
-            savedFirstVisibleItemIndex.intValue = settingsListState.firstVisibleItemIndex
-            savedFirstVisibleItemScrollOffset.intValue = settingsListState.firstVisibleItemScrollOffset
-        }
-    }
+    // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
+    val settingsListState = rememberLazyListState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val settingsCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {

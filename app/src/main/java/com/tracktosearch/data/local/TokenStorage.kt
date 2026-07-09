@@ -8,6 +8,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,6 +54,9 @@ class TokenStorage @Inject constructor(
     private val _accessTokenFlow = MutableStateFlow<String?>(null)
     val accessToken: Flow<String?> = _accessTokenFlow
 
+    private val _isLoggedInState = MutableStateFlow(false)
+    val isLoggedInState: StateFlow<Boolean> = _isLoggedInState.asStateFlow()
+
     // 异步加载 token，由 MainActivity 在 IO 线程调用
     suspend fun ensureCacheLoaded() {
         if (cacheLoaded) return
@@ -65,6 +70,7 @@ class TokenStorage @Inject constructor(
             cacheLoaded = true
             if (!token.isNullOrEmpty()) {
                 _accessTokenFlow.value = token
+                _isLoggedInState.value = true
             }
         }
     }
@@ -83,6 +89,7 @@ class TokenStorage @Inject constructor(
         cachedExpiresAt = expiresAt
         cacheLoaded = true
         _accessTokenFlow.value = accessToken
+        _isLoggedInState.value = true
     }
 
     suspend fun getAccessToken(): String? {
@@ -127,6 +134,7 @@ class TokenStorage @Inject constructor(
         cachedExpiresAt = 0L
         cacheLoaded = false
         _accessTokenFlow.value = null
+        _isLoggedInState.value = false
     }
 
     private companion object {

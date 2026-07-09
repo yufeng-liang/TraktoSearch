@@ -1,10 +1,15 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
+import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -132,6 +137,7 @@ class DoubanRetryManager @Inject constructor(
      * 从全局详情池批量刷新本地未标注类型(mediaType IS NULL)的失败项。
      *
      * 进入失败项查看页时后台调用：其他用户已标注类型的条目自动填充到本地，
+     * 优先读 entry.mediaType(细分类型),为 null 时降级用 isTvShow 映射,
      * 仅更新 null → 非 null(不覆盖用户已手动标注的值)。
      *
      * @return 本次实际填充的条目数(用于调用方决定是否刷新 UI)
@@ -145,7 +151,7 @@ class DoubanRetryManager @Inject constructor(
         if (pooled.isEmpty()) return@withContext 0
         var updated = 0
         for ((doubanId, entry) in pooled) {
-            val mediaType = if (entry.isTvShow) "show" else "movie"
+            val mediaType = entry.mediaType ?: if (entry.isTvShow) "show" else "movie"
             doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, mediaType)
             updated++
         }
@@ -157,16 +163,85 @@ class DoubanRetryManager @Inject constructor(
         doubanSyncFailureDao.getById(doubanId)?.let { DoubanSyncFailure.fromEntity(it) }
     }
 
-    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/清除标注)，并异步上传到全局共享池 */
+    /**
+     * 根据豆瓣详情的集数自动推断媒体类型（不覆盖用户已标注的值）。
+     *
+     * 规则：
+     * - 失败项 mediaType 已标注(非 null) → 不覆盖,直接返回 false
+     * - episodeCount > 0 → 电视剧类:
+     *   - genres 含"综艺" → "variety"
+     *   - genres 含"纪录片" → "documentary"
+     *   - 否则 → "show"
+     * - episodeCount == null/0 → "movie"
+     *
+     * 调用时机:用户打开失败项详情页,fetchDetail 成功后调用。
+     *
+     * @return true 表示推断成功并更新了本地 mediaType
+     */
+    suspend fun inferMediaTypeFromDetail(doubanId: String, detailInfo: DoubanDetailInfo): Boolean = withContext(Dispatchers.IO) {
+        // 先查本地 mediaType,已标注则不覆盖
+        val existing = doubanSyncFailureDao.getById(doubanId) ?: return@withContext false
+        if (existing.mediaType != null) return@withContext false
+
+        val inferred = if (detailInfo.episodeCount != null && detailInfo.episodeCount > 0) {
+            when {
+                detailInfo.genres.any { it.contains("综艺") } -> "variety"
+                detailInfo.genres.any { it.contains("纪录片") } -> "documentary"
+                else -> "show"
+            }
+        } else {
+            "movie"
+        }
+        doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, inferred)
+        // 推断的类型也异步上传全局池,供其他用户复用(不覆盖池中已有非null值)
+        runCatching {
+            cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, inferred)
+        }
+        true
+    }
+
+    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/综艺/纪录片/清除标注)，并异步上传到全局共享池 */
     suspend fun updateMediaType(doubanId: String, mediaType: String?) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateMediaType(doubanId, mediaType)
-        // 用户标注为 movie/show 时，异步上传到全局池供其他用户复用
+        // 用户标注为 movie/show/variety/documentary 时，异步上传到全局池供其他用户复用
         // 清除标注(null)不上传，避免误删池中其他用户的有效数据
         if (mediaType != null) {
             runCatching {
-                cloudDetailsPoolManager.uploadUserMarkedType(doubanId, isTvShow = mediaType == "show")
+                cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, mediaType)
             }
         }
+    }
+
+    /**
+     * 批量更新媒体类型(多选模式标注用),并并发上传到全局池。
+     *
+     * @param doubanIds 要更新的 doubanId 列表
+     * @param mediaType "movie"/"show"/"variety"/"documentary"; null=清除标注(不上传)
+     */
+    suspend fun batchUpdateMediaType(doubanIds: List<String>, mediaType: String?) = withContext(Dispatchers.IO) {
+        if (doubanIds.isEmpty()) return@withContext
+        doubanSyncFailureDao.updateMediaTypeBatch(doubanIds, mediaType)
+        // 非 null 时并发上传到全局池(并发度 3,避免逐条串行)
+        if (mediaType != null) {
+            val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+            coroutineScope {
+                doubanIds.map { id ->
+                    launch {
+                        semaphore.withPermit {
+                            runCatching {
+                                cloudDetailsPoolManager.uploadUserMarkedMediaType(id, mediaType)
+                            }
+                        }
+                    }
+                }.joinAll()
+            }
+        }
+    }
+
+    /** 批量删除失败项(多选模式删除用) */
+    suspend fun batchDeleteFailures(doubanIds: List<String>) = withContext(Dispatchers.IO) {
+        if (doubanIds.isEmpty()) return@withContext
+        doubanSyncFailureDao.deleteByDoubanIds(doubanIds)
     }
 
     /** 更新单条子标题(用于资源搜索) */

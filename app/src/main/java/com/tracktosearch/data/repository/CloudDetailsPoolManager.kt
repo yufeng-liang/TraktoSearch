@@ -273,35 +273,92 @@ class CloudDetailsPoolManager @Inject constructor(
     /**
      * 上传单条用户标注的媒体类型到全局池。
      *
-     * 用户在失败项详情页/列表页标注 movie/show 后立即调用。
-     * 映射：movie → isTvShow=false，show → isTvShow=true。
-     * 上传时 GET 对应分片 → 合并（用户标注覆盖 isTvShow，其他字段保留池中原值）→ PUT。
-     * 若池中无该 doubanId，则创建仅含 isTvShow 的条目。
+     * 用户在失败项详情页/列表页标注 movie/show/variety/documentary 后立即调用。
+     * 映射: movie → isTvShow=false; show/variety/documentary → isTvShow=true。
+     * 上传时 GET 对应分片 → 合并(用户标注覆盖 isTvShow + mediaType,其他字段保留池中原值) → PUT。
+     * 若池中无该 doubanId,则创建仅含 isTvShow + mediaType 的条目。
      *
      * @param doubanId 豆瓣条目 ID
-     * @param isTvShow true=电视剧，false=电影
+     * @param mediaType "movie"/"show"/"variety"/"documentary"; null 不上传
      * @return 是否上传成功
      */
-    suspend fun uploadUserMarkedType(doubanId: String, isTvShow: Boolean): Boolean = withContext(Dispatchers.IO) {
+    suspend fun uploadUserMarkedMediaType(doubanId: String, mediaType: String): Boolean = withContext(Dispatchers.IO) {
+        val isTvShow = mediaType != "movie"
         val shard = shardPrefix(doubanId)
         val lock = getShardLock(shard)
         lock.withLock {
-            // 构造仅含 isTvShow 的条目；其他字段尝试保留池中原值
+            // 构造仅含 isTvShow + mediaType 的条目；其他字段尝试保留池中原值
             val existing = downloadShard(shard) ?: emptyMap()
             val existingEntry = existing[doubanId]
             val newEntry = if (existingEntry != null) {
-                // 覆盖 isTvShow，保留其他字段
-                existingEntry.copy(isTvShow = isTvShow)
+                // 覆盖 isTvShow + mediaType,保留其他字段
+                existingEntry.copy(isTvShow = isTvShow, mediaType = mediaType)
             } else {
-                // 池中无该条目，创建仅含 isTvShow 的条目
-                DoubanDetailCacheEntry(imdbId = null, isTvShow = isTvShow)
+                // 池中无该条目,创建仅含 isTvShow + mediaType 的条目
+                DoubanDetailCacheEntry(imdbId = null, isTvShow = isTvShow, mediaType = mediaType)
             }
-            // 若 isTvShow 与池中一致则跳过上传
-            if (existingEntry != null && existingEntry.isTvShow == isTvShow) {
-                Log.d(TAG, "用户标注 $doubanId isTvShow=$isTvShow 与池中一致，跳过上传")
+            // 若 isTvShow + mediaType 与池中一致则跳过上传
+            if (existingEntry != null && existingEntry.isTvShow == isTvShow && existingEntry.mediaType == mediaType) {
+                Log.d(TAG, "用户标注 $doubanId mediaType=$mediaType 与池中一致,跳过上传")
                 return@withLock true
             }
             uploadShardWithRetry(shard, mapOf(doubanId to newEntry))
+        }
+    }
+
+    /**
+     * 上传单条完整详情条目到全局池（字段级合并：非 null 字段覆盖，null 字段保留池中原值）。
+     *
+     * fetchDetail 成功爬取豆瓣详情后调用，供其他用户复用，减少豆瓣爬取次数。
+     * 合并规则：
+     * - 池中无该条目 → 直接上传完整条目
+     * - 池中有该条目 → 非 null 字段覆盖池中原值，null 字段保留池中原值（避免覆盖其他用户已标注的 mediaType 等）
+     *
+     * @param doubanId 豆瓣条目 ID
+     * @param entry 本地爬取的完整详情条目
+     * @return 是否上传成功
+     */
+    suspend fun uploadDetailEntry(doubanId: String, entry: DoubanDetailCacheEntry): Boolean = withContext(Dispatchers.IO) {
+        val shard = shardPrefix(doubanId)
+        val lock = getShardLock(shard)
+        lock.withLock {
+            val existing = downloadShard(shard) ?: emptyMap()
+            val existingEntry = existing[doubanId]
+            val mergedEntry = if (existingEntry != null) {
+                // 字段级合并：非 null 字段覆盖，null 字段保留池中原值
+                existingEntry.copy(
+                    imdbId = entry.imdbId ?: existingEntry.imdbId,
+                    isTvShow = entry.isTvShow,
+                    title = entry.title ?: existingEntry.title,
+                    posterUrl = entry.posterUrl ?: existingEntry.posterUrl,
+                    genres = entry.genres.ifEmpty { existingEntry.genres },
+                    year = entry.year ?: existingEntry.year,
+                    countries = entry.countries.ifEmpty { existingEntry.countries },
+                    directors = entry.directors.ifEmpty { existingEntry.directors },
+                    mediaType = entry.mediaType ?: existingEntry.mediaType,
+                    doubanRating = entry.doubanRating ?: existingEntry.doubanRating,
+                    ratingCount = entry.ratingCount ?: existingEntry.ratingCount,
+                    summary = entry.summary ?: existingEntry.summary,
+                    episodeCount = entry.episodeCount ?: existingEntry.episodeCount,
+                    episodeDuration = entry.episodeDuration ?: existingEntry.episodeDuration,
+                    aka = entry.aka.ifEmpty { existingEntry.aka },
+                    runtime = entry.runtime ?: existingEntry.runtime,
+                    writers = entry.writers.ifEmpty { existingEntry.writers },
+                    cast = entry.cast.ifEmpty { existingEntry.cast },
+                    languages = entry.languages.ifEmpty { existingEntry.languages },
+                    initialReleaseDates = entry.initialReleaseDates.ifEmpty { existingEntry.initialReleaseDates },
+                    ratingDistribution = entry.ratingDistribution.ifEmpty { existingEntry.ratingDistribution },
+                    celebrities = entry.celebrities.ifEmpty { existingEntry.celebrities }
+                )
+            } else {
+                entry
+            }
+            // 若合并后与池中完全一致则跳过上传
+            if (existingEntry == mergedEntry) {
+                Log.d(TAG, "详情 $doubanId 与池中一致,跳过上传")
+                return@withLock true
+            }
+            uploadShardWithRetry(shard, mapOf(doubanId to mergedEntry))
         }
     }
 

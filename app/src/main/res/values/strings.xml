@@ -343,6 +343,19 @@
     <string name="detail_info_countries">Country</string>
     <string name="detail_info_directors">Director</string>
     <string name="detail_info_genres">Genre</string>
+    <string name="detail_info_douban_rating">Douban</string>
+    <string name="detail_info_rating_count">(%1$d ratings)</string>
+    <string name="detail_info_aka">Also Known As</string>
+    <string name="detail_info_runtime">Runtime</string>
+    <string name="detail_info_episode_count">Episodes</string>
+    <string name="detail_info_episode_duration">Episode Runtime</string>
+    <string name="detail_info_summary">Synopsis</string>
+    <string name="detail_info_writers">Writer</string>
+    <string name="detail_info_cast">Starring</string>
+    <string name="detail_info_languages">Language</string>
+    <string name="detail_info_initial_release_dates">Release Date</string>
+    <string name="detail_info_rating_distribution">Rating Distribution</string>
+    <string name="detail_info_celebrities">Cast &amp; Crew</string>
     <string name="detail_cast_all_title">All Cast &amp; Crew</string>
     <string name="detail_cast_close">Close</string>
     <string name="detail_specials">Specials</string>
@@ -461,7 +474,7 @@
     <string name="help_watchlist_b2">Manage your lists on the \"Me\" tab</string>
     <string name="help_watchlist_b3">Mark as watched supports checking episodes by season, specials (season 0) placed last</string>
     <string name="help_watchlist_b4">TV show count: requires watching all episodes of a full season</string>
-    <string name="help_statistics_b1">Access statistics from the top-right of \"Me\" page</string>
+    <string name="help_statistics_b1">Access statistics from the first row of \"Settings\" page</string>
     <string name="help_statistics_b2">View overview (total, this month, this year), watch time, and rating stats</string>
     <string name="help_statistics_b3">Genre pie chart and ranking show your viewing preferences</string>
     <string name="help_statistics_b4">Heatmap shows daily viewing activity over the past year</string>
@@ -602,7 +615,7 @@ Config:
     <string name="onboarding_step4_title">Settings</string>
     <string name="onboarding_step4_desc">Customize theme, language, search sources, and more</string>
     <string name="onboarding_step5_title">Statistics</string>
-    <string name="onboarding_step5_desc">View watch data and heatmap from the top-right of \"Me\" page. TV show count requires a full season completed</string>
+    <string name="onboarding_step5_desc">View watch data and heatmap from the first row of \"Settings\" page. TV show count requires a full season completed</string>
     <string name="onboarding_step6_title">Detail Page</string>
     <string name="onboarding_step6_desc">Tap poster for fullscreen view and save to gallery; tap cast avatar for actor\'s works; rating supports half-star</string>
     <string name="onboarding_step7_title">More Tips</string>
@@ -720,13 +733,59 @@ Config:
     <string name="screen_douban_failures_empty_movie">Movie list is empty</string>
     <string name="screen_douban_failures_empty_show">TV show list is empty</string>
     <string name="screen_douban_failures_empty_uncategorized">Uncategorized list is empty</string>
+    <string name="screen_douban_failures_empty_variety">Variety list is empty</string>
+    <string name="screen_douban_failures_empty_documentary">Documentary list is empty</string>
     <string name="screen_douban_failures_clear_all">Clear all</string>
     <string name="screen_douban_failures_clear_all_confirm">Clear all failure records? This cannot be undone.</string>
     <string name="screen_douban_failures_mark_as_movie">Mark as movie</string>
     <string name="screen_douban_failures_mark_as_show">Mark as TV show</string>
+    <string name="screen_douban_failures_mark_as_variety">Mark as variety</string>
+    <string name="screen_douban_failures_mark_as_documentary">Mark as documentary</string>
     <string name="screen_douban_failures_clear_mark">Clear type mark</string>
     <string name="screen_douban_failures_delete_item">Delete this item</string>
     <string name="screen_douban_failures_tab_uncategorized">Uncategorized</string>
+    <string name="screen_douban_failures_tab_variety">Variety</string>
+    <string name="screen_douban_failures_tab_documentary">Documentary</string>
+    <string name="screen_douban_failures_selected_count">%1$d selected</string>
+    <string name="screen_douban_failures_select_all">Select all</string>
+
+    <!-- 豆瓣详情页:爬取进度与标注提示 -->
+    <string name="douban_detail_fetching">Fetching Douban details…</string>
+    <string name="douban_detail_fetch_failed">Failed to fetch Douban details</string>
+    <string name="douban_detail_retry">Retry</string>
+    <string name="douban_detail_updated_and_synced">Douban details updated, synced to global pool</string>
+    <string name="douban_detail_marked_and_synced_movie">Marked as movie, synced to global pool</string>
+    <string name="douban_detail_marked_and_synced_show">Marked as TV show, synced to global pool</string>
+    <string name="douban_detail_marked_and_synced_variety">Marked as variety, synced to global pool</string>
+    <string name="douban_detail_marked_and_synced_documentary">Marked as documentary, synced to global pool</string>
+    <string name="douban_detail_mark_cleared">Type mark cleared</string>
+    <string name="douban_detail_mark_failed">Failed to mark type</string>
+
+    <!-- 豆瓣爬取测试页 -->
+    <string name="douban_spider_test_title">Douban Spider Test</string>
+    <string name="douban_spider_test_cookie_section">Cookie Info</string>
+    <string name="douban_spider_test_not_logged_in">Not logged in to Douban</string>
+    <string name="douban_spider_test_logged_in">Logged in · userId: %1$s</string>
+    <string name="douban_spider_test_url_section">Fetch Target</string>
+    <string name="douban_spider_test_preset">Quick pick</string>
+    <string name="douban_spider_test_url_preset_item">Movie/Show item</string>
+    <string name="douban_spider_test_url_preset_user">User home</string>
+    <string name="douban_spider_test_ua_pc">Desktop</string>
+    <string name="douban_spider_test_ua_mobile">Mobile</string>
+    <string name="douban_spider_test_fetch">Fetch</string>
+    <string name="douban_spider_test_fetching">Fetching…</string>
+    <string name="douban_spider_test_tab_fields">Fields</string>
+    <string name="douban_spider_test_tab_html">Raw HTML</string>
+    <string name="douban_spider_test_tab_preview">Web Preview</string>
+    <string name="douban_spider_test_copy_html">Copy all</string>
+    <string name="douban_spider_test_empty">empty</string>
+    <string name="douban_spider_test_copied">HTML copied to clipboard</string>
+    <string name="douban_spider_test_export_txt">Export TXT</string>
+    <string name="douban_spider_test_export_html">Export HTML</string>
+    <string name="douban_spider_test_exported">Exported</string>
+    <string name="douban_spider_test_pick_cached">Pick cached item</string>
+    <string name="douban_spider_test_pick_cached_title">Cached Douban Items</string>
+    <string name="douban_spider_test_no_cached">No cached items yet</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">Filter</string>

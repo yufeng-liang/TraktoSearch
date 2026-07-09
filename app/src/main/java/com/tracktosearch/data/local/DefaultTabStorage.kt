@@ -7,9 +7,14 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,14 +24,24 @@ private val Context.defaultTabDataStore: DataStore<Preferences> by preferencesDa
 class DefaultTabStorage @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    val defaultTab: Flow<Int> = context.defaultTabDataStore.data.map { prefs ->
-        prefs[KEY_DEFAULT_TAB] ?: DEFAULT_TAB_SEARCH
-    }.distinctUntilChanged()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val _defaultTab = MutableStateFlow(DEFAULT_TAB_SEARCH)
+    val defaultTab: StateFlow<Int> = _defaultTab.asStateFlow()
+
+    init {
+        // 预加载:从 DataStore 读取首值填入 StateFlow,消除 stateIn 默认值跳变
+        scope.launch {
+            val prefs = context.defaultTabDataStore.data.first()
+            _defaultTab.value = prefs[KEY_DEFAULT_TAB] ?: DEFAULT_TAB_SEARCH
+        }
+    }
 
     suspend fun setDefaultTab(tab: Int) {
         context.defaultTabDataStore.edit { prefs ->
             prefs[KEY_DEFAULT_TAB] = tab
         }
+        _defaultTab.value = tab
     }
 
     companion object {

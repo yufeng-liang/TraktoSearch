@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncManager
@@ -32,7 +33,12 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DoubanModule {
 
-    /** 豆瓣详情页解析结果持久化缓存（doubanId → imdbId/isTvShow，永久） */
+    /**
+     * 豆瓣详情页解析结果持久化缓存（doubanId → 详情字段，永久）。
+     *
+     * keyPrefix 使用 `douban_detail_v3` 让旧缓存（v1/v2 字段不全）自动失效，
+     * 强制重新抓取补全扩展字段（编剧/主演/语言/首播/评分分布/演职员等）。
+     */
     @Provides
     @Singleton
     fun provideDoubanDetailCache(
@@ -42,11 +48,11 @@ object DoubanModule {
         val dataStore = context.doubanDetailCacheStore
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         return persistentTtlCache(
-            ttlMillis = Long.MAX_VALUE, // 永久缓存（doubanId→imdbId 映射不会变）
+            ttlMillis = Long.MAX_VALUE, // 永久缓存（doubanId→详情字段不会变）
             maxSize = 2000,
             dataStore = dataStore,
             json = json,
-            keyPrefix = "douban_detail",
+            keyPrefix = "douban_detail_v3",
             scope = scope
         )
     }
@@ -54,8 +60,9 @@ object DoubanModule {
     @Provides
     @Singleton
     fun provideDoubanRepository(
-        detailCache: PersistentTtlCache<DoubanDetailCacheEntry>
-    ): DoubanRepository = DoubanRepository(detailCache)
+        detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
+        cloudDetailsPoolManager: CloudDetailsPoolManager
+    ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager)
 
     /**
      * DoubanFailureExporter 需要 DoubanSyncFailureDao + Json,显式 provide 以便注入 Json 实例。

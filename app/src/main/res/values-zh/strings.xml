@@ -343,6 +343,19 @@
     <string name="detail_info_countries">制片国家/地区</string>
     <string name="detail_info_directors">导演</string>
     <string name="detail_info_genres">类型</string>
+    <string name="detail_info_douban_rating">豆瓣</string>
+    <string name="detail_info_rating_count">(%1$d 人评价)</string>
+    <string name="detail_info_aka">又名</string>
+    <string name="detail_info_runtime">片长</string>
+    <string name="detail_info_episode_count">集数</string>
+    <string name="detail_info_episode_duration">单集片长</string>
+    <string name="detail_info_summary">剧情简介</string>
+    <string name="detail_info_writers">编剧</string>
+    <string name="detail_info_cast">主演</string>
+    <string name="detail_info_languages">语言</string>
+    <string name="detail_info_initial_release_dates">首播日期</string>
+    <string name="detail_info_rating_distribution">评分分布</string>
+    <string name="detail_info_celebrities">演职员</string>
     <string name="detail_cast_all_title">全部演职员</string>
     <string name="detail_cast_close">关闭</string>
     <string name="detail_specials">特别篇</string>
@@ -461,7 +474,7 @@
     <string name="help_watchlist_b2">在"我的"页面查看和管理你的列表</string>
     <string name="help_watchlist_b3">标记已看支持按季勾选集数，第0季特别篇放在最后</string>
     <string name="help_watchlist_b4">电视剧部数统计：需看完某一整季全部集数才计入</string>
-    <string name="help_statistics_b1">在"我的"页面右上角进入观看统计</string>
+    <string name="help_statistics_b1">在"设置"页面第一行进入观看统计</string>
     <string name="help_statistics_b2">查看观影总览（总数、本月、本年）、观影时长和评分统计</string>
     <string name="help_statistics_b3">类型分布饼图和类型排行展示你的观影偏好</string>
     <string name="help_statistics_b4">热力图展示过去一年的每日观影活跃度</string>
@@ -602,7 +615,7 @@
     <string name="onboarding_step4_title">设置</string>
     <string name="onboarding_step4_desc">自定义主题、语言、搜索源等</string>
     <string name="onboarding_step5_title">观看统计</string>
-    <string name="onboarding_step5_desc">在"我的"页面右上角查看观影数据和热力图，电视剧部数需看完一整季才计入统计</string>
+    <string name="onboarding_step5_desc">在"设置"页面第一行查看观影数据和热力图，电视剧部数需看完一整季才计入统计</string>
     <string name="onboarding_step6_title">详情页操作</string>
     <string name="onboarding_step6_desc">点击海报可大图查看并保存到相册；点击演职员头像可查看该演员的其他作品；评分支持半星选择</string>
     <string name="onboarding_step7_title">更多小技巧</string>
@@ -720,13 +733,59 @@
     <string name="screen_douban_failures_empty_movie">电影列表为空</string>
     <string name="screen_douban_failures_empty_show">电视剧列表为空</string>
     <string name="screen_douban_failures_empty_uncategorized">未分类列表为空</string>
+    <string name="screen_douban_failures_empty_variety">综艺列表为空</string>
+    <string name="screen_douban_failures_empty_documentary">纪录片列表为空</string>
     <string name="screen_douban_failures_clear_all">清空全部</string>
     <string name="screen_douban_failures_clear_all_confirm">确定清空全部失败项?此操作不可撤销</string>
     <string name="screen_douban_failures_mark_as_movie">标注为电影</string>
     <string name="screen_douban_failures_mark_as_show">标注为电视剧</string>
+    <string name="screen_douban_failures_mark_as_variety">标注为综艺</string>
+    <string name="screen_douban_failures_mark_as_documentary">标注为纪录片</string>
     <string name="screen_douban_failures_clear_mark">清除类型标注</string>
     <string name="screen_douban_failures_delete_item">删除此条目</string>
     <string name="screen_douban_failures_tab_uncategorized">未分类</string>
+    <string name="screen_douban_failures_tab_variety">综艺</string>
+    <string name="screen_douban_failures_tab_documentary">纪录片</string>
+    <string name="screen_douban_failures_selected_count">已选 %1$d 项</string>
+    <string name="screen_douban_failures_select_all">全选</string>
+
+    <!-- 豆瓣详情页:爬取进度与标注提示 -->
+    <string name="douban_detail_fetching">正在爬取豆瓣详情…</string>
+    <string name="douban_detail_fetch_failed">爬取豆瓣详情失败</string>
+    <string name="douban_detail_retry">重试</string>
+    <string name="douban_detail_updated_and_synced">豆瓣详情已更新，已共享到全局池</string>
+    <string name="douban_detail_marked_and_synced_movie">已标注为电影，已同步全局池</string>
+    <string name="douban_detail_marked_and_synced_show">已标注为电视剧，已同步全局池</string>
+    <string name="douban_detail_marked_and_synced_variety">已标注为综艺，已同步全局池</string>
+    <string name="douban_detail_marked_and_synced_documentary">已标注为纪录片，已同步全局池</string>
+    <string name="douban_detail_mark_cleared">已清除类型标注</string>
+    <string name="douban_detail_mark_failed">标注类型失败</string>
+
+    <!-- 豆瓣爬取测试页 -->
+    <string name="douban_spider_test_title">豆瓣爬取测试</string>
+    <string name="douban_spider_test_cookie_section">Cookie 信息</string>
+    <string name="douban_spider_test_not_logged_in">未登录豆瓣</string>
+    <string name="douban_spider_test_logged_in">已登录 · userId: %1$s</string>
+    <string name="douban_spider_test_url_section">爬取目标</string>
+    <string name="douban_spider_test_preset">快选</string>
+    <string name="douban_spider_test_url_preset_item">影视条目</string>
+    <string name="douban_spider_test_url_preset_user">用户主页</string>
+    <string name="douban_spider_test_ua_pc">电脑版</string>
+    <string name="douban_spider_test_ua_mobile">手机版</string>
+    <string name="douban_spider_test_fetch">爬取</string>
+    <string name="douban_spider_test_fetching">正在爬取…</string>
+    <string name="douban_spider_test_tab_fields">提取字段</string>
+    <string name="douban_spider_test_tab_html">原始 HTML</string>
+    <string name="douban_spider_test_tab_preview">网页预览</string>
+    <string name="douban_spider_test_copy_html">复制全部</string>
+    <string name="douban_spider_test_empty">空</string>
+    <string name="douban_spider_test_copied">HTML 已复制到剪贴板</string>
+    <string name="douban_spider_test_export_txt">导出 TXT</string>
+    <string name="douban_spider_test_export_html">导出 HTML</string>
+    <string name="douban_spider_test_exported">已导出</string>
+    <string name="douban_spider_test_pick_cached">选择已缓存条目</string>
+    <string name="douban_spider_test_pick_cached_title">已缓存的豆瓣条目</string>
+    <string name="douban_spider_test_no_cached">暂无已缓存条目</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">筛选</string>

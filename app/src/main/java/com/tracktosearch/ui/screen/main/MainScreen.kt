@@ -126,7 +126,8 @@ fun MainScreen(
     onFilterDiscoverClick: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
     onDoubanFailures: () -> Unit = {},
-    onNavigateToDoubanLogin: () -> Unit = {}
+    onNavigateToDoubanLogin: () -> Unit = {},
+    onSpiderTest: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
@@ -303,6 +304,7 @@ fun MainScreen(
                                     traktSearchQuery = query
                                     showTraktSearch = true
                                 },
+                                onSpiderTest = onSpiderTest,
                                 onMovieClick = onMovieClick,
                                 searchSourceType = searchSourceType,
                                 onSearchSourceTypeChange = { searchSourceType = it },
@@ -438,8 +440,8 @@ fun MainScreen(
             }
 
             // 新手引导遮罩（4个Tab高亮 + 3个纯信息提示）
-            // 步骤→Tab页映射：搜索(0)→发现(1)→我的(2)→设置(3)→我的(2)→我的(2)→不切换(-1)
-            val onboardingTabMap = listOf(0, 1, 2, 3, 2, 2, -1)
+            // 步骤→Tab页映射：搜索(0)→发现(1)→我的(2)→设置(3)→设置(3,观看统计入口在设置页第一行)→我的(2)→不切换(-1)
+            val onboardingTabMap = listOf(0, 1, 2, 3, 3, 2, -1)
             if (showOnboarding && tabRects.value.size == 4) {
                 OnboardingOverlay(
                     targetRects = tabRects.value + listOf(Rect.Zero, Rect.Zero, Rect.Zero),
