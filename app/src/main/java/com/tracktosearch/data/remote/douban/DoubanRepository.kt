@@ -352,8 +352,11 @@ class DoubanRepository(
     /**
      * 测试用:对单条豆瓣影视标记 wish/do/collect/remove,返回原始 HTTP 响应。
      * 仅爬取测试页调用,用于逆向确认写接口端点与字段(不进入正式业务逻辑)。
-     * 经典表单端点: https://movie.douban.com/j/movie/{wish|do|collect|remove}
-     * 表单字段: ck(CSRF 凭证), sid(豆瓣条目 ID), add=1
+     * 端点(现成实现 douban-mcp / Gazer 一致):
+     *   标记: POST https://movie.douban.com/j/subject/{sid}/{wish|do|collect}
+     *   取消: POST https://movie.douban.com/j/subject/{sid}/remove
+     * 表单字段: ck(CSRF 凭证), interest(=wish|do|collect), foldcollect=F; remove 仅 ck
+     * 请求头: Referer=详情页, X-Requested-With=XMLHttpRequest, Cookie
      */
     suspend fun markInterestTest(
         doubanId: String,
@@ -362,12 +365,14 @@ class DoubanRepository(
         endpoint: String,
         useMobileUa: Boolean
     ): MarkTestResult = withContext(Dispatchers.IO) {
-        val url = "https://movie.douban.com/j/movie/$endpoint"
-        val formBody = FormBody.Builder()
-            .add("ck", ck)
-            .add("sid", doubanId)
-            .add("add", "1")
-            .build()
+        val url = "https://movie.douban.com/j/subject/$doubanId/$endpoint"
+        val formBuilder = FormBody.Builder().add("ck", ck)
+        if (endpoint != "remove") {
+            // wish/do/collect:兴趣状态字段 + 固定 foldcollect
+            formBuilder.add("interest", endpoint)
+            formBuilder.add("foldcollect", "F")
+        }
+        val formBody = formBuilder.build()
         val request = Request.Builder()
             .url(url)
             .post(formBody)
