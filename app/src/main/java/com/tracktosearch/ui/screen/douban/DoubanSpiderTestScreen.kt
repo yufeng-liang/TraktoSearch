@@ -142,7 +142,8 @@ data class SpiderTestUiState(
     val markDoubanId: String = "",
     val isMarking: Boolean = false,
     val markResult: MarkTestResult? = null,
-    val markError: String? = null
+    val markError: String? = null,
+    val markRemoveMode: String = "empty" // 取消标记方式: "empty"(interest 置空) / "remove"(interest=remove)
 )
 
 /** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
@@ -256,6 +257,11 @@ class DoubanSpiderTestViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(markDoubanId = id, markError = null, markResult = null)
     }
 
+    /** 更新取消标记方式(empty / remove),仅 remove 动作使用 */
+    fun updateMarkRemoveMode(mode: String) {
+        _uiState.value = _uiState.value.copy(markRemoveMode = mode)
+    }
+
     /**
      * 标记写回测试:先抓 PC 详情页解析 ck,再 POST 候选写接口端点(wish/do/collect/remove)。
      * 仅用于逆向确认端点与字段,不进入正式业务逻辑。结果存入 markResult / markError。
@@ -283,7 +289,10 @@ class DoubanSpiderTestViewModel @Inject constructor(
                     return@launch
                 }
                 // 2. 对一个动作探测多个候选写接口端点
-                val result = doubanRepository.markTestCandidates(doubanId, current.cookie, ck, endpoint, useMobileUa = false)
+                val result = doubanRepository.markTestCandidates(
+                    doubanId, current.cookie, ck, endpoint, useMobileUa = false,
+                    removeMode = if (endpoint == "remove") current.markRemoveMode else "empty"
+                )
                 _uiState.value = _uiState.value.copy(isMarking = false, markResult = result)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isMarking = false, markError = e.stackTraceToString())
@@ -532,6 +541,29 @@ fun DoubanSpiderTestScreen(
                                     ) { Text(label) }
                                 }
                             }
+                        }
+                        // 取消标记方式选择(仅 remove 动作生效): empty / remove
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_mark_remove_mode),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            FilterChip(
+                                selected = uiState.markRemoveMode == "empty",
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("empty") },
+                                label = { Text(stringResource(R.string.douban_spider_test_mark_remove_empty)) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            FilterChip(
+                                selected = uiState.markRemoveMode == "remove",
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("remove") },
+                                label = { Text(stringResource(R.string.douban_spider_test_mark_remove_remove)) },
+                                modifier = Modifier.height(32.dp)
+                            )
                         }
                         // 未输入 ID 提示
                         if (uiState.markDoubanId.isBlank()) {

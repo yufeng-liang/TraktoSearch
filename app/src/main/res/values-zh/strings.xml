@@ -799,6 +799,9 @@
     <string name="douban_spider_test_mark_do">在看</string>
     <string name="douban_spider_test_mark_collect">看过</string>
     <string name="douban_spider_test_mark_remove">取消标记</string>
+    <string name="douban_spider_test_mark_remove_mode">取消方式</string>
+    <string name="douban_spider_test_mark_remove_empty">置空(interest 空)</string>
+    <string name="douban_spider_test_mark_remove_remove">remove(interest=remove)</string>
     <string name="douban_spider_test_marking">正在标记…</string>
     <string name="douban_spider_test_mark_no_id">请先输入豆瓣 ID</string>
     <string name="douban_spider_test_mark_result">结果</string>

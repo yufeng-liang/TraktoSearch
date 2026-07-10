@@ -357,16 +357,18 @@ class DoubanRepository(
      *   标记(wish/do/collect):
      *     A. POST /j/subject/{id}/interest        (Gazer 风格,字段 interest=动作,当前疑似有效)
      *     B. POST /j/subject/{id}/{动作}          (douban-mcp 风格,实测 404,作为对照)
-     *   取消(remove):
-     *     A. POST /j/subject/{id}/remove          (douban-mcp 风格)
-     *     B. DELETE /j/subject/{id}/interest      (现代风格)
-     */
+ *   取消(remove): 按 removeMode 单次只测一个候选,避免同一影视连续取消互相干扰
+ *     - "empty":  POST /j/subject/{id}/interest  (interest 置空, 疑似取消)
+ *     - "remove": POST /j/subject/{id}/interest  (interest=remove, 疑似取消)
+ *   注: 实测 A(/remove)404、B(DELETE /interest)403 均失败已剔除; C/D 均 r:0 待分开验证
+ */
     suspend fun markTestCandidates(
         doubanId: String,
         cookie: String,
         ck: String,
         action: String,
-        useMobileUa: Boolean
+        useMobileUa: Boolean,
+        removeMode: String = "empty"
     ): MarkTestResult = withContext(Dispatchers.IO) {
         val uaHeader = if (useMobileUa) mobileUa else ua
         val referer = "https://movie.douban.com/subject/$doubanId/"
@@ -374,23 +376,24 @@ class DoubanRepository(
         // 根据动作构造候选端点列表: Triple(方法, 路径, 表单)
         val candidates: List<Triple<String, String, FormBody?>> = when (action) {
             "remove" -> listOf(
-                Triple("POST", "/j/subject/$doubanId/remove",
-                    FormBody.Builder().add("ck", ck).build()),
-                Triple("DELETE", "/j/subject/$doubanId/interest", null),
-                // 候选 C: 复用 interest 端点, interest 置空(疑似取消方式)
-                Triple("POST", "/j/subject/$doubanId/interest",
-                    FormBody.Builder()
-                        .add("ck", ck)
-                        .add("interest", "")
-                        .add("foldcollect", "F")
-                        .build()),
-                // 候选 D: interest 传 remove 值试探
-                Triple("POST", "/j/subject/$doubanId/interest",
-                    FormBody.Builder()
-                        .add("ck", ck)
-                        .add("interest", "remove")
-                        .add("foldcollect", "F")
-                        .build())
+                // 按 removeMode 单选一个候选, 单次只测一个, 便于换影视分开验证
+                if (removeMode == "remove") {
+                    // 候选 D: interest=remove
+                    Triple("POST", "/j/subject/$doubanId/interest",
+                        FormBody.Builder()
+                            .add("ck", ck)
+                            .add("interest", "remove")
+                            .add("foldcollect", "F")
+                            .build())
+                } else {
+                    // 候选 C: interest 置空(默认)
+                    Triple("POST", "/j/subject/$doubanId/interest",
+                        FormBody.Builder()
+                            .add("ck", ck)
+                            .add("interest", "")
+                            .add("foldcollect", "F")
+                            .build())
+                }
             )
             else -> listOf(
                 // A: Gazer 风格 统一 interest 端点(当前疑似有效)
