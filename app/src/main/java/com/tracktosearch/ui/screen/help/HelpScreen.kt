@@ -315,6 +315,19 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_vpn_b2))
                     }
                 }
+
+                // 豆瓣标记双向写回
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_douban_writeback),
+                        isExpanded = expandedIndex == 10,
+                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_douban_writeback_b1))
+                        HelpBullet(stringResource(R.string.help_douban_writeback_b2))
+                        HelpBullet(stringResource(R.string.help_douban_writeback_b3))
+                    }
+                }
             }
 
             // TopAppBar（纯色背景，无共享元素转场）

@@ -109,6 +109,10 @@ interface DoubanSyncFailureDao {
     @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId = :doubanId")
     suspend fun updateMediaType(doubanId: String, mediaType: String?)
 
+    /** 写回豆瓣成功后持久化新标记状态(wish/collect) */
+    @Query("UPDATE douban_sync_failures SET status = :status WHERE doubanId = :doubanId")
+    suspend fun updateStatus(doubanId: String, status: String)
+
     /** 查询所有 mediaType 为 null 的失败项 doubanId(用于同步后从全局池填充类型) */
     @Query("SELECT doubanId FROM douban_sync_failures WHERE mediaType IS NULL")
     suspend fun getDoubanIdsWithNullMediaType(): List<String>

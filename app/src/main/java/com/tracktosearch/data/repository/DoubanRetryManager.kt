@@ -2,6 +2,7 @@ package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
+import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -265,5 +266,13 @@ class DoubanRetryManager @Inject constructor(
     /** 删除单条失败项(用户在详情页删除,不同于 clearAll) */
     suspend fun deleteFailure(doubanId: String) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.deleteByDoubanId(doubanId)
+    }
+
+    /**
+     * 写回豆瓣成功后持久化新的标记状态(wish/collect)。
+     * 持久化路径用 status.path(与 toEntity 一致),不从列表移除条目。
+     */
+    suspend fun updateStatus(doubanId: String, status: DoubanMarkStatus) = withContext(Dispatchers.IO) {
+        doubanSyncFailureDao.updateStatus(doubanId, status.path)
     }
 }

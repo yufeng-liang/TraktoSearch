@@ -468,6 +468,104 @@ class DoubanRepository(
     }
 
     /**
+     * 抓取 PC 详情页 HTML(用于解析 ck 凭证)。
+     * Cookie 失效时豆瓣会重定向到登录页,此时返回 null,由调用方提示重新登录。
+     */
+    suspend fun fetchDetailPageHtml(doubanId: String, cookie: String): String? = withContext(Dispatchers.IO) {
+        val html = fetchHtml("https://movie.douban.com/subject/$doubanId/", cookie)
+        return@withContext if (DoubanSpider.isLoginPage(html)) null else html
+    }
+
+    /**
+     * 抓取 PC 详情页并解析 csrf token(ck)。
+     * Cookie 失效或解析失败均返回 null,由调用方区分提示。
+     */
+    suspend fun fetchCsrfToken(doubanId: String, cookie: String): String? = withContext(Dispatchers.IO) {
+        val html = fetchDetailPageHtml(doubanId, cookie) ?: return@withContext null
+        DoubanSpider.parseCsrfToken(html)
+    }
+
+    /**
+     * 正式写回:将条目标记为想看(wish)或已看(collect)。
+     *
+     * 端点(经真机验证): POST /j/subject/{id}/interest + ck + interest=动作(wish|collect)
+     *   + foldcollect=F + tags/comment/private,成功判据 HTTP 200 且响应体含 {"r":0}。
+     * 注意:标记走 /interest 接口;取消删除走独立的 /subject/{id}/remove(见 [removeMark])。
+     *
+     * @param action "wish" 或 "collect"
+     * @return [MarkWriteResult] 含是否成功 / 状态码 / 信息
+     */
+    suspend fun markInterest(
+        action: String,
+        doubanId: String,
+        cookie: String,
+        ck: String
+    ): MarkWriteResult = withContext(Dispatchers.IO) {
+        val url = "https://movie.douban.com/j/subject/$doubanId/interest"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .post(
+                FormBody.Builder()
+                    .add("ck", ck)
+                    .add("interest", action)
+                    .add("foldcollect", "F")
+                    .add("tags", "")
+                    .add("comment", "")
+                    .add("private", "on")
+                    .build()
+            )
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            val ok = response.isSuccessful && body.contains("\"r\":0")
+            MarkWriteResult(
+                success = ok,
+                statusCode = response.code,
+                message = if (ok) "r:0" else body.take(200)
+            )
+        }
+    }
+
+    /**
+     * 正式写回:取消豆瓣标记(删除收藏)。
+     *
+     * 端点(经真机验证): POST /subject/{id}/remove + ck(网页收藏编辑页"删除"按钮真正提交的表单,
+     *   非 /interest 接口)。成功判据 HTTP 302 且 Location 重定向回详情页
+     *   (/interest 端点即使返回 r:0 也只是"假成功",标记仍在,见 markTestCandidates 说明)。
+     * 需用不跟随重定向的客户端(noRedirectClient)才能观测到 302。
+     *
+     * @return [MarkWriteResult] 含是否成功 / 状态码 / 信息
+     */
+    suspend fun removeMark(
+        doubanId: String,
+        cookie: String,
+        ck: String
+    ): MarkWriteResult = withContext(Dispatchers.IO) {
+        val url = "https://movie.douban.com/subject/$doubanId/remove"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .post(FormBody.Builder().add("ck", ck).build())
+            .build()
+        noRedirectClient.newCall(request).execute().use { response ->
+            val location = response.header("Location")
+            val ok = response.code == 302 && location?.contains("/subject/$doubanId/") == true
+            MarkWriteResult(
+                success = ok,
+                statusCode = response.code,
+                message = if (ok) "302 -> $location" else "HTTP ${response.code}"
+            )
+        }
+    }
+
+    /**
      * 抓取豆瓣用户主页,解析头像、昵称、ID。
      *
      * 头像解析策略(从准到粗,任一命中即用):
@@ -612,6 +710,13 @@ data class MarkCandidateResult(
 data class MarkTestResult(
     val action: String,
     val candidates: List<MarkCandidateResult>
+)
+
+/** 正式写回结果(标记/取消) */
+data class MarkWriteResult(
+    val success: Boolean,
+    val statusCode: Int,
+    val message: String
 )
 
 /** 豆瓣标记状态 */

@@ -732,6 +732,21 @@
     <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
     <string name="screen_douban_item_detail_copied">コピーしました</string>
 
+    <!-- 豆瓣マーク双方向書き戻し -->
+    <string name="douban_writeback_title">豆瓣マーク(書き戻し)</string>
+    <string name="douban_writeback_wish">見たい</string>
+    <string name="douban_writeback_collect">見た</string>
+    <string name="douban_writeback_remove">マーク解除</string>
+    <string name="douban_writeback_login_required">豆瓣にログインしていないため書き戻せません</string>
+    <string name="douban_writeback_cookie_expired">豆瓣の Cookie が無効です、再ログインしてください</string>
+    <string name="douban_writeback_ck_failed">豆瓣 CSRF トークン(ck)の解析に失敗</string>
+    <string name="douban_writeback_marked_success">豆瓣に書き戻しました</string>
+    <string name="douban_writeback_removed">豆瓣のマークを解除しました</string>
+    <string name="douban_writeback_failed">豆瓣への書き戻しに失敗しました、再試行してください</string>
+    <string name="douban_writeback_remove_confirm_title">豆瓣マーク解除</string>
+    <string name="douban_writeback_remove_confirm_text">このアイテムを豆瓣のコレクションから削除し、失敗リストからも削除します。続行しますか?</string>
+    <string name="douban_writeback_remove_confirm_yes">解除して削除</string>
+
     <!-- Notification (追加) -->
     <string name="settings_notification_release_desc">ウォッチリストの作品が公開されたら通知</string>
     <string name="settings_notification_new_season_desc">新しいシーズンが放送されたら通知</string>
@@ -769,6 +784,12 @@
     <string name="help_vpn">VPNについて</string>
     <string name="help_vpn_b1">アプリの一部機能は海外サービスへのアクセスが必要です。VPNを有効にしないと正常に利用できない場合があります</string>
     <string name="help_vpn_b2">対象機能：予告編サムネイル（YouTube）、Traktデータ（トレンド/おすすめ/期待榜）、TMDBデータ（映画情報/ポスター）</string>
+
+    <!-- 豆瓣マーク双方向書き戻しヘルプ -->
+    <string name="help_douban_writeback">豆瓣マーク書き戻し</string>
+    <string name="help_douban_writeback_b1">豆瓣同期失敗アイテム詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
+    <string name="help_douban_writeback_b2">Traktが主源、豆瓣がミラー。競合時は豆瓣優先(直接書き戻し)。</string>
+    <string name="help_douban_writeback_b3">見たい↔見たの切り替えは失敗リストに保存。マーク解除は失敗アイテムを削除します(確認ダイアログ付き)。</string>
     <string name="settings_restart_onboarding">チュートリアル</string>
     <string name="settings_restart_onboarding_desc">アプリの機能ガイドを再表示</string>
     <string name="onboarding_skip">スキップ</string>

@@ -603,6 +603,12 @@ Config:
     <string name="help_vpn">VPN Notice</string>
     <string name="help_vpn_b1">Some features require access to overseas services. VPN may be needed for normal access</string>
     <string name="help_vpn_b2">Affected features: Trailer thumbnails (YouTube), Trakt data (trending/recommendations), TMDB data (movie details/posters)</string>
+
+    <!-- Douban mark bidirectional write-back help -->
+    <string name="help_douban_writeback">Douban Mark Write-back</string>
+    <string name="help_douban_writeback_b1">On the Douban sync-failure item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
+    <string name="help_douban_writeback_b2">Trakt is the primary source; Douban is a mirror. On conflict, Douban wins (writes directly to Douban).</string>
+    <string name="help_douban_writeback_b3">Switching Wish/Collected persists the new status to the failure list. Removing the mark deletes the failure item (with a second confirmation).</string>
     <string name="settings_restart_onboarding">Tutorial</string>
     <string name="settings_restart_onboarding_desc">Re-run the app feature tour</string>
     <string name="onboarding_skip">Skip</string>
@@ -844,6 +850,21 @@ Config:
     <string name="screen_douban_item_detail_meta_attempt_count">Attempts</string>
     <string name="screen_douban_item_detail_meta_douban_id">Douban ID</string>
     <string name="screen_douban_item_detail_copied">Copied</string>
+
+    <!-- Douban mark bidirectional write-back -->
+    <string name="douban_writeback_title">Douban mark (write-back)</string>
+    <string name="douban_writeback_wish">Want to watch</string>
+    <string name="douban_writeback_collect">Watched</string>
+    <string name="douban_writeback_remove">Remove mark</string>
+    <string name="douban_writeback_login_required">Not logged in to Douban, cannot write back</string>
+    <string name="douban_writeback_cookie_expired">Douban cookie expired, please login again</string>
+    <string name="douban_writeback_ck_failed">Failed to parse Douban csrf token (ck)</string>
+    <string name="douban_writeback_marked_success">Written back to Douban</string>
+    <string name="douban_writeback_removed">Douban mark removed</string>
+    <string name="douban_writeback_failed">Failed to write back to Douban, please retry</string>
+    <string name="douban_writeback_remove_confirm_title">Remove Douban mark</string>
+    <string name="douban_writeback_remove_confirm_text">This will delete the item from your Douban collection and remove it from the failure list. Continue?</string>
+    <string name="douban_writeback_remove_confirm_yes">Remove &amp; delete</string>
 
     <!-- Notification -->
     <string name="settings_notification">Notifications</string>

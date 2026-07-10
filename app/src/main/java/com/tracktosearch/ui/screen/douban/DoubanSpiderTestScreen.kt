@@ -59,7 +59,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -77,7 +77,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.AnnotatedString
@@ -598,8 +597,8 @@ fun DoubanSpiderTestScreen(
                         }
                         // 结果(多候选端点对照)
                         uiState.markResult?.let { res ->
-                            val clipboard = LocalClipboardManager.current
                             val copyCtx = LocalContext.current
+                            val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -620,8 +619,8 @@ fun DoubanSpiderTestScreen(
                                                 appendLine("[${c.label.ifBlank { "候选${'A' + i}" }}] ${c.endpoint} → HTTP ${c.statusCode} → ${c.responseBody.ifBlank { "(empty body)" }}")
                                             }
                                         }
-                                        clipboard.setText(AnnotatedString(sb))
-                                        Toast.makeText(copyCtx, R.string.douban_spider_test_mark_copied, Toast.LENGTH_SHORT).show()
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("result", sb))
+                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
@@ -685,7 +684,7 @@ fun DoubanSpiderTestScreen(
                     item {
                         SectionCard(title = "Error") {
                             Text(
-                                text = uiState.error!!,
+                                text = uiState.error ?: "",
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(8.dp),
@@ -734,7 +733,7 @@ fun DoubanSpiderTestScreen(
 
                     // TabRow 吸顶
                     stickyHeader {
-                        TabRow(selectedTabIndex = selectedTab) {
+                        PrimaryTabRow(selectedTabIndex = selectedTab) {
                             val tabs = listOf(
                                 stringResource(R.string.douban_spider_test_tab_fields),
                                 stringResource(R.string.douban_spider_test_tab_html),
@@ -894,7 +893,7 @@ private fun FieldRow(label: String, value: String?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = if (isEmpty) "(${stringResource(R.string.douban_spider_test_empty)})" else value!!,
+                text = if (isEmpty) "(${stringResource(R.string.douban_spider_test_empty)})" else value,
                 modifier = Modifier.fillMaxWidth(),
                 style = MaterialTheme.typography.bodySmall,
                 fontFamily = FontFamily.Monospace,

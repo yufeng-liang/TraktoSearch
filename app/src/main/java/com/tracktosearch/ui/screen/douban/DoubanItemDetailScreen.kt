@@ -197,7 +197,9 @@ data class DoubanItemDetailUiState(
     // 豆瓣详情补充信息(年份/制片国家/地区/导演/类型),命中缓存秒回,失败或未加载为 null
     val detailInfo: DoubanDetailInfo? = null,
     // 豆瓣详情加载阶段(详情Tab内联状态用)
-    val detailLoadPhase: DetailLoadPhase = DetailLoadPhase.IDLE
+    val detailLoadPhase: DetailLoadPhase = DetailLoadPhase.IDLE,
+    // 写回豆瓣标记操作进行中(想看/已看/取消按钮统一 loading)
+    val marking: Boolean = false
 )
 
 /**
@@ -668,6 +670,101 @@ class DoubanItemDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(posterDominantColor = color)
     }
 
+    // ==================== 豆瓣标记双向写回 ====================
+
+    /**
+     * 写回豆瓣:将当前条目标记为[status](想看/已看)。
+     * 流程:取 cookie → 抓详情页解析 ck → 调 [DoubanRepository.markInterest]。
+     * 成功后持久化新状态到失败列表(不移除条目),刷新 UI 状态行;失败弹 Toast。
+     */
+    private fun markToDouban(status: DoubanMarkStatus) {
+        val failure = _uiState.value.failure ?: return
+        if (_uiState.value.marking) return
+        _uiState.value = _uiState.value.copy(marking = true)
+        viewModelScope.launch {
+            val result = runCatching {
+                val credentials = doubanAuthStorage.getCredentials()
+                    ?: return@runCatching MarkWriteOutcome.LoginRequired
+                val ck = doubanRepository.fetchCsrfToken(failure.doubanId, credentials.cookie)
+                    ?: return@runCatching if (doubanRepository.fetchDetailPageHtml(failure.doubanId, credentials.cookie) == null)
+                        MarkWriteOutcome.CookieExpired else MarkWriteOutcome.CkFailed
+                val res = doubanRepository.markInterest(status.path, failure.doubanId, credentials.cookie, ck)
+                if (res.success) {
+                    doubanRetryManager.updateStatus(failure.doubanId, status)
+                    val refreshed = doubanRetryManager.getFailure(failure.doubanId)
+                    _uiState.value = _uiState.value.copy(
+                        marking = false,
+                        failure = refreshed ?: failure.copy(status = status)
+                    )
+                    MarkWriteOutcome.Success
+                } else {
+                    _uiState.value = _uiState.value.copy(marking = false)
+                    MarkWriteOutcome.Failed(res.message)
+                }
+            }.getOrDefault(MarkWriteOutcome.Failed(null))
+            emitWritebackToast(result)
+        }
+    }
+
+    /** 想看(wish)写回 */
+    fun markWish() = markToDouban(DoubanMarkStatus.WISH)
+
+    /** 已看(collect)写回 */
+    fun markCollect() = markToDouban(DoubanMarkStatus.COLLECT)
+
+    /**
+     * 取消标记(删除豆瓣收藏)。
+     * 成功后删除该失败条目(标记已无意义),UI 自动返回列表。
+     * 二次确认由 UI 的 AlertDialog 完成,确认后才调用本方法。
+     */
+    fun removeMark() {
+        val failure = _uiState.value.failure ?: return
+        if (_uiState.value.marking) return
+        _uiState.value = _uiState.value.copy(marking = true)
+        viewModelScope.launch {
+            val result = runCatching {
+                val credentials = doubanAuthStorage.getCredentials()
+                    ?: return@runCatching MarkWriteOutcome.LoginRequired
+                val ck = doubanRepository.fetchCsrfToken(failure.doubanId, credentials.cookie)
+                    ?: return@runCatching if (doubanRepository.fetchDetailPageHtml(failure.doubanId, credentials.cookie) == null)
+                        MarkWriteOutcome.CookieExpired else MarkWriteOutcome.CkFailed
+                val res = doubanRepository.removeMark(failure.doubanId, credentials.cookie, ck)
+                if (res.success) {
+                    doubanRetryManager.deleteFailure(failure.doubanId)
+                    _uiState.value = _uiState.value.copy(marking = false, failure = null)
+                    MarkWriteOutcome.Removed
+                } else {
+                    _uiState.value = _uiState.value.copy(marking = false)
+                    MarkWriteOutcome.Failed(res.message)
+                }
+            }.getOrDefault(MarkWriteOutcome.Failed(null))
+            emitWritebackToast(result)
+        }
+    }
+
+    /** 将写回结果映射为 Toast 文案资源 ID 并发事件 */
+    private fun emitWritebackToast(outcome: MarkWriteOutcome) {
+        val resId = when (outcome) {
+            MarkWriteOutcome.Success -> R.string.douban_writeback_marked_success
+            MarkWriteOutcome.Removed -> R.string.douban_writeback_removed
+            MarkWriteOutcome.LoginRequired -> R.string.douban_writeback_login_required
+            MarkWriteOutcome.CookieExpired -> R.string.douban_writeback_cookie_expired
+            MarkWriteOutcome.CkFailed -> R.string.douban_writeback_ck_failed
+            is MarkWriteOutcome.Failed -> R.string.douban_writeback_failed
+        }
+        _toastEvent.tryEmit(resId)
+    }
+
+    /** 写回结果枚举(内部用,便于映射 Toast) */
+    private sealed interface MarkWriteOutcome {
+        data object Success : MarkWriteOutcome
+        data object Removed : MarkWriteOutcome
+        data object LoginRequired : MarkWriteOutcome
+        data object CookieExpired : MarkWriteOutcome
+        data object CkFailed : MarkWriteOutcome
+        data class Failed(val message: String?) : MarkWriteOutcome
+    }
+
     /**
      * 进入详情页时尽早从缓存预查海报主色(不需要 bitmap)。
      * 命中则瞬间设置 posterDominantColor,让沉浸背景在海报图片加载前显示。
@@ -707,6 +804,8 @@ fun DoubanItemDetailScreen(
     var subtitleInput by remember { mutableStateOf("") }
     // 手动标记媒体类型下拉菜单展开状态
     var showMarkMenu by remember { mutableStateOf(false) }
+    // 取消标记二次确认弹窗状态
+    var showRemoveConfirm by remember { mutableStateOf(false) }
     // 演职员头像点击 → 应用内 WebView 打开(注入豆瓣 cookie)
     var webviewUrl by remember { mutableStateOf<String?>(null) }
     var webviewTitle by remember { mutableStateOf("") }
@@ -851,6 +950,19 @@ fun DoubanItemDetailScreen(
                             posterColorExtractor = viewModel.posterColorExtractor,
                             onPosterColorExtracted = viewModel::updatePosterColor
                         )
+                    }
+
+                    // 豆瓣标记双向写回操作栏(想看/已看/取消)
+                    item(key = "writeback_actions") {
+                        Box(modifier = Modifier.alpha(contentAlpha)) {
+                            DoubanWritebackActions(
+                                failure = failure,
+                                marking = uiState.marking,
+                                onWish = { viewModel.markWish() },
+                                onCollect = { viewModel.markCollect() },
+                                onRemove = { showRemoveConfirm = true }
+                            )
+                        }
                     }
 
                     // Tab 行(吸顶) —
@@ -1315,6 +1427,31 @@ fun DoubanItemDetailScreen(
         }
     }
 
+    // 取消豆瓣标记二次确认弹窗(删除收藏后会移除该失败条目)
+    if (showRemoveConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRemoveConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
+            text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showRemoveConfirm = false
+                        viewModel.removeMark()
+                    }
+                ) {
+                    Text(stringResource(R.string.douban_writeback_remove_confirm_yes))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRemoveConfirm = false }) {
+                    Text(stringResource(R.string.douban_retry_cancel))
+                }
+            }
+        )
+    }
+
     // 演职员头像 → 应用内 WebView(注入豆瓣 cookie)
     val url = webviewUrl
     if (url != null) {
@@ -1369,6 +1506,71 @@ fun DoubanItemDetailScreen(
 }
 
 // ==================== 头部区域 ====================
+
+/**
+ * 豆瓣标记双向写回操作栏(详情页内容区顶部)。
+ * 提供「想看 / 已看 / 取消」三个动作;电影无「在看」故不显示。
+ * 当前已标记状态高亮对应按钮;操作进行中整体禁用并展示 loading。
+ */
+@Composable
+private fun DoubanWritebackActions(
+    failure: DoubanSyncFailure,
+    marking: Boolean,
+    onWish: () -> Unit,
+    onCollect: () -> Unit,
+    onRemove: () -> Unit
+) {
+    val status = failure.status
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = stringResource(R.string.douban_writeback_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilterChip(
+                    selected = status == DoubanMarkStatus.WISH,
+                    onClick = onWish,
+                    enabled = !marking,
+                    label = { Text(stringResource(R.string.douban_writeback_wish)) },
+                    leadingIcon = if (status == DoubanMarkStatus.WISH) {
+                        { Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    } else null
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                FilterChip(
+                    selected = status == DoubanMarkStatus.COLLECT,
+                    onClick = onCollect,
+                    enabled = !marking,
+                    label = { Text(stringResource(R.string.douban_writeback_collect)) }
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                OutlinedButton(
+                    onClick = onRemove,
+                    enabled = !marking
+                ) {
+                    if (marking) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(stringResource(R.string.douban_writeback_remove))
+                    }
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun DoubanItemHeader(

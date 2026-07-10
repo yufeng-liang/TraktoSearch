@@ -603,6 +603,12 @@
     <string name="help_vpn">VPN 说明</string>
     <string name="help_vpn_b1">本应用部分功能需要访问国外服务，不开启VPN可能无法正常访问</string>
     <string name="help_vpn_b2">涉及功能：预告片缩略图（YouTube）、Trakt 数据（热门/推荐/期待榜）、TMDB 数据（影视详情/海报）</string>
+
+    <!-- 豆瓣标记双向写回帮助 -->
+    <string name="help_douban_writeback">豆瓣标记双向写回</string>
+    <string name="help_douban_writeback_b1">在豆瓣同步失败条目详情页,可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
+    <string name="help_douban_writeback_b2">Trakt 为主源,豆瓣为镜像。冲突以豆瓣为准(直接写回豆瓣)。</string>
+    <string name="help_douban_writeback_b3">想看↔已看切换后新状态持久化到失败列表;取消标记会删除该失败条目(需二次确认)。</string>
     <string name="settings_restart_onboarding">新手引导</string>
     <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>
     <string name="onboarding_skip">跳过</string>
@@ -844,6 +850,21 @@
     <string name="screen_douban_item_detail_meta_attempt_count">尝试次数</string>
     <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
     <string name="screen_douban_item_detail_copied">已复制</string>
+
+    <!-- 豆瓣标记双向写回 -->
+    <string name="douban_writeback_title">豆瓣标记(双向写回)</string>
+    <string name="douban_writeback_wish">想看</string>
+    <string name="douban_writeback_collect">已看</string>
+    <string name="douban_writeback_remove">取消标记</string>
+    <string name="douban_writeback_login_required">未登录豆瓣,无法写回</string>
+    <string name="douban_writeback_cookie_expired">豆瓣 Cookie 已失效,请重新登录</string>
+    <string name="douban_writeback_ck_failed">解析豆瓣凭证(ck)失败</string>
+    <string name="douban_writeback_marked_success">已写回豆瓣</string>
+    <string name="douban_writeback_removed">已取消豆瓣标记</string>
+    <string name="douban_writeback_failed">写回豆瓣失败,请重试</string>
+    <string name="douban_writeback_remove_confirm_title">取消豆瓣标记</string>
+    <string name="douban_writeback_remove_confirm_text">将删除该条目在豆瓣的收藏,并从此失败列表移除,是否继续?</string>
+    <string name="douban_writeback_remove_confirm_yes">取消并移除</string>
 
     <!-- Notification -->
     <string name="settings_notification">通知提醒</string>

@@ -732,6 +732,21 @@
     <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
     <string name="screen_douban_item_detail_copied">복사됨</string>
 
+    <!-- 더우반 마크 양방향 쓰기 -->
+    <string name="douban_writeback_title">더우반 마크(쓰기)</string>
+    <string name="douban_writeback_wish">보고 싶음</string>
+    <string name="douban_writeback_collect">봄</string>
+    <string name="douban_writeback_remove">마크 해제</string>
+    <string name="douban_writeback_login_required">더우반에 로그인하지 않아 쓸 수 없습니다</string>
+    <string name="douban_writeback_cookie_expired">더우반 Cookie가 만료되었습니다, 다시 로그인하세요</string>
+    <string name="douban_writeback_ck_failed">더우반 CSRF 토큰(ck) 파싱 실패</string>
+    <string name="douban_writeback_marked_success">더우반에 쓰기 완료</string>
+    <string name="douban_writeback_removed">더우반 마크 해제됨</string>
+    <string name="douban_writeback_failed">더우반 쓰기 실패, 다시 시도하세요</string>
+    <string name="douban_writeback_remove_confirm_title">더우반 마크 해제</string>
+    <string name="douban_writeback_remove_confirm_text">이 항목을 더우반 수집에서 삭제하고 실패 목록에서도 제거합니다. 계속할까요?</string>
+    <string name="douban_writeback_remove_confirm_yes">해제 및 삭제</string>
+
     <!-- Notification (추가) -->
     <string name="settings_notification_release_desc">관심목록의 작품이 공개되면 알림</string>
     <string name="settings_notification_new_season_desc">새 시즌이 방영되면 알림</string>
@@ -769,6 +784,12 @@
     <string name="help_vpn">VPN 안내</string>
     <string name="help_vpn_b1">일부 기능은 해외 서비스에 접근해야 합니다. VPN을 활성화하지 않으면 정상적으로 사용할 수 없는 경우가 있습니다</string>
     <string name="help_vpn_b2">해당 기능: 예고편 썸네일(YouTube), Trakt 데이터(인기/추천/기대榜), TMDB 데이터(영화 정보/포스터)</string>
+
+    <!-- 더우반 마크 양방향 쓰기 도움말 -->
+    <string name="help_douban_writeback">더우반 마크 쓰기</string>
+    <string name="help_douban_writeback_b1">더우반 동기화 실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있습니다.</string>
+    <string name="help_douban_writeback_b2">Trakt가 주 원본, 더우반이 미러. 충돌 시 더우반 우선(직접 쓰기).</string>
+    <string name="help_douban_writeback_b3">보고 싶음↔봄 전환은 실패 목록에 저장. 마크 해제는 실패 항목을 삭제합니다(확인 대화상자 포함).</string>
     <string name="settings_restart_onboarding">튜토리얼</string>
     <string name="settings_restart_onboarding_desc">앱 기능 가이드 다시 보기</string>
     <string name="onboarding_skip">건너뛰기</string>
