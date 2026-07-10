@@ -183,7 +183,7 @@ class DoubanRetryManager @Inject constructor(
 
         // 强覆盖：genre 含"综艺"或"真人秀" → 综艺
         val forceType = when {
-            detailInfo.genres.any { it.contains("综艺") || it.contains("真人秀") } -> "variety"
+            detailInfo.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
             detailInfo.genres.any { it.contains("纪录片") } -> "documentary"
             else -> null
         }

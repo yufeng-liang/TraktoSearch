@@ -20,8 +20,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -240,16 +242,31 @@ fun DetailScreen(
             }
             val tabContainerColor = if (isPinned) {
                 uiState.posterDominantColor?.let { c ->
-                    lerp(MaterialTheme.colorScheme.background, c, 0.70f)
+                    lerp(MaterialTheme.colorScheme.background, c, 0.635f)
                 } ?: MaterialTheme.colorScheme.surface
             } else {
                 Color.Transparent
             }
             val tabContentColor = when {
                 isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
-                !isPinned && (uiState.posterDominantColor?.luminance() ?: 1f) <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                !isPinned -> {
+                    // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
+                    val midColor = uiState.posterDominantColor?.let { c ->
+                        lerp(c, MaterialTheme.colorScheme.background, 0.5f)
+                    } ?: MaterialTheme.colorScheme.background
+                    if (midColor.luminance() <= 0.5f) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                }
                 else -> MaterialTheme.colorScheme.onSurface
             }
+
+            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsTopHeight(WindowInsets.statusBars)
+                    .background(tabContainerColor)
+                    .align(Alignment.TopCenter)
+            )
 
             // 回调 lambda remember 化:避免每次重组都新建实例(与 MovieCard 一致),
             // 减少分配并为后续按字段跳过重组打基础。置于 LazyColumn 之前(@Composable 上下文)。

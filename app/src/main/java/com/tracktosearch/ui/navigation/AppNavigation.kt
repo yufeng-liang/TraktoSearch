@@ -234,42 +234,6 @@ fun AppNavigation(
                             }
                         }
 
-                        // 版本更新检查：首页数据加载完成后再延迟 0.8 秒检查，仅一次
-                        // 已登录：等想看列表加载完成；未登录：立即就绪
-                        // 延迟 0.8s：等首屏渲染稳定后再发起网络请求，避免与 UI 抢资源导致卡顿
-                        val updateRepository: UpdateRepository = hiltViewModel<UpdateCheckViewModel>().updateRepository
-                        var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
-                        var updateChecked by rememberSaveable { mutableStateOf(false) }
-                        val uiState by watchlistViewModel.uiState.collectAsStateWithLifecycle()
-                        // 用 snapshotFlow 监听条件，避免 LaunchedEffect key 变化导致协程取消
-                        LaunchedEffect(Unit) {
-                            snapshotFlow {
-                                if (isLoggedIn) {
-                                    uiState.moviesLoaded && uiState.showsLoaded
-                                } else {
-                                    true
-                                }
-                            }.first { it }
-                            // 数据加载完成后再等 0.8 秒，让首屏渲染稳定
-                            kotlinx.coroutines.delay(800)
-                            if (!updateChecked) {
-                                updateChecked = true
-                                try {
-                                    updateInfo = updateRepository.checkForUpdate()
-                                } catch (_: Exception) {}
-                            }
-                        }
-
-                        // 更新弹窗（仅有新版本时才显示）
-                        updateInfo?.let { info ->
-                            if (info.hasUpdate) {
-                                UpdateDialog(
-                                    updateInfo = info,
-                                    onDismiss = { updateInfo = null }
-                                )
-                            }
-                        }
-
                         // 豆瓣同步续传检测:App 启动时检测是否有未处理完的 pending items
                         // 优先级:pending items 优先于 failures 重试
                         // - 有 pending items → 弹续传对话框(继续同步/完整同步)
@@ -628,6 +592,31 @@ fun AppNavigation(
                 composable(Routes.DOUBAN_SPIDER_TEST) {
                     DoubanSpiderTestScreen(
                         onBack = { navController.popBackStack() }
+                    )
+                }
+            }
+
+            // 版本更新检查：App 启动后延迟 0.8 秒检查，仅一次（登录页和主界面都适用）
+            // 延迟 0.8s：等首屏渲染稳定后再发起网络请求，避免与 UI 抢资源导致卡顿
+            val updateCheckViewModel: UpdateCheckViewModel = hiltViewModel()
+            val updateRepository = updateCheckViewModel.updateRepository
+            var updateInfo by remember { mutableStateOf<com.tracktosearch.data.repository.UpdateInfo?>(null) }
+            var updateChecked by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                kotlinx.coroutines.delay(800)
+                if (!updateChecked) {
+                    updateChecked = true
+                    try {
+                        updateInfo = updateRepository.checkForUpdate()
+                    } catch (_: Exception) {}
+                }
+            }
+            // 更新弹窗（仅有新版本时才显示，覆盖在 NavHost 之上）
+            updateInfo?.let { info ->
+                if (info.hasUpdate) {
+                    UpdateDialog(
+                        updateInfo = info,
+                        onDismiss = { updateInfo = null }
                     )
                 }
             }
