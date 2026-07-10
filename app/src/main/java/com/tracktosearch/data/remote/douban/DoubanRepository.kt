@@ -350,45 +350,79 @@ class DoubanRepository(
     }
 
     /**
-     * 测试用:对单条豆瓣影视标记 wish/do/collect/remove,返回原始 HTTP 响应。
-     * 仅爬取测试页调用,用于逆向确认写接口端点与字段(不进入正式业务逻辑)。
-     * 端点(现成实现 douban-mcp / Gazer 一致):
-     *   标记: POST https://movie.douban.com/j/subject/{sid}/{wish|do|collect}
-     *   取消: POST https://movie.douban.com/j/subject/{sid}/remove
-     * 表单字段: ck(CSRF 凭证), interest(=wish|do|collect), foldcollect=F; remove 仅 ck
-     * 请求头: Referer=详情页, X-Requested-With=XMLHttpRequest, Cookie
+     * 测试用:对一个标记动作同时探测多个候选写接口端点,返回对照结果。
+     * 仅爬取测试页调用,用于逆向确认端点与字段(不进入正式业务逻辑)。
+     *
+     * 候选端点(基于 GitHub 现成实现交叉验证,真机实测 wish 动作 /j/subject/{id}/wish 返回 404):
+     *   标记(wish/do/collect):
+     *     A. POST /j/subject/{id}/interest        (Gazer 风格,字段 interest=动作,当前疑似有效)
+     *     B. POST /j/subject/{id}/{动作}          (douban-mcp 风格,实测 404,作为对照)
+     *   取消(remove):
+     *     A. POST /j/subject/{id}/remove          (douban-mcp 风格)
+     *     B. DELETE /j/subject/{id}/interest      (现代风格)
      */
-    suspend fun markInterestTest(
+    suspend fun markTestCandidates(
         doubanId: String,
         cookie: String,
         ck: String,
-        endpoint: String,
+        action: String,
         useMobileUa: Boolean
     ): MarkTestResult = withContext(Dispatchers.IO) {
-        val url = "https://movie.douban.com/j/subject/$doubanId/$endpoint"
-        val formBuilder = FormBody.Builder().add("ck", ck)
-        if (endpoint != "remove") {
-            // wish/do/collect:兴趣状态字段 + 固定 foldcollect
-            formBuilder.add("interest", endpoint)
-            formBuilder.add("foldcollect", "F")
-        }
-        val formBody = formBuilder.build()
-        val request = Request.Builder()
-            .url(url)
-            .post(formBody)
-            .header("User-Agent", if (useMobileUa) mobileUa else ua)
-            .header("Cookie", cookie)
-            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
-            .header("X-Requested-With", "XMLHttpRequest")
-            .header("Accept", "application/json, text/javascript, */*; q=0.01")
-            .build()
-        client.newCall(request).execute().use { response ->
-            MarkTestResult(
-                endpoint = endpoint,
-                statusCode = response.code,
-                responseBody = response.body?.string() ?: ""
+        val uaHeader = if (useMobileUa) mobileUa else ua
+        val referer = "https://movie.douban.com/subject/$doubanId/"
+
+        // 根据动作构造候选端点列表: Triple(方法, 路径, 表单)
+        val candidates: List<Triple<String, String, FormBody?>> = when (action) {
+            "remove" -> listOf(
+                Triple("POST", "/j/subject/$doubanId/remove",
+                    FormBody.Builder().add("ck", ck).build()),
+                Triple("DELETE", "/j/subject/$doubanId/interest", null)
+            )
+            else -> listOf(
+                // A: Gazer 风格 统一 interest 端点(当前疑似有效)
+                Triple("POST", "/j/subject/$doubanId/interest",
+                    FormBody.Builder()
+                        .add("ck", ck)
+                        .add("interest", action)
+                        .add("foldcollect", "F")
+                        .add("tags", "")
+                        .add("comment", "")
+                        .add("private", "on")
+                        .build()),
+                // B: douban-mcp 风格 分动作路径(实测 404,对照)
+                Triple("POST", "/j/subject/$doubanId/$action",
+                    FormBody.Builder()
+                        .add("ck", ck)
+                        .add("interest", action)
+                        .add("foldcollect", "F")
+                        .build())
             )
         }
+
+        val results = candidates.map { (method, path, body) ->
+            val url = "https://movie.douban.com$path"
+            val requestBuilder = Request.Builder()
+                .url(url)
+                .header("User-Agent", uaHeader)
+                .header("Cookie", cookie)
+                .header("Referer", referer)
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            val request = if (method == "DELETE") {
+                requestBuilder.delete().build()
+            } else {
+                requestBuilder.post(body!!).build()
+            }
+            client.newCall(request).execute().use { response ->
+                MarkCandidateResult(
+                    endpoint = "$method $path",
+                    method = method,
+                    statusCode = response.code,
+                    responseBody = response.body?.string() ?: ""
+                )
+            }
+        }
+        MarkTestResult(action = action, candidates = results)
     }
 
     /**
@@ -514,10 +548,18 @@ data class TestFetchResult(
  * @param statusCode HTTP 状态码
  * @param responseBody 响应体原始文本(通常为 JSON,如 {"r":0,...})
  */
-data class MarkTestResult(
-    val endpoint: String,
+/** 单次候选端点的写回探测结果 */
+data class MarkCandidateResult(
+    val endpoint: String,      // 如 "POST /j/subject/{id}/interest"
+    val method: String,        // POST / DELETE
     val statusCode: Int,
     val responseBody: String
+)
+
+/** 一个标记动作(wish/do/collect/remove)对多个候选端点的探测结果 */
+data class MarkTestResult(
+    val action: String,
+    val candidates: List<MarkCandidateResult>
 )
 
 /** 豆瓣标记状态 */

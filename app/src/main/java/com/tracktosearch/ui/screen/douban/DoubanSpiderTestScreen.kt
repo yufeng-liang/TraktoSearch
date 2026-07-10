@@ -282,8 +282,8 @@ class DoubanSpiderTestViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(isMarking = false, markError = "Failed to parse ck from detail page HTML")
                     return@launch
                 }
-                // 2. POST 候选写接口端点
-                val result = doubanRepository.markInterestTest(doubanId, current.cookie, ck, endpoint, useMobileUa = false)
+                // 2. 对一个动作探测多个候选写接口端点
+                val result = doubanRepository.markTestCandidates(doubanId, current.cookie, ck, endpoint, useMobileUa = false)
                 _uiState.value = _uiState.value.copy(isMarking = false, markResult = result)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isMarking = false, markError = e.stackTraceToString())
@@ -564,7 +564,7 @@ fun DoubanSpiderTestScreen(
                                 )
                             }
                         }
-                        // 结果
+                        // 结果(多候选端点对照)
                         uiState.markResult?.let { res ->
                             val clipboard = LocalClipboardManager.current
                             val copyCtx = LocalContext.current
@@ -575,7 +575,7 @@ fun DoubanSpiderTestScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = stringResource(R.string.douban_spider_test_mark_result),
+                                    text = "${stringResource(R.string.douban_spider_test_mark_result)} · ${res.action}",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -583,9 +583,10 @@ fun DoubanSpiderTestScreen(
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         val sb = buildString {
-                                            appendLine("endpoint: ${res.endpoint}")
-                                            appendLine("HTTP ${res.statusCode}")
-                                            appendLine("Body: ${res.responseBody.ifBlank { "(empty body)" }}")
+                                            appendLine("action: ${res.action}")
+                                            res.candidates.forEachIndexed { i, c ->
+                                                appendLine("[候选${'A' + i}] ${c.endpoint} → HTTP ${c.statusCode} → ${c.responseBody.ifBlank { "(empty body)" }}")
+                                            }
                                         }
                                         clipboard.setText(AnnotatedString(sb))
                                         Toast.makeText(copyCtx, R.string.douban_spider_test_mark_copied, Toast.LENGTH_SHORT).show()
@@ -596,40 +597,43 @@ fun DoubanSpiderTestScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.height(6.dp))
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        val okColor = Color(0xFF4CAF50)
-                                        Text(
-                                            text = "endpoint: ${res.endpoint}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "HTTP ${res.statusCode}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = if (res.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .heightIn(max = 180.dp)
-                                            .verticalScroll(rememberScrollState())
-                                    ) {
-                                        Text(
-                                            text = res.responseBody.ifBlank { "(empty body)" },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontFamily = FontFamily.Monospace,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
+                            res.candidates.forEachIndexed { idx, cand ->
+                                if (idx > 0) Spacer(modifier = Modifier.height(8.dp))
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            val okColor = Color(0xFF4CAF50)
+                                            Text(
+                                                text = "endpoint: ${cand.endpoint}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "HTTP ${cand.statusCode}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = if (cand.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 180.dp)
+                                                .verticalScroll(rememberScrollState())
+                                        ) {
+                                            Text(
+                                                text = cand.responseBody.ifBlank { "(empty body)" },
+                                                style = MaterialTheme.typography.bodySmall,
+                                                fontFamily = FontFamily.Monospace,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
                                     }
                                 }
                             }
