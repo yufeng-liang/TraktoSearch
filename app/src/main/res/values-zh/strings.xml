@@ -802,6 +802,8 @@
     <string name="douban_spider_test_marking">正在标记…</string>
     <string name="douban_spider_test_mark_no_id">请先输入豆瓣 ID</string>
     <string name="douban_spider_test_mark_result">结果</string>
+    <string name="douban_spider_test_copy_result">复制结果</string>
+    <string name="douban_spider_test_mark_copied">已复制结果</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">筛选</string>

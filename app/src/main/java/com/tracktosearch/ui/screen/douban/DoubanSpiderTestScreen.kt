@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -75,8 +77,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -562,12 +566,35 @@ fun DoubanSpiderTestScreen(
                         }
                         // 结果
                         uiState.markResult?.let { res ->
+                            val clipboard = LocalClipboardManager.current
+                            val copyCtx = LocalContext.current
                             Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = stringResource(R.string.douban_spider_test_mark_result),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.douban_spider_test_mark_result),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                TextButton(
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        val sb = buildString {
+                                            appendLine("endpoint: ${res.endpoint}")
+                                            appendLine("HTTP ${res.statusCode}")
+                                            appendLine("Body: ${res.responseBody.ifBlank { "(empty body)" }}")
+                                        }
+                                        clipboard.setText(AnnotatedString(sb))
+                                        Toast.makeText(copyCtx, R.string.douban_spider_test_mark_copied, Toast.LENGTH_SHORT).show()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(stringResource(R.string.douban_spider_test_copy_result))
+                                }
+                            }
                             Spacer(modifier = Modifier.height(6.dp))
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),

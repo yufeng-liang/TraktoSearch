@@ -802,6 +802,8 @@ Config:
     <string name="douban_spider_test_marking">Marking…</string>
     <string name="douban_spider_test_mark_no_id">Enter Douban ID first</string>
     <string name="douban_spider_test_mark_result">Result</string>
+    <string name="douban_spider_test_copy_result">Copy result</string>
+    <string name="douban_spider_test_mark_copied">Result copied</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">Filter</string>
