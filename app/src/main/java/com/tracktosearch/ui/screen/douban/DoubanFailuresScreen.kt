@@ -76,6 +76,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -166,6 +167,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -307,8 +309,8 @@ class DoubanFailuresViewModel @Inject constructor(
     }
 
     /** 批量更新媒体类型(多选模式标注用) */
-    fun batchSetMediaType(doubanIds: List<String>, mediaType: String?) {
-        viewModelScope.launch(Dispatchers.IO) {
+    suspend fun batchSetMediaType(doubanIds: List<String>, mediaType: String?) {
+        withContext(Dispatchers.IO) {
             doubanRetryManager.batchUpdateMediaType(doubanIds, mediaType)
             // 本地同步更新
             val idSet = doubanIds.toSet()
@@ -321,8 +323,8 @@ class DoubanFailuresViewModel @Inject constructor(
     }
 
     /** 批量删除失败项(多选模式删除用) */
-    fun batchDeleteFailures(doubanIds: List<String>) {
-        viewModelScope.launch(Dispatchers.IO) {
+    suspend fun batchDeleteFailures(doubanIds: List<String>) {
+        withContext(Dispatchers.IO) {
             doubanRetryManager.batchDeleteFailures(doubanIds)
             val idSet = doubanIds.toSet()
             _uiState.value = _uiState.value.copy(
@@ -992,6 +994,13 @@ fun DoubanFailuresScreen(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
+                        if (isProcessing) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             // 全选/取消全选当前 Tab
                             val allSelected = filtered.isNotEmpty() && filtered.all { selectedItems.containsKey(it.doubanId) }
@@ -1041,9 +1050,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "movie")
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchSetMediaType(ids, "movie")
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                         MultiSelectActionButton(
@@ -1054,9 +1065,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "show")
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchSetMediaType(ids, "show")
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                         MultiSelectActionButton(
@@ -1066,9 +1079,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, null)
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchSetMediaType(ids, null)
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                     }
@@ -1087,9 +1102,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "variety")
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchSetMediaType(ids, "variety")
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                         MultiSelectActionButton(
@@ -1100,9 +1117,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "documentary")
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchSetMediaType(ids, "documentary")
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                         MultiSelectActionButton(
@@ -1114,9 +1133,11 @@ fun DoubanFailuresScreen(
                             onClick = {
                                 isProcessing = true
                                 val ids = selectedItems.keys.toList()
-                                viewModel.batchDeleteFailures(ids)
-                                isMultiSelectMode = false
-                                isProcessing = false
+                                scope.launch {
+                                    viewModel.batchDeleteFailures(ids)
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                }
                             }
                         )
                     }

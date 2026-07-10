@@ -1065,7 +1065,8 @@ class DoubanSyncManager @Inject constructor(
      * 从全局详情池批量填充本地未标注类型（mediaType IS NULL）的失败项。
      *
      * 同步完成后调用：查询本地所有 mediaType 为 null 的失败项 doubanId，
-     * 从全局池批量下载,优先读 entry.mediaType(细分类型),为 null 时降级用 isTvShow 映射,
+     * 从全局池批量下载,仅填充 entry.mediaType 非 null 的条目(其他用户已标注),
+     * 为 null 时跳过(可能是用户主动清除,不降级用 isTvShow 映射,避免覆盖清除操作)。
      * 仅更新 null → 非 null(不覆盖用户已手动标注的值)。
      *
      * 这样其他用户已标注类型的条目，本机用户无需再手动标注。
@@ -1077,7 +1078,7 @@ class DoubanSyncManager @Inject constructor(
         val pooled = cloudDetailsPoolManager.downloadDetails(nullIds)
         if (pooled.isEmpty()) return
         for ((doubanId, entry) in pooled) {
-            val mediaType = entry.mediaType ?: if (entry.isTvShow) "show" else "movie"
+            val mediaType = entry.mediaType ?: continue
             doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, mediaType)
         }
     }

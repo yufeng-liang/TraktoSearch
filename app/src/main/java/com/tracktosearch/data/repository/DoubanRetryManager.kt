@@ -151,7 +151,9 @@ class DoubanRetryManager @Inject constructor(
         if (pooled.isEmpty()) return@withContext 0
         var updated = 0
         for ((doubanId, entry) in pooled) {
-            val mediaType = entry.mediaType ?: if (entry.isTvShow) "show" else "movie"
+            // 全局池 mediaType 为 null 表示用户主动清除了标注,不降级用 isTvShow 映射,
+            // 避免覆盖其他用户的清除操作;仅非 null 时才填充本地 null → 非 null
+            val mediaType = entry.mediaType ?: continue
             doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, mediaType)
             updated++
         }
