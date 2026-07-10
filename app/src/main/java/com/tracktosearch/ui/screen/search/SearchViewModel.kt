@@ -109,7 +109,7 @@ class SearchViewModel @Inject constructor(
         loadHotSearches()
     }
 
-    private fun loadHotSearches() {
+    fun loadHotSearches() {
         viewModelScope.launch {
             // 先检查热门搜索缓存（纯标题列表，本地即可命中）
             val hotCached = hotSearchCache.get("hot_searches_v2")
@@ -118,7 +118,7 @@ class SearchViewModel @Inject constructor(
                 return@launch
             }
             // 共享缓存 + 飞行中去重：并发时只发一次网络请求
-            val cacheKey = "douban-movie_1_10"
+            val cacheKey = "douban-movie_1_10_v2"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     val response = doubanHotApi.getChart()
@@ -143,7 +143,19 @@ class SearchViewModel @Inject constructor(
                 _hotSearches.value = titles
                 hotSearchCache.put("hot_searches_v2", titles)
             } catch (_: Exception) {
-                // 加载失败时保持空列表
+                // 失败兜底：尝试从 v2 缓存取数据(发现页新片榜可能已加载成功)
+                try {
+                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v2")
+                    if (cached != null) {
+                        val titles = cached.items.take(8).map { item ->
+                            item.title.replace(Regex("^【[^】]+】"), "").trim()
+                        }.filter { it.isNotBlank() }
+                        _hotSearches.value = titles
+                        if (titles.isNotEmpty()) {
+                            hotSearchCache.put("hot_searches_v2", titles)
+                        }
+                    }
+                } catch (_: Exception) {}
             }
         }
     }
@@ -166,7 +178,7 @@ class SearchViewModel @Inject constructor(
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
-            val cacheKey = "${categoryId}_1_10"
+            val cacheKey = "${categoryId}_1_10_v2"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
                     try {

@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -762,6 +764,40 @@ fun DoubanItemDetailScreen(
         ) {
             val failure = uiState.failure
 
+            // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让状态栏区域也能用)
+            // - 非吸顶(tab 还在海报下方):底色透明,文字按渐变中段混合色亮度自适应
+            // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.635 混合,文字按底色亮度自适应
+            val isPinned by remember {
+                derivedStateOf { listState.firstVisibleItemIndex >= 1 }
+            }
+            val tabContainerColor = if (isPinned) {
+                uiState.posterDominantColor?.let { c ->
+                    lerp(MaterialTheme.colorScheme.background, c, 0.635f)
+                } ?: MaterialTheme.colorScheme.surface
+            } else {
+                Color.Transparent
+            }
+            val tabContentColor = when {
+                isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                !isPinned -> {
+                    // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
+                    val midColor = uiState.posterDominantColor?.let { c ->
+                        lerp(c, MaterialTheme.colorScheme.background, 0.5f)
+                    } ?: MaterialTheme.colorScheme.background
+                    if (midColor.luminance() <= 0.5f) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                }
+                else -> MaterialTheme.colorScheme.onSurface
+            }
+
+            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .windowInsetsTopHeight(WindowInsets.statusBars)
+                    .background(tabContainerColor)
+                    .align(Alignment.TopCenter)
+            )
+
             if (uiState.isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -798,21 +834,7 @@ fun DoubanItemDetailScreen(
                     // - 非吸顶(tab 还在海报下方):透明
                     // - 吸顶:沉浸色与白色 0.5f 混合,文字按底色亮度自适应
                     stickyHeader(key = "tab_row") {
-                        val isPinned by remember {
-                            derivedStateOf { listState.firstVisibleItemIndex >= 1 }
-                        }
-                        val tabContainerColor = if (isPinned) {
-                            uiState.posterDominantColor?.let { c ->
-                                lerp(MaterialTheme.colorScheme.background, c, 0.70f)
-                            } ?: MaterialTheme.colorScheme.surface
-                        } else {
-                            Color.Transparent
-                        }
-                        val tabContentColor = when {
-                            isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
-                            !isPinned && (uiState.posterDominantColor?.luminance() ?: 1f) <= 0.5f -> MaterialTheme.colorScheme.onPrimary
-                            else -> MaterialTheme.colorScheme.onSurface
-                        }
+                        // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
                         PrimaryTabRow(
                             selectedTabIndex = selectedTab,
                             containerColor = tabContainerColor,
