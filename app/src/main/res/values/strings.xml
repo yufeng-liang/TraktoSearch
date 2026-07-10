@@ -800,8 +800,8 @@ Config:
     <string name="douban_spider_test_mark_collect">Collect</string>
     <string name="douban_spider_test_mark_remove">Remove</string>
     <string name="douban_spider_test_mark_remove_mode">Cancel mode</string>
-    <string name="douban_spider_test_mark_remove_empty">Empty (interest blank)</string>
-    <string name="douban_spider_test_mark_remove_remove">remove (interest=remove)</string>
+    <string name="douban_spider_test_mark_remove_empty">Web form (/remove 302)</string>
+    <string name="douban_spider_test_mark_remove_naked">JSON variant (/j/remove)</string>
     <string name="douban_spider_test_marking">Marking…</string>
     <string name="douban_spider_test_mark_no_id">Enter Douban ID first</string>
     <string name="douban_spider_test_mark_result">Result</string>

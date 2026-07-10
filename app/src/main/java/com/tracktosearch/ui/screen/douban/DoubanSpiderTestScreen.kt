@@ -143,7 +143,7 @@ data class SpiderTestUiState(
     val isMarking: Boolean = false,
     val markResult: MarkTestResult? = null,
     val markError: String? = null,
-    val markRemoveMode: String = "empty" // 取消标记方式: "empty"(interest 置空) / "remove"(interest=remove)
+    val markRemoveMode: String = "web_remove" // 取消标记方式: "web_remove"(POST /subject/{id}/remove 网页表单) / "j_remove"(POST /j/subject/{id}/remove)
 )
 
 /** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
@@ -291,7 +291,7 @@ class DoubanSpiderTestViewModel @Inject constructor(
                 // 2. 对一个动作探测多个候选写接口端点
                 val result = doubanRepository.markTestCandidates(
                     doubanId, current.cookie, ck, endpoint, useMobileUa = false,
-                    removeMode = if (endpoint == "remove") current.markRemoveMode else "empty"
+                    removeMode = if (endpoint == "remove") current.markRemoveMode else "web_remove"
                 )
                 _uiState.value = _uiState.value.copy(isMarking = false, markResult = result)
             } catch (e: Exception) {
@@ -542,7 +542,7 @@ fun DoubanSpiderTestScreen(
                                 }
                             }
                         }
-                        // 取消标记方式选择(仅 remove 动作生效): empty / remove
+                        // 取消标记方式选择(仅 remove 动作生效): web_remove / j_remove
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
@@ -552,16 +552,16 @@ fun DoubanSpiderTestScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             FilterChip(
-                                selected = uiState.markRemoveMode == "empty",
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("empty") },
+                                selected = uiState.markRemoveMode == "web_remove",
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("web_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_empty)) },
                                 modifier = Modifier.height(32.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             FilterChip(
-                                selected = uiState.markRemoveMode == "remove",
-                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("remove") },
-                                label = { Text(stringResource(R.string.douban_spider_test_mark_remove_remove)) },
+                                selected = uiState.markRemoveMode == "j_remove",
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("j_remove") },
+                                label = { Text(stringResource(R.string.douban_spider_test_mark_remove_naked)) },
                                 modifier = Modifier.height(32.dp)
                             )
                         }
@@ -617,7 +617,7 @@ fun DoubanSpiderTestScreen(
                                         val sb = buildString {
                                             appendLine("action: ${res.action}")
                                             res.candidates.forEachIndexed { i, c ->
-                                                appendLine("[候选${'A' + i}] ${c.endpoint} → HTTP ${c.statusCode} → ${c.responseBody.ifBlank { "(empty body)" }}")
+                                                appendLine("[${c.label.ifBlank { "候选${'A' + i}" }}] ${c.endpoint} → HTTP ${c.statusCode} → ${c.responseBody.ifBlank { "(empty body)" }}")
                                             }
                                         }
                                         clipboard.setText(AnnotatedString(sb))
@@ -637,6 +637,13 @@ fun DoubanSpiderTestScreen(
                                     color = MaterialTheme.colorScheme.surfaceVariant
                                 ) {
                                     Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(
+                                            text = cand.label.ifBlank { cand.endpoint },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
                                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             val okColor = Color(0xFF4CAF50)
                                             Text(

@@ -86,6 +86,13 @@ class DoubanRepository(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    // 不自动跟随重定向的客户端: 豆瓣网页删除收藏表单 POST /subject/{id}/remove 成功后返回 302
+    // 重定向回详情页, 需禁止自动跟随才能观测到 302 状态码与 Location, 用于确认删除是否真正生效。
+    private val noRedirectClient = client.newBuilder()
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+
     private val ua =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
@@ -350,74 +357,85 @@ class DoubanRepository(
     }
 
     /**
-     * 测试用:对一个标记动作同时探测多个候选写接口端点,返回对照结果。
+     * 测试用:对一个标记动作探测候选写接口端点,返回对照结果。
      * 仅爬取测试页调用,用于逆向确认端点与字段(不进入正式业务逻辑)。
      *
-     * 候选端点(基于 GitHub 现成实现交叉验证,真机实测 wish 动作 /j/subject/{id}/wish 返回 404):
-     *   标记(wish/do/collect):
-     *     A. POST /j/subject/{id}/interest        (Gazer 风格,字段 interest=动作,当前疑似有效)
-     *     B. POST /j/subject/{id}/{动作}          (douban-mcp 风格,实测 404,作为对照)
- *   取消(remove): 按 removeMode 单次只测一个候选,避免同一影视连续取消互相干扰
- *     - "empty":  POST /j/subject/{id}/interest  (interest 置空, 疑似取消)
- *     - "remove": POST /j/subject/{id}/interest  (interest=remove, 疑似取消)
- *   注: 实测 A(/remove)404、B(DELETE /interest)403 均失败已剔除; C/D 均 r:0 待分开验证
- */
+     * 标记(wish/do/collect)已实测确认: POST /j/subject/{id}/interest + interest=动作 → r:0 成功。
+     *   候选 A(Gazer 风格, 有效): POST /interest + interest=动作 + foldcollect=F + tags/comment/private
+     *   候选 B(douban-mcp 风格, 404 对照): POST /j/subject/{id}/{动作} + interest=动作 + foldcollect=F
+     *
+     * 取消(remove): 经交叉验证, 取消标记根本不走 /interest 端点(此前对 interest 传空/传 remove 均 r:0
+     *   但网页仍显示想看, 系假成功)。网页"删除标记"按钮实际提交的是收藏编辑页的删除表单端点:
+     *   - "web_remove"(默认): POST /subject/{id}/remove + ck    (网页表单端点, 成功返回 302 重定向回详情页)
+     *   - "j_remove":         POST /j/subject/{id}/remove + ck  (JSON 端点变体, 若存在可能返回 {"r":0})
+     *   web_remove 用不跟随重定向的客户端观测 302 + Location, 用户仍需在网页最终确认标记消失。
+     */
     suspend fun markTestCandidates(
         doubanId: String,
         cookie: String,
         ck: String,
         action: String,
         useMobileUa: Boolean,
-        removeMode: String = "empty"
+        removeMode: String = "web_remove"
     ): MarkTestResult = withContext(Dispatchers.IO) {
         val uaHeader = if (useMobileUa) mobileUa else ua
         val referer = "https://movie.douban.com/subject/$doubanId/"
 
-        // 根据动作构造候选端点列表: Triple(方法, 路径, 表单)
-        val candidates: List<Triple<String, String, FormBody?>> = when (action) {
+        // 候选端点列表(含语义标签, 便于 UI 展示与复制)
+        val candidates: List<CandidateSpec> = when (action) {
             "remove" -> listOf(
-                // 按 removeMode 单选一个候选, 单次只测一个, 便于换影视分开验证
-                if (removeMode == "remove") {
-                    // 候选 D: interest=remove
-                    Triple("POST", "/j/subject/$doubanId/interest",
-                        FormBody.Builder()
-                            .add("ck", ck)
-                            .add("interest", "remove")
-                            .add("foldcollect", "F")
-                            .build())
+                if (removeMode == "j_remove") {
+                    // JSON 端点变体: POST /j/subject/{id}/remove + ck, 可能返回 {"r":0}
+                    CandidateSpec(
+                        method = "POST",
+                        path = "/j/subject/$doubanId/remove",
+                        body = FormBody.Builder().add("ck", ck).build(),
+                        label = "取消·/j/remove(JSON)"
+                    )
                 } else {
-                    // 候选 C: interest 置空(默认)
-                    Triple("POST", "/j/subject/$doubanId/interest",
-                        FormBody.Builder()
-                            .add("ck", ck)
-                            .add("interest", "")
-                            .add("foldcollect", "F")
-                            .build())
+                    // 网页收藏编辑页删除表单端点: POST /subject/{id}/remove + ck
+                    // 这是网页"删除标记"按钮真正提交的地址(非 /interest), 成功返回 302 重定向回详情页。
+                    // 用 noRedirect 客户端观测 302 + Location 以确认删除生效。
+                    CandidateSpec(
+                        method = "POST",
+                        path = "/subject/$doubanId/remove",
+                        body = FormBody.Builder().add("ck", ck).build(),
+                        label = "取消·/remove(网页表单302)",
+                        noRedirect = true
+                    )
                 }
             )
             else -> listOf(
-                // A: Gazer 风格 统一 interest 端点(当前疑似有效)
-                Triple("POST", "/j/subject/$doubanId/interest",
-                    FormBody.Builder()
+                // A: Gazer 风格 统一 interest 端点(已实测 wish/collect r:0 有效)
+                CandidateSpec(
+                    method = "POST",
+                    path = "/j/subject/$doubanId/interest",
+                    body = FormBody.Builder()
                         .add("ck", ck)
                         .add("interest", action)
                         .add("foldcollect", "F")
                         .add("tags", "")
                         .add("comment", "")
                         .add("private", "on")
-                        .build()),
-                // B: douban-mcp 风格 分动作路径(实测 404,对照)
-                Triple("POST", "/j/subject/$doubanId/$action",
-                    FormBody.Builder()
+                        .build(),
+                    label = "标记·$action(Gazer)"
+                ),
+                // B: douban-mcp 风格 分动作路径(实测 404, 作为对照)
+                CandidateSpec(
+                    method = "POST",
+                    path = "/j/subject/$doubanId/$action",
+                    body = FormBody.Builder()
                         .add("ck", ck)
                         .add("interest", action)
                         .add("foldcollect", "F")
-                        .build())
+                        .build(),
+                    label = "标记·$action(mcp-404)"
+                )
             )
         }
 
-        val results = candidates.map { (method, path, body) ->
-            val url = "https://movie.douban.com$path"
+        val results = candidates.map { spec ->
+            val url = "https://movie.douban.com${spec.path}"
             val requestBuilder = Request.Builder()
                 .url(url)
                 .header("User-Agent", uaHeader)
@@ -425,17 +443,24 @@ class DoubanRepository(
                 .header("Referer", referer)
                 .header("X-Requested-With", "XMLHttpRequest")
                 .header("Accept", "application/json, text/javascript, */*; q=0.01")
-            val request = if (method == "DELETE") {
+            val request = if (spec.method == "DELETE") {
                 requestBuilder.delete().build()
             } else {
-                requestBuilder.post(body!!).build()
+                requestBuilder.post(spec.body!!).build()
             }
-            client.newCall(request).execute().use { response ->
+            // 网页删除表单需用不跟随重定向的客户端, 才能观测到 302 与 Location
+            val useClient = if (spec.noRedirect) noRedirectClient else client
+            useClient.newCall(request).execute().use { response ->
+                val rawBody = response.body?.string() ?: ""
+                // 302 时 body 通常为空, 把 Location 拼进结果便于判断是否重定向回详情页(删除生效标志)
+                val location = response.header("Location")
+                val displayBody = if (!location.isNullOrBlank()) "[Location: $location] $rawBody" else rawBody
                 MarkCandidateResult(
-                    endpoint = "$method $path",
-                    method = method,
+                    endpoint = "${spec.method} ${spec.path}",
+                    method = spec.method,
                     statusCode = response.code,
-                    responseBody = response.body?.string() ?: ""
+                    responseBody = displayBody,
+                    label = spec.label
                 )
             }
         }
@@ -565,12 +590,22 @@ data class TestFetchResult(
  * @param statusCode HTTP 状态码
  * @param responseBody 响应体原始文本(通常为 JSON,如 {"r":0,...})
  */
+/** 测试用候选端点规格(含语义标签,便于 UI 展示与复制) */
+private data class CandidateSpec(
+    val method: String,
+    val path: String,
+    val body: FormBody?,
+    val label: String,
+    val noRedirect: Boolean = false  // true=用不跟随重定向的客户端(观测网页删除表单的 302)
+)
+
 /** 单次候选端点的写回探测结果 */
 data class MarkCandidateResult(
     val endpoint: String,      // 如 "POST /j/subject/{id}/interest"
     val method: String,        // POST / DELETE
     val statusCode: Int,
-    val responseBody: String
+    val responseBody: String,
+    val label: String = ""     // 语义标签, 如 "标记·wish(Gazer)" / "取消·仅ck(去foldcollect)"
 )
 
 /** 一个标记动作(wish/do/collect/remove)对多个候选端点的探测结果 */
