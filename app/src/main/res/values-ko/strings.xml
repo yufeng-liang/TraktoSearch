@@ -735,7 +735,9 @@
     <!-- 더우반 마크 양방향 쓰기 -->
     <string name="douban_writeback_title">더우반 마크(쓰기)</string>
     <string name="douban_writeback_wish">보고 싶음</string>
+    <string name="douban_writeback_wished">보고 싶음 등록됨</string>
     <string name="douban_writeback_collect">봄</string>
+    <string name="douban_writeback_collected">시청 완료</string>
     <string name="douban_writeback_remove">마크 해제</string>
     <string name="douban_writeback_login_required">더우반에 로그인하지 않아 쓸 수 없습니다</string>
     <string name="douban_writeback_cookie_expired">더우반 Cookie가 만료되었습니다, 다시 로그인하세요</string>

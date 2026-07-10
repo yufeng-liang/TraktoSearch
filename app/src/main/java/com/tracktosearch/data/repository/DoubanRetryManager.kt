@@ -201,7 +201,7 @@ class DoubanRetryManager @Inject constructor(
             return@withContext true
         }
 
-        // 非强覆盖：已标注则不覆盖
+        // 非强覆盖：已标注则不覆盖（自动推断是第一优先级,用户清除标注后进入详情页仍会重新推断）
         if (existing.mediaType != null) return@withContext false
 
         val inferred = if (detailInfo.episodeCount != null && detailInfo.episodeCount > 0) {
@@ -209,7 +209,8 @@ class DoubanRetryManager @Inject constructor(
         } else {
             "movie"
         }
-        doubanSyncFailureDao.updateMediaTypeIfNull(doubanId, inferred)
+        // 用 updateMediaType 而非 updateMediaTypeIfNull,确保同时清除 mediaTypeCleared 标记
+        doubanSyncFailureDao.updateMediaType(doubanId, inferred)
         // 推断的类型也异步上传全局池,供其他用户复用(不覆盖池中已有非null值)
         runCatching {
             cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, inferred)

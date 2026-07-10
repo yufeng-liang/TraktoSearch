@@ -26,6 +26,7 @@ data class DoubanSyncFailure(
     val failedAt: Long,
     val attemptCount: Int = 0,
     val mediaType: String? = null,   // "movie" / "show" / null(未分类),用户手动标注
+    val mediaTypeCleared: Boolean = false, // 用户主动清除标注(区分"从未标注"与"清除标注")
     val subtitle: String? = null     // 用户手动编辑的子标题/外文标题/别名,用于资源搜索
 ) {
     /** 转换为 Room Entity 用于持久化 */
@@ -42,6 +43,7 @@ data class DoubanSyncFailure(
         failedAt = failedAt,
         attemptCount = attemptCount,
         mediaType = mediaType,
+        mediaTypeCleared = mediaTypeCleared,
         subtitle = subtitle
     )
 
@@ -71,6 +73,7 @@ data class DoubanSyncFailure(
             failedAt = e.failedAt,
             attemptCount = e.attemptCount,
             mediaType = e.mediaType,
+            mediaTypeCleared = e.mediaTypeCleared,
             subtitle = e.subtitle
         )
 

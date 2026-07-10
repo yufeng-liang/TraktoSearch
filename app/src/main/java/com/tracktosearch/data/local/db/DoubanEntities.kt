@@ -74,6 +74,7 @@ data class DoubanSyncFailureEntity(
     val failedAt: Long,
     val attemptCount: Int = 0,
     val mediaType: String? = null,  // "movie" / "show" / null(未分类),用户手动标注
+    val mediaTypeCleared: Boolean = false, // 用户主动清除标注(区分"从未标注"与"清除标注",防止全局池/自动推断重新填充)
     val subtitle: String? = null    // 用户手动编辑的子标题/外文标题/别名,用于资源搜索
 )
 
@@ -105,16 +106,16 @@ interface DoubanSyncFailureDao {
     @Query("DELETE FROM douban_sync_failures")
     suspend fun clearAll()
 
-    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/未分类) */
-    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId = :doubanId")
+    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/未分类)。清除标注(null)时设 mediaTypeCleared=true 防止重新填充 */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END) WHERE doubanId = :doubanId")
     suspend fun updateMediaType(doubanId: String, mediaType: String?)
 
     /** 写回豆瓣成功后持久化新标记状态(wish/collect) */
     @Query("UPDATE douban_sync_failures SET status = :status WHERE doubanId = :doubanId")
     suspend fun updateStatus(doubanId: String, status: String)
 
-    /** 查询所有 mediaType 为 null 的失败项 doubanId(用于同步后从全局池填充类型) */
-    @Query("SELECT doubanId FROM douban_sync_failures WHERE mediaType IS NULL")
+    /** 查询所有 mediaType 为 null 且未被用户主动清除的失败项 doubanId(用于同步后从全局池填充类型) */
+    @Query("SELECT doubanId FROM douban_sync_failures WHERE mediaType IS NULL AND mediaTypeCleared = 0")
     suspend fun getDoubanIdsWithNullMediaType(): List<String>
 
     /** 批量更新媒体类型(全局池填充用，仅更新 null → 非 null) */
@@ -129,8 +130,8 @@ interface DoubanSyncFailureDao {
     @Query("DELETE FROM douban_sync_failures WHERE doubanId IN (:ids)")
     suspend fun deleteByDoubanIds(ids: List<String>)
 
-    /** 批量更新媒体类型(多选模式标注用,覆盖更新) */
-    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId IN (:ids)")
+    /** 批量更新媒体类型(多选模式标注用,覆盖更新)。清除标注(null)时设 mediaTypeCleared=true */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END) WHERE doubanId IN (:ids)")
     suspend fun updateMediaTypeBatch(ids: List<String>, mediaType: String?)
 }
 

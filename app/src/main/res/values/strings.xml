@@ -854,7 +854,9 @@ Config:
     <!-- Douban mark bidirectional write-back -->
     <string name="douban_writeback_title">Douban mark (write-back)</string>
     <string name="douban_writeback_wish">Want to watch</string>
+    <string name="douban_writeback_wished">In watchlist</string>
     <string name="douban_writeback_collect">Watched</string>
+    <string name="douban_writeback_collected">Already watched</string>
     <string name="douban_writeback_remove">Remove mark</string>
     <string name="douban_writeback_login_required">Not logged in to Douban, cannot write back</string>
     <string name="douban_writeback_cookie_expired">Douban cookie expired, please login again</string>

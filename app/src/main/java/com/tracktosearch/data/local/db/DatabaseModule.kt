@@ -126,6 +126,14 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v7 → v8: douban_sync_failures 表新增 mediaTypeCleared 列
+            // 用于区分"从未标注"(false)与"用户主动清除标注"(true),防止全局池/自动推断重新填充
+            db.execSQL("ALTER TABLE douban_sync_failures ADD COLUMN mediaTypeCleared INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -134,7 +142,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tracktosearch.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
     }
 

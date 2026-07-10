@@ -735,7 +735,9 @@
     <!-- 豆瓣マーク双方向書き戻し -->
     <string name="douban_writeback_title">豆瓣マーク(書き戻し)</string>
     <string name="douban_writeback_wish">見たい</string>
+    <string name="douban_writeback_wished">見たい済み</string>
     <string name="douban_writeback_collect">見た</string>
+    <string name="douban_writeback_collected">視聴済み</string>
     <string name="douban_writeback_remove">マーク解除</string>
     <string name="douban_writeback_login_required">豆瓣にログインしていないため書き戻せません</string>
     <string name="douban_writeback_cookie_expired">豆瓣の Cookie が無効です、再ログインしてください</string>

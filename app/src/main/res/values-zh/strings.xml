@@ -854,7 +854,9 @@
     <!-- 豆瓣标记双向写回 -->
     <string name="douban_writeback_title">豆瓣标记(双向写回)</string>
     <string name="douban_writeback_wish">想看</string>
+    <string name="douban_writeback_wished">已想看</string>
     <string name="douban_writeback_collect">已看</string>
+    <string name="douban_writeback_collected">已看过</string>
     <string name="douban_writeback_remove">取消标记</string>
     <string name="douban_writeback_login_required">未登录豆瓣,无法写回</string>
     <string name="douban_writeback_cookie_expired">豆瓣 Cookie 已失效,请重新登录</string>

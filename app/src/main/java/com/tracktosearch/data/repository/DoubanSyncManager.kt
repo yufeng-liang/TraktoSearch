@@ -1425,7 +1425,11 @@ class DoubanSyncManager @Inject constructor(
             status = status,
             failureReason = reason,
             failedAt = System.currentTimeMillis(),
-            attemptCount = (existing?.attemptCount ?: 0) + 1
+            attemptCount = (existing?.attemptCount ?: 0) + 1,
+            // 保留用户已标注的 mediaType 和清除标记,避免同步/重试时丢失
+            mediaType = existing?.mediaType,
+            mediaTypeCleared = existing?.mediaTypeCleared ?: false,
+            subtitle = existing?.subtitle
         )
     }
 }

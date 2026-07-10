@@ -53,6 +53,7 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -1510,7 +1511,8 @@ fun DoubanItemDetailScreen(
 /**
  * 豆瓣标记双向写回操作栏(详情页内容区顶部)。
  * 提供「想看 / 已看 / 取消」三个动作;电影无「在看」故不显示。
- * 当前已标记状态高亮对应按钮;操作进行中整体禁用并展示 loading。
+ * 当前已标记状态:对应按钮显示"已想看"/"已看过"(选中态),点击不触发操作;
+ * 取消标记按钮使用红色警示态。
  */
 @Composable
 private fun DoubanWritebackActions(
@@ -1521,6 +1523,8 @@ private fun DoubanWritebackActions(
     onRemove: () -> Unit
 ) {
     val status = failure.status
+    val isWish = status == DoubanMarkStatus.WISH
+    val isCollect = status == DoubanMarkStatus.COLLECT
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1538,25 +1542,29 @@ private fun DoubanWritebackActions(
             Spacer(modifier = Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 FilterChip(
-                    selected = status == DoubanMarkStatus.WISH,
-                    onClick = onWish,
+                    selected = isWish,
+                    onClick = { if (!isWish) onWish() },
                     enabled = !marking,
-                    label = { Text(stringResource(R.string.douban_writeback_wish)) },
-                    leadingIcon = if (status == DoubanMarkStatus.WISH) {
+                    label = { Text(stringResource(if (isWish) R.string.douban_writeback_wished else R.string.douban_writeback_wish)) },
+                    leadingIcon = if (isWish) {
                         { Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     } else null
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 FilterChip(
-                    selected = status == DoubanMarkStatus.COLLECT,
-                    onClick = onCollect,
+                    selected = isCollect,
+                    onClick = { if (!isCollect) onCollect() },
                     enabled = !marking,
-                    label = { Text(stringResource(R.string.douban_writeback_collect)) }
+                    label = { Text(stringResource(if (isCollect) R.string.douban_writeback_collected else R.string.douban_writeback_collect)) }
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 OutlinedButton(
                     onClick = onRemove,
-                    enabled = !marking
+                    enabled = !marking,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
                 ) {
                     if (marking) {
                         CircularProgressIndicator(
