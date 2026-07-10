@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -70,6 +71,7 @@ internal fun FilterSection(
                     }
                     FilterChip(
                         selected = source in enabledSources,
+                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
@@ -111,6 +113,7 @@ internal fun FilterSection(
                     }
                     FilterChip(
                         selected = type in enabledDiskTypes,
+                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)

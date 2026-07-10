@@ -653,6 +653,7 @@
     <string name="screen_douban_failures_tab_documentary">ドキュメンタリー</string>
     <string name="screen_douban_failures_selected_count">%1$d件選択中</string>
     <string name="screen_douban_failures_select_all">全て選択</string>
+    <string name="screen_douban_failures_deselect_all">全て解除</string>
 
     <!-- 豆瓣詳細ページ:クロール進捗とラベル付け通知 -->
     <string name="douban_detail_fetching">豆瓣詳細を取得中…</string>
@@ -715,7 +716,7 @@
     <string name="screen_douban_item_detail_failure_reason">失敗理由: %1$s</string>
     <string name="screen_douban_item_detail_open_douban">豆瓣ページを開く</string>
     <string name="screen_douban_item_detail_retry">同期を再試行</string>
-    <string name="screen_douban_item_detail_delete">この失敗記録を削除</string>
+    <string name="screen_douban_item_detail_delete">このレコードを削除</string>
     <string name="screen_douban_item_detail_delete_confirm">この失敗記録を削除しますか?</string>
     <string name="screen_douban_item_detail_subtitle_hint">タップしてサブタイトル追加(リソース検索に使用)</string>
     <string name="screen_douban_item_detail_subtitle_edit">サブタイトル編集</string>

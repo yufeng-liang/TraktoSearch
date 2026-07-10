@@ -179,16 +179,30 @@ class DoubanRetryManager @Inject constructor(
      * @return true 表示推断成功并更新了本地 mediaType
      */
     suspend fun inferMediaTypeFromDetail(doubanId: String, detailInfo: DoubanDetailInfo): Boolean = withContext(Dispatchers.IO) {
-        // 先查本地 mediaType,已标注则不覆盖
         val existing = doubanSyncFailureDao.getById(doubanId) ?: return@withContext false
+
+        // 强覆盖：genre 含"综艺"或"真人秀" → 综艺
+        val forceType = when {
+            detailInfo.genres.any { it.contains("综艺") || it.contains("真人秀") } -> "variety"
+            detailInfo.genres.any { it.contains("纪录片") } -> "documentary"
+            else -> null
+        }
+        if (forceType != null) {
+            // 强覆盖：即使已有标注也覆盖
+            if (existing.mediaType != forceType) {
+                doubanSyncFailureDao.updateMediaType(doubanId, forceType)
+                runCatching {
+                    cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, forceType)
+                }
+            }
+            return@withContext true
+        }
+
+        // 非强覆盖：已标注则不覆盖
         if (existing.mediaType != null) return@withContext false
 
         val inferred = if (detailInfo.episodeCount != null && detailInfo.episodeCount > 0) {
-            when {
-                detailInfo.genres.any { it.contains("综艺") } -> "variety"
-                detailInfo.genres.any { it.contains("纪录片") } -> "documentary"
-                else -> "show"
-            }
+            "show"
         } else {
             "movie"
         }

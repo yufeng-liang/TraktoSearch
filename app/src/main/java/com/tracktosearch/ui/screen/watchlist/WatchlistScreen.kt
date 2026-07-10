@@ -1124,6 +1124,7 @@ private fun WatchlistFilterSheet(
                 sortedGenres.forEach { genre ->
                     FilterChip(
                         selected = genre in filterState.selectedGenres,
+                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = {
                             val newSet = if (genre in filterState.selectedGenres) {
                                 filterState.selectedGenres - genre
@@ -1165,6 +1166,7 @@ private fun WatchlistFilterSheet(
                             rowDecades.forEach { decade ->
                                 FilterChip(
                                     selected = decade in filterState.selectedDecadeKeys,
+                                    border = if (decade in filterState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                     onClick = { onDecadeToggle(decade) },
                                     label = { Text("${decade}s") }
                                 )
@@ -1277,6 +1279,7 @@ private fun WatchlistFilterSheet(
                     MarkedTimePreset.entries.forEach { preset ->
                         FilterChip(
                             selected = filterState.markedTimePreset == preset,
+                            border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                             onClick = { onMarkedTimePresetChange(preset) },
                             label = {
                                 Text(stringResource(when (preset) {
