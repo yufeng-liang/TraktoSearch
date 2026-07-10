@@ -793,6 +793,15 @@
     <string name="douban_spider_test_pick_cached">选择已缓存条目</string>
     <string name="douban_spider_test_pick_cached_title">已缓存的豆瓣条目</string>
     <string name="douban_spider_test_no_cached">暂无已缓存条目</string>
+    <string name="douban_spider_test_mark_section">标记写回测试</string>
+    <string name="douban_spider_test_mark_douban_id">豆瓣 ID</string>
+    <string name="douban_spider_test_mark_wish">想看</string>
+    <string name="douban_spider_test_mark_do">在看</string>
+    <string name="douban_spider_test_mark_collect">看过</string>
+    <string name="douban_spider_test_mark_remove">取消标记</string>
+    <string name="douban_spider_test_marking">正在标记…</string>
+    <string name="douban_spider_test_mark_no_id">请先输入豆瓣 ID</string>
+    <string name="douban_spider_test_mark_result">结果</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">筛选</string>

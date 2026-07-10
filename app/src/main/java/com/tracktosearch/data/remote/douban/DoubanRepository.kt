@@ -9,6 +9,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -349,6 +350,43 @@ class DoubanRepository(
     }
 
     /**
+     * 测试用:对单条豆瓣影视标记 wish/do/collect/remove,返回原始 HTTP 响应。
+     * 仅爬取测试页调用,用于逆向确认写接口端点与字段(不进入正式业务逻辑)。
+     * 经典表单端点: https://movie.douban.com/j/movie/{wish|do|collect|remove}
+     * 表单字段: ck(CSRF 凭证), sid(豆瓣条目 ID), add=1
+     */
+    suspend fun markInterestTest(
+        doubanId: String,
+        cookie: String,
+        ck: String,
+        endpoint: String,
+        useMobileUa: Boolean
+    ): MarkTestResult = withContext(Dispatchers.IO) {
+        val url = "https://movie.douban.com/j/movie/$endpoint"
+        val formBody = FormBody.Builder()
+            .add("ck", ck)
+            .add("sid", doubanId)
+            .add("add", "1")
+            .build()
+        val request = Request.Builder()
+            .url(url)
+            .post(formBody)
+            .header("User-Agent", if (useMobileUa) mobileUa else ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .build()
+        client.newCall(request).execute().use { response ->
+            MarkTestResult(
+                endpoint = endpoint,
+                statusCode = response.code,
+                responseBody = response.body?.string() ?: ""
+            )
+        }
+    }
+
+    /**
      * 抓取豆瓣用户主页,解析头像、昵称、ID。
      *
      * 头像解析策略(从准到粗,任一命中即用):
@@ -463,6 +501,18 @@ data class TestFetchResult(
     val statusCode: Int,
     val html: String,
     val durationMs: Long
+)
+
+/**
+ * 标记写回测试结果(测试页用)。
+ * @param endpoint 实际请求的写接口路径(如 wish/do/collect/remove)
+ * @param statusCode HTTP 状态码
+ * @param responseBody 响应体原始文本(通常为 JSON,如 {"r":0,...})
+ */
+data class MarkTestResult(
+    val endpoint: String,
+    val statusCode: Int,
+    val responseBody: String
 )
 
 /** 豆瓣标记状态 */

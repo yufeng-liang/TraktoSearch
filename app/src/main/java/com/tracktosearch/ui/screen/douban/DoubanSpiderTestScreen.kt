@@ -33,6 +33,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -92,6 +94,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DoubanSpider
+import com.tracktosearch.data.remote.douban.MarkTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
@@ -130,7 +133,12 @@ data class SpiderTestUiState(
     val ua: TestUa = TestUa.PC,
     val isFetching: Boolean = false,
     val result: SpiderTestResult? = null,
-    val error: String? = null
+    val error: String? = null,
+    // ── 标记写回测试 ──
+    val markDoubanId: String = "",
+    val isMarking: Boolean = false,
+    val markResult: MarkTestResult? = null,
+    val markError: String? = null
 )
 
 /** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
@@ -235,6 +243,46 @@ class DoubanSpiderTestViewModel @Inject constructor(
                     isFetching = false,
                     error = e.stackTraceToString()
                 )
+            }
+        }
+    }
+
+    /** 更新标记测试用的豆瓣条目 ID */
+    fun updateMarkDoubanId(id: String) {
+        _uiState.value = _uiState.value.copy(markDoubanId = id, markError = null, markResult = null)
+    }
+
+    /**
+     * 标记写回测试:先抓 PC 详情页解析 ck,再 POST 候选写接口端点(wish/do/collect/remove)。
+     * 仅用于逆向确认端点与字段,不进入正式业务逻辑。结果存入 markResult / markError。
+     */
+    fun markTest(endpoint: String) {
+        val current = _uiState.value
+        val doubanId = current.markDoubanId.trim()
+        if (doubanId.isBlank()) {
+            _uiState.value = current.copy(markError = "doubanId is blank")
+            return
+        }
+        _uiState.value = current.copy(isMarking = true, markError = null, markResult = null)
+        viewModelScope.launch {
+            try {
+                // 1. 抓 PC 详情页(含 ck 凭证),PC UA 与写接口一致
+                val detailUrl = "https://movie.douban.com/subject/$doubanId/"
+                val fetch = doubanRepository.fetchHtmlForTest(detailUrl, current.cookie, useMobileUa = false)
+                if (DoubanSpider.isLoginPage(fetch.html)) {
+                    _uiState.value = _uiState.value.copy(isMarking = false, markError = "Cookie expired (login page returned)")
+                    return@launch
+                }
+                val ck = DoubanSpider.parseCsrfToken(fetch.html)
+                if (ck == null) {
+                    _uiState.value = _uiState.value.copy(isMarking = false, markError = "Failed to parse ck from detail page HTML")
+                    return@launch
+                }
+                // 2. POST 候选写接口端点
+                val result = doubanRepository.markInterestTest(doubanId, current.cookie, ck, endpoint, useMobileUa = false)
+                _uiState.value = _uiState.value.copy(isMarking = false, markResult = result)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isMarking = false, markError = e.stackTraceToString())
             }
         }
     }
@@ -430,6 +478,132 @@ fun DoubanSpiderTestScreen(
                                     Text(stringResource(R.string.douban_spider_test_fetching))
                                 } else {
                                     Text(stringResource(R.string.douban_spider_test_fetch))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── 标记写回测试区 ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_mark_section)) {
+                        OutlinedTextField(
+                            value = uiState.markDoubanId,
+                            onValueChange = viewModel::updateMarkDoubanId,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_mark_douban_id)) },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // 4 个写回测试按钮(两行两列)
+                        val markActions = listOf(
+                            "wish" to stringResource(R.string.douban_spider_test_mark_wish),
+                            "do" to stringResource(R.string.douban_spider_test_mark_do),
+                            "collect" to stringResource(R.string.douban_spider_test_mark_collect),
+                            "remove" to stringResource(R.string.douban_spider_test_mark_remove)
+                        )
+                        val canMark = uiState.isLoggedIn && uiState.markDoubanId.isNotBlank() && !uiState.isMarking
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                markActions.take(2).forEach { (ep, label) ->
+                                    Button(
+                                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.markTest(ep) },
+                                        enabled = canMark,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) { Text(label) }
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                markActions.takeLast(2).forEach { (ep, label) ->
+                                    Button(
+                                        onClick = { view.performHaptic(HapticType.CLICK); viewModel.markTest(ep) },
+                                        enabled = canMark,
+                                        modifier = Modifier.weight(1f),
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    ) { Text(label) }
+                                }
+                            }
+                        }
+                        // 未输入 ID 提示
+                        if (uiState.markDoubanId.isBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_mark_no_id),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 标记中
+                        if (uiState.isMarking) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.douban_spider_test_marking), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        // 错误(技术堆栈/英文)
+                        uiState.markError?.let { err ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                                Text(
+                                    text = err,
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        // 结果
+                        uiState.markResult?.let { res ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_mark_result),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        val okColor = Color(0xFF4CAF50)
+                                        Text(
+                                            text = "endpoint: ${res.endpoint}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = "HTTP ${res.statusCode}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = if (res.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 180.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        Text(
+                                            text = res.responseBody.ifBlank { "(empty body)" },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                 }
                             }
                         }

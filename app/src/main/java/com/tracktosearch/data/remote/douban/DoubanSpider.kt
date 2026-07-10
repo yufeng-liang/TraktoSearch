@@ -72,6 +72,18 @@ object DoubanSpider {
         return doc.selectFirst("form#lzform") != null || doc.title().contains("登录")
     }
 
+    /**
+     * 从详情页 HTML 解析 CSRF 凭证 ck(写接口必需)。
+     * PC 详情页内嵌 `<input type="hidden" name="ck" value="...">`，
+     * 优先用 Jsoup 取 input[name=ck]，失败再用正则兜底。
+     */
+    fun parseCsrfToken(html: String): String? {
+        val doc = Jsoup.parse(html)
+        doc.selectFirst("input[name=ck]")?.attr("value")?.takeIf { it.isNotBlank() }?.let { return it }
+        return Regex("""name=["']ck["']\s+value=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            .find(html)?.groupValues?.getOrNull(1)?.takeIf { it.isNotBlank() }
+    }
+
     /** 解析单页标记列表 HTML，返回条目列表。空列表表示无更多条目 */
     fun parseMarkList(html: String): List<DoubanMarkItem> = parseMarkListPage(html).items
 

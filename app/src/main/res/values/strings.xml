@@ -793,6 +793,15 @@ Config:
     <string name="douban_spider_test_pick_cached">Pick cached item</string>
     <string name="douban_spider_test_pick_cached_title">Cached Douban Items</string>
     <string name="douban_spider_test_no_cached">No cached items yet</string>
+    <string name="douban_spider_test_mark_section">Mark Write-back Test</string>
+    <string name="douban_spider_test_mark_douban_id">Douban ID</string>
+    <string name="douban_spider_test_mark_wish">Wish</string>
+    <string name="douban_spider_test_mark_do">Doing</string>
+    <string name="douban_spider_test_mark_collect">Collect</string>
+    <string name="douban_spider_test_mark_remove">Remove</string>
+    <string name="douban_spider_test_marking">Marking…</string>
+    <string name="douban_spider_test_mark_no_id">Enter Douban ID first</string>
+    <string name="douban_spider_test_mark_result">Result</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">Filter</string>
