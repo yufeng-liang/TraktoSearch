@@ -705,6 +705,7 @@
     <string name="filter_reset">リセット</string>
     <string name="filter_apply">適用</string>
     <string name="filter_genre">ジャンル</string>
+    <string name="filter_genre_empty">ジャンルデータなし(先に詳細を取得してください)</string>
     <string name="filter_year">年</string>
     <string name="filter_rating">Trakt 評価</string>
     <string name="filter_rating_label">評価</string>
