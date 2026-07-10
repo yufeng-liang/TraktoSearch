@@ -3,8 +3,12 @@ package com.tracktosearch.ui.screen.douban
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.webkit.CookieManager
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -92,8 +96,12 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -567,6 +575,9 @@ class DoubanItemDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showDeleteConfirm = show)
     }
 
+    /** 获取豆瓣 cookie(供 WebView 注入用) */
+    fun getDoubanCookie(): String? = doubanAuthStorage.getCredentials()?.cookie
+
     /**
      * 启动单条重试。
      * - true:已启动,UI 跳转到 DoubanSyncDialog
@@ -671,6 +682,9 @@ fun DoubanItemDetailScreen(
     var subtitleInput by remember { mutableStateOf("") }
     // 手动标记媒体类型下拉菜单展开状态
     var showMarkMenu by remember { mutableStateOf(false) }
+    // 演职员头像点击 → 应用内 WebView 打开(注入豆瓣 cookie)
+    var webviewUrl by remember { mutableStateOf<String?>(null) }
+    var webviewTitle by remember { mutableStateOf("") }
 
     // 内容就绪状态:沉浸背景优先显示,其他内容(tab/搜索/资源)淡入
     // posterDominantColor 就绪 → 80ms 后标记就绪;未就绪 → 400ms 兜底
@@ -789,7 +803,7 @@ fun DoubanItemDetailScreen(
                         }
                         val tabContainerColor = if (isPinned) {
                             uiState.posterDominantColor?.let { c ->
-                                lerp(c, Color.White, 0.37f)
+                                lerp(MaterialTheme.colorScheme.background, c, 0.70f)
                             } ?: MaterialTheme.colorScheme.surface
                         } else {
                             Color.Transparent
@@ -929,7 +943,11 @@ fun DoubanItemDetailScreen(
                                         },
                                         onRetry = { viewModel.retrySingle() },
                                         onDelete = { viewModel.showDeleteConfirm(true) },
-                                        onRetryLoadDetail = { viewModel.retryLoadDetailInfo() }
+                                        onRetryLoadDetail = { viewModel.retryLoadDetailInfo() },
+                                        onCelebrityClick = { url, name ->
+                                            webviewUrl = url
+                                            webviewTitle = name
+                                        }
                                     )
                                 }
                             }
@@ -1271,6 +1289,58 @@ fun DoubanItemDetailScreen(
                 }
             }
         )
+    }
+
+    // 演职员头像 → 应用内 WebView(注入豆瓣 cookie)
+    val url = webviewUrl
+    if (url != null) {
+        Dialog(
+            onDismissRequest = { webviewUrl = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = webviewTitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = { webviewUrl = null }) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.detail_back)
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    )
+                )
+                AndroidView(
+                    factory = { ctx ->
+                        WebView(ctx).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                            CookieManager.getInstance().setAcceptCookie(true)
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                            // 注入豆瓣 cookie
+                            val cookie = viewModel.getDoubanCookie()
+                            if (cookie != null) {
+                                CookieManager.getInstance().setCookie("https://movie.douban.com", cookie)
+                                CookieManager.getInstance().flush()
+                            }
+                            webViewClient = WebViewClient()
+                            loadUrl(url)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
     }
 }
 
@@ -1667,6 +1737,7 @@ private fun DoubanFilterSection(
                     }
                     androidx.compose.material3.FilterChip(
                         selected = source in enabledSources,
+                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = {
                             view.performHaptic(HapticType.TICK)
                             onToggleSource(source)
@@ -1718,6 +1789,7 @@ private fun DoubanFilterSection(
                     }
                     androidx.compose.material3.FilterChip(
                         selected = type in enabledDiskTypes,
+                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = {
                             view.performHaptic(HapticType.TICK)
                             onToggleDiskType(type)
@@ -1796,27 +1868,14 @@ private fun DoubanDetailInfoTab(
     onOpenDouban: () -> Unit,
     onRetry: () -> Unit,
     onDelete: () -> Unit,
-    onRetryLoadDetail: () -> Unit
+    onRetryLoadDetail: () -> Unit,
+    onCelebrityClick: (url: String, name: String) -> Unit
 ) {
     val view = LocalView.current
     val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         // 操作按钮区
-        Button(
-            onClick = {
-                view.performHaptic(HapticType.CLICK)
-                onOpenDouban()
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(stringResource(R.string.screen_douban_item_detail_open_douban))
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // 仅可恢复原因才显示「重新尝试同步」
+        // 仅可恢复原因才显示「重新尝试同步」(单独一行)
         if (failure.failureReason.recoverable) {
             Button(
                 onClick = {
@@ -1832,19 +1891,36 @@ private fun DoubanDetailInfoTab(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        OutlinedButton(
-            onClick = {
-                view.performHaptic(HapticType.CLICK)
-                onDelete()
-            },
+        // 打开豆瓣页面 + 删除此记录(同一行分散对齐)
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.outlinedButtonColors(
-                contentColor = MaterialTheme.colorScheme.error
-            )
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(stringResource(R.string.screen_douban_item_detail_delete))
+            Button(
+                onClick = {
+                    view.performHaptic(HapticType.CLICK)
+                    onOpenDouban()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Rounded.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.screen_douban_item_detail_open_douban))
+            }
+            OutlinedButton(
+                onClick = {
+                    view.performHaptic(HapticType.CLICK)
+                    onDelete()
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(stringResource(R.string.screen_douban_item_detail_delete))
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1858,15 +1934,44 @@ private fun DoubanDetailInfoTab(
             )
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                MetaRow(
-                    label = stringResource(R.string.screen_douban_item_detail_meta_failed_at),
-                    value = formatTimestamp(failure.failedAt)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                MetaRow(
-                    label = stringResource(R.string.screen_douban_item_detail_meta_attempt_count),
-                    value = failure.attemptCount.toString()
-                )
+                // 失败时间(左) + 尝试次数(右) 同一行
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    // 左:失败时间
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.screen_douban_item_detail_meta_failed_at),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = formatTimestamp(failure.failedAt),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    // 右:尝试次数(右对齐)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        Text(
+                            text = stringResource(R.string.screen_douban_item_detail_meta_attempt_count),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.End
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = failure.attemptCount.toString(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.End
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(6.dp))
                 MetaRow(
                     label = stringResource(R.string.screen_douban_item_detail_meta_douban_id),
@@ -2189,14 +2294,7 @@ private fun DoubanDetailInfoTab(
                                 onClick = {
                                     if (!celebrity.doubanPersonageUrl.isNullOrBlank()) {
                                         view.performHaptic(HapticType.CLICK)
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(celebrity.doubanPersonageUrl))
-                                        try {
-                                            context.startActivity(intent)
-                                        } catch (_: ActivityNotFoundException) {
-                                            context.showToast(
-                                                context.getString(R.string.screen_douban_item_detail_open_douban)
-                                            )
-                                        }
+                                        onCelebrityClick(celebrity.doubanPersonageUrl, celebrity.name)
                                     }
                                 }
                             ),

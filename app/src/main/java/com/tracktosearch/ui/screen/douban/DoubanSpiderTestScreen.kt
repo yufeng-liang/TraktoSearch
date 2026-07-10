@@ -10,6 +10,7 @@ import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,10 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ExpandCircleDown
@@ -95,6 +93,8 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DoubanSpider
 import com.tracktosearch.data.remote.douban.TestFetchResult
+import com.tracktosearch.data.repository.DoubanRetryManager
+import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
@@ -146,7 +146,8 @@ data class CachedDoubanItem(
 @HiltViewModel
 class DoubanSpiderTestViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
-    private val doubanAuthStorage: DoubanAuthStorage
+    private val doubanAuthStorage: DoubanAuthStorage,
+    private val doubanRetryManager: DoubanRetryManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SpiderTestUiState())
@@ -185,16 +186,16 @@ class DoubanSpiderTestViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(ua = ua)
     }
 
-    /** 加载本地已缓存的豆瓣条目快照(快选弹窗用) */
+    /** 加载失败项列表(快选弹窗用,失败项有海报/标题/id) */
     fun loadCachedItems() {
         viewModelScope.launch {
-            val snapshot = doubanRepository.getDetailSnapshot()
-            _cachedItems.value = snapshot.entries.map { (id, entry) ->
+            val failures = doubanRetryManager.getAllFailures()
+            _cachedItems.value = failures.map { failure ->
                 CachedDoubanItem(
-                    doubanId = id,
-                    title = entry.title,
-                    posterUrl = entry.posterUrl,
-                    doubanUrl = "https://movie.douban.com/subject/$id/"
+                    doubanId = failure.doubanId,
+                    title = failure.title,
+                    posterUrl = failure.posterUrl,
+                    doubanUrl = failure.doubanUrl
                 )
             }.sortedByDescending { it.doubanId }  // doubanId 大的(通常是较新条目)在前
         }
@@ -253,10 +254,6 @@ fun DoubanSpiderTestScreen(
     val view = androidx.compose.ui.platform.LocalView.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPickerDialog by remember { mutableStateOf(false) }
-
-    // 各 Tab 独立的滚动状态,切换 Tab 时各自保留位置
-    val fieldsScrollState = rememberScrollState()
-    val htmlScrollState = rememberScrollState()
 
     BackHandler(enabled = true) { onBack() }
 
@@ -368,11 +365,13 @@ fun DoubanSpiderTestScreen(
                             )
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.ITEM,
+                                border = if (uiState.urlPreset == UrlPreset.ITEM) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
                             )
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.USER_HOME,
+                                border = if (uiState.urlPreset == UrlPreset.USER_HOME) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
                             )
@@ -402,11 +401,13 @@ fun DoubanSpiderTestScreen(
                             )
                             FilterChip(
                                 selected = uiState.ua == TestUa.PC,
+                                border = if (uiState.ua == TestUa.PC) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                 onClick = { viewModel.updateUa(TestUa.PC) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
                             )
                             FilterChip(
                                 selected = uiState.ua == TestUa.MOBILE,
+                                border = if (uiState.ua == TestUa.MOBILE) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                 onClick = { viewModel.updateUa(TestUa.MOBILE) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
                             )
@@ -505,13 +506,13 @@ fun DoubanSpiderTestScreen(
                         }
                     }
 
-                    // Tab 内容(填满剩余视口,内部独立滚动)
-                    item {
-                        Box(modifier = Modifier.fillParentMaxSize()) {
-                            when (selectedTab) {
-                                0 -> FieldsTab(result, fieldsScrollState)
-                                1 -> HtmlTab(result.html, context, htmlScrollState)
-                                2 -> PreviewTab(uiState.url, uiState.cookie, uiState.ua)
+                    // Tab 内容:FieldsTab/HtmlTab 自然高度在 LazyColumn 中滚动;PreviewTab 用 fillParentMaxSize 让 WebView 自带滚动
+                    when (selectedTab) {
+                        0 -> item { FieldsTab(result) }
+                        1 -> item { HtmlTab(result.html, context) }
+                        2 -> item {
+                            Box(modifier = Modifier.fillParentMaxSize()) {
+                                PreviewTab(uiState.url, uiState.cookie, uiState.ua)
                             }
                         }
                     }
@@ -563,12 +564,11 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
 
 /** 提取字段 Tab:逐行展示 DoubanDetailInfo,空值标红 */
 @Composable
-private fun FieldsTab(result: SpiderTestResult, scrollState: ScrollState) {
+private fun FieldsTab(result: SpiderTestResult) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .verticalScroll(scrollState)
             .navigationBarsPadding()
     ) {
         // parseDetail 异常时显示堆栈
@@ -661,9 +661,9 @@ private fun FieldRow(label: String, value: String?) {
     }
 }
 
-/** 原始 HTML Tab:等宽字体可滚动 + 复制/导出按钮 */
+/** 原始 HTML Tab:等宽字体 + 复制/导出按钮(自然高度在 LazyColumn 中滚动) */
 @Composable
-private fun HtmlTab(html: String, context: Context, scrollState: ScrollState) {
+private fun HtmlTab(html: String, context: Context) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     val txtLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
@@ -692,7 +692,7 @@ private fun HtmlTab(html: String, context: Context, scrollState: ScrollState) {
     val ts = remember { System.currentTimeMillis() }
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .padding(horizontal = 12.dp)
             .navigationBarsPadding()
     ) {
@@ -732,15 +732,13 @@ private fun HtmlTab(html: String, context: Context, scrollState: ScrollState) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .padding(vertical = 8.dp),
             shape = RoundedCornerShape(8.dp),
             color = Color(0xFF0A0C10)
         ) {
             Text(
                 text = html,
-                modifier = Modifier
-                    .padding(10.dp)
-                    .verticalScroll(scrollState),
+                modifier = Modifier.padding(10.dp),
                 style = androidx.compose.ui.text.TextStyle(
                     fontFamily = FontFamily.Monospace,
                     fontSize = 10.sp,

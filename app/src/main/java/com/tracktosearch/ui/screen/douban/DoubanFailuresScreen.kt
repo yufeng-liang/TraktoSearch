@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,6 +60,7 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Deselect
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Nature
@@ -938,21 +940,26 @@ fun DoubanFailuresScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // 全选当前 Tab
+                            // 全选/取消全选当前 Tab
+                            val allSelected = filtered.isNotEmpty() && filtered.all { selectedItems.containsKey(it.doubanId) }
                             TextButton(
                                 onClick = {
                                     view.performHaptic(HapticType.CLICK)
-                                    filtered.forEach { selectedItems[it.doubanId] = true }
+                                    if (allSelected) {
+                                        selectedItems.clear()
+                                    } else {
+                                        filtered.forEach { selectedItems[it.doubanId] = true }
+                                    }
                                 },
                                 enabled = !isProcessing
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.SelectAll,
+                                    imageVector = if (allSelected) Icons.Rounded.Deselect else Icons.Rounded.SelectAll,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.screen_douban_failures_select_all))
+                                Text(stringResource(if (allSelected) R.string.screen_douban_failures_deselect_all else R.string.screen_douban_failures_select_all))
                             }
                             Spacer(modifier = Modifier.width(4.dp))
                             TextButton(
@@ -1591,6 +1598,7 @@ private fun FailureFilterSheet(
             sortedReasons.forEach { reason ->
                 FilterChip(
                     selected = reason in filterState.selectedReasons,
+                    border = if (reason in filterState.selectedReasons) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                     onClick = {
                         val newSet = if (reason in filterState.selectedReasons) {
                             filterState.selectedReasons - reason
@@ -1625,6 +1633,7 @@ private fun FailureFilterSheet(
                 MarkedTimePreset.entries.forEach { preset ->
                     FilterChip(
                         selected = filterState.markedTimePreset == preset,
+                        border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                         onClick = { onPresetChange(preset) },
                         label = { Text(stringResource(preset.localizedStringRes())) }
                     )

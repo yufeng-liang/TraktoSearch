@@ -11,6 +11,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -780,6 +781,7 @@ private fun DiskSearchContent(
                                         }
                                         FilterChip(
                                             selected = source in diskState.enabledSources,
+                                            border = if (source in diskState.enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                             onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
@@ -820,6 +822,7 @@ private fun DiskSearchContent(
                                         }
                                         FilterChip(
                                             selected = type in diskState.enabledDiskTypes,
+                                            border = if (type in diskState.enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
                                             onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
                                             label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                                             modifier = Modifier.height(28.dp)
