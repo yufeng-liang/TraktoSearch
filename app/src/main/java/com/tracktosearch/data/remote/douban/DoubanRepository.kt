@@ -376,7 +376,21 @@ class DoubanRepository(
             "remove" -> listOf(
                 Triple("POST", "/j/subject/$doubanId/remove",
                     FormBody.Builder().add("ck", ck).build()),
-                Triple("DELETE", "/j/subject/$doubanId/interest", null)
+                Triple("DELETE", "/j/subject/$doubanId/interest", null),
+                // 候选 C: 复用 interest 端点, interest 置空(疑似取消方式)
+                Triple("POST", "/j/subject/$doubanId/interest",
+                    FormBody.Builder()
+                        .add("ck", ck)
+                        .add("interest", "")
+                        .add("foldcollect", "F")
+                        .build()),
+                // 候选 D: interest 传 remove 值试探
+                Triple("POST", "/j/subject/$doubanId/interest",
+                    FormBody.Builder()
+                        .add("ck", ck)
+                        .add("interest", "remove")
+                        .add("foldcollect", "F")
+                        .build())
             )
             else -> listOf(
                 // A: Gazer 风格 统一 interest 端点(当前疑似有效)
