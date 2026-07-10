@@ -217,12 +217,9 @@ class DoubanRetryManager @Inject constructor(
     /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/综艺/纪录片/清除标注)，并异步上传到全局共享池 */
     suspend fun updateMediaType(doubanId: String, mediaType: String?) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateMediaType(doubanId, mediaType)
-        // 用户标注为 movie/show/variety/documentary 时，异步上传到全局池供其他用户复用
-        // 清除标注(null)不上传，避免误删池中其他用户的有效数据
-        if (mediaType != null) {
-            runCatching {
-                cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, mediaType)
-            }
+        // 标注(含清除标注null)均异步上传到全局池强覆盖,供其他用户同步
+        runCatching {
+            cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, mediaType)
         }
     }
 
@@ -230,25 +227,23 @@ class DoubanRetryManager @Inject constructor(
      * 批量更新媒体类型(多选模式标注用),并并发上传到全局池。
      *
      * @param doubanIds 要更新的 doubanId 列表
-     * @param mediaType "movie"/"show"/"variety"/"documentary"; null=清除标注(不上传)
+     * @param mediaType "movie"/"show"/"variety"/"documentary"; null=清除标注(也上传强覆盖)
      */
     suspend fun batchUpdateMediaType(doubanIds: List<String>, mediaType: String?) = withContext(Dispatchers.IO) {
         if (doubanIds.isEmpty()) return@withContext
         doubanSyncFailureDao.updateMediaTypeBatch(doubanIds, mediaType)
-        // 非 null 时并发上传到全局池(并发度 3,避免逐条串行)
-        if (mediaType != null) {
-            val semaphore = kotlinx.coroutines.sync.Semaphore(3)
-            coroutineScope {
-                doubanIds.map { id ->
-                    launch {
-                        semaphore.withPermit {
-                            runCatching {
-                                cloudDetailsPoolManager.uploadUserMarkedMediaType(id, mediaType)
-                            }
+        // 并发上传到全局池(含清除标注null),并发度 3,避免逐条串行
+        val semaphore = kotlinx.coroutines.sync.Semaphore(3)
+        coroutineScope {
+            doubanIds.map { id ->
+                launch {
+                    semaphore.withPermit {
+                        runCatching {
+                            cloudDetailsPoolManager.uploadUserMarkedMediaType(id, mediaType)
                         }
                     }
-                }.joinAll()
-            }
+                }
+            }.joinAll()
         }
     }
 

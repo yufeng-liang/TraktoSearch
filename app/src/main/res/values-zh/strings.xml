@@ -826,6 +826,7 @@
     <string name="screen_douban_item_detail_meta_failed_at">失败时间</string>
     <string name="screen_douban_item_detail_meta_attempt_count">尝试次数</string>
     <string name="screen_douban_item_detail_meta_douban_id">豆瓣 ID</string>
+    <string name="screen_douban_item_detail_copied">已复制</string>
 
     <!-- Notification -->
     <string name="settings_notification">通知提醒</string>

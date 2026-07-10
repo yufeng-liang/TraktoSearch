@@ -278,18 +278,26 @@ class CloudDetailsPoolManager @Inject constructor(
      * 上传时 GET 对应分片 → 合并(用户标注覆盖 isTvShow + mediaType,其他字段保留池中原值) → PUT。
      * 若池中无该 doubanId,则创建仅含 isTvShow + mediaType 的条目。
      *
+     * 清除标注(mediaType=null)也会上传,强覆盖池中 mediaType 为 null(用户主动清除优先于池中其他用户标注)。
+     * 自动推断(综艺/纪录片)优先级仍最高,会在进入详情页时覆盖用户清除。
+     *
      * @param doubanId 豆瓣条目 ID
-     * @param mediaType "movie"/"show"/"variety"/"documentary"; null 不上传
+     * @param mediaType "movie"/"show"/"variety"/"documentary"; null=清除标注(也上传强覆盖)
      * @return 是否上传成功
      */
-    suspend fun uploadUserMarkedMediaType(doubanId: String, mediaType: String): Boolean = withContext(Dispatchers.IO) {
-        val isTvShow = mediaType != "movie"
+    suspend fun uploadUserMarkedMediaType(doubanId: String, mediaType: String?): Boolean = withContext(Dispatchers.IO) {
         val shard = shardPrefix(doubanId)
         val lock = getShardLock(shard)
         lock.withLock {
             // 构造仅含 isTvShow + mediaType 的条目；其他字段尝试保留池中原值
             val existing = downloadShard(shard) ?: emptyMap()
             val existingEntry = existing[doubanId]
+            // 清除标注(null)时保留池中原 isTvShow;标注非null时按 mediaType 推导;池中无条目且清除时默认 false
+            val isTvShow = when {
+                mediaType != null -> mediaType != "movie"
+                existingEntry != null -> existingEntry.isTvShow
+                else -> false
+            }
             val newEntry = if (existingEntry != null) {
                 // 覆盖 isTvShow + mediaType,保留其他字段
                 existingEntry.copy(isTvShow = isTvShow, mediaType = mediaType)
