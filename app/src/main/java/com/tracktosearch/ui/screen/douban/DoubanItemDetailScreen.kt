@@ -1,6 +1,9 @@
 package com.tracktosearch.ui.screen.douban
 
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.webkit.CookieManager
@@ -1993,7 +1996,8 @@ private fun DoubanDetailInfoTab(
                 Spacer(modifier = Modifier.height(6.dp))
                 MetaRow(
                     label = stringResource(R.string.screen_douban_item_detail_meta_douban_id),
-                    value = failure.doubanId
+                    value = failure.doubanId,
+                    copyable = true
                 )
             }
         }
@@ -2097,7 +2101,8 @@ private fun DoubanDetailInfoTab(
                         if (!detailInfo.imdbId.isNullOrBlank()) {
                             MetaRow(
                                 label = "IMDb ID",
-                                value = detailInfo.imdbId
+                                value = detailInfo.imdbId,
+                                copyable = true
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
@@ -2373,20 +2378,38 @@ private fun DoubanDetailInfoTab(
 }
 
 @Composable
-private fun MetaRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (copyable) Modifier.clickable {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
+                    context.showToast(context.getString(R.string.screen_douban_item_detail_copied))
+                } else Modifier
+            ),
+        verticalAlignment = Alignment.Top
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Start
         )
-        Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 12.dp)
         )
     }
 }

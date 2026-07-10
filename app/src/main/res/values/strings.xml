@@ -826,6 +826,7 @@ Config:
     <string name="screen_douban_item_detail_meta_failed_at">Failed at</string>
     <string name="screen_douban_item_detail_meta_attempt_count">Attempts</string>
     <string name="screen_douban_item_detail_meta_douban_id">Douban ID</string>
+    <string name="screen_douban_item_detail_copied">Copied</string>
 
     <!-- Notification -->
     <string name="settings_notification">Notifications</string>

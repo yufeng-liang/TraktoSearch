@@ -55,7 +55,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
-import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
@@ -68,7 +67,6 @@ import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Tv
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Inbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -136,6 +134,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
@@ -179,13 +178,16 @@ enum class SortOrder { ASC, DESC }
 @HiltViewModel
 class DoubanFailuresViewModel @Inject constructor(
     private val doubanRetryManager: DoubanRetryManager,
-    private val doubanFailureExporter: DoubanFailureExporter
+    private val doubanFailureExporter: DoubanFailureExporter,
+    private val doubanRepository: DoubanRepository
 ) : ViewModel() {
 
     data class DoubanFailuresUiState(
         val isLoading: Boolean = true,
         val failures: List<DoubanSyncFailure> = emptyList(),
-        val error: String? = null
+        val error: String? = null,
+        /** doubanId → 豆瓣评分(10分制),来自详情缓存(爬取过的条目才有) */
+        val doubanRatings: Map<String, Double> = emptyMap()
     )
 
     /** 筛选状态:失败原因多选 + 标记时间区间 + 排序方式 */
@@ -214,10 +216,18 @@ class DoubanFailuresViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val list = doubanRetryManager.getAllFailures()
+                // 从豆瓣详情缓存批量查询评分(爬取过的条目才有评分)
+                val ratings = runCatching {
+                    doubanRepository.getDetailSnapshot()
+                        .mapNotNull { (id, entry) ->
+                            entry.doubanRating?.let { id to it }
+                        }.toMap()
+                }.getOrDefault(emptyMap())
                 _uiState.value = DoubanFailuresUiState(
                     isLoading = false,
                     failures = list,
-                    error = null
+                    error = null,
+                    doubanRatings = ratings
                 )
                 // 后台静默从全局池刷新其他用户标注的类型，有更新则重新加载列表
                 launch {
@@ -590,6 +600,7 @@ fun DoubanFailuresScreen(
                             Box {
                                 FailureCard(
                                     failure = failure,
+                                    doubanRating = uiState.doubanRatings[failure.doubanId],
                                     onClick = {
                                         if (isMultiSelectMode) {
                                             view.performHaptic(HapticType.CLICK)
@@ -1333,6 +1344,7 @@ private data class CategoryCounts(
 @Composable
 private fun FailureCard(
     failure: DoubanSyncFailure,
+    doubanRating: Double?,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1390,7 +1402,7 @@ private fun FailureCard(
                     }
                 }
 
-                // 评分角标(左上角):5 分制转★显示
+                // 用户评分角标(左上角):5 分制转★显示
                 failure.rating?.let { rating ->
                     val stars = buildString {
                         repeat(5) { i ->
@@ -1416,26 +1428,43 @@ private fun FailureCard(
                     }
                 }
 
-                // 失败原因图标(右下角小角标)
-                val reason = failure.failureReason
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .size(20.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(
-                            if (reason.recoverable) Color(0xCCFF9800)
-                            else Color(0xCC757575)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (reason.recoverable) Icons.Rounded.Warning else Icons.Rounded.Block,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
-                    )
+                // 豆瓣评分角标(右上角):10 分制数字
+                doubanRating?.let { rating ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xCC000000)
+                    ) {
+                        Text(
+                            text = String.format("%.1f", rating),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            color = Color(0xFFFFC107),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                // 豆瓣标记时间(左下角)
+                if (failure.markedAt.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(4.dp),
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xCC000000)
+                    ) {
+                        Text(
+                            text = failure.markedAt,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                 }
             }
 
