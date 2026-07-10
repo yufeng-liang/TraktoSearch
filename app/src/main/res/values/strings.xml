@@ -742,6 +742,10 @@ Config:
     <string name="screen_douban_failures_mark_as_variety">Mark as variety</string>
     <string name="screen_douban_failures_mark_as_documentary">Mark as documentary</string>
     <string name="screen_douban_failures_clear_mark">Clear type mark</string>
+    <string name="screen_douban_failures_marked_as_movie">Marked as movie</string>
+    <string name="screen_douban_failures_marked_as_show">Marked as TV show</string>
+    <string name="screen_douban_failures_marked_as_variety">Marked as variety</string>
+    <string name="screen_douban_failures_marked_as_documentary">Marked as documentary</string>
     <string name="screen_douban_failures_delete_item">Delete this item</string>
     <string name="screen_douban_failures_tab_uncategorized">Uncategorized</string>
     <string name="screen_douban_failures_tab_variety">Variety</string>
@@ -777,7 +781,7 @@ Config:
     <string name="douban_spider_test_tab_fields">Fields</string>
     <string name="douban_spider_test_tab_html">Raw HTML</string>
     <string name="douban_spider_test_tab_preview">Web Preview</string>
-    <string name="douban_spider_test_copy_html">Copy all</string>
+    <string name="douban_spider_test_copy_html">Copy</string>
     <string name="douban_spider_test_empty">empty</string>
     <string name="douban_spider_test_copied">HTML copied to clipboard</string>
     <string name="douban_spider_test_export_txt">Export TXT</string>

@@ -643,6 +643,10 @@
     <string name="screen_douban_failures_mark_as_variety">예능으로 표시</string>
     <string name="screen_douban_failures_mark_as_documentary">다큐멘터리로 표시</string>
     <string name="screen_douban_failures_clear_mark">유형 표시 지우기</string>
+    <string name="screen_douban_failures_marked_as_movie">영화로 표시됨</string>
+    <string name="screen_douban_failures_marked_as_show">TV 드라마로 표시됨</string>
+    <string name="screen_douban_failures_marked_as_variety">예능으로 표시됨</string>
+    <string name="screen_douban_failures_marked_as_documentary">다큐멘터리로 표시됨</string>
     <string name="screen_douban_failures_delete_item">이 항목 삭제</string>
     <string name="screen_douban_failures_tab_uncategorized">미분류</string>
     <string name="screen_douban_failures_tab_variety">예능</string>
@@ -678,7 +682,7 @@
     <string name="douban_spider_test_tab_fields">추출 필드</string>
     <string name="douban_spider_test_tab_html">원본 HTML</string>
     <string name="douban_spider_test_tab_preview">웹 미리보기</string>
-    <string name="douban_spider_test_copy_html">모두 복사</string>
+    <string name="douban_spider_test_copy_html">복사</string>
     <string name="douban_spider_test_empty">비어있음</string>
     <string name="douban_spider_test_copied">HTML이 클립보드에 복사되었습니다</string>
     <string name="douban_spider_test_export_txt">TXT 내보내기</string>

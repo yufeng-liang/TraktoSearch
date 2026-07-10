@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,9 +27,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -238,7 +241,7 @@ class DoubanSpiderTestViewModel @Inject constructor(
 
 // ==================== Composable ====================
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DoubanSpiderTestScreen(
     onBack: () -> Unit,
@@ -296,205 +299,222 @@ fun DoubanSpiderTestScreen(
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // ── 顶部区:Cookie + URL + 错误(可滚动,内容多时不溢出) ──
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState())
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
             ) {
-            // ── Cookie 信息区 ──
-            SectionCard(title = stringResource(R.string.douban_spider_test_cookie_section)) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surface
-                ) {
-                    Text(
-                        text = uiState.cookie.ifBlank { "(empty)" },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(10.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 5
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    val dotColor = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    Surface(shape = RoundedCornerShape(50), color = dotColor, modifier = Modifier.size(8.dp)) {}
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (uiState.isLoggedIn)
-                            stringResource(R.string.douban_spider_test_logged_in, uiState.userId)
-                        else
-                            stringResource(R.string.douban_spider_test_not_logged_in),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
-                    )
-                }
-            }
-
-            // ── 爬取目标区 ──
-            SectionCard(title = stringResource(R.string.douban_spider_test_url_section)) {
-                OutlinedTextField(
-                    value = uiState.url,
-                    onValueChange = viewModel::updateUrl,
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 13.sp
-                    )
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = stringResource(R.string.douban_spider_test_preset),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    FilterChip(
-                        selected = uiState.urlPreset == UrlPreset.ITEM,
-                        onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
-                        label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
-                    )
-                    FilterChip(
-                        selected = uiState.urlPreset == UrlPreset.USER_HOME,
-                        onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
-                        label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    IconButton(onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        viewModel.loadCachedItems()
-                        showPickerDialog = true
-                    }) {
-                        Icon(
-                            imageVector = Icons.Rounded.ExpandCircleDown,
-                            contentDescription = stringResource(R.string.douban_spider_test_pick_cached),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = "User-Agent",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = uiState.ua == TestUa.PC,
-                        onClick = { viewModel.updateUa(TestUa.PC) },
-                        label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
-                    )
-                    FilterChip(
-                        selected = uiState.ua == TestUa.MOBILE,
-                        onClick = { viewModel.updateUa(TestUa.MOBILE) },
-                        label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
-                    )
-                }
-                Spacer(modifier = Modifier.height(14.dp))
-                Button(
-                    onClick = {
-                        view.performHaptic(HapticType.CLICK)
-                        viewModel.fetch()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !uiState.isFetching
-                ) {
-                    if (uiState.isFetching) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.douban_spider_test_fetching))
-                    } else {
-                        Text(stringResource(R.string.douban_spider_test_fetch))
-                    }
-                }
-            }
-
-            // ── 错误区(网络异常) ──
-            if (uiState.error != null) {
-                SectionCard(title = "Error") {
-                    Text(
-                        text = uiState.error!!,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            } // 顶部滚动 Column 结束
-
-            // ── 结果区(weight 1f 占满剩余高度,各 Tab 独立滚动保留位置) ──
-            uiState.result?.let { result ->
-                // meta-stats 行
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Row(
-                        modifier = Modifier.padding(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        val okColor = Color(0xFF4CAF50)
-                        Text(
-                            text = "HTTP ${result.statusCode}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (result.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
-                        )
-                        Text(
-                            text = "${result.durationMs}ms",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "isLoginPage: ${result.isLoginPage}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (result.isLoginPage) MaterialTheme.colorScheme.error else okColor
-                        )
+                // ── Cookie 信息区 ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_cookie_section)) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface
+                        ) {
+                            Text(
+                                text = uiState.cookie.ifBlank { "(empty)" },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 5
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val dotColor = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
+                            Surface(shape = RoundedCornerShape(50), color = dotColor, modifier = Modifier.size(8.dp)) {}
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (uiState.isLoggedIn)
+                                    stringResource(R.string.douban_spider_test_logged_in, uiState.userId)
+                                else
+                                    stringResource(R.string.douban_spider_test_not_logged_in),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
+                            )
+                        }
                     }
                 }
 
-                // Tab
-                val tabs = listOf(
-                    stringResource(R.string.douban_spider_test_tab_fields),
-                    stringResource(R.string.douban_spider_test_tab_html),
-                    stringResource(R.string.douban_spider_test_tab_preview)
-                )
-                TabRow(selectedTabIndex = selectedTab) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = { selectedTab = index },
-                            text = { Text(title, style = MaterialTheme.typography.labelMedium) }
+                // ── 爬取目标区 ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_url_section)) {
+                        OutlinedTextField(
+                            value = uiState.url,
+                            onValueChange = viewModel::updateUrl,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
                         )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // 快选行:标题 + 影视条目/用户主页 + 快选弹窗按钮
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_preset),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            FilterChip(
+                                selected = uiState.urlPreset == UrlPreset.ITEM,
+                                onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
+                                label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
+                            )
+                            FilterChip(
+                                selected = uiState.urlPreset == UrlPreset.USER_HOME,
+                                onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
+                                label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            IconButton(onClick = {
+                                view.performHaptic(HapticType.CLICK)
+                                viewModel.loadCachedItems()
+                                showPickerDialog = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ExpandCircleDown,
+                                    contentDescription = stringResource(R.string.douban_spider_test_pick_cached),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        // UA 行:标题 + 电脑版/手机版 + 爬取按钮
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "User-Agent",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            FilterChip(
+                                selected = uiState.ua == TestUa.PC,
+                                onClick = { viewModel.updateUa(TestUa.PC) },
+                                label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
+                            )
+                            FilterChip(
+                                selected = uiState.ua == TestUa.MOBILE,
+                                onClick = { viewModel.updateUa(TestUa.MOBILE) },
+                                label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    viewModel.fetch()
+                                },
+                                enabled = !uiState.isFetching,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                if (uiState.isFetching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.douban_spider_test_fetching))
+                                } else {
+                                    Text(stringResource(R.string.douban_spider_test_fetch))
+                                }
+                            }
+                        }
                     }
                 }
 
-                when (selectedTab) {
-                    0 -> FieldsTab(result, fieldsScrollState)
-                    1 -> HtmlTab(result.html, context, htmlScrollState)
-                    2 -> PreviewTab(uiState.url, uiState.cookie, uiState.ua)
+                // ── 错误区(网络异常) ──
+                if (uiState.error != null) {
+                    item {
+                        SectionCard(title = "Error") {
+                            Text(
+                                text = uiState.error!!,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
+                // ── 结果区(TabRow 吸顶,各 Tab 独立滚动保留位置) ──
+                uiState.result?.let { result ->
+                    // meta-stats 行
+                    item {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                val okColor = Color(0xFF4CAF50)
+                                Text(
+                                    text = "HTTP ${result.statusCode}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (result.statusCode in 200..299) okColor else MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = "${result.durationMs}ms",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = "isLoginPage: ${result.isLoginPage}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (result.isLoginPage) MaterialTheme.colorScheme.error else okColor
+                                )
+                            }
+                        }
+                    }
+
+                    // TabRow 吸顶
+                    stickyHeader {
+                        TabRow(selectedTabIndex = selectedTab) {
+                            val tabs = listOf(
+                                stringResource(R.string.douban_spider_test_tab_fields),
+                                stringResource(R.string.douban_spider_test_tab_html),
+                                stringResource(R.string.douban_spider_test_tab_preview)
+                            )
+                            tabs.forEachIndexed { index, title ->
+                                Tab(
+                                    selected = selectedTab == index,
+                                    onClick = { selectedTab = index },
+                                    text = { Text(title, style = MaterialTheme.typography.labelMedium) }
+                                )
+                            }
+                        }
+                    }
+
+                    // Tab 内容(填满剩余视口,内部独立滚动)
+                    item {
+                        Box(modifier = Modifier.fillParentMaxSize()) {
+                            when (selectedTab) {
+                                0 -> FieldsTab(result, fieldsScrollState)
+                                1 -> HtmlTab(result.html, context, htmlScrollState)
+                                2 -> PreviewTab(uiState.url, uiState.cookie, uiState.ua)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -682,19 +702,28 @@ private fun HtmlTab(html: String, context: Context, scrollState: ScrollState) {
                 .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(onClick = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("html", html))
-                context.showToast(context.getString(R.string.douban_spider_test_copied))
-            }) {
+            OutlinedButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("html", html))
+                    context.showToast(context.getString(R.string.douban_spider_test_copied))
+                },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
                 Text(stringResource(R.string.douban_spider_test_copy_html))
             }
-            OutlinedButton(onClick = { txtLauncher.launch("douban_$ts.txt") }) {
+            OutlinedButton(
+                onClick = { txtLauncher.launch("douban_$ts.txt") },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
                 Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.douban_spider_test_export_txt))
             }
-            OutlinedButton(onClick = { htmlLauncher.launch("douban_$ts.html") }) {
+            OutlinedButton(
+                onClick = { htmlLauncher.launch("douban_$ts.html") },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+            ) {
                 Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.douban_spider_test_export_html))
@@ -773,7 +802,8 @@ private fun CachedItemsPickerDialog(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                 Text(
-                    text = stringResource(R.string.douban_spider_test_pick_cached_title),
+                    text = stringResource(R.string.douban_spider_test_pick_cached_title) +
+                        if (items.isNotEmpty()) " (${items.size})" else "",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
