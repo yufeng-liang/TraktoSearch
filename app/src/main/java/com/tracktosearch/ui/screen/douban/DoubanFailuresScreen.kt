@@ -479,21 +479,25 @@ fun DoubanFailuresScreen(
     }
 
     // 各分类数量(用于 Tab 徽标,不受搜索/筛选影响,反映实际分组数量)
-    val movieCount = remember(uiState.failures, selectedMode) {
-        uiState.failures.count { it.status == currentStatus && it.mediaType == "movie" }
+    // 合并为一次 groupBy 遍历,避免 5 次独立 count
+    val categoryCounts = remember(uiState.failures, selectedMode) {
+        val byMedia = uiState.failures
+            .filter { it.status == currentStatus }
+            .groupBy { it.mediaType }
+        CategoryCounts(
+            movie = byMedia["movie"]?.size ?: 0,
+            show = byMedia["show"]?.size ?: 0,
+            variety = byMedia["variety"]?.size ?: 0,
+            documentary = byMedia["documentary"]?.size ?: 0,
+            uncategorized = byMedia[null]?.size ?: 0,
+            total = byMedia.values.sumOf { it.size }
+        )
     }
-    val showCount = remember(uiState.failures, selectedMode) {
-        uiState.failures.count { it.status == currentStatus && it.mediaType == "show" }
-    }
-    val varietyCount = remember(uiState.failures, selectedMode) {
-        uiState.failures.count { it.status == currentStatus && it.mediaType == "variety" }
-    }
-    val documentaryCount = remember(uiState.failures, selectedMode) {
-        uiState.failures.count { it.status == currentStatus && it.mediaType == "documentary" }
-    }
-    val uncategorizedCount = remember(uiState.failures, selectedMode) {
-        uiState.failures.count { it.status == currentStatus && it.mediaType == null }
-    }
+    val movieCount = categoryCounts.movie
+    val showCount = categoryCounts.show
+    val varietyCount = categoryCounts.variety
+    val documentaryCount = categoryCounts.documentary
+    val uncategorizedCount = categoryCounts.uncategorized
 
     // 长按菜单目标条目
     var menuFailure by remember { mutableStateOf<DoubanSyncFailure?>(null) }
@@ -514,10 +518,8 @@ fun DoubanFailuresScreen(
 
             // 内容区:空状态 / 失败项网格
             Box(modifier = Modifier.fillMaxSize()) {
-                // 计算当前模式总数(不受搜索/筛选影响,用于判断"模式为空"和"分类为空")
-                val currentModeTotalCount = remember(uiState.failures, selectedMode) {
-                    uiState.failures.count { it.status == currentStatus }
-                }
+                // 当前模式总数(不受搜索/筛选影响,用于判断"模式为空"和"分类为空")
+                val currentModeTotalCount = categoryCounts.total
                 // 当前 tab 的数量(用于判断分类为空)
                 val currentTabCount = when (selectedTab) {
                     0 -> movieCount
@@ -1327,6 +1329,17 @@ private fun MultiSelectActionButton(
  * - 评分角标:5 分制转★显示(rating=4 → ★★★★☆),null 不显示
  * - 失败原因图标:右下角小角标,可恢复用橙色 Warning,不可恢复用灰色 Block
  */
+
+/** 各媒体类型分类计数(一次 groupBy 遍历结果) */
+private data class CategoryCounts(
+    val movie: Int,
+    val show: Int,
+    val variety: Int,
+    val documentary: Int,
+    val uncategorized: Int,
+    val total: Int
+)
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FailureCard(

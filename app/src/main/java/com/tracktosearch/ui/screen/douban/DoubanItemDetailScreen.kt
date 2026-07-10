@@ -257,8 +257,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 prefetchPosterColor(failure.posterUrl)
                 // 异步加载豆瓣详情补充信息(年份/国家/导演/类型),命中缓存秒回
                 loadDetailInfo(failure)
-                // 加载完成后自动触发资源搜索
-                searchResources()
+                // 资源搜索延迟到用户切换到资源搜索 Tab 时才触发,避免进入页面瞬间 12+ 并发网络请求
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -310,19 +309,18 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
                 result.first?.let { info ->
                     _uiState.value = _uiState.value.copy(detailInfo = info)
-                    // 根据集数自动推断媒体类型(不覆盖用户已标注的值,静默)
-                    // 推断成功则刷新 failure 状态,让 UI 的 mediaType 标注按钮同步更新
-                    val inferred = runCatching {
-                        doubanRetryManager.inferMediaTypeFromDetail(failure.doubanId, info)
-                    }.getOrDefault(false)
-                    if (inferred) {
-                        val refreshed = doubanRetryManager.getFailure(failure.doubanId)
-                        if (refreshed != null) {
-                            _uiState.value = _uiState.value.copy(failure = refreshed)
-                        }
-                    }
-                    // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
+                    // 仅实际爬取豆瓣时才推断媒体类型(缓存命中说明之前已推断过,无需重复)
                     if (fromNetwork) {
+                        val inferred = runCatching {
+                            doubanRetryManager.inferMediaTypeFromDetail(failure.doubanId, info)
+                        }.getOrDefault(false)
+                        if (inferred) {
+                            val refreshed = doubanRetryManager.getFailure(failure.doubanId)
+                            if (refreshed != null) {
+                                _uiState.value = _uiState.value.copy(failure = refreshed)
+                            }
+                        }
+                        // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
                         _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
                     }
                 }
@@ -689,14 +687,14 @@ fun DoubanItemDetailScreen(
     var webviewTitle by remember { mutableStateOf("") }
 
     // 内容就绪状态:沉浸背景优先显示,其他内容(tab/搜索/资源)淡入
-    // posterDominantColor 就绪 → 80ms 后标记就绪;未就绪 → 400ms 兜底
+    // posterDominantColor 就绪 → 80ms 后标记就绪;未就绪 → 200ms 兜底(缩短等待感)
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.posterDominantColor) {
         if (uiState.posterDominantColor != null) {
             kotlinx.coroutines.delay(80)
             contentReady = true
         } else {
-            kotlinx.coroutines.delay(400)
+            kotlinx.coroutines.delay(200)
             contentReady = true
         }
     }
@@ -859,6 +857,10 @@ fun DoubanItemDetailScreen(
                                 onClick = {
                                     view.performHaptic(HapticType.CLICK)
                                     selectedTab = 1
+                                    // 首次切换到资源搜索 Tab 时才触发搜索(延迟加载,减少进入页面时的并发负担)
+                                    if (!uiState.searchAttempted && !uiState.isSearching) {
+                                        viewModel.searchResources()
+                                    }
                                 },
                                 text = {
                                     Text(
@@ -2133,9 +2135,9 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
-                        // 又名
+                        // 又名(长内容用 Column 布局)
                         if (detailInfo.aka.isNotEmpty()) {
-                            MetaRow(
+                            MetaColumn(
                                 label = stringResource(R.string.detail_info_aka),
                                 value = detailInfo.aka.joinToString(" / ")
                             )
@@ -2173,9 +2175,9 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
-                        // 主演
+                        // 主演(长内容用 Column 布局)
                         if (detailInfo.cast.isNotEmpty()) {
-                            MetaRow(
+                            MetaColumn(
                                 label = stringResource(R.string.detail_info_cast),
                                 value = detailInfo.cast.joinToString(" / ")
                             )
@@ -2189,9 +2191,9 @@ private fun DoubanDetailInfoTab(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
-                        // 首播日期
+                        // 首播日期(长内容用 Column 布局)
                         if (detailInfo.initialReleaseDates.isNotEmpty()) {
-                            MetaRow(
+                            MetaColumn(
                                 label = stringResource(R.string.detail_info_initial_release_dates),
                                 value = detailInfo.initialReleaseDates.joinToString(" / ")
                             )
@@ -2378,11 +2380,32 @@ private fun DoubanDetailInfoTab(
 
 @Composable
 private fun MetaRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+/** 长内容字段(又名/主演/首播日期)用 Column 布局,标题在上(黑体),内容在下自然换行 */
+@Composable
+private fun MetaColumn(label: String, value: String) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(2.dp))
         Text(
