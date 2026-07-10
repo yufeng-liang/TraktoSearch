@@ -804,6 +804,7 @@ Config:
     <string name="filter_reset">Reset</string>
     <string name="filter_apply">Apply</string>
     <string name="filter_genre">Genre</string>
+    <string name="filter_genre_empty">No genres available (crawl details first)</string>
     <string name="filter_year">Year</string>
     <string name="filter_rating">Trakt rating</string>
     <string name="filter_rating_label">Rating</string>

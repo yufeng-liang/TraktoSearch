@@ -804,6 +804,7 @@
     <string name="filter_reset">重置</string>
     <string name="filter_apply">应用</string>
     <string name="filter_genre">类型</string>
+    <string name="filter_genre_empty">暂无类型数据(需先爬取详情)</string>
     <string name="filter_year">年份</string>
     <string name="filter_rating">Trakt 评分</string>
     <string name="filter_rating_label">评分</string>

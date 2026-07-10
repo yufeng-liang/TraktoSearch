@@ -18,6 +18,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -82,6 +85,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
@@ -112,6 +116,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -124,6 +129,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -187,12 +196,18 @@ class DoubanFailuresViewModel @Inject constructor(
         val failures: List<DoubanSyncFailure> = emptyList(),
         val error: String? = null,
         /** doubanId → 豆瓣评分(10分制),来自详情缓存(爬取过的条目才有) */
-        val doubanRatings: Map<String, Double> = emptyMap()
+        val doubanRatings: Map<String, Double> = emptyMap(),
+        /** doubanId → 豆瓣类型列表(如["剧情","喜剧"]),来自详情缓存(爬取过的条目才有) */
+        val doubanGenres: Map<String, List<String>> = emptyMap(),
+        /** 当前失败项集合中出现过的所有类型(去重排序,用于筛选弹窗展示) */
+        val availableGenres: List<String> = emptyList()
     )
 
-    /** 筛选状态:失败原因多选 + 标记时间区间 + 排序方式 */
+    /** 筛选状态:失败原因多选 + 类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式 */
     data class FilterState(
         val selectedReasons: Set<FailureReason> = emptySet(),
+        val selectedGenres: Set<String> = emptySet(),
+        val ratingRange: ClosedFloatingPointRange<Float> = 0f..10f,
         val markedTimePreset: MarkedTimePreset = MarkedTimePreset.ALL,
         val markedTimeOrder: SortOrder = SortOrder.DESC
     )
@@ -206,6 +221,8 @@ class DoubanFailuresViewModel @Inject constructor(
     /** 是否有激活的筛选条件(用于筛选按钮图标高亮) */
     val hasActiveFilters: StateFlow<Boolean> = _filterState.map { state ->
         state.selectedReasons.isNotEmpty() ||
+        state.selectedGenres.isNotEmpty() ||
+        state.ratingRange != 0f..10f ||
         state.markedTimePreset != MarkedTimePreset.ALL ||
         state.markedTimeOrder != SortOrder.DESC
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -216,18 +233,27 @@ class DoubanFailuresViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val list = doubanRetryManager.getAllFailures()
-                // 从豆瓣详情缓存批量查询评分(爬取过的条目才有评分)
-                val ratings = runCatching {
-                    doubanRepository.getDetailSnapshot()
-                        .mapNotNull { (id, entry) ->
-                            entry.doubanRating?.let { id to it }
-                        }.toMap()
-                }.getOrDefault(emptyMap())
+                // 从豆瓣详情缓存批量查询评分和类型(爬取过的条目才有)
+                val snapshot = runCatching { doubanRepository.getDetailSnapshot() }.getOrDefault(emptyMap())
+                val ratings = snapshot.mapNotNull { (id, entry) ->
+                    entry.doubanRating?.let { id to it }
+                }.toMap()
+                val genresMap = snapshot.mapNotNull { (id, entry) ->
+                    if (entry.genres.isNotEmpty()) id to entry.genres else null
+                }.toMap()
+                // 聚合失败项中出现过的所有类型(去重排序)
+                val availableGenres = genresMap.values
+                    .flatten()
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .sorted()
                 _uiState.value = DoubanFailuresUiState(
                     isLoading = false,
                     failures = list,
                     error = null,
-                    doubanRatings = ratings
+                    doubanRatings = ratings,
+                    doubanGenres = genresMap,
+                    availableGenres = availableGenres
                 )
                 // 后台静默从全局池刷新其他用户标注的类型，有更新则重新加载列表
                 launch {
@@ -307,6 +333,14 @@ class DoubanFailuresViewModel @Inject constructor(
 
     fun updateSelectedReasons(reasons: Set<FailureReason>) {
         _filterState.value = _filterState.value.copy(selectedReasons = reasons)
+    }
+
+    fun updateSelectedGenres(genres: Set<String>) {
+        _filterState.value = _filterState.value.copy(selectedGenres = genres)
+    }
+
+    fun updateRatingRange(range: ClosedFloatingPointRange<Float>) {
+        _filterState.value = _filterState.value.copy(ratingRange = range)
     }
 
     fun updateMarkedTimePreset(preset: MarkedTimePreset) {
@@ -453,7 +487,7 @@ fun DoubanFailuresScreen(
 
     // 按 status × mediaType × 搜索 × 筛选 过滤当前列表
     val currentStatus = if (selectedMode == 0) DoubanMarkStatus.WISH else DoubanMarkStatus.COLLECT
-    val filtered = remember(uiState.failures, selectedMode, selectedTab, searchQuery, filterState) {
+    val filtered = remember(uiState.failures, selectedMode, selectedTab, searchQuery, filterState, uiState.doubanGenres, uiState.doubanRatings) {
         // 1. status × mediaType 分组
         val byStatusAndType = uiState.failures.filter { failure ->
             failure.status == currentStatus &&
@@ -474,15 +508,30 @@ fun DoubanFailuresScreen(
         // 3. 失败原因多选
         val byReason = if (filterState.selectedReasons.isEmpty()) bySearch
         else bySearch.filter { it.failureReason in filterState.selectedReasons }
-        // 4. 标记时间区间预设
-        val byTime = byReason.filter { item ->
+        // 4. 类型多选(豆瓣条目 genres 与选中类型有交集即通过)
+        val byGenre = if (filterState.selectedGenres.isEmpty()) byReason
+        else byReason.filter { failure ->
+            val itemGenres = uiState.doubanGenres[failure.doubanId].orEmpty()
+            itemGenres.any { it in filterState.selectedGenres }
+        }
+        // 5. 豆瓣评分区间(无评分条目仅在默认全区间时通过)
+        val byRating = byGenre.filter { failure ->
+            val rating = uiState.doubanRatings[failure.doubanId]
+            if (rating == null) {
+                filterState.ratingRange == 0f..10f
+            } else {
+                rating.toFloat() >= filterState.ratingRange.start && rating.toFloat() <= filterState.ratingRange.endInclusive
+            }
+        }
+        // 6. 标记时间区间预设
+        val byTime = byRating.filter { item ->
             when (filterState.markedTimePreset) {
                 MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.markedAt, 7)
                 MarkedTimePreset.THIRTY_DAYS -> isWithinDays(item.markedAt, 30)
                 MarkedTimePreset.ALL -> true
             }
         }
-        // 5. 标记时间排序(ISO 字符串天然有序)
+        // 7. 标记时间排序(ISO 字符串天然有序)
         if (filterState.markedTimeOrder == SortOrder.DESC) byTime.sortedByDescending { it.markedAt }
         else byTime.sortedBy { it.markedAt }
     }
@@ -537,8 +586,10 @@ fun DoubanFailuresScreen(
                     3 -> documentaryCount
                     else -> uncategorizedCount
                 }
-                // 是否有激活的筛选条件(失败原因多选 + 标记时间区间预设)
+                // 是否有激活的筛选条件(失败原因多选 + 类型多选 + 评分区间 + 标记时间区间预设)
                 val hasActiveFilter = filterState.selectedReasons.isNotEmpty() ||
+                    filterState.selectedGenres.isNotEmpty() ||
+                    filterState.ratingRange != 0f..10f ||
                     filterState.markedTimePreset != MarkedTimePreset.ALL
 
                 // 判断空状态类型(优先级:总空 > 模式空 > 搜索空 > 筛选空 > 分类空)
@@ -1087,7 +1138,10 @@ fun DoubanFailuresScreen(
         ) {
             FailureFilterSheet(
                 filterState = filterState,
+                availableGenres = uiState.availableGenres,
                 onReasonsChange = { viewModel.updateSelectedReasons(it) },
+                onGenresChange = { viewModel.updateSelectedGenres(it) },
+                onRatingRangeChange = { viewModel.updateRatingRange(it) },
                 onPresetChange = { viewModel.updateMarkedTimePreset(it) },
                 onOrderChange = { viewModel.updateMarkedTimeOrder(it) },
                 onReset = { viewModel.resetFilters() },
@@ -1582,7 +1636,7 @@ private fun ActionItem(
 }
 
 /**
- * 筛选 ModalBottomSheet 内容:失败原因多选 + 标记时间区间 + 排序方式。
+ * 筛选 ModalBottomSheet 内容:失败原因多选 + 类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式。
  * 布局参考 Watchlist 筛选弹窗:每类之间用 HorizontalDivider 分隔,
  * 标题与 chips/SegmentedButton 共用一行,SpaceBetween 让每行均匀分布。
  */
@@ -1590,7 +1644,10 @@ private fun ActionItem(
 @Composable
 private fun FailureFilterSheet(
     filterState: DoubanFailuresViewModel.FilterState,
+    availableGenres: List<String>,
     onReasonsChange: (Set<FailureReason>) -> Unit,
+    onGenresChange: (Set<String>) -> Unit,
+    onRatingRangeChange: (ClosedFloatingPointRange<Float>) -> Unit,
     onPresetChange: (MarkedTimePreset) -> Unit,
     onOrderChange: (SortOrder) -> Unit,
     onReset: () -> Unit,
@@ -1605,7 +1662,6 @@ private fun FailureFilterSheet(
         // 失败原因多选(chip 按估算宽度降序排列:长块先占位,短块填缝)
         val sortedReasons = remember {
             FailureReason.entries.sortedByDescending { reason ->
-                val labelRes = reason.localizedStringResCompat()
                 // 估算:不同原因的文本长度,粗略排序
                 when (reason) {
                     FailureReason.NO_IMDB_ID -> 80
@@ -1641,6 +1697,116 @@ private fun FailureFilterSheet(
                     label = { Text(stringResource(reason.localizedStringResCompat())) }
                 )
             }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+        // 类型多选(豆瓣条目 genres,chip 按估算宽度降序排列)
+        val sortedGenres = remember(availableGenres) {
+            availableGenres.sortedByDescending { genre ->
+                val cjkCount = genre.count { it.code in 0x4E00..0x9FFF }
+                val otherCount = genre.length - cjkCount
+                cjkCount * 14 + otherCount * 8 + 24
+            }
+        }
+        Text(
+            text = stringResource(R.string.filter_genre),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        if (sortedGenres.isEmpty()) {
+            Text(
+                text = stringResource(R.string.filter_genre_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        } else {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                sortedGenres.forEach { genre ->
+                    FilterChip(
+                        selected = genre in filterState.selectedGenres,
+                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        onClick = {
+                            val newSet = if (genre in filterState.selectedGenres) {
+                                filterState.selectedGenres - genre
+                            } else {
+                                filterState.selectedGenres + genre
+                            }
+                            onGenresChange(newSet)
+                        },
+                        label = { Text(genre) }
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
+
+        // 豆瓣评分 RangeSlider(标题 + 滑动条 + 数值同一行)
+        val view = LocalView.current
+        var lastRatingStart by remember(filterState.ratingRange.start) { mutableStateOf(filterState.ratingRange.start.toInt()) }
+        var lastRatingEnd by remember(filterState.ratingRange.endInclusive) { mutableStateOf(filterState.ratingRange.endInclusive.toInt()) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.filter_rating_label),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            // 滑动条占 65% 宽度,右对齐评分值加大加粗
+            // 包一层拦截竖直滑动,避免拖动滑块时触发 sheet 上下移动
+            val ratingScrollConnection = remember {
+                object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                        Offset(0f, available.y)
+                    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                        Offset(0f, available.y)
+                    override suspend fun onPreFling(available: Velocity): Velocity = Velocity(0f, available.y)
+                    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity = Velocity(0f, available.y)
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                    .nestedScroll(ratingScrollConnection)
+                    .draggable(
+                        state = rememberDraggableState { _ -> },
+                        orientation = Orientation.Vertical,
+                        startDragImmediately = true,
+                        enabled = true
+                    )
+            ) {
+                RangeSlider(
+                    value = filterState.ratingRange,
+                    onValueChange = { range ->
+                        val newStart = range.start.toInt()
+                        val newEnd = range.endInclusive.toInt()
+                        if (newStart != lastRatingStart || newEnd != lastRatingEnd) {
+                            view.performHaptic(HapticType.TICK)
+                            lastRatingStart = newStart
+                            lastRatingEnd = newEnd
+                        }
+                        onRatingRangeChange(range)
+                    },
+                    valueRange = 0f..10f,
+                    steps = 9,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            Text(
+                text = "%.0f-%.0f".format(filterState.ratingRange.start, filterState.ratingRange.endInclusive),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
@@ -1686,9 +1852,6 @@ private fun FailureFilterSheet(
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.weight(1f))
-            // 右侧 SegmentedButtonRow 靠右,固定最小高度保持单行
-            // wrapContentWidth 让 Row 宽度按内容撑开
-            // 给每个 button 加 widthIn(min) 防止 weight(1f) 把内容压缩到文字截断
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .height(32.dp)
