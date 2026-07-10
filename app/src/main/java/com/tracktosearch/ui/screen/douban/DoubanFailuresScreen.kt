@@ -662,177 +662,6 @@ fun DoubanFailuresScreen(
                 }
             }
 
-            // 多选操作栏(顶部滑入,参考 WatchlistScreen)
-            AnimatedVisibility(
-                visible = isMultiSelectMode,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.thin()
-                        )
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                ) {
-                    // 状态栏 Spacer
-                    Spacer(modifier = Modifier.statusBarsPadding())
-                    // 第一行:返回 + 选中数 + 全选 + 取消
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(onClick = {
-                            isMultiSelectMode = false
-                            isProcessing = false
-                        }) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        Text(
-                            text = stringResource(
-                                R.string.screen_douban_failures_selected_count,
-                                selectedItems.size
-                            ),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            // 全选当前 Tab
-                            TextButton(
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    filtered.forEach { selectedItems[it.doubanId] = true }
-                                },
-                                enabled = !isProcessing
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.SelectAll,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(stringResource(R.string.screen_douban_failures_select_all))
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            TextButton(
-                                onClick = {
-                                    isMultiSelectMode = false
-                                    isProcessing = false
-                                },
-                                enabled = !isProcessing
-                            ) {
-                                Text(stringResource(R.string.douban_retry_cancel))
-                            }
-                        }
-                    }
-                    // 第二行:标注为电影 / 标注为电视剧 / 清除标注
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_mark_as_movie),
-                            icon = Icons.Rounded.Movie,
-                            enabled = !isProcessing,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "movie")
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_mark_as_show),
-                            icon = Icons.Rounded.Tv,
-                            enabled = !isProcessing,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "show")
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_clear_mark),
-                            enabled = !isProcessing,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, null)
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                    }
-                    // 第三行:标注为综艺 / 标注为纪录片 / 删除
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_mark_as_variety),
-                            icon = Icons.Rounded.TheaterComedy,
-                            enabled = !isProcessing,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "variety")
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_mark_as_documentary),
-                            icon = Icons.Rounded.Nature,
-                            enabled = !isProcessing,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchSetMediaType(ids, "documentary")
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                        MultiSelectActionButton(
-                            text = stringResource(R.string.screen_douban_failures_delete_item),
-                            icon = Icons.Rounded.Delete,
-                            enabled = !isProcessing,
-                            isDestructive = true,
-                            modifier = Modifier.weight(1f),
-                            onClick = {
-                                isProcessing = true
-                                val ids = selectedItems.keys.toList()
-                                viewModel.batchDeleteFailures(ids)
-                                isMultiSelectMode = false
-                                isProcessing = false
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
             // Haze 模糊覆盖层:状态栏 + 标题栏 + 搜索框 + 切换条 + 分类 Tab
             Box(
                 modifier = Modifier
@@ -1061,6 +890,177 @@ fun DoubanFailuresScreen(
                             }
                         )
                     }
+                }
+            }
+
+            // 多选操作栏(顶部滑入,参考 WatchlistScreen)
+            AnimatedVisibility(
+                visible = isMultiSelectMode,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.thin()
+                        )
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                ) {
+                    // 状态栏 Spacer
+                    Spacer(modifier = Modifier.statusBarsPadding())
+                    // 第一行:返回 + 选中数 + 全选 + 取消
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(onClick = {
+                            isMultiSelectMode = false
+                            isProcessing = false
+                        }) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Text(
+                            text = stringResource(
+                                R.string.screen_douban_failures_selected_count,
+                                selectedItems.size
+                            ),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // 全选当前 Tab
+                            TextButton(
+                                onClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    filtered.forEach { selectedItems[it.doubanId] = true }
+                                },
+                                enabled = !isProcessing
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.SelectAll,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.screen_douban_failures_select_all))
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            TextButton(
+                                onClick = {
+                                    isMultiSelectMode = false
+                                    isProcessing = false
+                                },
+                                enabled = !isProcessing
+                            ) {
+                                Text(stringResource(R.string.douban_retry_cancel))
+                            }
+                        }
+                    }
+                    // 第二行:标注为电影 / 标注为电视剧 / 清除标注
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_movie),
+                            icon = Icons.Rounded.Movie,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "movie")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_show),
+                            icon = Icons.Rounded.Tv,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "show")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_clear_mark),
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, null)
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                    }
+                    // 第三行:标注为综艺 / 标注为纪录片 / 删除
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_variety),
+                            icon = Icons.Rounded.TheaterComedy,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "variety")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_mark_as_documentary),
+                            icon = Icons.Rounded.Nature,
+                            enabled = !isProcessing,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchSetMediaType(ids, "documentary")
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                        MultiSelectActionButton(
+                            text = stringResource(R.string.screen_douban_failures_delete_item),
+                            icon = Icons.Rounded.Delete,
+                            enabled = !isProcessing,
+                            isDestructive = true,
+                            modifier = Modifier.weight(1f),
+                            onClick = {
+                                isProcessing = true
+                                val ids = selectedItems.keys.toList()
+                                viewModel.batchDeleteFailures(ids)
+                                isMultiSelectMode = false
+                                isProcessing = false
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
         }

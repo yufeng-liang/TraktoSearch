@@ -643,6 +643,10 @@
     <string name="screen_douban_failures_mark_as_variety">バラエティとしてマーク</string>
     <string name="screen_douban_failures_mark_as_documentary">ドキュメンタリーとしてマーク</string>
     <string name="screen_douban_failures_clear_mark">タイプマークをクリア</string>
+    <string name="screen_douban_failures_marked_as_movie">映画としてマーク済み</string>
+    <string name="screen_douban_failures_marked_as_show">TVドラマとしてマーク済み</string>
+    <string name="screen_douban_failures_marked_as_variety">バラエティとしてマーク済み</string>
+    <string name="screen_douban_failures_marked_as_documentary">ドキュメンタリーとしてマーク済み</string>
     <string name="screen_douban_failures_delete_item">この項目を削除</string>
     <string name="screen_douban_failures_tab_uncategorized">未分類</string>
     <string name="screen_douban_failures_tab_variety">バラエティ</string>
@@ -678,7 +682,7 @@
     <string name="douban_spider_test_tab_fields">抽出フィールド</string>
     <string name="douban_spider_test_tab_html">生HTML</string>
     <string name="douban_spider_test_tab_preview">Webプレビュー</string>
-    <string name="douban_spider_test_copy_html">すべてコピー</string>
+    <string name="douban_spider_test_copy_html">コピー</string>
     <string name="douban_spider_test_empty">空</string>
     <string name="douban_spider_test_copied">HTMLをクリップボードにコピーしました</string>
     <string name="douban_spider_test_export_txt">TXT書き出し</string>

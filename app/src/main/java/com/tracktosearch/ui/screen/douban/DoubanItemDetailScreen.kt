@@ -266,8 +266,6 @@ class DoubanItemDetailViewModel @Inject constructor(
      */
     private fun loadDetailInfo(failure: DoubanSyncFailure) {
         viewModelScope.launch {
-            // 入口标记为 FETCHING(重试时从 FAILED 回到 FETCHING)
-            _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
             // 记录是否来自实际爬取(用于决定是否弹乐观 Toast)
             var fromNetwork = false
             try {
@@ -815,7 +813,7 @@ fun DoubanItemDetailScreen(
                                 },
                                 text = {
                                     Text(
-                                        stringResource(R.string.screen_douban_item_detail_tab_resources),
+                                        stringResource(R.string.screen_douban_item_detail_tab_info),
                                         maxLines = 1
                                     )
                                 }
@@ -828,7 +826,7 @@ fun DoubanItemDetailScreen(
                                 },
                                 text = {
                                     Text(
-                                        stringResource(R.string.screen_douban_item_detail_tab_info),
+                                        stringResource(R.string.screen_douban_item_detail_tab_resources),
                                         maxLines = 1
                                     )
                                 }
@@ -838,7 +836,7 @@ fun DoubanItemDetailScreen(
 
                     // Tab 内容
                     when (selectedTab) {
-                        0 -> {
+                        1 -> {
                             // 资源搜索 Tab
                             item(key = "search_keyword_bar") {
                                 Box(modifier = Modifier.alpha(contentAlpha)) {
@@ -910,7 +908,7 @@ fun DoubanItemDetailScreen(
                                 }
                             }
                         }
-                        1 -> {
+                        0 -> {
                             // 详情信息 Tab
                             item(key = "info_actions") {
                                 Box(modifier = Modifier.alpha(contentAlpha)) {
@@ -1058,32 +1056,64 @@ fun DoubanItemDetailScreen(
                         onDismissRequest = { showMarkMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_movie)) },
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (failure?.mediaType == "movie") R.string.screen_douban_failures_marked_as_movie
+                                        else R.string.screen_douban_failures_mark_as_movie
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Rounded.Movie, contentDescription = null) },
+                            modifier = if (failure?.mediaType == "movie") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
                             onClick = {
                                 viewModel.setMediaType("movie")
                                 showMarkMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_show)) },
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (failure?.mediaType == "show") R.string.screen_douban_failures_marked_as_show
+                                        else R.string.screen_douban_failures_mark_as_show
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Rounded.Tv, contentDescription = null) },
+                            modifier = if (failure?.mediaType == "show") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
                             onClick = {
                                 viewModel.setMediaType("show")
                                 showMarkMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_variety)) },
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (failure?.mediaType == "variety") R.string.screen_douban_failures_marked_as_variety
+                                        else R.string.screen_douban_failures_mark_as_variety
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Rounded.TheaterComedy, contentDescription = null) },
+                            modifier = if (failure?.mediaType == "variety") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
                             onClick = {
                                 viewModel.setMediaType("variety")
                                 showMarkMenu = false
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.screen_douban_failures_mark_as_documentary)) },
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (failure?.mediaType == "documentary") R.string.screen_douban_failures_marked_as_documentary
+                                        else R.string.screen_douban_failures_mark_as_documentary
+                                    )
+                                )
+                            },
                             leadingIcon = { Icon(Icons.Rounded.Nature, contentDescription = null) },
+                            modifier = if (failure?.mediaType == "documentary") Modifier.background(MaterialTheme.colorScheme.primaryContainer) else Modifier,
                             onClick = {
                                 viewModel.setMediaType("documentary")
                                 showMarkMenu = false
@@ -1171,7 +1201,7 @@ fun DoubanItemDetailScreen(
             }
 
             // 资源搜索 Tab 快速回顶按钮(仅资源搜索 Tab 显示,详情信息 Tab 内容少不需要)
-            if (selectedTab == 0) {
+            if (selectedTab == 1) {
                 ScrollToTopButton(
                     listState = listState,
                     modifier = Modifier
@@ -1769,6 +1799,7 @@ private fun DoubanDetailInfoTab(
     onRetryLoadDetail: () -> Unit
 ) {
     val view = LocalView.current
+    val context = LocalContext.current
     Column(modifier = Modifier.padding(16.dp)) {
         // 操作按钮区
         Button(
@@ -2150,7 +2181,25 @@ private fun DoubanDetailInfoTab(
             ) {
                 items(detailInfo.celebrities) { celebrity ->
                     Column(
-                        modifier = Modifier.width(72.dp),
+                        modifier = Modifier
+                            .width(72.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    if (!celebrity.doubanPersonageUrl.isNullOrBlank()) {
+                                        view.performHaptic(HapticType.CLICK)
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(celebrity.doubanPersonageUrl))
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (_: ActivityNotFoundException) {
+                                            context.showToast(
+                                                context.getString(R.string.screen_douban_item_detail_open_douban)
+                                            )
+                                        }
+                                    }
+                                }
+                            ),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Box(
@@ -2209,13 +2258,13 @@ private fun DoubanDetailInfoTab(
 
 @Composable
 private fun MetaRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f)
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = value,
             style = MaterialTheme.typography.bodySmall,
