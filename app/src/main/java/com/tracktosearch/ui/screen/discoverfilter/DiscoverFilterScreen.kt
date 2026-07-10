@@ -327,7 +327,7 @@ fun DiscoverFilterScreen(
                 // 类型
                 FilterChip(
                     selected = uiState.selectedGenreIds.isNotEmpty(),
-                    border = if (uiState.selectedGenreIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (uiState.selectedGenreIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showGenreDialog = true },
                     label = {
                         Text(
@@ -341,7 +341,7 @@ fun DiscoverFilterScreen(
                 // 地区
                 FilterChip(
                     selected = uiState.selectedCountries.isNotEmpty(),
-                    border = if (uiState.selectedCountries.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (uiState.selectedCountries.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showRegionDialog = true },
                     label = {
                         Text(
@@ -355,7 +355,7 @@ fun DiscoverFilterScreen(
                 // 标签
                 FilterChip(
                     selected = uiState.selectedKeywordIds.isNotEmpty(),
-                    border = if (uiState.selectedKeywordIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (uiState.selectedKeywordIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showTagDialog = true },
                     label = {
                         Text(
@@ -369,7 +369,7 @@ fun DiscoverFilterScreen(
                 // 评分（显示"评分 0.0-10.0"）
                 FilterChip(
                     selected = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f,
-                    border = if (uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { viewModel.toggleAdvanced() },
                     label = {
                         Text(
@@ -458,7 +458,7 @@ fun DiscoverFilterScreen(
                             TmdbRepository.DiscoverSort.entries.forEach { sort ->
                                 FilterChip(
                                     selected = uiState.sortBy == sort,
-                                    border = if (uiState.sortBy == sort) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                    border = if (uiState.sortBy == sort) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         viewModel.setSortBy(sort)
@@ -496,7 +496,7 @@ fun DiscoverFilterScreen(
                             viewModel.decadeOptions.forEach { opt ->
                                 FilterChip(
                                     selected = opt.key in uiState.selectedDecadeKeys,
-                                    border = if (opt.key in uiState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                    border = if (opt.key in uiState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         viewModel.toggleDecade(opt.key)
@@ -850,7 +850,7 @@ private fun MultiSelectDialog(
                     options.forEach { (id, name) ->
                         FilterChip(
                             selected = id in selectedIds,
-                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
                                 onToggle(id)
@@ -869,7 +869,7 @@ private fun MultiSelectDialog(
                     options.forEach { (id, name) ->
                         FilterChip(
                             selected = id in selectedIds,
-                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
                                 onToggle(id)

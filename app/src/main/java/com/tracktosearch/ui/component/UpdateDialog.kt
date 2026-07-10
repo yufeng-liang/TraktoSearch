@@ -48,6 +48,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 
+private const val RELEASE_PAGE_URL = "https://gitee.com/yufeng-liang/TrackToSearch-release/releases"
+
 private sealed class DownloadState {
     object Idle : DownloadState()
     data class Downloading(val progress: Float) : DownloadState()
@@ -397,37 +399,58 @@ fun UpdateDialog(
             when (val state = downloadState) {
                 is DownloadState.Idle -> {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-                        Button(onClick = {
-                            downloadState = DownloadState.Downloading(0f)
-                            downloadJob = scope.launch {
-                                try {
-                                    val file = ApkDownloader.downloadApk(
-                                        context = context,
-                                        url = updateInfo.downloadUrl,
-                                        fileName = "TraktToSearch-v${updateInfo.latestVersion}.apk",
-                                        onProgress = { progress ->
-                                            downloadState = DownloadState.Downloading(progress)
-                                        }
-                                    )
-                                    downloadState = DownloadState.Completed(file)
-                                } catch (e: Exception) {
-                                    downloadState = DownloadState.Error(e.message ?: context.getString(R.string.update_download_failed))
-                                }
+                        if (updateInfo.downloadUrl.isEmpty()) {
+                            // 下载链接为空：提示并引导前往发布页
+                            Text(
+                                text = stringResource(R.string.update_download_unavailable),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(RELEASE_PAGE_URL))
+                                context.startActivity(intent)
+                                onDismiss()
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.update_release_page))
                             }
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.update_download_builtin))
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        OutlinedButton(onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
-                            context.startActivity(intent)
-                            onDismiss()
-                        }, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.update_download_browser))
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.update_later))
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.update_later))
+                            }
+                        } else {
+                            Button(onClick = {
+                                downloadState = DownloadState.Downloading(0f)
+                                downloadJob = scope.launch {
+                                    try {
+                                        val file = ApkDownloader.downloadApk(
+                                            context = context,
+                                            url = updateInfo.downloadUrl,
+                                            fileName = "TraktToSearch-v${updateInfo.latestVersion}.apk",
+                                            onProgress = { progress ->
+                                                downloadState = DownloadState.Downloading(progress)
+                                            }
+                                        )
+                                        downloadState = DownloadState.Completed(file)
+                                    } catch (e: Exception) {
+                                        downloadState = DownloadState.Error(e.message ?: context.getString(R.string.update_download_failed))
+                                    }
+                                }
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.update_download_builtin))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(onClick = {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
+                                context.startActivity(intent)
+                                onDismiss()
+                            }, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.update_download_browser))
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            OutlinedButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.update_later))
+                            }
                         }
                     }
                 }

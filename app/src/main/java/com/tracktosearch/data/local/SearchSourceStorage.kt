@@ -29,7 +29,7 @@ class SearchSourceStorage @Inject constructor(
     private val _pansouEnabled = MutableStateFlow(true)
     val pansouEnabled: StateFlow<Boolean> = _pansouEnabled.asStateFlow()
 
-    private val _panhubEnabled = MutableStateFlow(true)
+    private val _panhubEnabled = MutableStateFlow(false)
     val panhubEnabled: StateFlow<Boolean> = _panhubEnabled.asStateFlow()
 
     private val _zresoEnabled = MutableStateFlow(true)
@@ -40,7 +40,7 @@ class SearchSourceStorage @Inject constructor(
         scope.launch {
             val prefs = context.searchSourceDataStore.data.first()
             _pansouEnabled.value = prefs[KEY_PANSOU] ?: true
-            _panhubEnabled.value = prefs[KEY_PANHUB] ?: true
+            _panhubEnabled.value = prefs[KEY_PANHUB] ?: false
             _zresoEnabled.value = prefs[KEY_ZRESO] ?: true
         }
     }

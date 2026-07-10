@@ -200,7 +200,7 @@ class UpdateRepository @Inject constructor(
                 // 有新版本：将该版本 changelog 追加到完整日志缓存，设置页打开时直接用缓存
                 appendToFullChangelog(gitHubResult.latestVersion, gitHubResult.changelog)
                 val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
-                if (downloadUrl.isEmpty()) return null
+                // 下载链接为空时仍返回 hasUpdate=true,避免旧版本因下载链接获取失败而看不到更新提示
                 val info = gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
                 changelogStorage.saveCachedUpdateInfo(
                     info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
@@ -223,7 +223,7 @@ class UpdateRepository @Inject constructor(
             if (isNewerVersion(giteeResult.latestVersion, currentVersion)) {
                 appendToFullChangelog(giteeResult.latestVersion, giteeResult.changelog)
                 val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
-                if (downloadUrl.isEmpty()) return null
+                // 下载链接为空时仍返回 hasUpdate=true(同 GitHub 路径)
                 val info = giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
                 changelogStorage.saveCachedUpdateInfo(
                     info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl

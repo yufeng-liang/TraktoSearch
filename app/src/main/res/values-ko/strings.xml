@@ -42,6 +42,8 @@
     <string name="update_new_version">새 버전 v%1$s 사용 가능</string>
     <string name="update_download_builtin">내장 다운로드</string>
     <string name="update_download_browser">브라우저 다운로드</string>
+    <string name="update_release_page">릴리스 페이지로</string>
+    <string name="update_download_unavailable">직접 다운로드를 일시적으로 사용할 수 없습니다. 릴리스 페이지에서 APK를 받을 수 있습니다.</string>
     <string name="update_close">닫기</string>
     <string name="install_failed">설치 실패 (code=%1$d)</string>
     <string name="help_col_source">출처</string>
@@ -589,7 +591,7 @@
     <string name="douban_sync_mode_c_desc">모든 동기화 기록을 지우고 모든 더우반 표시를 처음부터 재동기화합니다. 이 앱이 Trakt에 추가한 표시는 제거되고 다시 작성됩니다.</string>
     <string name="douban_sync_mode_c_example">예: 이전에 %1$d개 항목 동기화됨, 모두 지워지고 재동기화됩니다. 데이터가 심하게 불일치할 때만 사용하세요.</string>
     <string name="douban_sync_mode_confirm">확인</string>
-    <string name="douban_sync_mode_warning_c">완전 재작성은 모든 동기화 기록을 지웁니다. 정말 계속하시겠습니까?</string>
+    <string name="douban_sync_mode_warning_c">완전 재작성은 모든 동기화 기록을 지우고 더우반 리스트를 다시 크롤링합니다.\n\n더우반에는 엄격한 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 본인 책임하에 진행하세요.\n\n정말 계속하시겠습니까?</string>
 
     <!-- Douban retry dialog - export option -->
     <string name="douban_retry_option_export">실패 기록 내보내기</string>

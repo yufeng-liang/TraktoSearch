@@ -1761,7 +1761,7 @@ private fun DoubanFilterSection(
                     }
                     androidx.compose.material3.FilterChip(
                         selected = source in enabledSources,
-                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = {
                             view.performHaptic(HapticType.TICK)
                             onToggleSource(source)
@@ -1813,7 +1813,7 @@ private fun DoubanFilterSection(
                     }
                     androidx.compose.material3.FilterChip(
                         selected = type in enabledDiskTypes,
-                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = {
                             view.performHaptic(HapticType.TICK)
                             onToggleDiskType(type)

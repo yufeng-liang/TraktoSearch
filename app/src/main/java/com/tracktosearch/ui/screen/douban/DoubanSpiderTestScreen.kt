@@ -365,13 +365,13 @@ fun DoubanSpiderTestScreen(
                             )
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.ITEM,
-                                border = if (uiState.urlPreset == UrlPreset.ITEM) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = if (uiState.urlPreset == UrlPreset.ITEM) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.ITEM) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_item)) }
                             )
                             FilterChip(
                                 selected = uiState.urlPreset == UrlPreset.USER_HOME,
-                                border = if (uiState.urlPreset == UrlPreset.USER_HOME) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = if (uiState.urlPreset == UrlPreset.USER_HOME) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { viewModel.updateUrlPreset(UrlPreset.USER_HOME) },
                                 label = { Text(stringResource(R.string.douban_spider_test_url_preset_user)) }
                             )
@@ -401,13 +401,13 @@ fun DoubanSpiderTestScreen(
                             )
                             FilterChip(
                                 selected = uiState.ua == TestUa.PC,
-                                border = if (uiState.ua == TestUa.PC) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = if (uiState.ua == TestUa.PC) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { viewModel.updateUa(TestUa.PC) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_pc)) }
                             )
                             FilterChip(
                                 selected = uiState.ua == TestUa.MOBILE,
-                                border = if (uiState.ua == TestUa.MOBILE) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                                border = if (uiState.ua == TestUa.MOBILE) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { viewModel.updateUa(TestUa.MOBILE) },
                                 label = { Text(stringResource(R.string.douban_spider_test_ua_mobile)) }
                             )

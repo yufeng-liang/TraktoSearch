@@ -1706,7 +1706,7 @@ private fun FailureFilterSheet(
             sortedReasons.forEach { reason ->
                 FilterChip(
                     selected = reason in filterState.selectedReasons,
-                    border = if (reason in filterState.selectedReasons) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                    border = if (reason in filterState.selectedReasons) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = {
                         val newSet = if (reason in filterState.selectedReasons) {
                             filterState.selectedReasons - reason
@@ -1750,7 +1750,7 @@ private fun FailureFilterSheet(
                 sortedGenres.forEach { genre ->
                     FilterChip(
                         selected = genre in filterState.selectedGenres,
-                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (genre in filterState.selectedGenres) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = {
                             val newSet = if (genre in filterState.selectedGenres) {
                                 filterState.selectedGenres - genre
@@ -1851,7 +1851,7 @@ private fun FailureFilterSheet(
                 MarkedTimePreset.entries.forEach { preset ->
                     FilterChip(
                         selected = filterState.markedTimePreset == preset,
-                        border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (filterState.markedTimePreset == preset) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = { onPresetChange(preset) },
                         label = { Text(stringResource(preset.localizedStringRes())) }
                     )

@@ -42,6 +42,8 @@
     <string name="update_new_version">新しいバージョン v%1$s が利用可能です</string>
     <string name="update_download_builtin">内蔵ダウンロード</string>
     <string name="update_download_browser">ブラウザダウンロード</string>
+    <string name="update_release_page">リリースページへ</string>
+    <string name="update_download_unavailable">直接ダウンロードは一時的に利用できません。リリースページからAPKを取得できます。</string>
     <string name="update_close">閉じる</string>
     <string name="install_failed">インストール失敗 (code=%1$d)</string>
     <string name="help_col_source">ソース</string>
@@ -589,7 +591,7 @@
     <string name="douban_sync_mode_c_desc">全ての同期記録をクリアし、すべての豆瓣マークをゼロから再同期します。このアプリがTraktに追加したマークは削除され、再書き込みされます。</string>
     <string name="douban_sync_mode_c_example">例:以前に%1$d項目を同期済み、全てクリアされ再同期されます。データが著しく不整合な場合のみ使用してください。</string>
     <string name="douban_sync_mode_confirm">確認</string>
-    <string name="douban_sync_mode_warning_c">完全上書きは全ての同期記録をクリアします。本当に続行しますか?</string>
+    <string name="douban_sync_mode_warning_c">完全上書きは全ての同期記録をクリアし、豆瓣リストを再クロールします。\n\n豆瓣には厳格なアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。自己責任で続行してください。\n\n本当に続行しますか?</string>
 
     <!-- Douban retry dialog - export option -->
     <string name="douban_retry_option_export">失敗記録をエクスポート</string>

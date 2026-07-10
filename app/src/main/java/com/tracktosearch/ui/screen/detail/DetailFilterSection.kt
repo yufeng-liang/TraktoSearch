@@ -71,7 +71,7 @@ internal fun FilterSection(
                     }
                     FilterChip(
                         selected = source in enabledSources,
-                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (source in enabledSources) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = { view.performHaptic(HapticType.TICK); onToggleSource(source) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
@@ -113,7 +113,7 @@ internal fun FilterSection(
                     }
                     FilterChip(
                         selected = type in enabledDiskTypes,
-                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null,
+                        border = if (type in enabledDiskTypes) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                         onClick = { view.performHaptic(HapticType.TICK); onToggleDiskType(type) },
                         label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         modifier = Modifier.height(28.dp)
