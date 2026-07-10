@@ -716,8 +716,7 @@
     <string name="screen_douban_item_detail_failure_reason">실패 이유: %1$s</string>
     <string name="screen_douban_item_detail_open_douban">더우반 페이지 열기</string>
     <string name="screen_douban_item_detail_retry">동기화 재시도</string>
-    <string name="screen_douban_item_detail_delete">이 기록 삭제</string>
-    <string name="screen_douban_item_detail_delete_confirm">이 실패 기록을 삭제하시겠습니까?</string>
+    <string name="screen_douban_item_detail_refetch">다시 크롤링</string>
     <string name="screen_douban_item_detail_subtitle_hint">탭하여 부제목 추가 (리소스 검색에 사용)</string>
     <string name="screen_douban_item_detail_subtitle_edit">부제목 편집</string>
     <string name="screen_douban_item_detail_search_with_subtitle">부제목으로 검색</string>

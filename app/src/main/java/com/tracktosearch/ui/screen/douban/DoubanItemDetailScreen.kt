@@ -39,7 +39,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.OpenInBrowser
@@ -51,7 +50,6 @@ import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -188,7 +186,6 @@ data class DoubanItemDetailUiState(
     val enabledDiskTypes: Set<DiskType> = ResourceRepository.ALL_DISK_TYPES,
     // 弹窗
     val showSubtitleDialog: Boolean = false,
-    val showDeleteConfirm: Boolean = false,
     // 重试
     val retryStarted: Boolean = false,
     val retryStartFailed: Boolean = false,
@@ -208,7 +205,7 @@ data class DoubanItemDetailUiState(
  * - 资源搜索:主标题 + 子标题并行搜索(参照 [com.tracktosearch.ui.screen.detail.DetailViewModel])
  * - 子标题编辑 → 持久化 → 自动刷新搜索
  * - 单条重试 → 启动 [DoubanSyncManager] 重试流程
- * - 删除失败记录 → 触发 onBack
+ * - 强制重新爬取豆瓣详情(forceRefresh=true,跳过缓存)
  * - 加载豆瓣详情补充信息(年份/国家/导演/类型),命中持久化缓存秒回
  */
 @HiltViewModel
@@ -571,10 +568,6 @@ class DoubanItemDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showSubtitleDialog = show)
     }
 
-    fun showDeleteConfirm(show: Boolean) {
-        _uiState.value = _uiState.value.copy(showDeleteConfirm = show)
-    }
-
     /** 获取豆瓣 cookie(供 WebView 注入用) */
     fun getDoubanCookie(): String? = doubanAuthStorage.getCredentials()?.cookie
 
@@ -601,12 +594,41 @@ class DoubanItemDetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(retryStartFailed = false)
     }
 
-    /** 删除当前失败项记录,删除后 failure 置 null 触发 UI 自动 onBack */
-    fun deleteFailure() {
-        val failure = _uiState.value.failure ?: return
+    /** 强制重新爬取豆瓣详情(跳过缓存和全局池,直接爬取豆瓣) */
+    fun retryFetchDetail() {
+        val current = _uiState.value.failure ?: return
         viewModelScope.launch {
-            doubanRetryManager.deleteFailure(failure.doubanId)
-            _uiState.value = _uiState.value.copy(failure = null, showDeleteConfirm = false)
+            _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+            val cookie = getDoubanCookie()
+            val result = doubanRepository.fetchDetail(
+                doubanUrl = current.doubanUrl,
+                cookie = cookie ?: "",
+                title = current.title,
+                forceRefresh = true,
+                onProgress = { phase, _ ->
+                    when (phase) {
+                        "fetching" -> {
+                            _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FETCHING)
+                        }
+                    }
+                }
+            )
+            result.first?.let { info ->
+                _uiState.value = _uiState.value.copy(detailInfo = info, detailLoadPhase = DetailLoadPhase.DONE)
+                // 强制重新爬取成功后推断媒体类型
+                val inferred = runCatching {
+                    doubanRetryManager.inferMediaTypeFromDetail(current.doubanId, info)
+                }.getOrDefault(false)
+                if (inferred) {
+                    val refreshed = doubanRetryManager.getFailure(current.doubanId)
+                    if (refreshed != null) {
+                        _uiState.value = _uiState.value.copy(failure = refreshed)
+                    }
+                }
+                _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
+            } ?: run {
+                _uiState.value = _uiState.value.copy(detailLoadPhase = DetailLoadPhase.FAILED)
+            }
         }
     }
 
@@ -780,7 +802,7 @@ fun DoubanItemDetailScreen(
                 !isPinned -> {
                     // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
                     val midColor = uiState.posterDominantColor?.let { c ->
-                        lerp(c, MaterialTheme.colorScheme.background, 0.5f)
+                        lerp(c, MaterialTheme.colorScheme.background, 0.8f)
                     } ?: MaterialTheme.colorScheme.background
                     if (midColor.luminance() <= 0.5f) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                 }
@@ -966,7 +988,7 @@ fun DoubanItemDetailScreen(
                                             }
                                         },
                                         onRetry = { viewModel.retrySingle() },
-                                        onDelete = { viewModel.showDeleteConfirm(true) },
+                                        onRetryFetch = { viewModel.retryFetchDetail() },
                                         onRetryLoadDetail = { viewModel.retryLoadDetailInfo() },
                                         onCelebrityClick = { url, name ->
                                             webviewUrl = url
@@ -1288,31 +1310,6 @@ fun DoubanItemDetailScreen(
                 }
             )
         }
-    }
-
-    // 删除确认弹窗
-    if (uiState.showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { viewModel.showDeleteConfirm(false) },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.screen_douban_item_detail_delete)) },
-            text = { Text(stringResource(R.string.screen_douban_item_detail_delete_confirm)) },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.deleteFailure() },
-                    colors = ButtonDefaults.textButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Text(stringResource(R.string.douban_sync_mode_confirm))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.showDeleteConfirm(false) }) {
-                    Text(stringResource(R.string.douban_retry_cancel))
-                }
-            }
-        )
     }
 
     // 演职员头像 → 应用内 WebView(注入豆瓣 cookie)
@@ -1891,7 +1888,7 @@ private fun DoubanDetailInfoTab(
     detailLoadPhase: DetailLoadPhase,
     onOpenDouban: () -> Unit,
     onRetry: () -> Unit,
-    onDelete: () -> Unit,
+    onRetryFetch: () -> Unit,
     onRetryLoadDetail: () -> Unit,
     onCelebrityClick: (url: String, name: String) -> Unit
 ) {
@@ -1915,7 +1912,7 @@ private fun DoubanDetailInfoTab(
             Spacer(modifier = Modifier.height(8.dp))
         }
 
-        // 打开豆瓣页面 + 删除此记录(同一行分散对齐)
+        // 打开豆瓣页面 + 重新爬取(同一行分散对齐)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1934,16 +1931,13 @@ private fun DoubanDetailInfoTab(
             OutlinedButton(
                 onClick = {
                     view.performHaptic(HapticType.CLICK)
-                    onDelete()
+                    onRetryFetch()
                 },
-                modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.error
-                )
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Rounded.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(stringResource(R.string.screen_douban_item_detail_delete))
+                Text(stringResource(R.string.screen_douban_item_detail_refetch))
             }
         }
 

@@ -59,7 +59,6 @@ import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Deselect
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Movie
@@ -808,16 +807,6 @@ fun DoubanFailuresScreen(
                                     contentDescription = stringResource(R.string.filter_title),
                                     tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary
                                     else androidx.compose.material3.LocalContentColor.current
-                                )
-                            }
-                            // 清空全部
-                            IconButton(onClick = {
-                                view.performHaptic(HapticType.CLICK)
-                                showClearConfirm = true
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Rounded.DeleteSweep,
-                                    contentDescription = stringResource(R.string.screen_douban_failures_clear_all)
                                 )
                             }
                         },

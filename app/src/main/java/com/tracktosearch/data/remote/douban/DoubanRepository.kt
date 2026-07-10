@@ -158,35 +158,43 @@ class DoubanRepository(
         doubanUrl: String,
         cookie: String,
         title: String? = null,
+        forceRefresh: Boolean = false,
         onProgress: (phase: String, title: String?) -> Unit = { _, _ -> }
     ): Pair<DoubanDetailInfo?, Boolean> {
         // 从 URL 解析 doubanId 作为缓存 key
         val doubanId = Regex("""subject/(\d+)""").find(doubanUrl)?.groupValues?.get(1) ?: doubanUrl
 
-        // 优先查本地缓存(命中则跳过详情页爬取,省 3-5 秒反爬延迟)
-        detailCache.get(doubanId)?.let { entry ->
-            onProgress("cache_hit", title)
-            return Pair(entry.toDetailInfo(), true) // 命中本地缓存
-        }
-        // 缓存未命中时等待磁盘加载完成再查一次,避免 loadFromDisk 未完成时误判为缓存未命中
-        // 导致不必要的 3-5 秒反爬延迟与详情页爬取
-        detailCache.awaitLoaded()
-        detailCache.get(doubanId)?.let { entry ->
-            onProgress("cache_hit", title)
-            return Pair(entry.toDetailInfo(), true) // 命中本地磁盘缓存
-        }
+        // forceRefresh=true 时跳过缓存和全局池,直接爬取豆瓣(用于"重新爬取"按钮)
+        if (!forceRefresh) {
+            // 优先查本地缓存(命中则跳过详情页爬取,省 3-5 秒反爬延迟)
+            detailCache.get(doubanId)?.let { entry ->
+                if (!entry.title.isNullOrBlank()) {
+                    onProgress("cache_hit", title)
+                    return Pair(entry.toDetailInfo(), true) // 命中本地缓存(标题非空=字段完善)
+                }
+            }
+            // 缓存未命中时等待磁盘加载完成再查一次,避免 loadFromDisk 未完成时误判为缓存未命中
+            // 导致不必要的 3-5 秒反爬延迟与详情页爬取
+            detailCache.awaitLoaded()
+            detailCache.get(doubanId)?.let { entry ->
+                if (!entry.title.isNullOrBlank()) {
+                    onProgress("cache_hit", title)
+                    return Pair(entry.toDetailInfo(), true) // 命中本地磁盘缓存
+                }
+            }
 
-        // 本地缓存未命中 → 查全局池(减少豆瓣爬取次数,用户A爬过的条目用户B直接复用)
-        val pool = cloudDetailsPoolManager
-        if (pool != null) {
-            val cloudEntry = runCatching {
-                pool.downloadDetail(doubanId)
-            }.getOrNull()
-            if (cloudEntry != null && cloudEntry.imdbId != null) {
-                // 全局池命中,写入本地缓存(永久),后续直接命中本地
-                detailCache.put(doubanId, cloudEntry)
-                onProgress("cache_hit", title)
-                return Pair(cloudEntry.toDetailInfo(), true) // 命中全局池
+            // 本地缓存未命中 → 查全局池(减少豆瓣爬取次数,用户A爬过的条目用户B直接复用)
+            val pool = cloudDetailsPoolManager
+            if (pool != null) {
+                val cloudEntry = runCatching {
+                    pool.downloadDetail(doubanId)
+                }.getOrNull()
+                if (cloudEntry != null && !cloudEntry.title.isNullOrBlank()) {
+                    // 全局池命中(标题非空=字段完善),写入本地缓存(永久),后续直接命中本地
+                    detailCache.put(doubanId, cloudEntry)
+                    onProgress("cache_hit", title)
+                    return Pair(cloudEntry.toDetailInfo(), true) // 命中全局池
+                }
             }
         }
 
@@ -203,8 +211,8 @@ class DoubanRepository(
             lastHtml = html
             // 解析成功就跳出
             val parsed = DoubanSpider.parseDetail(html)
-            if (parsed.imdbId != null) {
-                // 写入持久化缓存（永久，下次再导入同一部影片直接命中；保留所有字段）
+            if (!parsed.title.isNullOrBlank()) {
+                // 标题非空 = 爬取成功,写入持久化缓存（永久，下次再进入直接命中；保留所有字段）
                 val entry = DoubanDetailCacheEntry(
                     imdbId = parsed.imdbId,
                     isTvShow = parsed.isTvShow,
@@ -245,7 +253,7 @@ class DoubanRepository(
                 onProgress("done", title)
                 return Pair(parsed, false)
             }
-            // imdbId 为空可能是页面结构变化或加载不全，重试一次
+            // 标题为空可能是页面结构变化或加载不全，重试一次
         }
 
         // 两次都失败，返回最后一次解析结果（可能 imdbId 为 null）
