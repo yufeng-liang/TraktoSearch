@@ -218,3 +218,32 @@ private fun CooldownBadge(cooldownStatus: CooldownStatus?) {
         }
     }
 }
+
+/**
+ * 首次同步引导弹窗。
+ *
+ * 检测到用户已登录豆瓣但从未同步过时自动弹出。
+ * 用户点「开始导入」后弹出模式选择弹窗（DoubanSyncModePickerDialog）。
+ */
+@Composable
+fun DoubanFirstSyncGuideDialog(
+    onDismiss: () -> Unit,
+    onStartImport: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
+        title = { Text(stringResource(R.string.douban_first_sync_title)) },
+        text = { Text(stringResource(R.string.douban_first_sync_message)) },
+        confirmButton = {
+            TextButton(onClick = onStartImport) {
+                Text(stringResource(R.string.douban_first_sync_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.douban_first_sync_later))
+            }
+        }
+    )
+}

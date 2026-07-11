@@ -46,6 +46,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.CloudFailureSyncManager
+import com.tracktosearch.data.repository.DownloadResult
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncManager
@@ -135,14 +136,16 @@ class DoubanRetryViewModel @Inject constructor(
                 _cloudSyncLoading.value = false
                 return@launch
             }
-            val count = cloudFailureSyncManager.downloadAndMerge()
-            _cloudSyncEvent.value = when {
-                count < 0 -> CloudSyncEvent.DownloadFailed
-                count == 0 -> CloudSyncEvent.CloudEmpty
-                else -> {
+            val result = cloudFailureSyncManager.downloadAndMerge()
+            _cloudSyncEvent.value = when (result) {
+                is DownloadResult.Success -> {
+                    // 云端更新,本地已替换 → 刷新失败项统计
                     refreshRetryState()
-                    CloudSyncEvent.DownloadSuccess(count)
+                    CloudSyncEvent.DownloadSuccess(result.count)
                 }
+                DownloadResult.CloudEmpty -> CloudSyncEvent.CloudEmpty
+                DownloadResult.LocalNewer -> CloudSyncEvent.LocalNewer
+                DownloadResult.Failed -> CloudSyncEvent.DownloadFailed
             }
             _cloudSyncLoading.value = false
         }
@@ -169,6 +172,9 @@ sealed class CloudSyncEvent {
 
     /** 云端无失败数据 */
     object CloudEmpty : CloudSyncEvent()
+
+    /** 本地数据更新,跳过云端(无需刷新 UI) */
+    object LocalNewer : CloudSyncEvent()
 
     /** 下载并合并 N 条失败数据 */
     data class DownloadSuccess(val count: Int) : CloudSyncEvent()

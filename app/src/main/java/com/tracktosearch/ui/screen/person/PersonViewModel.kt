@@ -338,19 +338,24 @@ class PersonViewModel @Inject constructor(
     ) {
         _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
         viewModelScope.launch {
-            val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
-            val result = traktRepository.searchByTmdb(tmdbId, type)
-            result.onSuccess { searchResults ->
-                val first = searchResults.firstOrNull()
-                val traktId = if (isMovie) first?.movie?.ids?.trakt else first?.show?.ids?.trakt
-                val imdbId = if (isMovie) first?.movie?.ids?.imdb else first?.show?.ids?.imdb ?: ""
-                if (traktId != null && traktId > 0) {
-                    onNavigate(traktId, tmdbId, title, imdbId ?: "", 0.0)
-                } else {
-                    _toastEvent.emit(R.string.card_resolve_not_found)
+            try {
+                val type = if (isMovie) MediaType.MOVIE else MediaType.SHOW
+                val result = traktRepository.searchByTmdb(tmdbId, type)
+                result.onSuccess { searchResults ->
+                    val first = searchResults.firstOrNull()
+                    val traktId = if (isMovie) first?.movie?.ids?.trakt else first?.show?.ids?.trakt
+                    val imdbId = if (isMovie) first?.movie?.ids?.imdb else first?.show?.ids?.imdb ?: ""
+                    if (traktId != null && traktId > 0) {
+                        onNavigate(traktId, tmdbId, title, imdbId ?: "", 0.0)
+                    } else {
+                        _toastEvent.emit(R.string.card_resolve_not_found)
+                    }
                 }
+            } catch (_: Exception) {
+                // 忽略异常，确保 resolvingTmdbId 被清空
+            } finally {
+                _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
             }
-            _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
         }
     }
 }

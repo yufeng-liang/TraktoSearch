@@ -130,9 +130,23 @@ class TraktRepository @Inject constructor(
     /** 获取当前缓存（可能为 null，需先调用 loadWatchlistWatchedIds） */
     fun getWatchlistWatchedIds(): WatchlistWatchedIds? = watchlistWatchedIds
 
-    /** 清除全局想看/已看缓存（退出登录时调用） */
+    /** 清除全局想看/已看缓存及所有用户私有内存缓存（退出登录时调用） */
     fun clearWatchlistWatchedCache() {
         watchlistWatchedIds = null
+        // 清除所有用户私有内存缓存，避免下一用户看到上一用户的历史/评分/想看列表
+        commentsCache.clear()
+        relatedMoviesCache.clear()
+        relatedShowsCache.clear()
+        movieHistoryCache.clear()
+        showHistoryCache.clear()
+        watchedShowsCache.clear()
+        userRatingsCache.clear()
+        userStatsCache.clear()
+        movieWatchlistCache.clear()
+        showWatchlistCache.clear()
+        // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
+        notFoundTmdbIds.clear()
+        notFoundImdbIds.clear()
         // 同步清除持久化缓存，避免下次登录仍读到旧账号数据
         persistentScope.launch {
             try { watchlistWatchedIdsCache.clearAll() } catch (_: Exception) {}
@@ -606,6 +620,34 @@ class TraktRepository @Inject constructor(
                 Result.success(body)
             } else {
                 Result.failure(Exception("Failed to fetch comments: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** POST /comments 添加短评，成功返回 201 */
+    suspend fun postComment(traktId: Int, type: MediaType, comment: String, spoiler: Boolean = false): Result<TraktComment> {
+        return try {
+            val typeStr = when (type) {
+                MediaType.MOVIE -> "movie"
+                MediaType.SHOW -> "show"
+                else -> return Result.failure(Exception("Unsupported type for comment: $type"))
+            }
+            val request = TraktCommentRequest(
+                item = TraktCommentItem(
+                    type = typeStr,
+                    ids = TraktCommentItemId(trakt = traktId)
+                ),
+                comment = comment,
+                spoiler = spoiler
+            )
+            val response = traktApiService.postComment(request)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) Result.success(body) else Result.failure(Exception("Empty response body"))
+            } else {
+                Result.failure(Exception("Failed to post comment: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)

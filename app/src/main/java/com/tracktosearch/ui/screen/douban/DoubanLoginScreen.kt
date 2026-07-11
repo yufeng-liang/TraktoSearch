@@ -77,7 +77,8 @@ class DoubanLoginViewModel @Inject constructor(
     val doubanAuthStorage: DoubanAuthStorage,
     val doubanSyncManager: DoubanSyncManager,
     val cloudFailureSyncManager: com.tracktosearch.data.repository.CloudFailureSyncManager,
-    private val cloudPersonalSyncManager: com.tracktosearch.data.repository.CloudPersonalSyncManager
+    private val cloudPersonalSyncManager: com.tracktosearch.data.repository.CloudPersonalSyncManager,
+    private val doubanRetryManager: com.tracktosearch.data.repository.DoubanRetryManager
 ) : ViewModel() {
 
     val progress = doubanSyncManager.progress
@@ -119,7 +120,11 @@ class DoubanLoginViewModel @Inject constructor(
     /** 用户确认后下载云端失败数据并合并到本地 */
     fun downloadCloudFailures() {
         viewModelScope.launch {
-            cloudFailureSyncManager.downloadAndMerge()
+            val result = cloudFailureSyncManager.downloadAndMerge()
+            // 云端更新且替换成功 → 刷新失败项统计,让设置页/Watchlist 页显示最新数量
+            if (result is com.tracktosearch.data.repository.DownloadResult.Success) {
+                doubanRetryManager.refreshRetryState()
+            }
             _cloudFailureCount.value = null
         }
     }

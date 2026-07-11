@@ -808,6 +808,55 @@ class DoubanRepository(
     }
 
     /**
+     * 正式写回:标记看过+评分+短评（一次请求）。
+     *
+     * 基于测试页验证通过的 [markWatchedWithRatingForTest]，端点同为 POST /j/subject/{id}/interest，
+     * 表单增加 rating 和 comment 字段。豆瓣「打分」与「标记看过」耦合，通过 collect 一步提交星级最稳。
+     *
+     * @param rating 1..5 豆瓣五星制（整星，不支持半星）
+     * @param comment 短评（可选，空串表示不写短评）
+     * @return [MarkWriteResult] 含是否成功 / 状态码 / 信息
+     */
+    suspend fun markWatchedWithRating(
+        doubanId: String,
+        cookie: String,
+        ck: String,
+        rating: Int,
+        comment: String = ""
+    ): MarkWriteResult = withContext(Dispatchers.IO) {
+        val ratingStr = rating.coerceIn(1, 5).toString()
+        val url = "https://movie.douban.com/j/subject/$doubanId/interest"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .post(
+                FormBody.Builder()
+                    .add("ck", ck)
+                    .add("interest", "collect")
+                    .add("rating", ratingStr)
+                    .add("foldcollect", "F")
+                    .add("tags", "")
+                    .add("comment", comment)
+                    .add("private", "on")
+                    .build()
+            )
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            val ok = response.isSuccessful && body.contains("\"r\":0")
+            MarkWriteResult(
+                success = ok,
+                statusCode = response.code,
+                message = if (ok) "r:0" else body.take(200)
+            )
+        }
+    }
+
+    /**
      * 正式写回:取消豆瓣标记(删除收藏)。
      *
      * 端点(经真机验证): POST /subject/{id}/remove + ck(网页收藏编辑页"删除"按钮真正提交的表单,

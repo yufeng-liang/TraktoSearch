@@ -3,11 +3,16 @@ package com.tracktosearch.ui.screen.watchlist
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,9 +22,11 @@ import com.tracktosearch.R
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -70,7 +77,6 @@ data class WatchlistUiState(
     val hasMoreShows: Boolean = true,
     val moviePage: Int = 1,
     val showPage: Int = 1,
-    val tmdbUnavailable: Boolean = false,
     // 已看历史
     val historyMovies: List<MediaUiItem> = emptyList(),
     val historyShows: List<MediaUiItem> = emptyList(),
@@ -81,8 +87,26 @@ data class WatchlistUiState(
     val historyMoviesLoaded: Boolean = false,
     val historyShowsLoaded: Boolean = false,
     // 豆瓣同步进度（isRunning 时在 Tab 栏下方显示横幅，点击重新打开同步弹窗）
-    val doubanSyncProgress: DoubanSyncProgress? = null
-)
+    val doubanSyncProgress: DoubanSyncProgress? = null,
+    // 状态一致性检查进度（isRunning 时显示横幅，点击重新打开检查弹窗）
+    val consistencyCheckProgress: ConsistencyCheckResult? = null
+) {
+    /**
+     * 当前可见 tab 是否存在 TMDB 不可用的条目。
+     *
+     * 只检测 tmdbId > 0 但 posterUrl 仍为 null 的条目（这才是 TMDB 不可用导致的）。
+     * tmdbId <= 0 的条目不算（数据本身没有 tmdbId，非 TMDB 不可用）。
+     * 实时从当前 tab 的列表计算，避免多 tab 加载互相覆盖。
+     */
+    fun isTmdbUnavailable(selectedMode: Int, selectedTab: Int): Boolean {
+        val items = if (selectedMode == 0) {
+            if (selectedTab == 0) movies else shows
+        } else {
+            if (selectedTab == 0) historyMovies else historyShows
+        }
+        return items.any { it.tmdbId > 0 && it.posterUrl == null }
+    }
+}
 
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
@@ -90,11 +114,54 @@ class WatchlistViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val offlineCacheManager: OfflineCacheManager,
     private val doubanSyncManager: DoubanSyncManager,
+    private val doubanAuthStorage: DoubanAuthStorage,
+    private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
+
+    /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
+    private val _syncCompleteEvent = MutableSharedFlow<Unit>()
+    val syncCompleteEvent = _syncCompleteEvent.asSharedFlow()
+
+    /** 状态一致性检查完成事件（UI 监听后自动弹出 ConsistencyCheckDialog 显示结果） */
+    private val _consistencyCheckCompleteEvent = MutableSharedFlow<Unit>()
+    val consistencyCheckCompleteEvent = _consistencyCheckCompleteEvent.asSharedFlow()
+
+    /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
+    private val _needFirstSyncGuide = MutableStateFlow(false)
+    val needFirstSyncGuide: StateFlow<Boolean> = _needFirstSyncGuide.asStateFlow()
+
+    /** 检查是否需要首次同步引导 */
+    private fun checkFirstSyncNeeded() {
+        viewModelScope.launch {
+            // 未登录豆瓣 → 不需要引导
+            if (doubanAuthStorage.getCredentials() == null) return@launch
+            // 已登录但从未同步过 → 需要引导
+            val status = doubanSyncMetaStorage.getCooldownStatus()
+            if (status.neverSynced) {
+                _needFirstSyncGuide.value = true
+            }
+        }
+    }
+
+    /** 用户已处理首次同步引导（点击「开始导入」或「稍后再说」后调用） */
+    fun onFirstSyncGuideHandled() {
+        _needFirstSyncGuide.value = false
+    }
+
+    /** 检查是否已登录豆瓣 */
+    fun isDoubanLoggedIn(): Boolean = doubanAuthStorage.getCredentials() != null
+
+    /** 启动豆瓣同步 */
+    fun startDoubanSync(mode: SyncMode) {
+        viewModelScope.launch {
+            doubanSyncManager.startSync(mode)
+        }
+    }
 
     private val maxRetries = 2
 
@@ -158,20 +225,36 @@ class WatchlistViewModel @Inject constructor(
     }
 
     init {
-        // 监听豆瓣同步进度：isRunning 时显示横幅，完成且有成功条目则静默刷新
+        // 检查首次同步引导
+        checkFirstSyncNeeded()
+        // 监听豆瓣同步进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
         viewModelScope.launch {
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
-                // 同步进行中或已完成（5 秒内）→ 暴露给 UI 显示横幅
+                // 同步进行中或已完成 → 暴露给 UI 显示横幅
                 if (progress.isRunning || progress.isComplete) {
                     _uiState.value = _uiState.value.copy(doubanSyncProgress = progress)
                     // 完成且有成功条目，触发静默刷新（保留已有数据避免闪烁）
                     if (progress.isComplete && progress.successCount > 0) {
                         refreshIfLoaded(silent = true)
                     }
-                    // 完成后 5 秒清除横幅（让用户看到结果）
+                    // 完成后：发事件让 UI 自动弹出 DoubanSyncDialog，横幅 5 秒后消失
                     if (progress.isComplete) {
+                        _syncCompleteEvent.emit(Unit)
                         delay(5000)
                         _uiState.value = _uiState.value.copy(doubanSyncProgress = null)
+                    }
+                }
+            }
+        }
+        // 监听状态一致性检查进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
+        viewModelScope.launch {
+            statusConsistencyChecker.checkProgress.collect { progress: ConsistencyCheckResult ->
+                if (progress.isRunning || progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(consistencyCheckProgress = progress)
+                    if (progress.isComplete) {
+                        _consistencyCheckCompleteEvent.emit(Unit)
+                        delay(5000)
+                        _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
                     }
                 }
             }
@@ -231,14 +314,12 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
-                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     movies = uiItems,
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                     moviesLoaded = true,
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
-                    moviePage = _uiState.value.moviePage + 1,
-                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                    moviePage = _uiState.value.moviePage + 1
                 )
                 // 写入离线缓存（仅首页）
                 if (_uiState.value.moviePage == 2) {
@@ -310,14 +391,12 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
-                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     shows = uiItems,
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                     showsLoaded = true,
                     hasMoreShows = _uiState.value.showPage < totalPages,
-                    showPage = _uiState.value.showPage + 1,
-                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                    showPage = _uiState.value.showPage + 1
                 )
                 // 写入离线缓存（仅首页）
                 if (_uiState.value.showPage == 2) {
@@ -365,12 +444,10 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
-                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     historyMovies = uiItems,
                     isLoadingHistoryMovies = false,
-                    historyMoviesLoaded = true,
-                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                    historyMoviesLoaded = true
                 )
                 // 写入离线缓存
                 val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_MOVIE) }
@@ -415,12 +492,10 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
-                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     historyShows = uiItems,
                     isLoadingHistoryShows = false,
-                    historyShowsLoaded = true,
-                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                    historyShowsLoaded = true
                 )
                 // 写入离线缓存
                 val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_HISTORY_SHOW) }
@@ -585,13 +660,11 @@ class WatchlistViewModel @Inject constructor(
                         )
                     }
                 }.awaitAll()
-                val tmdbFailed = uiItems.any { it.posterUrl == null && it.displayTitle == it.title }
                 _uiState.value = _uiState.value.copy(
                     movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
                     isLoadingMovies = false,
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
-                    moviePage = _uiState.value.moviePage + 1,
-                    tmdbUnavailable = _uiState.value.tmdbUnavailable || tmdbFailed
+                    moviePage = _uiState.value.moviePage + 1
                 )
             }.onFailure { e ->
                 _uiState.value = _uiState.value.copy(

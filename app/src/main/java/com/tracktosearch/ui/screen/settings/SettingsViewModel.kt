@@ -34,6 +34,9 @@ import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.CloudPersonalSyncManager
+import com.tracktosearch.data.repository.ConsistencyCheckResult
+import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -92,6 +95,8 @@ class SettingsViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val cloudPersonalSyncManager: CloudPersonalSyncManager,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
+    private val doubanSyncManager: DoubanSyncManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -530,6 +535,29 @@ class SettingsViewModel @Inject constructor(
             }
             _cooldownStatus.value = doubanSyncMetaStorage.getCooldownStatus()
         }
+    }
+
+    // ===== 状态一致性检查 =====
+
+    /** 暴露检查进度 StateFlow（供 UI 实时观察） */
+    val checkProgress: StateFlow<ConsistencyCheckResult> = statusConsistencyChecker.checkProgress
+
+    /** 豆瓣同步是否正在运行（同步进行中隐藏手动检查入口，因同步后自动检查） */
+    val isDoubanSyncRunning: StateFlow<Boolean> = doubanSyncManager.progress
+        .map { it.isRunning }
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
+    /** 检查是否在运行中 */
+    fun isCheckRunning(): Boolean = statusConsistencyChecker.isRunning()
+
+    /** 手动触发：爬豆瓣列表拿最新状态后对比（分钟级，进度通过 checkProgress 暴露） */
+    fun startManualConsistencyCheck() {
+        statusConsistencyChecker.checkAndUnifyWithCrawl()
+    }
+
+    /** 取消正在进行的检查 */
+    fun cancelConsistencyCheck() {
+        statusConsistencyChecker.cancel()
     }
 
     /** 清除豆瓣凭据（退出登录） */

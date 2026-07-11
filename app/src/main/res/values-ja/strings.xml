@@ -508,6 +508,7 @@
     <string name="detail_rating_cancel">キャンセル</string>
     <string name="detail_rating_no_rating">未評価</string>
     <string name="detail_rating_hint">星の左右をタップしてハーフ/全体を選択、もう一度タップで解除</string>
+    <string name="detail_rating_comment_hint">コメント（任意）</string>
     <string name="detail_videos_section">予告編とスクリーンショット</string>
     <string name="detail_videos_all">すべて(%1$d)</string>
     <string name="detail_videos_all_title">予告編とスクリーンショット</string>
@@ -612,6 +613,23 @@
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">同期失敗項目を表示</string>
     <string name="settings_douban_view_failures_desc">%1$d件の豆瓣項目が同期失敗</string>
+    <string name="settings_douban_status_consistency">ステータス一貫性チェック</string>
+    <string name="settings_douban_status_consistency_desc">豆瓣とTraktのウォッチリスト/視聴済みステータスが一致するか確認</string>
+    <string name="settings_douban_status_consistency_checking">確認中…</string>
+    <string name="settings_douban_status_consistency_done">衝突 %1$d件、Trakt更新 %2$d件、豆瓣更新 %3$d件</string>
+    <string name="consistency_check_title">状態一貫性チェック</string>
+    <string name="consistency_check_background">バックグラウンド</string>
+    <string name="consistency_check_cancel">キャンセル</string>
+    <string name="consistency_check_complete_banner">チェック完了</string>
+    <string name="consistency_check_phase_crawl">豆瓣リスト取得中</string>
+    <string name="consistency_check_phase_compare">状態比較中</string>
+    <string name="consistency_check_phase_update_trakt">Trakt更新中</string>
+    <string name="consistency_check_phase_update_douban">豆瓣更新中</string>
+    <string name="consistency_check_phase_done">完了</string>
+    <string name="consistency_check_summary">%1$d件チェック、%2$d件の競合、Trakt更新%3$d件、豆瓣更新%4$d件、エラー%5$d件</string>
+    <string name="consistency_check_sub_wish">見たいリスト</string>
+    <string name="consistency_check_sub_collect">見たリスト</string>
+    <string name="consistency_check_sub_detail_ck">詳細ページck取得</string>
     <string name="settings_douban_import_failures">JSONから失敗項目をインポート</string>
     <string name="settings_douban_import_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてここで表示</string>
     <string name="screen_douban_failures_title">同期失敗項目</string>

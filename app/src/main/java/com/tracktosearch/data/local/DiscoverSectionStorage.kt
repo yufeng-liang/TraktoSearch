@@ -34,8 +34,11 @@ class DiscoverSectionStorage @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
+        const val SECTION_ID_DOUBAN_RECOMMEND = "douban-recommend"
+
         // 所有发现页栏目 ID（默认顺序）
         val ALL_SECTION_IDS = listOf(
+            SECTION_ID_DOUBAN_RECOMMEND,
             "douban-movie",
             "douban-weekly",
             "douban-top250",

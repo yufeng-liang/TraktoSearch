@@ -246,11 +246,15 @@ internal fun UserRatingBar(
 @Composable
 internal fun RatingDialog(
     initialRating: Int?,
+    initialComment: String?,
     isSubmitting: Boolean,
     onDismiss: () -> Unit,
-    onConfirm: (Int?) -> Unit
+    onConfirm: (Int?, String) -> Unit
 ) {
     var selectedRating by remember(initialRating) { mutableIntStateOf(initialRating ?: 0) }
+    var commentText by remember(initialComment) {
+        androidx.compose.runtime.mutableStateOf(initialComment ?: "")
+    }
     val starColor = Color(0xFFFFC107)
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
     val ratingView = LocalView.current
@@ -360,6 +364,23 @@ internal fun RatingDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                // 短评输入框（可选）
+                androidx.compose.material3.OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { if (it.length <= 350) commentText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = {
+                        Text(
+                            text = stringResource(R.string.detail_rating_comment_hint),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
+                    textStyle = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    enabled = !isSubmitting,
+                    shape = RoundedCornerShape(12.dp)
+                )
                 Spacer(modifier = Modifier.height(20.dp))
                 // 圆角按钮行
                 Row(
@@ -388,7 +409,7 @@ internal fun RatingDialog(
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.primary)
-                            .clickable(enabled = !isSubmitting) { onConfirm(if (selectedRating > 0) selectedRating else null) }
+                            .clickable(enabled = !isSubmitting) { onConfirm(if (selectedRating > 0) selectedRating else null, commentText.trim()) }
                             .padding(vertical = 10.dp),
                         contentAlignment = Alignment.Center
                     ) {

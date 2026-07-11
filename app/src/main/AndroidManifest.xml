@@ -110,6 +110,12 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
+        <!-- 状态一致性检查前台服务 -->
+        <service
+            android:name=".service.ConsistencyCheckService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
         <receiver
             android:name=".push.PushReceiver"
             android:enabled="true"
