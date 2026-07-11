@@ -60,7 +60,10 @@ class CustomSearchService @Inject constructor(
             .build()
 
         val response = okHttpClient.newCall(request).execute()
-        if (!response.isSuccessful) return@withContext emptyList()
+        if (!response.isSuccessful) {
+            response.close()
+            return@withContext emptyList()
+        }
 
         val body = response.body?.string() ?: return@withContext emptyList()
         val jsonElement = json.parseToJsonElement(body)

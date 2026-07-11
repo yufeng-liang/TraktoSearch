@@ -654,26 +654,31 @@ class TraktSearchViewModel @Inject constructor(
                 )
             )
 
-            resourceRepository.searchResourcesFlow(
-                keyword = query,
-                onSourceComplete = {
-                    val current = _uiState.value.diskState
+            try {
+                resourceRepository.searchResourcesFlow(
+                    keyword = query,
+                    onSourceComplete = {
+                        val current = _uiState.value.diskState
+                        _uiState.value = _uiState.value.copy(
+                            diskState = current.copy(completedSources = current.completedSources + 1)
+                        )
+                    }
+                ).collect { items ->
+                    // 搜索期间只更新资源列表，保持 isLoading = true 以显示进度
                     _uiState.value = _uiState.value.copy(
-                        diskState = current.copy(completedSources = current.completedSources + 1)
+                        diskState = _uiState.value.diskState.copy(
+                            resources = items
+                        )
                     )
                 }
-            ).collect { items ->
-                // 搜索期间只更新资源列表，保持 isLoading = true 以显示进度
-                _uiState.value = _uiState.value.copy(
-                    diskState = _uiState.value.diskState.copy(
-                        resources = items
+            } catch (_: Exception) {
+                // 网络错误等异常，确保 isLoading 被重置
+            } finally {
+                if (_uiState.value.diskState.isLoading) {
+                    _uiState.value = _uiState.value.copy(
+                        diskState = _uiState.value.diskState.copy(isLoading = false)
                     )
-                )
-            }
-            if (_uiState.value.diskState.isLoading) {
-                _uiState.value = _uiState.value.copy(
-                    diskState = _uiState.value.diskState.copy(isLoading = false)
-                )
+                }
             }
         }
     }

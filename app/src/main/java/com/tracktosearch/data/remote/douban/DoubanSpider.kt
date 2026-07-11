@@ -57,6 +57,23 @@ data class DoubanMarkListPage(
 )
 
 /**
+ * 豆瓣移动端搜索页（m.douban.com/search/?query={imdbId}）解析出的单条影视结果。
+ *
+ * @param doubanId 豆瓣条目 ID（从 /movie/subject/{id}/ 链接解析）
+ * @param title 条目标题
+ * @param doubanUrl 豆瓣条目相对链接（如 /movie/subject/37090502/）
+ * @param posterUrl 海报 URL（可能为空）
+ * @param rating 豆瓣评分（10 分制，如 8.0；null 表示暂无评分）
+ */
+data class DoubanSearchResultItem(
+    val doubanId: String,
+    val title: String,
+    val doubanUrl: String,
+    val posterUrl: String?,
+    val rating: Double?
+)
+
+/**
  * 豆瓣 HTML 解析器（基于 Jsoup）。
  *
  * 解析逻辑：
@@ -265,5 +282,38 @@ object DoubanSpider {
             sibling = sibling.nextSibling()
         }
         return sb.toString().trim().takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * 解析豆瓣移动端搜索页 HTML（m.douban.com/search/?query={imdbId}），提取影视条目列表。
+     *
+     * 搜索结果位于 `<ul class="search_results_subjects">` 内的 `<li>` 中：
+     * - doubanId 从 `<a href="/movie/subject/{id}/">` 链接解析
+     * - title 从 `<span class="subject-title">` 解析
+     * - posterUrl 从 `<img src="...">` 解析
+     * - rating 从 `<span class="rating-stars" data-rating="80.0">` 的 data-rating 属性解析（10 分制 = 值/10）
+     *
+     * @return 解析出的搜索结果列表（按页面顺序），空列表表示无搜索结果或非搜索结果页
+     */
+    fun parseSearchByImdb(html: String): List<DoubanSearchResultItem> {
+        val doc: Document = Jsoup.parse(html)
+        val items = doc.select("ul.search_results_subjects li").mapNotNull { li ->
+            val linkEl = li.selectFirst("a[href]") ?: return@mapNotNull null
+            val doubanUrl = linkEl.attr("href")
+            val doubanId = Regex("""subject/(\d+)""").find(doubanUrl)?.groupValues?.get(1)
+                ?: return@mapNotNull null
+
+            val title = li.selectFirst("span.subject-title")?.text()?.trim()
+                ?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+
+            val posterUrl = li.selectFirst("img")?.absUrl("src")?.takeIf { it.isNotEmpty() }
+
+            // data-rating 值如 "80.0" 表示 8.0 分（10 分制 = 值 / 10）
+            val rating = li.selectFirst("span.rating-stars")?.attr("data-rating")
+                ?.toDoubleOrNull()?.let { it / 10.0 }
+
+            DoubanSearchResultItem(doubanId, title, doubanUrl, posterUrl, rating)
+        }
+        return items
     }
 }

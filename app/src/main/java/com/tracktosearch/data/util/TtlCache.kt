@@ -1,8 +1,10 @@
 package com.tracktosearch.data.util
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -46,9 +48,17 @@ open class TtlCache<T>(
         val now = System.currentTimeMillis()
         // 防止 now + ttlMillis 溢出（Long.MAX_VALUE 作为"永不过期"时会导致溢出为负数，缓存立即失效）
         val expireAt = if (ttlMillis >= Long.MAX_VALUE - now) Long.MAX_VALUE else now + ttlMillis
+        putInternal(key, value, expireAt)
+    }
+
+    /** 子类专用：用指定 expireAt 写入（如 PersistentTtlCache 从磁盘恢复时保留原始过期时间） */
+    protected fun putInternal(key: String, value: T, expireAt: Long) {
         cache[key] = Entry(value, expireAt, accessCounter.incrementAndGet())
         trimToSize()
     }
+
+    /** 子类专用：获取 key 的当前 expireAt（用于持久化时保存原始过期时间） */
+    protected fun getExpireAt(key: String): Long? = cache[key]?.expireAt
 
     suspend fun getOrPut(key: String, defaultValue: suspend () -> T): T {
         get(key)?.let { return it }
@@ -86,6 +96,10 @@ open class TtlCache<T>(
             put(key, value)
             deferred.complete(value)
             value
+        } catch (e: CancellationException) {
+            // 发起方协程被取消：用普通异常通知等待方，避免级联取消不相关协程
+            deferred.completeExceptionally(IOException("Fetch cancelled"))
+            throw e
         } catch (e: Exception) {
             deferred.completeExceptionally(e)
             throw e
@@ -94,7 +108,12 @@ open class TtlCache<T>(
         }
     }
 
-    fun clear() = cache.clear()
+    fun clear() {
+        cache.clear()
+        // 清除飞行中请求追踪，防止 clear 后旧请求完成时把旧数据写回缓存，
+        // 也防止新调用方 join 到已失效的飞行中请求
+        inFlightRequests.clear()
+    }
 
     private fun trimToSize() {
         if (maxSize <= 0) return

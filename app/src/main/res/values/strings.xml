@@ -376,6 +376,7 @@
     <string name="detail_rating_cancel">Cancel</string>
     <string name="detail_rating_no_rating">Not rated</string>
     <string name="detail_rating_hint">Tap left/right of a star for half/full point. Tap again to clear.</string>
+    <string name="detail_rating_comment_hint">Comment (optional)</string>
     <string name="detail_videos_section">Videos &amp; Images</string>
     <string name="detail_videos_all">All (%1$d)</string>
     <string name="detail_videos_all_title">Videos &amp; Images</string>
@@ -717,6 +718,23 @@ Config:
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">View sync failures</string>
     <string name="settings_douban_view_failures_desc">%1$d Douban items failed to sync</string>
+    <string name="settings_douban_status_consistency">Check Status Consistency</string>
+    <string name="settings_douban_status_consistency_desc">Check if Douban and Trakt watchlist/watched statuses match</string>
+    <string name="settings_douban_status_consistency_checking">Checking…</string>
+    <string name="settings_douban_status_consistency_done">Conflicts: %1$d, Trakt updated: %2$d, Douban updated: %3$d</string>
+    <string name="consistency_check_title">Status Consistency Check</string>
+    <string name="consistency_check_background">Background</string>
+    <string name="consistency_check_cancel">Cancel</string>
+    <string name="consistency_check_complete_banner">Check complete</string>
+    <string name="consistency_check_phase_crawl">Crawling Douban lists</string>
+    <string name="consistency_check_phase_compare">Comparing statuses</string>
+    <string name="consistency_check_phase_update_trakt">Updating Trakt</string>
+    <string name="consistency_check_phase_update_douban">Updating Douban</string>
+    <string name="consistency_check_phase_done">Done</string>
+    <string name="consistency_check_summary">Checked %1$d items, found %2$d conflicts, Trakt updated %3$d, Douban updated %4$d, errors %5$d</string>
+    <string name="consistency_check_sub_wish">Wish list</string>
+    <string name="consistency_check_sub_collect">Watched list</string>
+    <string name="consistency_check_sub_detail_ck">Fetching ck</string>
     <string name="settings_douban_import_failures">Import failures from JSON</string>
     <string name="settings_douban_import_failures_desc">Import a failures JSON file exported from another device to view here</string>
     <string name="screen_douban_failures_title">Sync failures</string>

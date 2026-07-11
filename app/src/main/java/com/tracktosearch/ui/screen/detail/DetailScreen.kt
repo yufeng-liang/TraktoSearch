@@ -88,6 +88,7 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -129,6 +130,14 @@ fun DetailScreen(
 
     LaunchedEffect(traktId, tmdbId, title) {
         viewModel.loadDetail(traktId, tmdbId, title, mediaType, year, imdbId, traktRating, inWatchlist = initialInWatchlist, isWatched = initialIsWatched)
+    }
+
+    // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
+    val toastContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.toastEvent.collect { resId ->
+            toastContext.showToast(toastContext.getString(resId))
+        }
     }
 
     val listState = rememberLazyListState()
@@ -713,70 +722,130 @@ fun DetailScreen(
                 )
             }
 
-            // 分享按钮（半透明背景 + Haze 模糊增强）
+            // 分享按钮 + 豆瓣同步重试按钮（半透明背景 + Haze 模糊增强）
             val context = LocalContext.current
-            Box(
+            Row(
                 modifier = Modifier
                     .statusBarsPadding()
                     .padding(end = 12.dp, top = 4.dp)
-                    .align(Alignment.TopEnd)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(
-                        state = detailHazeState,
-                        style = HazeStyle(
-                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                            blurRadius = 20.dp,
-                            noiseFactor = 0f,
-                            tint = null
-                        )
-                    )
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            val shareLinksLabel = context.getString(R.string.detail_share_links)
-                            val shareText = buildString {
-                                append(uiState.title)
-                                if (uiState.year != null) append(" (${uiState.year})")
-                                append("\n")
-                                if (uiState.overview.isNotBlank()) {
-                                    append(uiState.overview)
-                                    append("\n")
+                    .align(Alignment.TopEnd),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 豆瓣同步重试按钮（仅在 doubanSyncRetryable=true 时显示）
+                if (uiState.doubanSyncRetryable) {
+                    val view = LocalView.current
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .hazeEffect(
+                                state = detailHazeState,
+                                style = HazeStyle(
+                                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                    blurRadius = 20.dp,
+                                    noiseFactor = 0f,
+                                    tint = null
+                                )
+                            )
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                shape = CircleShape
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                                shape = CircleShape
+                            )
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                enabled = !uiState.isDoubanSyncing,
+                                onClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    viewModel.retryDoubanSync()
                                 }
-                                // 附带前两个资源搜索结果的网盘链接
-                                val topResources = uiState.resources.take(2)
-                                if (topResources.isNotEmpty()) {
-                                    append("\n" + shareLinksLabel + "\n")
-                                    topResources.forEachIndexed { index, item ->
-                                        append("${index + 1}. ${item.name}\n${item.url}\n")
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (uiState.isDoubanSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Refresh,
+                                contentDescription = stringResource(R.string.detail_douban_sync_retry),
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // 分享按钮
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .hazeEffect(
+                            state = detailHazeState,
+                            style = HazeStyle(
+                                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
+                                blurRadius = 20.dp,
+                                noiseFactor = 0f,
+                                tint = null
+                            )
+                        )
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                            shape = CircleShape
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                            shape = CircleShape
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {
+                                val shareLinksLabel = context.getString(R.string.detail_share_links)
+                                val shareText = buildString {
+                                    append(uiState.title)
+                                    if (uiState.year != null) append(" (${uiState.year})")
+                                    append("\n")
+                                    if (uiState.overview.isNotBlank()) {
+                                        append(uiState.overview)
+                                        append("\n")
+                                    }
+                                    // 附带前两个资源搜索结果的网盘链接
+                                    val topResources = uiState.resources.take(2)
+                                    if (topResources.isNotEmpty()) {
+                                        append("\n" + shareLinksLabel + "\n")
+                                        topResources.forEachIndexed { index, item ->
+                                            append("${index + 1}. ${item.name}\n${item.url}\n")
+                                        }
                                     }
                                 }
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                }
+                                context.startActivity(Intent.createChooser(intent, null))
                             }
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, shareText)
-                            }
-                            context.startActivity(Intent.createChooser(intent, null))
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Rounded.Share,
-                    contentDescription = stringResource(R.string.detail_share),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Share,
+                        contentDescription = stringResource(R.string.detail_share),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
 
             ScrollToTopButton(
@@ -871,16 +940,17 @@ fun DetailScreen(
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,
+                    initialComment = null,
                     isSubmitting = uiState.isRating,
                     onDismiss = {
                         showRatingDialog = false
                         viewModel.dismissRatingDialog()
                     },
-                    onConfirm = { rating ->
+                    onConfirm = { rating, comment ->
                         showRatingDialog = false
                         viewModel.dismissRatingDialog()
                         view.performHaptic(HapticType.HEAVY_CLICK)
-                        if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRating(rating)
+                        if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRatingWithComment(rating, comment)
                     }
                 )
             }

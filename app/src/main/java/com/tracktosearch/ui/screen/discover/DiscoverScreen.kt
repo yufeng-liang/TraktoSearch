@@ -1,11 +1,8 @@
 package com.tracktosearch.ui.screen.discover
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,11 +11,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -26,7 +21,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.FilterList
@@ -55,18 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -96,6 +88,7 @@ fun DiscoverScreen(
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onFilterDiscoverClick: () -> Unit = {},
+    onDoubanLoginClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
@@ -208,6 +201,30 @@ fun DiscoverScreen(
                 // 根据用户设置（显示/隐藏 + 排序）渲染各栏目
                 sectionConfigs.filter { it.visible }.forEach { config ->
                     when (config.id) {
+                        // 豆瓣「猜你喜欢」（电影/电视剧，需登录豆瓣）
+                        DiscoverSectionStorage.SECTION_ID_DOUBAN_RECOMMEND -> {
+                            item(key = config.id) {
+                                DoubanRecommendSection(
+                                    state = uiState.doubanRecommendState,
+                                    resolvingItemId = uiState.resolvingRecommendItemId,
+                                    onItemClick = { item ->
+                                        val isMovieTab = uiState.doubanRecommendState.let {
+                                            it is DoubanRecommendState.Success && it.currentTab == RecommendTab.MOVIE
+                                        }
+                                        viewModel.resolveAndNavigateRecommend(item, isMovieTab) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+                                            if (isMovieTab) {
+                                                onMovieClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+                                            } else {
+                                                onShowClick(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+                                            }
+                                        }
+                                    },
+                                    onRetry = { viewModel.retryDoubanRecommend() },
+                                    onLoginClick = onDoubanLoginClick,
+                                    onTabSelected = { tab -> viewModel.switchRecommendTab(tab) }
+                                )
+                            }
+                        }
                         // 豆瓣热榜各榜单
                         "douban-movie", "douban-weekly", "douban-top250", "douban-nowplaying" -> {
                             val category = uiState.doubanHotCategories.find { it.id == config.id }
@@ -240,101 +257,18 @@ fun DiscoverScreen(
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
-                                        // 紧凑胶囊分段器：今日 / 本周（宽度跟随文字）
+                                        // 今日/本周切换条（统一组件）
                                         val isDay = uiState.trendingTimeWindow == "day"
-                                        val dayLabel = stringResource(R.string.discover_trending_day)
-                                        val weekLabel = stringResource(R.string.discover_trending_week)
-                                        val tabPadding = 12.dp
-                                        val tabHeight = 30.dp
-                                        // 用 TextMeasurer 同步测量文字宽度，避免 onTextLayout 异步回调导致切回页面时宽度跳变
-                                        val textMeasurer = rememberTextMeasurer()
-                                        val dayTextWidthPx = remember(dayLabel) {
-                                            textMeasurer.measure(
-                                                text = dayLabel,
-                                                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                            ).size.width
-                                        }
-                                        val weekTextWidthPx = remember(weekLabel) {
-                                            textMeasurer.measure(
-                                                text = weekLabel,
-                                                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                                            ).size.width
-                                        }
-                                        val density = LocalDensity.current
-                                        val dayTabWidthDp = with(density) { dayTextWidthPx.toDp() + tabPadding * 2 }
-                                        val weekTabWidthDp = with(density) { weekTextWidthPx.toDp() + tabPadding * 2 }
-                                        val capsuleWidth = dayTabWidthDp + weekTabWidthDp
-                                        val indicatorOffset by animateDpAsState(
-                                            targetValue = if (isDay) 0.dp else dayTabWidthDp,
-                                            animationSpec = tween(200),
-                                            label = "indicator"
-                                        )
-                                        val indicatorWidth by animateDpAsState(
-                                            targetValue = if (isDay) dayTabWidthDp else weekTabWidthDp,
-                                            animationSpec = tween(200),
-                                            label = "indicatorWidth"
-                                        )
-                                        Box(
-                                            modifier = Modifier
-                                                .height(tabHeight)
-                                                .width(capsuleWidth)
-                                                .clip(RoundedCornerShape(7.dp))
-                                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                        ) {
-                                            // 滑块指示器
-                                            Box(
-                                                modifier = Modifier
-                                                    .offset(x = indicatorOffset)
-                                                    .width(indicatorWidth)
-                                                    .fillMaxHeight()
-                                                    .padding(3.dp)
-                                                    .clip(RoundedCornerShape(5.dp))
-                                                    .background(MaterialTheme.colorScheme.primary)
-                                            )
-                                            // 文字选项
-                                            Row {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(dayTabWidthDp)
-                                                        .fillMaxHeight()
-                                                        .clickable(
-                                                            interactionSource = remember { MutableInteractionSource() },
-                                                            indication = null
-                                                        ) { viewModel.switchTrendingTimeWindow("day") },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = dayLabel,
-                                                        fontSize = 13.sp,
-                                                        fontWeight = if (isDay) FontWeight.Medium else FontWeight.Normal,
-                                                        color = if (isDay)
-                                                            MaterialTheme.colorScheme.onPrimary
-                                                        else
-                                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
-                                                Box(
-                                                    modifier = Modifier
-                                                        .width(weekTabWidthDp)
-                                                        .fillMaxHeight()
-                                                        .clickable(
-                                                            interactionSource = remember { MutableInteractionSource() },
-                                                            indication = null
-                                                        ) { viewModel.switchTrendingTimeWindow("week") },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = weekLabel,
-                                                        fontSize = 13.sp,
-                                                        fontWeight = if (!isDay) FontWeight.Medium else FontWeight.Normal,
-                                                        color = if (!isDay)
-                                                            MaterialTheme.colorScheme.onPrimary
-                                                        else
-                                                            MaterialTheme.colorScheme.onSurfaceVariant
-                                                    )
-                                                }
+                                        CapsuleTabSelector(
+                                            tabs = listOf(
+                                                stringResource(R.string.discover_trending_day),
+                                                stringResource(R.string.discover_trending_week)
+                                            ),
+                                            selectedIndex = if (isDay) 0 else 1,
+                                            onTabSelected = { index ->
+                                                viewModel.switchTrendingTimeWindow(if (index == 0) "day" else "week")
                                             }
-                                        }
+                                        )
                                         Spacer(modifier = Modifier.weight(1f))
                                         if (uiState.tmdbPopularMovies.isNotEmpty()) {
                                             Row(

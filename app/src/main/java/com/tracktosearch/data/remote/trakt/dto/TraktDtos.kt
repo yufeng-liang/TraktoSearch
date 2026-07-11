@@ -144,6 +144,25 @@ data class TraktCommentUser(
     val name: String = ""
 )
 
+/** POST /comments 请求体 */
+@Serializable
+data class TraktCommentRequest(
+    val item: TraktCommentItem,
+    val comment: String,
+    val spoiler: Boolean = false
+)
+
+@Serializable
+data class TraktCommentItem(
+    val type: String,               // "movie" 或 "show"
+    val ids: TraktCommentItemId
+)
+
+@Serializable
+data class TraktCommentItemId(
+    val trakt: Int
+)
+
 @Serializable
 data class TraktSeason(
     val number: Int = 0,

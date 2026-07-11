@@ -60,6 +60,7 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -124,6 +125,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.TextStyle
@@ -141,7 +143,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
+import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -197,13 +201,44 @@ fun WatchlistScreen(
     // 0=想看, 1=已看
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     val tabScope = rememberCoroutineScope()
-    // 控制豆瓣同步进度弹窗显示（点击横幅重新打开）
+    // 控制豆瓣同步进度弹窗显示（点击横幅重新打开 / 同步完成自动弹出）
     var showSyncDialog by rememberSaveable { mutableStateOf(false) }
+    // 首次同步引导弹窗
+    var showFirstSyncGuide by remember { mutableStateOf(false) }
+    // 模式选择弹窗（引导弹窗确认后弹出）
+    var showSyncModePicker by remember { mutableStateOf(false) }
     // 海报加载失败横幅关闭状态(用户点关闭后隐藏,数据刷新后自动恢复)
     var posterErrorDismissed by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState.tmdbUnavailable) {
+    // 当前可见 tab 的 TMDB 不可用状态（实时计算，避免多 tab 加载互相覆盖）
+    val tmdbUnavailable = uiState.isTmdbUnavailable(selectedMode, selectedTab)
+    LaunchedEffect(tmdbUnavailable) {
         // tmdbUnavailable 变 false 时重置关闭状态,下次再失败时重新显示横幅
-        if (!uiState.tmdbUnavailable) posterErrorDismissed = false
+        if (!tmdbUnavailable) posterErrorDismissed = false
+    }
+
+    // 监听首次同步引导状态
+    LaunchedEffect(Unit) {
+        viewModel.needFirstSyncGuide.collect { need ->
+            if (need) {
+                showFirstSyncGuide = true
+                viewModel.onFirstSyncGuideHandled()
+            }
+        }
+    }
+
+    // 监听同步完成事件 → 自动弹出 DoubanSyncDialog 显示结果
+    LaunchedEffect(Unit) {
+        viewModel.syncCompleteEvent.collect {
+            showSyncDialog = true
+        }
+    }
+
+    // 监听状态检查完成事件 → 自动弹出 ConsistencyCheckDialog 显示结果
+    var showConsistencyDialog by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        viewModel.consistencyCheckCompleteEvent.collect {
+            showConsistencyDialog = true
+        }
     }
 
     // 保存每个 (mode, tab) 组合的滚动位置
@@ -453,12 +488,29 @@ fun WatchlistScreen(
                                     append(stringResource(R.string.watchlist_empty_go_trakt))
                                 }
                                 append(stringResource(R.string.watchlist_empty_hint_middle))
-                                withLink(LinkAnnotation.Url("discover") {
-                                    onDiscoverClick()
-                                }) {
+                                withLink(LinkAnnotation.Clickable(
+                                    tag = "discover",
+                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                )) {
                                     append(stringResource(R.string.watchlist_empty_go_discover))
                                 }
                                 append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                // 「，或从豆瓣导入标记」超链接
+                                append(stringResource(R.string.watchlist_empty_douban_import_prefix))
+                                withLink(LinkAnnotation.Clickable(
+                                    tag = "douban_import",
+                                    linkInteractionListener = LinkInteractionListener {
+                                        // 已登录豆瓣 → 弹同步弹窗；未登录 → 跳转豆瓣登录页
+                                        val hasDouban = viewModel.isDoubanLoggedIn()
+                                        if (hasDouban) {
+                                            showSyncDialog = true
+                                        } else {
+                                            onNavigateToDoubanLogin()
+                                        }
+                                    }
+                                )) {
+                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                }
                             },
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -886,8 +938,74 @@ fun WatchlistScreen(
                             }
                         }
 
+                        // 状态一致性检查进度横幅（检查进行中或刚完成 5 秒内显示）
+                        val checkProgress = uiState.consistencyCheckProgress
+                        if (checkProgress != null) {
+                            val checkSpinTransition = rememberInfiniteTransition(label = "check_spin")
+                            val checkSpinRotation by checkSpinTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                ),
+                                label = "check_rotation"
+                            )
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showConsistencyDialog = true },
+                                color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
+                                    else MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (checkProgress.isRunning) Icons.Rounded.SyncAlt
+                                            else Icons.Rounded.CheckCircle,
+                                        contentDescription = null,
+                                        tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                            else MaterialTheme.colorScheme.onTertiaryContainer,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .then(
+                                                if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = checkSpinRotation }
+                                                else Modifier
+                                            )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (checkProgress.cookieExpired) {
+                                                stringResource(R.string.douban_sync_cookie_expired_banner)
+                                            } else if (checkProgress.isComplete) {
+                                                stringResource(R.string.consistency_check_complete_banner)
+                                            } else if (checkProgress.total > 0) {
+                                                "${checkProgress.phase} (${checkProgress.current}/${checkProgress.total})"
+                                            } else {
+                                                checkProgress.phase
+                                            },
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                        if (checkProgress.isRunning && checkProgress.total > 0) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            LinearProgressIndicator(
+                                                progress = { (checkProgress.current.toFloat() / checkProgress.total).coerceIn(0f, 1f) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
-                        if (uiState.tmdbUnavailable && !posterErrorDismissed) {
+                        if (tmdbUnavailable && !posterErrorDismissed) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.errorContainer
@@ -1040,6 +1158,43 @@ fun WatchlistScreen(
                 onTraktLogin = {
                     showSyncDialog = false
                     onNavigateToLogin()
+                }
+            )
+        }
+
+        // 状态一致性检查进度弹窗（点击横幅重新打开）
+        if (showConsistencyDialog) {
+            com.tracktosearch.ui.screen.settings.ConsistencyCheckDialog(
+                onDismiss = {
+                    val p = uiState.consistencyCheckProgress
+                    if (p == null || !p.isRunning) {
+                        showConsistencyDialog = false
+                    }
+                },
+                onBackground = { showConsistencyDialog = false }
+            )
+        }
+
+        // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
+        if (showFirstSyncGuide) {
+            DoubanFirstSyncGuideDialog(
+                onDismiss = { showFirstSyncGuide = false },
+                onStartImport = {
+                    showFirstSyncGuide = false
+                    showSyncModePicker = true
+                }
+            )
+        }
+
+        // 同步模式选择弹窗（引导弹窗确认后弹出）
+        if (showSyncModePicker) {
+            DoubanSyncModePickerDialog(
+                syncedCount = 0,
+                cooldownStatus = null,
+                onDismiss = { showSyncModePicker = false },
+                onModeSelected = { mode ->
+                    showSyncModePicker = false
+                    viewModel.startDoubanSync(mode)
                 }
             )
         }
