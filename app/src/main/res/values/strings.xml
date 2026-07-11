@@ -817,6 +817,15 @@ Config:
     <string name="douban_spider_test_mark_result">Result</string>
     <string name="douban_spider_test_copy_result">Copy result</string>
     <string name="douban_spider_test_mark_copied">Result copied</string>
+    <string name="douban_spider_test_recommend_section">Recommend (with Cookie)</string>
+    <string name="douban_spider_test_recommend_type">Type</string>
+    <string name="douban_spider_test_recommend_movie">Movie</string>
+    <string name="douban_spider_test_recommend_tv">TV</string>
+    <string name="douban_spider_test_recommend_run">Test Recommend</string>
+    <string name="douban_spider_test_recommend_no_login">Log in to Douban first to test personalized recommendations</string>
+    <string name="douban_spider_test_recommend_doulist">Doulist</string>
+    <string name="douban_spider_test_recommending">Testing…</string>
+    <string name="douban_spider_test_recommend_no_items">No doulist parsed (see raw JSON)</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">Filter</string>
