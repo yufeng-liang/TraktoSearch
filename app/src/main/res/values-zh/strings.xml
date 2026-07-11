@@ -130,6 +130,10 @@
     <!-- Detail Screen -->
     <string name="detail_back">返回</string>
     <string name="detail_share">分享</string>
+    <string name="detail_douban_sync_success">豆瓣数据已同步更新</string>
+    <string name="detail_douban_sync_failed">豆瓣同步失败，可重试</string>
+    <string name="detail_douban_sync_id_not_ready">豆瓣ID未就绪，可重试</string>
+    <string name="detail_douban_sync_retry">重试豆瓣同步</string>
     <string name="detail_marked_watched">已看过</string>
     <string name="detail_mark_watched">标记已看</string>
     <string name="detail_mark_watched_title">选择要标记已看的集</string>

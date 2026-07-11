@@ -130,6 +130,10 @@
     <!-- Detail Screen -->
     <string name="detail_back">Back</string>
     <string name="detail_share">Share</string>
+    <string name="detail_douban_sync_success">Douban data synced</string>
+    <string name="detail_douban_sync_failed">Douban sync failed, retry available</string>
+    <string name="detail_douban_sync_id_not_ready">Douban ID not ready, retry available</string>
+    <string name="detail_douban_sync_retry">Retry Douban sync</string>
     <string name="detail_marked_watched">Watched</string>
     <string name="detail_mark_watched">Mark as Watched</string>
     <string name="detail_mark_watched_title">Select Episodes to Mark as Watched</string>
