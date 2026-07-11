@@ -577,6 +577,10 @@
     <!-- 증분 동기화 쿨다운(7일) -->
     <string name="cooldown_remaining_days">쿨다운·남%1$d일</string>
     <string name="cooldown_available">동기화 가능</string>
+    <string name="douban_first_sync_title">Douban에서 가져오기</string>
+    <string name="douban_first_sync_message">Douban에 로그인했지만 아직 마크를 가져오지 않았습니다. Douban에서 관심 목록과 시청 기록을 가져와 빠르게 시작하세요.</string>
+    <string name="douban_first_sync_start">가져오기 시작</string>
+    <string name="douban_first_sync_later">나중에</string>
     <string name="cooldown_guidance_title">쿨다운 기간 중</string>
     <string name="cooldown_guidance_message">7일 이내에 리스트 크롤링을 동기화했습니다. 증분 동기화는 건너뛰며(데이터는 클라우드에서). 강제 동기화로 더우반 리스트를 다시 크롤링하시겠습니까?\n\n더우반에는 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 강제 동기화는 본인 책임하에.</string>
     <string name="cooldown_force_sync">강제 동기화</string>
@@ -625,6 +629,7 @@
     <string name="cloud_sync_upload_success">실패 데이터를 클라우드에 업로드했습니다</string>
     <string name="cloud_sync_upload_failed">업로드 실패, 나중에 다시 시도하세요</string>
     <string name="cloud_sync_download_empty">이 더우반 계정의 클라우드 실패 데이터가 없습니다</string>
+    <string name="cloud_sync_download_local_newer">로컬 데이터가 더 최신이므로 클라우드 데이터를 무시했습니다</string>
     <string name="cloud_sync_download_success">클라우드 실패 데이터 %1$d개를 다운로드하여 병합했습니다</string>
     <string name="dialog_download_success_title">가져오기 성공</string>
     <string name="dialog_download_success_message">클라우드에서 %1$d개의 실패 항목을 가져왔습니다. 동기화 실패 항목 페이지에서 확인할 수 있습니다.</string>
@@ -707,6 +712,26 @@
     <string name="douban_spider_test_recommend_doulist">두리스트</string>
     <string name="douban_spider_test_recommending">테스트 중…</string>
     <string name="douban_spider_test_recommend_no_items">두리스트를 파싱하지 못했습니다(원시 JSON 참조)</string>
+    <string name="douban_spider_test_rating_section">봤어요 + 평점 쓰기 (Cookie 포함)</string>
+    <string name="douban_spider_test_rating_douban_id">더우반 항목 ID (예: 1292052)</string>
+    <string name="douban_spider_test_rating_stars">평점</string>
+    <string name="douban_spider_test_rating_comment_hint">한줄평 (선택)</string>
+    <string name="douban_spider_test_rating_run">봤어요 + 평점 제출</string>
+    <string name="douban_spider_test_rating_writing">제출 중…</string>
+    <string name="douban_spider_test_rating_no_login">먼저 더우반에 로그인하세요 (쓰기 API는 Cookie 필요)</string>
+    <string name="douban_spider_test_rating_success">성공 (r:0)</string>
+    <string name="douban_spider_test_rating_failed">실패</string>
+    <string name="douban_spider_test_rating_star_unit">점</string>
+    <string name="douban_spider_test_search_section">imdb→豆瓣ID 검색 테스트</string>
+    <string name="douban_spider_test_search_imdb_hint">IMDb ID (예: tt39528392)</string>
+    <string name="douban_spider_test_search_run">검색</string>
+    <string name="douban_spider_test_searching">검색 중…</string>
+    <string name="douban_spider_test_search_no_imdb">IMDb ID를 입력해 주세요</string>
+    <string name="douban_spider_test_search_no_result">검색 결과 없음 (원시 HTML 참조)</string>
+    <string name="douban_spider_test_search_show_html">원시 HTML 펼치기</string>
+    <string name="douban_spider_test_search_hide_html">원시 HTML 접기</string>
+    <string name="douban_spider_test_cookie_clear">임시 삭제</string>
+    <string name="douban_spider_test_cookie_restore">복원</string>
 
     <!--豆瓣 실패 항목 조회 페이지: 필터와 검색 -->
     <string name="filter_title">필터</string>
@@ -951,6 +976,11 @@
     <string name="discover_douban_weekly">이번 주 베스트</string>
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_nowplaying">상영중</string>
+    <string name="discover_douban_recommend">너를 위한 추천</string>
+    <string name="discover_douban_recommend_movie">영화</string>
+    <string name="discover_douban_recommend_tv">TV 프로그램</string>
+    <string name="discover_douban_recommend_login_prompt">더우반에 로그인하여 맞춤 추천 받기</string>
+    <string name="discover_douban_recommend_login_button">더우반 로그인</string>
     <string name="discover_view_all">전체(%d) ></string>
     <string name="discover_trakt_trending_movies">Trakt 트렌딩 영화</string>
     <string name="discover_trakt_trending_shows">Trakt 트렌딩 TV 프로그램</string>
@@ -1070,6 +1100,8 @@
     <string name="watchlist_empty_hint_middle">에서 관심 목록 추가, </string>
     <string name="watchlist_empty_go_discover">발견</string>
     <string name="watchlist_empty_hint_suffix">에서 더 탐색</string>
+    <string name="watchlist_empty_douban_import_prefix">, 또는 </string>
+    <string name="watchlist_empty_douban_import_link">Douban에서 가져오기</string>
     <string name="watched_empty_hint_prefix">시도해 보세요: </string>
     <string name="watched_empty_hint_middle">에서 시청 표시, </string>
 

@@ -577,6 +577,10 @@
     <!-- 増分同期クールダウン(7日) -->
     <string name="cooldown_remaining_days">クールダウン·残り%1$d日</string>
     <string name="cooldown_available">同期可能</string>
+    <string name="douban_first_sync_title">Doubanからインポート</string>
+    <string name="douban_first_sync_message">Doubanにログイン済みですが、まだマークをインポートしていません。Doubanからウォッチリストと視聴履歴をインポートして素早く開始しましょう。</string>
+    <string name="douban_first_sync_start">インポート開始</string>
+    <string name="douban_first_sync_later">後で</string>
     <string name="cooldown_guidance_title">クールダウン期間中</string>
     <string name="cooldown_guidance_message">7日以内にリストクロールを同期済みです。増分同期はスキップされます(データはクラウドから)。強制同期で豆瓣リストを再クロールしますか?\n\n豆瓣にはアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。強制同期は自己責任で。</string>
     <string name="cooldown_force_sync">強制同期</string>
@@ -625,6 +629,7 @@
     <string name="cloud_sync_upload_success">失敗データをクラウドにアップロードしました</string>
     <string name="cloud_sync_upload_failed">アップロード失敗、後でもう一度お試しください</string>
     <string name="cloud_sync_download_empty">この豆瓣アカウントのクラウド失敗データはありません</string>
+    <string name="cloud_sync_download_local_newer">ローカルデータがより新しいため、クラウドデータを無視しました</string>
     <string name="cloud_sync_download_success">クラウド失敗データ %1$d 件をダウンロードしてマージしました</string>
     <string name="dialog_download_success_title">インポート成功</string>
     <string name="dialog_download_success_message">クラウドから %1$d 件の失敗項目をインポートしました。同期失敗項目ページで確認できます。</string>
@@ -707,6 +712,26 @@
     <string name="douban_spider_test_recommend_doulist">豆リスト</string>
     <string name="douban_spider_test_recommending">テスト中…</string>
     <string name="douban_spider_test_recommend_no_items">豆リストが解析されませんでした（生JSONを参照）</string>
+    <string name="douban_spider_test_rating_section">視聴済み + 評価の書き込み（Cookie付き）</string>
+    <string name="douban_spider_test_rating_douban_id">豆瓣アイテムID（例: 1292052）</string>
+    <string name="douban_spider_test_rating_stars">評価</string>
+    <string name="douban_spider_test_rating_comment_hint">短評（任意）</string>
+    <string name="douban_spider_test_rating_run">視聴済み + 評価を送信</string>
+    <string name="douban_spider_test_rating_writing">送信中…</string>
+    <string name="douban_spider_test_rating_no_login">先に豆瓣にログインしてください（書き込みAPIにはCookieが必要）</string>
+    <string name="douban_spider_test_rating_success">成功（r:0）</string>
+    <string name="douban_spider_test_rating_failed">失敗</string>
+    <string name="douban_spider_test_rating_star_unit">星</string>
+    <string name="douban_spider_test_search_section">imdb→豆瓣ID 検索テスト</string>
+    <string name="douban_spider_test_search_imdb_hint">IMDb ID（例: tt39528392）</string>
+    <string name="douban_spider_test_search_run">検索</string>
+    <string name="douban_spider_test_searching">検索中…</string>
+    <string name="douban_spider_test_search_no_imdb">IMDb ID を入力してください</string>
+    <string name="douban_spider_test_search_no_result">検索結果なし（生HTMLを参照）</string>
+    <string name="douban_spider_test_search_show_html">生HTMLを展開</string>
+    <string name="douban_spider_test_search_hide_html">生HTMLを折りたたむ</string>
+    <string name="douban_spider_test_cookie_clear">一時クリア</string>
+    <string name="douban_spider_test_cookie_restore">復元</string>
 
     <!-- 豆瓣失敗項查看頁:フィルターと検索 -->
     <string name="filter_title">フィルター</string>
@@ -951,6 +976,11 @@
     <string name="discover_douban_weekly">今週のベスト</string>
     <string name="discover_douban_top250">トップ250</string>
     <string name="discover_douban_nowplaying">上映中</string>
+    <string name="discover_douban_recommend">あなたに似合う</string>
+    <string name="discover_douban_recommend_movie">映画</string>
+    <string name="discover_douban_recommend_tv">テレビ番組</string>
+    <string name="discover_douban_recommend_login_prompt">豆瓣にログインしてパーソナライズされたおすすめを入手</string>
+    <string name="discover_douban_recommend_login_button">豆瓣にログイン</string>
     <string name="discover_view_all">すべて(%d) ></string>
     <string name="discover_trakt_trending_movies">Trakt トレンド映画</string>
     <string name="discover_trakt_trending_shows">Trakt トレンドテレビ番組</string>
@@ -1070,6 +1100,8 @@
     <string name="watchlist_empty_hint_middle">でウォッチリストに追加、</string>
     <string name="watchlist_empty_go_discover">発見ページ</string>
     <string name="watchlist_empty_hint_suffix">でさらに探索</string>
+    <string name="watchlist_empty_douban_import_prefix">、または</string>
+    <string name="watchlist_empty_douban_import_link">Doubanからインポート</string>
     <string name="watched_empty_hint_prefix">こちらを試す：</string>
     <string name="watched_empty_hint_middle">で視聴済みにマーク、</string>
 
