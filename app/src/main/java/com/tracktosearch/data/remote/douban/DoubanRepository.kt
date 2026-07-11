@@ -1,6 +1,8 @@
 package com.tracktosearch.data.remote.douban
 
 import com.tracktosearch.data.local.DoubanUserProfile
+import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
+import com.tracktosearch.data.remote.douban.dto.DoubanRecommendResponse
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.Dispatchers
@@ -12,13 +14,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+
+/** 豆瓣 Cookie 过期异常（401/403 或响应为登录页） */
+class DoubanCookieExpiredException(message: String = "豆瓣登录已过期") : Exception(message)
 
 /**
  * 延时信息(用于同步进度弹窗展示倒计时)。
@@ -110,7 +117,8 @@ data class DoubanCelebrityCacheEntry(
  */
 class DoubanRepository(
     private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
-    private val cloudDetailsPoolManager: CloudDetailsPoolManager? = null
+    private val cloudDetailsPoolManager: CloudDetailsPoolManager? = null,
+    private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -449,6 +457,101 @@ class DoubanRepository(
     }
 
     /**
+     * 测试用(路径 B):标记「看过(collect)」并一并提交评分。
+     *
+     * 端点(与正式 [markInterest] 同源, 经真机验证): POST /j/subject/{id}/interest
+     *   + ck + interest=collect + rating=N(1..5) + foldcollect=F + tags/comment/private。
+     * 成功判据 HTTP 200 且响应体含 {"r":0}。豆瓣「打分」与「标记看过」耦合,
+     * 通过 collect 一步提交星级最稳,无需单独打 /subject/{id}/rating。
+     *
+     * 仅测试页调用,用于逆向确认 rating 字段是否被接受及取值范围(推测 1..5 星)。
+     *
+     * @param rating 星级 1..5
+     * @param comment 短评(可选)
+     */
+    suspend fun markWatchedWithRatingForTest(
+        doubanId: String,
+        cookie: String,
+        ck: String,
+        rating: Int,
+        comment: String = "",
+        tags: String = ""
+    ): RatingWriteTestResult = withContext(Dispatchers.IO) {
+        val startMs = System.currentTimeMillis()
+        val url = "https://movie.douban.com/j/subject/$doubanId/interest"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .post(
+                FormBody.Builder()
+                    .add("ck", ck)
+                    .add("interest", "collect")
+                    .add("rating", rating.toString())
+                    .add("foldcollect", "F")
+                    .add("tags", tags)
+                    .add("comment", comment)
+                    .add("private", "on")
+                    .build()
+            )
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            val ok = response.isSuccessful && body.contains("\"r\":0")
+            RatingWriteTestResult(
+                doubanId = doubanId,
+                rating = rating,
+                success = ok,
+                statusCode = response.code,
+                durationMs = System.currentTimeMillis() - startMs,
+                body = body
+            )
+        }
+    }
+
+    /**
+     * 测试用:用 imdbId 搜索豆瓣移动端搜索页(m.douban.com/search/?query={imdbId}),
+     * 返回原始 HTML + 解析出的搜索结果列表。
+     *
+     * 该端点返回服务端渲染 HTML(非 JS 渲染),Jsoup 解析 a[href^="/movie/subject/"] 即可拿到 doubanId。
+     * 因 imdbId 是唯一标识,匹配准确率极高,无需二次详情页验证。
+     *
+     * @param imdbId IMDb ID(如 tt39528392)
+     * @param cookie 豆瓣 Cookie(测试 cookie 是否必需;传空字符串可验证未登录场景)
+     * @param useMobileUa 是否使用移动端 UA(该端点是移动端页面,建议 true)
+     */
+    suspend fun searchDoubanIdByImdbForTest(
+        imdbId: String,
+        cookie: String,
+        useMobileUa: Boolean = true
+    ): DoubanSearchTestResult = withContext(Dispatchers.IO) {
+        val startMs = System.currentTimeMillis()
+        val url = "https://m.douban.com/search/?query=$imdbId"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", if (useMobileUa) mobileUa else ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://m.douban.com/")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val html = response.body?.string() ?: ""
+            val isLoginPage = DoubanSpider.isLoginPage(html)
+            val results = DoubanSpider.parseSearchByImdb(html)
+            DoubanSearchTestResult(
+                imdbId = imdbId,
+                statusCode = response.code,
+                durationMs = System.currentTimeMillis() - startMs,
+                html = html,
+                isLoginPage = isLoginPage,
+                results = results
+            )
+        }
+    }
+
+    /**
      * 测试用:对一个标记动作探测候选写接口端点,返回对照结果。
      * 仅爬取测试页调用,用于逆向确认端点与字段(不进入正式业务逻辑)。
      *
@@ -760,6 +863,43 @@ class DoubanRepository(
         s = s.replace(Regex("""的豆瓣(主页)?.*$"""), "")
         return s.trim().ifBlank { raw }
     }
+
+    /**
+     * 抓取豆瓣「为你推荐」rexxar 端点（movie/tv），带登录 cookie 返回个性化单剧推荐。
+     *
+     * - 带登录 cookie: 返回个性化单剧推荐，每条带 alg_strategy("user_movie"/"user_tv") 和 reason_data 推荐理由
+     * - 免登录: 返回通用热门片单（非单剧），不推荐使用
+     *
+     * @param type "movie" 或 "tv"
+     * @param cookie 用户登录后的豆瓣 cookie
+     * @return 个性化单剧列表（已过滤片单/豆列，仅保留 type="subject"）
+     * @throws DoubanCookieExpiredException 当响应为登录页（cookie 过期）
+     */
+    suspend fun fetchRecommend(type: String, cookie: String): List<DoubanRecommendItem> = withContext(Dispatchers.IO) {
+        val url = "https://m.douban.com/rexxar/api/v2/$type/recommend"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", mobileUa)
+            .header("Cookie", cookie)
+            .header("Referer", "https://m.douban.com/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: throw IOException("豆瓣推荐响应为空")
+            // cookie 过期:rexxar 端点可能返回 401 或重定向到登录页
+            if (response.code == 401 || response.code == 403) {
+                throw DoubanCookieExpiredException()
+            }
+            // 防御性检查:响应是 HTML 登录页而非 JSON
+            if (body.contains("<form id=\"lzform\"") || body.contains("\"login\":true")) {
+                throw DoubanCookieExpiredException()
+            }
+            val parsed = json.decodeFromString<DoubanRecommendResponse>(body)
+            // 过滤片单/豆列（type=="playlist"）和广告（type=="ad"），保留所有单剧推荐
+            parsed.items.filter { it.type == "movie" || it.type == "tv" }
+        }
+    }
 }
 
 /**
@@ -819,6 +959,26 @@ data class RecommendTestResult(
     val body: String,           // 原始 JSON 响应体
     val itemCount: Int?,        // 解析出的 items 数量(null=非 JSON 或解析失败)
     val titles: List<String>    // 片单标题列表
+)
+
+/** 测试页「看过+评分写入」结果(路径 B: /j/subject/{id}/interest + interest=collect + rating) */
+data class RatingWriteTestResult(
+    val doubanId: String,
+    val rating: Int,            // 提交的星级(1..5)
+    val success: Boolean,       // HTTP 200 且响应体含 {"r":0}
+    val statusCode: Int,
+    val durationMs: Long,
+    val body: String            // 原始响应体
+)
+
+/** 测试页「imdb→豆瓣ID」搜索结果 */
+data class DoubanSearchTestResult(
+    val imdbId: String,             // 查询用的 imdbId
+    val statusCode: Int,
+    val durationMs: Long,
+    val html: String,               // 原始 HTML 响应体
+    val isLoginPage: Boolean,       // 是否为登录页(cookie 过期)
+    val results: List<DoubanSearchResultItem>  // 解析出的搜索结果列表
 )
 
 /** 豆瓣标记状态 */

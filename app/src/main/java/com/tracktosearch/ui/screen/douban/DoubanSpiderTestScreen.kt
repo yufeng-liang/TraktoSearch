@@ -96,8 +96,11 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DoubanSearchResultItem
+import com.tracktosearch.data.remote.douban.DoubanSearchTestResult
 import com.tracktosearch.data.remote.douban.DoubanSpider
 import com.tracktosearch.data.remote.douban.MarkTestResult
+import com.tracktosearch.data.remote.douban.RatingWriteTestResult
 import com.tracktosearch.data.remote.douban.RecommendTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
@@ -148,7 +151,19 @@ data class SpiderTestUiState(
     val recommendType: String = "tv",      // "movie" | "tv"
     val isRecommending: Boolean = false,
     val recommendResult: RecommendTestResult? = null,
-    val recommendError: String? = null
+    val recommendError: String? = null,
+    // ── 看过+评分写入测试(带 cookie, 路径 B) ──
+    val ratingDoubanId: String = "",       // 目标条目 doubanId
+    val ratingValue: Int = 5,              // 星级 1..5
+    val ratingComment: String = "",        // 短评(可选)
+    val isRatingWriting: Boolean = false,
+    val ratingResult: RatingWriteTestResult? = null,
+    val ratingError: String? = null,
+    // ── imdb→豆瓣ID 搜索测试 ──
+    val searchImdbId: String = "",         // 输入的 imdbId(如 tt39528392)
+    val isSearching: Boolean = false,
+    val searchResult: DoubanSearchTestResult? = null,
+    val searchError: String? = null
 )
 
 /** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
@@ -202,6 +217,21 @@ class DoubanSpiderTestViewModel @Inject constructor(
 
     fun updateUa(ua: TestUa) {
         _uiState.value = _uiState.value.copy(ua = ua)
+    }
+
+    /** 临时清除 cookie(仅置空 uiState.cookie,不影响 DoubanAuthStorage 真实存储),用于测试未登录场景 */
+    fun clearCookieTemporarily() {
+        _uiState.value = _uiState.value.copy(cookie = "")
+    }
+
+    /** 恢复 cookie(从 DoubanAuthStorage 重新读取) */
+    fun restoreCookie() {
+        val cred = doubanAuthStorage.getCredentials()
+        _uiState.value = _uiState.value.copy(
+            cookie = cred?.cookie ?: "",
+            isLoggedIn = cred != null,
+            userId = cred?.userId ?: ""
+        )
     }
 
     /** 加载失败项列表(快选弹窗用,失败项有海报/标题/id) */
@@ -326,6 +356,95 @@ class DoubanSpiderTestViewModel @Inject constructor(
             }
         }
     }
+
+    /** 更新看过+评分测试用的豆瓣条目 ID */
+    fun updateRatingDoubanId(id: String) {
+        _uiState.value = _uiState.value.copy(ratingDoubanId = id, ratingError = null, ratingResult = null)
+    }
+
+    /** 更新评分星级(1..5) */
+    fun updateRatingValue(v: Int) {
+        _uiState.value = _uiState.value.copy(ratingValue = v.coerceIn(1, 5))
+    }
+
+    /** 更新短评(可选) */
+    fun updateRatingComment(c: String) {
+        _uiState.value = _uiState.value.copy(ratingComment = c)
+    }
+
+    /**
+     * 看过+评分写入测试(路径 B):先抓 PC 详情页解析 ck,再 POST /j/subject/{id}/interest
+     * (interest=collect + rating=N)。复用已真机验证的 markInterest 端点族,标记「看过」时一并提交评分。
+     * 仅用于测试页逆向确认 rating 字段是否被接受,不进入正式业务逻辑。
+     */
+    fun ratingWriteTest() {
+        val current = _uiState.value
+        val doubanId = current.ratingDoubanId.trim()
+        if (doubanId.isBlank()) {
+            _uiState.value = current.copy(ratingError = "doubanId is blank")
+            return
+        }
+        _uiState.value = current.copy(isRatingWriting = true, ratingError = null, ratingResult = null)
+        viewModelScope.launch {
+            try {
+                // 1. 抓 PC 详情页(含 ck 凭证),PC UA 与写接口一致
+                val detailUrl = "https://movie.douban.com/subject/$doubanId/"
+                val fetch = doubanRepository.fetchHtmlForTest(detailUrl, current.cookie, useMobileUa = false)
+                if (DoubanSpider.isLoginPage(fetch.html)) {
+                    _uiState.value = _uiState.value.copy(isRatingWriting = false, ratingError = "Cookie expired (login page returned)")
+                    return@launch
+                }
+                val ck = DoubanSpider.parseCsrfToken(fetch.html)
+                if (ck == null) {
+                    _uiState.value = _uiState.value.copy(isRatingWriting = false, ratingError = "Failed to parse ck from detail page HTML")
+                    return@launch
+                }
+                // 2. 提交「看过 + 评分」
+                val result = doubanRepository.markWatchedWithRatingForTest(
+                    doubanId = doubanId,
+                    cookie = current.cookie,
+                    ck = ck,
+                    rating = current.ratingValue,
+                    comment = current.ratingComment.trim()
+                )
+                _uiState.value = _uiState.value.copy(isRatingWriting = false, ratingResult = result)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isRatingWriting = false, ratingError = e.stackTraceToString())
+            }
+        }
+    }
+
+    /** 更新 imdb→豆瓣ID 搜索测试的输入 imdbId */
+    fun updateSearchImdbId(id: String) {
+        _uiState.value = _uiState.value.copy(searchImdbId = id, searchError = null, searchResult = null)
+    }
+
+    /**
+     * imdb→豆瓣ID 搜索测试:用 imdbId 搜索 m.douban.com/search/?query={imdbId},
+     * 返回原始 HTML + 解析出的搜索结果列表。
+     * 用于验证 cookie 是否必需、端点是否可用、解析是否正确。
+     */
+    fun searchByImdbTest() {
+        val current = _uiState.value
+        val imdbId = current.searchImdbId.trim()
+        if (imdbId.isBlank()) {
+            _uiState.value = current.copy(searchError = "imdbId is blank")
+            return
+        }
+        _uiState.value = current.copy(isSearching = true, searchError = null, searchResult = null)
+        viewModelScope.launch {
+            try {
+                val result = doubanRepository.searchDoubanIdByImdbForTest(
+                    imdbId = imdbId,
+                    cookie = current.cookie,
+                    useMobileUa = true
+                )
+                _uiState.value = _uiState.value.copy(isSearching = false, searchResult = result)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isSearching = false, searchError = e.stackTraceToString())
+            }
+        }
+    }
 }
 
 // ==================== Composable ====================
@@ -423,6 +542,23 @@ fun DoubanSpiderTestScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (uiState.isLoggedIn) Color(0xFF4CAF50) else Color(0xFFF44336)
                             )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.clearCookieTemporarily() },
+                                enabled = uiState.cookie.isNotBlank(),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text(stringResource(R.string.douban_spider_test_cookie_clear), style = MaterialTheme.typography.labelSmall)
+                            }
+                            OutlinedButton(
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.restoreCookie() },
+                                enabled = uiState.cookie.isBlank(),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                            ) {
+                                Text(stringResource(R.string.douban_spider_test_cookie_restore), style = MaterialTheme.typography.labelSmall)
+                            }
                         }
                     }
                 }
@@ -707,6 +843,134 @@ fun DoubanSpiderTestScreen(
                     }
                 }
 
+                // ── 看过+评分写入测试(带 Cookie, 路径 B) ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_rating_section)) {
+                        OutlinedTextField(
+                            value = uiState.ratingDoubanId,
+                            onValueChange = viewModel::updateRatingDoubanId,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_douban_id)) },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                        )
+                        // 星级选择 1..5
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_rating_stars),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            (1..5).forEach { star ->
+                                FilterChip(
+                                    selected = uiState.ratingValue == star,
+                                    border = if (uiState.ratingValue == star) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRatingValue(star) },
+                                    label = { Text("$star") },
+                                    modifier = Modifier.height(32.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                        }
+                        // 短评(可选)
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedTextField(
+                            value = uiState.ratingComment,
+                            onValueChange = viewModel::updateRatingComment,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_comment_hint)) },
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.ratingWriteTest() },
+                                enabled = uiState.isLoggedIn && uiState.ratingDoubanId.isNotBlank() && !uiState.isRatingWriting,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                if (uiState.isRatingWriting) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.douban_spider_test_rating_writing))
+                                } else {
+                                    Text(stringResource(R.string.douban_spider_test_rating_run))
+                                }
+                            }
+                        }
+                        // 未登录提示
+                        if (!uiState.isLoggedIn) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_rating_no_login),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 错误(技术堆栈/英文)
+                        uiState.ratingError?.let { err ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                                Text(
+                                    text = err,
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        // 结果
+                        uiState.ratingResult?.let { res ->
+                            val copyCtx = LocalContext.current
+                            val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "HTTP ${res.statusCode} · ${res.durationMs}ms · ${res.rating}${stringResource(R.string.douban_spider_test_rating_star_unit)} · " +
+                                        if (res.success) stringResource(R.string.douban_spider_test_rating_success) else stringResource(R.string.douban_spider_test_rating_failed),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (res.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                )
+                                TextButton(
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("rating", res.body))
+                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(stringResource(R.string.douban_spider_test_copy_result))
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = res.body.ifBlank { "(empty body)" },
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // ── 为你推荐测试(带 Cookie) ──
                 item {
                     SectionCard(title = stringResource(R.string.douban_spider_test_recommend_section)) {
@@ -836,6 +1100,194 @@ fun DoubanSpiderTestScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                        }
+                    }
+                }
+
+                // ── imdb→豆瓣ID 搜索测试 ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_search_section)) {
+                        OutlinedTextField(
+                            value = uiState.searchImdbId,
+                            onValueChange = viewModel::updateSearchImdbId,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_search_imdb_hint)) },
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.searchByImdbTest() },
+                                enabled = uiState.searchImdbId.isNotBlank() && !uiState.isSearching,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                if (uiState.isSearching) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.douban_spider_test_searching))
+                                } else {
+                                    Text(stringResource(R.string.douban_spider_test_search_run))
+                                }
+                            }
+                        }
+                        // 未输入提示
+                        if (uiState.searchImdbId.isBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_search_no_imdb),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 搜索中
+                        if (uiState.isSearching) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.douban_spider_test_searching), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        // 错误(技术堆栈/英文)
+                        uiState.searchError?.let { err ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                                Text(
+                                    text = err,
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        // 结果
+                        uiState.searchResult?.let { res ->
+                            val copyCtx = LocalContext.current
+                            val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${res.imdbId} · HTTP ${res.statusCode} · ${res.durationMs}ms" +
+                                        if (res.isLoginPage) " · 登录页" else "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                TextButton(
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("html", res.html))
+                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(stringResource(R.string.douban_spider_test_copy_result))
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            if (res.results.isNotEmpty()) {
+                                res.results.forEachIndexed { i, item ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Column(modifier = Modifier.padding(10.dp)) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Text(
+                                                    text = "${i + 1}.",
+                                                    modifier = Modifier.width(24.dp),
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                                Column {
+                                                    Text(
+                                                        text = item.title,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    Text(
+                                                        text = "doubanId: ${item.doubanId}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        color = MaterialTheme.colorScheme.primary
+                                                    )
+                                                    Text(
+                                                        text = "url: ${item.doubanUrl}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontFamily = FontFamily.Monospace,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    item.rating?.let { r ->
+                                                        Text(
+                                                            text = "rating: $r",
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            fontFamily = FontFamily.Monospace,
+                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.douban_spider_test_search_no_result),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            // 原始 HTML(可折叠)
+                            Spacer(modifier = Modifier.height(10.dp))
+                            var showHtml by remember { mutableStateOf(false) }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(
+                                    onClick = { showHtml = !showHtml },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(if (showHtml) stringResource(R.string.douban_spider_test_search_hide_html) else stringResource(R.string.douban_spider_test_search_show_html))
+                                }
+                            }
+                            if (showHtml) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 300.dp)
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        Text(
+                                            text = res.html,
+                                            modifier = Modifier.padding(10.dp),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontFamily = FontFamily.Monospace,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
