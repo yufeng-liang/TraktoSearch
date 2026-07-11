@@ -148,7 +148,6 @@ import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
-import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
@@ -205,9 +204,8 @@ class DoubanFailuresViewModel @Inject constructor(
         val availableGenres: List<String> = emptyList()
     )
 
-    /** 筛选状态:失败原因多选 + 类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式 */
+    /** 筛选状态:类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式 */
     data class FilterState(
-        val selectedReasons: Set<FailureReason> = emptySet(),
         val selectedGenres: Set<String> = emptySet(),
         val ratingRange: ClosedFloatingPointRange<Float> = 0f..10f,
         val markedTimePreset: MarkedTimePreset = MarkedTimePreset.ALL,
@@ -222,7 +220,6 @@ class DoubanFailuresViewModel @Inject constructor(
 
     /** 是否有激活的筛选条件(用于筛选按钮图标高亮) */
     val hasActiveFilters: StateFlow<Boolean> = _filterState.map { state ->
-        state.selectedReasons.isNotEmpty() ||
         state.selectedGenres.isNotEmpty() ||
         state.ratingRange != 0f..10f ||
         state.markedTimePreset != MarkedTimePreset.ALL ||
@@ -331,10 +328,6 @@ class DoubanFailuresViewModel @Inject constructor(
                 failures = _uiState.value.failures.filterNot { it.doubanId in idSet }
             )
         }
-    }
-
-    fun updateSelectedReasons(reasons: Set<FailureReason>) {
-        _filterState.value = _filterState.value.copy(selectedReasons = reasons)
     }
 
     fun updateSelectedGenres(genres: Set<String>) {
@@ -507,16 +500,13 @@ fun DoubanFailuresScreen(
             it.title.contains(searchQuery, ignoreCase = true) ||
             (it.subtitle?.contains(searchQuery, ignoreCase = true) ?: false)
         }
-        // 3. 失败原因多选
-        val byReason = if (filterState.selectedReasons.isEmpty()) bySearch
-        else bySearch.filter { it.failureReason in filterState.selectedReasons }
-        // 4. 类型多选(豆瓣条目 genres 与选中类型有交集即通过)
-        val byGenre = if (filterState.selectedGenres.isEmpty()) byReason
-        else byReason.filter { failure ->
+        // 3. 类型多选(豆瓣条目 genres 与选中类型有交集即通过)
+        val byGenre = if (filterState.selectedGenres.isEmpty()) bySearch
+        else bySearch.filter { failure ->
             val itemGenres = uiState.doubanGenres[failure.doubanId].orEmpty()
             itemGenres.any { it in filterState.selectedGenres }
         }
-        // 5. 豆瓣评分区间(无评分条目仅在默认全区间时通过)
+        // 4. 豆瓣评分区间(无评分条目仅在默认全区间时通过)
         val byRating = byGenre.filter { failure ->
             val rating = uiState.doubanRatings[failure.doubanId]
             if (rating == null) {
@@ -525,7 +515,7 @@ fun DoubanFailuresScreen(
                 rating.toFloat() >= filterState.ratingRange.start && rating.toFloat() <= filterState.ratingRange.endInclusive
             }
         }
-        // 6. 标记时间区间预设
+        // 5. 标记时间区间预设
         val byTime = byRating.filter { item ->
             when (filterState.markedTimePreset) {
                 MarkedTimePreset.SEVEN_DAYS -> isWithinDays(item.markedAt, 7)
@@ -533,7 +523,7 @@ fun DoubanFailuresScreen(
                 MarkedTimePreset.ALL -> true
             }
         }
-        // 7. 标记时间排序(ISO 字符串天然有序)
+        // 6. 标记时间排序(ISO 字符串天然有序)
         if (filterState.markedTimeOrder == SortOrder.DESC) byTime.sortedByDescending { it.markedAt }
         else byTime.sortedBy { it.markedAt }
     }
@@ -588,9 +578,8 @@ fun DoubanFailuresScreen(
                     3 -> documentaryCount
                     else -> uncategorizedCount
                 }
-                // 是否有激活的筛选条件(失败原因多选 + 类型多选 + 评分区间 + 标记时间区间预设)
-                val hasActiveFilter = filterState.selectedReasons.isNotEmpty() ||
-                    filterState.selectedGenres.isNotEmpty() ||
+                // 是否有激活的筛选条件(类型多选 + 评分区间 + 标记时间区间预设)
+                val hasActiveFilter = filterState.selectedGenres.isNotEmpty() ||
                     filterState.ratingRange != 0f..10f ||
                     filterState.markedTimePreset != MarkedTimePreset.ALL
 
@@ -1160,7 +1149,6 @@ fun DoubanFailuresScreen(
             FailureFilterSheet(
                 filterState = filterState,
                 availableGenres = uiState.availableGenres,
-                onReasonsChange = { viewModel.updateSelectedReasons(it) },
                 onGenresChange = { viewModel.updateSelectedGenres(it) },
                 onRatingRangeChange = { viewModel.updateRatingRange(it) },
                 onPresetChange = { viewModel.updateMarkedTimePreset(it) },
@@ -1657,7 +1645,7 @@ private fun ActionItem(
 }
 
 /**
- * 筛选 ModalBottomSheet 内容:失败原因多选 + 类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式。
+ * 筛选 ModalBottomSheet 内容:类型多选 + 豆瓣评分区间 + 标记时间区间 + 排序方式。
  * 布局参考 Watchlist 筛选弹窗:每类之间用 HorizontalDivider 分隔,
  * 标题与 chips/SegmentedButton 共用一行,SpaceBetween 让每行均匀分布。
  */
@@ -1666,7 +1654,6 @@ private fun ActionItem(
 private fun FailureFilterSheet(
     filterState: DoubanFailuresViewModel.FilterState,
     availableGenres: List<String>,
-    onReasonsChange: (Set<FailureReason>) -> Unit,
     onGenresChange: (Set<String>) -> Unit,
     onRatingRangeChange: (ClosedFloatingPointRange<Float>) -> Unit,
     onPresetChange: (MarkedTimePreset) -> Unit,
@@ -1680,48 +1667,6 @@ private fun FailureFilterSheet(
             .padding(horizontal = 16.dp, vertical = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // 失败原因多选(chip 按估算宽度降序排列:长块先占位,短块填缝)
-        val sortedReasons = remember {
-            FailureReason.entries.sortedByDescending { reason ->
-                // 估算:不同原因的文本长度,粗略排序
-                when (reason) {
-                    FailureReason.NO_IMDB_ID -> 80
-                    FailureReason.DETAIL_FETCH_FAILED -> 110
-                    FailureReason.TRAKT_NOT_FOUND -> 100
-                    FailureReason.TRAKT_WRITE_TIMEOUT -> 110
-                    FailureReason.TRAKT_WRITE_FAILED -> 100
-                }
-            }
-        }
-        Text(
-            text = stringResource(R.string.douban_failure_filter_reason),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            sortedReasons.forEach { reason ->
-                FilterChip(
-                    selected = reason in filterState.selectedReasons,
-                    border = if (reason in filterState.selectedReasons) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
-                    onClick = {
-                        val newSet = if (reason in filterState.selectedReasons) {
-                            filterState.selectedReasons - reason
-                        } else {
-                            filterState.selectedReasons + reason
-                        }
-                        onReasonsChange(newSet)
-                    },
-                    label = { Text(stringResource(reason.localizedStringResCompat())) }
-                )
-            }
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
-
         // 类型多选(豆瓣条目 genres,chip 按估算宽度降序排列)
         val sortedGenres = remember(availableGenres) {
             availableGenres.sortedByDescending { genre ->
@@ -1960,15 +1905,6 @@ private fun isWithinDays(markedAt: String, days: Int): Boolean {
     }
     // 全部格式解析失败,包含该条目(避免隐藏)
     return true
-}
-
-/** FailureReason 本地化字符串资源 ID */
-private fun FailureReason.localizedStringResCompat(): Int = when (this) {
-    FailureReason.NO_IMDB_ID -> R.string.douban_failure_reason_no_imdb_id
-    FailureReason.DETAIL_FETCH_FAILED -> R.string.douban_failure_reason_detail_fetch_failed
-    FailureReason.TRAKT_NOT_FOUND -> R.string.douban_failure_reason_trakt_not_found
-    FailureReason.TRAKT_WRITE_TIMEOUT -> R.string.douban_failure_reason_trakt_write_timeout
-    FailureReason.TRAKT_WRITE_FAILED -> R.string.douban_failure_reason_trakt_write_failed
 }
 
 /** MarkedTimePreset 本地化字符串资源 ID */
