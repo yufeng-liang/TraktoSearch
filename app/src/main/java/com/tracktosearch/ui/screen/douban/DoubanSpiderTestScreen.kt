@@ -857,21 +857,23 @@ fun DoubanSpiderTestScreen(
                                 fontSize = 13.sp
                             )
                         )
-                        // 星级选择 1..5
+                        // 星级选择(整星 1..5)
                         Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = stringResource(R.string.douban_spider_test_rating_stars),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = stringResource(R.string.douban_spider_test_rating_stars),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
                             (1..5).forEach { star ->
+                                val selected = uiState.ratingValue == star
+                                val label = "$star"
                                 FilterChip(
-                                    selected = uiState.ratingValue == star,
-                                    border = if (uiState.ratingValue == star) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                    selected = selected,
+                                    border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRatingValue(star) },
-                                    label = { Text("$star") },
+                                    label = { Text(label) },
                                     modifier = Modifier.height(32.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -937,7 +939,8 @@ fun DoubanSpiderTestScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "HTTP ${res.statusCode} · ${res.durationMs}ms · ${res.rating}${stringResource(R.string.douban_spider_test_rating_star_unit)} · " +
+                                    text = "HTTP ${res.statusCode} · ${res.durationMs}ms · ${res.rating}" +
+                                        stringResource(R.string.douban_spider_test_rating_star_unit) + " · " +
                                         if (res.success) stringResource(R.string.douban_spider_test_rating_success) else stringResource(R.string.douban_spider_test_rating_failed),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (res.success) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error

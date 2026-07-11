@@ -118,7 +118,9 @@ data class DoubanCelebrityCacheEntry(
 class DoubanRepository(
     private val detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val cloudDetailsPoolManager: CloudDetailsPoolManager? = null,
-    private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true }
+    private val json: Json = Json { ignoreUnknownKeys = true; coerceInputValues = true },
+    /** traktId→doubanId 永久映射缓存，详情页预查用 */
+    private val idMappingCache: PersistentTtlCache<String>? = null
 ) {
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -466,7 +468,7 @@ class DoubanRepository(
      *
      * 仅测试页调用,用于逆向确认 rating 字段是否被接受及取值范围(推测 1..5 星)。
      *
-     * @param rating 星级 1..5
+     * @param rating 星级(0.5 步长, 范围 1.0..5.0)
      * @param comment 短评(可选)
      */
     suspend fun markWatchedWithRatingForTest(
@@ -478,6 +480,7 @@ class DoubanRepository(
         tags: String = ""
     ): RatingWriteTestResult = withContext(Dispatchers.IO) {
         val startMs = System.currentTimeMillis()
+        val ratingStr = rating.toString()
         val url = "https://movie.douban.com/j/subject/$doubanId/interest"
         val request = Request.Builder()
             .url(url)
@@ -490,7 +493,7 @@ class DoubanRepository(
                 FormBody.Builder()
                     .add("ck", ck)
                     .add("interest", "collect")
-                    .add("rating", rating.toString())
+                    .add("rating", ratingStr)
                     .add("foldcollect", "F")
                     .add("tags", tags)
                     .add("comment", comment)
@@ -549,6 +552,84 @@ class DoubanRepository(
                 results = results
             )
         }
+    }
+
+    /**
+     * 正式方法:用 imdbId 搜索豆瓣移动端搜索页,返回首个匹配的 doubanId。
+     *
+     * 端点: GET https://m.douban.com/search/?query={imdbId}
+     * - 服务端渲染 HTML,Jsoup 解析 a[href^="/movie/subject/"] 拿 doubanId
+     * - 无需 cookie(已验证),单条标记无反爬延迟
+     *
+     * @return 匹配到的 doubanId,未匹配返回 null
+     */
+    suspend fun searchDoubanIdByImdb(imdbId: String): String? = withContext(Dispatchers.IO) {
+        val url = "https://m.douban.com/search/?query=$imdbId"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", mobileUa)
+            .header("Referer", "https://m.douban.com/")
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response ->
+                val html = response.body?.string() ?: ""
+                DoubanSpider.parseSearchByImdb(html).firstOrNull()?.doubanId
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * 详情页预查 doubanId 的完整链路(内存缓存 → 同步表 → 详情缓存 → 网络搜索)。
+     *
+     * @param traktId Trakt ID
+     * @param imdbId IMDb ID(可能为 null,此时只查缓存和同步表)
+     * @param mediaType "movie" 或 "show"
+     * @return 匹配到的 doubanId,未匹配返回 null
+     */
+    suspend fun findDoubanId(
+        traktId: Int,
+        imdbId: String?,
+        mediaType: String
+    ): String? {
+        val cacheKey = "${traktId}_$mediaType"
+
+        // 1. 查 traktId→doubanId 永久缓存
+        idMappingCache?.get(cacheKey)?.let { return it }
+        // 等磁盘加载完成再查一次,避免 loadFromDisk 未完成时误判
+        idMappingCache?.awaitLoaded()
+        idMappingCache?.get(cacheKey)?.let { return it }
+
+        // 2. 查 douban_synced_items 表 by imdbId(调用方 DAO 查询)
+        // 此处不直接查 DAO,由 ViewModel 层查询后传入,避免 Repository 依赖 DAO
+
+        // 3. 遍历 DoubanDetailCache by imdbId
+        if (!imdbId.isNullOrBlank()) {
+            getDetailSnapshot().entries.firstOrNull { (_, entry) ->
+                entry.imdbId == imdbId
+            }?.key?.let { doubanId ->
+                // 命中详情缓存,写入映射缓存
+                idMappingCache?.put(cacheKey, doubanId)
+                return doubanId
+            }
+        }
+
+        // 4. 网络搜索 m.douban.com/search/?query={imdbId}
+        if (!imdbId.isNullOrBlank()) {
+            val doubanId = searchDoubanIdByImdb(imdbId)
+            if (doubanId != null) {
+                idMappingCache?.put(cacheKey, doubanId)
+            }
+            return doubanId
+        }
+
+        return null
+    }
+
+    /**
+     * 写入 traktId→doubanId 映射到永久缓存(供豆瓣导入成功后调用)。
+     */
+    suspend fun putDoubanIdMapping(traktId: Int, mediaType: String, doubanId: String) {
+        idMappingCache?.put("${traktId}_$mediaType", doubanId)
     }
 
     /**

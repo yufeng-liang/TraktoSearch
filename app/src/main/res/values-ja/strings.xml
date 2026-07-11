@@ -94,6 +94,10 @@
     <!-- Detail Screen -->
     <string name="detail_back">戻る</string>
     <string name="detail_share">共有</string>
+    <string name="detail_douban_sync_success">豆瓣データが同期されました</string>
+    <string name="detail_douban_sync_failed">豆瓣の同期に失敗、再試行できます</string>
+    <string name="detail_douban_sync_id_not_ready">豆瓣IDの準備が未完了、再試行できます</string>
+    <string name="detail_douban_sync_retry">豆瓣の同期を再試行</string>
     <string name="detail_marked_watched">視聴済み</string>
     <string name="detail_mark_watched">視聴済みにする</string>
     <string name="detail_mark_watched_title">視聴済みにするエピソードを選択</string>
