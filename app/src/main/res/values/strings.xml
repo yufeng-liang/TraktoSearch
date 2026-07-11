@@ -682,6 +682,10 @@ Config:
     <!-- Incremental sync cooldown (7-day) -->
     <string name="cooldown_remaining_days">Cooldown · %1$dd left</string>
     <string name="cooldown_available">Available</string>
+    <string name="douban_first_sync_title">Import from Douban</string>
+    <string name="douban_first_sync_message">You\'ve logged in to Douban but haven\'t imported your marks yet. Import your watchlist and watched history from Douban to get started quickly.</string>
+    <string name="douban_first_sync_start">Start Import</string>
+    <string name="douban_first_sync_later">Later</string>
     <string name="cooldown_guidance_title">Within cooldown period</string>
     <string name="cooldown_guidance_message">List crawling was synced within 7 days. Incremental sync will be skipped (data comes from cloud). Force sync to re-crawl the Douban list?\n\nDouban has anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. Force sync at your own risk.</string>
     <string name="cooldown_force_sync">Force sync</string>
@@ -730,6 +734,7 @@ Config:
     <string name="cloud_sync_upload_success">Failures uploaded to cloud</string>
     <string name="cloud_sync_upload_failed">Upload failed, please try again later</string>
     <string name="cloud_sync_download_empty">No cloud failures for this Douban account</string>
+    <string name="cloud_sync_download_local_newer">Local data is newer, cloud data ignored</string>
     <string name="cloud_sync_download_success">Downloaded and merged %1$d cloud failures</string>
     <string name="dialog_download_success_title">Import Successful</string>
     <string name="dialog_download_success_message">Imported %1$d failure items from cloud. You can view them in the sync failures page.</string>
@@ -826,6 +831,26 @@ Config:
     <string name="douban_spider_test_recommend_doulist">Doulist</string>
     <string name="douban_spider_test_recommending">Testing…</string>
     <string name="douban_spider_test_recommend_no_items">No doulist parsed (see raw JSON)</string>
+    <string name="douban_spider_test_rating_section">Mark Watched + Rate (with Cookie)</string>
+    <string name="douban_spider_test_rating_douban_id">Douban item ID (e.g. 1292052)</string>
+    <string name="douban_spider_test_rating_stars">Rating</string>
+    <string name="douban_spider_test_rating_comment_hint">Short review (optional)</string>
+    <string name="douban_spider_test_rating_run">Submit Watched + Rating</string>
+    <string name="douban_spider_test_rating_writing">Submitting…</string>
+    <string name="douban_spider_test_rating_no_login">Log in to Douban first (write API requires Cookie)</string>
+    <string name="douban_spider_test_rating_success">Success (r:0)</string>
+    <string name="douban_spider_test_rating_failed">Failed</string>
+    <string name="douban_spider_test_rating_star_unit">star(s)</string>
+    <string name="douban_spider_test_search_section">imdb→Douban ID Search</string>
+    <string name="douban_spider_test_search_imdb_hint">IMDb ID (e.g. tt39528392)</string>
+    <string name="douban_spider_test_search_run">Search</string>
+    <string name="douban_spider_test_searching">Searching…</string>
+    <string name="douban_spider_test_search_no_imdb">Please enter an IMDb ID first</string>
+    <string name="douban_spider_test_search_no_result">No results found (see raw HTML)</string>
+    <string name="douban_spider_test_search_show_html">Show raw HTML</string>
+    <string name="douban_spider_test_search_hide_html">Hide raw HTML</string>
+    <string name="douban_spider_test_cookie_clear">Clear Temporarily</string>
+    <string name="douban_spider_test_cookie_restore">Restore</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">Filter</string>
@@ -1051,6 +1076,11 @@ Config:
     <string name="discover_douban_weekly">Weekly Best</string>
     <string name="discover_douban_top250">Top 250</string>
     <string name="discover_douban_nowplaying">Now Playing</string>
+    <string name="discover_douban_recommend">Guess You Like</string>
+    <string name="discover_douban_recommend_movie">Movies</string>
+    <string name="discover_douban_recommend_tv">TV Shows</string>
+    <string name="discover_douban_recommend_login_prompt">Log in to Douban for personalized recommendations</string>
+    <string name="discover_douban_recommend_login_button">Log in to Douban</string>
     <string name="discover_view_all">View all (%d)</string>
     <string name="discover_trakt_trending_movies">Trakt Trending Movies</string>
     <string name="discover_trakt_trending_shows">Trakt Trending Shows</string>
@@ -1180,6 +1210,8 @@ Config:
     <string name="watchlist_empty_hint_middle"> to add to watchlist, </string>
     <string name="watchlist_empty_go_discover">Discover</string>
     <string name="watchlist_empty_hint_suffix"> to explore more</string>
+    <string name="watchlist_empty_douban_import_prefix">, or </string>
+    <string name="watchlist_empty_douban_import_link">import from Douban</string>
     <string name="watched_empty_hint_prefix">You can try: go to </string>
     <string name="watched_empty_hint_middle"> to mark as watched, </string>
 

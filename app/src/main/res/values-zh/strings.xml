@@ -682,6 +682,10 @@
     <!-- 增量同步冷却期(7天) -->
     <string name="cooldown_remaining_days">冷却中·剩%1$d天</string>
     <string name="cooldown_available">可同步</string>
+    <string name="douban_first_sync_title">从豆瓣导入标记</string>
+    <string name="douban_first_sync_message">你已登录豆瓣但还未导入标记。从豆瓣导入想看和已看记录，快速开始使用。</string>
+    <string name="douban_first_sync_start">开始导入</string>
+    <string name="douban_first_sync_later">稍后再说</string>
     <string name="cooldown_guidance_title">处于冷却期内</string>
     <string name="cooldown_guidance_message">7 天内已同步过列表爬取,增量同步将被跳过(数据来自云端)。是否强制同步重新爬取豆瓣列表?\n\n豆瓣有反爬机制,频繁多次爬取可能导致你的 IP 地址被列入黑名单。强制同步请自行承担风险。</string>
     <string name="cooldown_force_sync">强制同步</string>
@@ -730,6 +734,7 @@
     <string name="cloud_sync_upload_success">失败数据已上传到云端</string>
     <string name="cloud_sync_upload_failed">上传失败,请稍后重试</string>
     <string name="cloud_sync_download_empty">云端无该豆瓣账号的失败数据</string>
+    <string name="cloud_sync_download_local_newer">本地数据更新,已忽略云端数据</string>
     <string name="cloud_sync_download_success">已下载并合并 %1$d 条云端失败数据</string>
     <string name="dialog_download_success_title">导入成功</string>
     <string name="dialog_download_success_message">已从云端导入 %1$d 条失败项,可进入查看同步失败项页面查看</string>
@@ -826,6 +831,26 @@
     <string name="douban_spider_test_recommend_doulist">片单</string>
     <string name="douban_spider_test_recommending">测试中…</string>
     <string name="douban_spider_test_recommend_no_items">未解析到片单（见原始 JSON）</string>
+    <string name="douban_spider_test_rating_section">看过 + 评分写入（带 Cookie）</string>
+    <string name="douban_spider_test_rating_douban_id">豆瓣条目 ID（如 1292052）</string>
+    <string name="douban_spider_test_rating_stars">评分</string>
+    <string name="douban_spider_test_rating_comment_hint">短评（可选）</string>
+    <string name="douban_spider_test_rating_run">提交看过 + 评分</string>
+    <string name="douban_spider_test_rating_writing">提交中…</string>
+    <string name="douban_spider_test_rating_no_login">需先登录豆瓣账号（写接口必须带 Cookie）</string>
+    <string name="douban_spider_test_rating_success">成功（r:0）</string>
+    <string name="douban_spider_test_rating_failed">失败</string>
+    <string name="douban_spider_test_rating_star_unit">星</string>
+    <string name="douban_spider_test_search_section">imdb→豆瓣ID 搜索测试</string>
+    <string name="douban_spider_test_search_imdb_hint">IMDb ID（如 tt39528392）</string>
+    <string name="douban_spider_test_search_run">搜索</string>
+    <string name="douban_spider_test_searching">搜索中…</string>
+    <string name="douban_spider_test_search_no_imdb">请先输入 IMDb ID</string>
+    <string name="douban_spider_test_search_no_result">未搜索到结果（见原始 HTML）</string>
+    <string name="douban_spider_test_search_show_html">展开原始 HTML</string>
+    <string name="douban_spider_test_search_hide_html">收起原始 HTML</string>
+    <string name="douban_spider_test_cookie_clear">临时清除</string>
+    <string name="douban_spider_test_cookie_restore">恢复</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">筛选</string>
@@ -1051,6 +1076,11 @@
     <string name="discover_douban_weekly">口碑榜</string>
     <string name="discover_douban_top250">Top250</string>
     <string name="discover_douban_nowplaying">正在热映</string>
+    <string name="discover_douban_recommend">猜你喜欢</string>
+    <string name="discover_douban_recommend_movie">电影</string>
+    <string name="discover_douban_recommend_tv">电视剧</string>
+    <string name="discover_douban_recommend_login_prompt">登录豆瓣解锁个性化推荐</string>
+    <string name="discover_douban_recommend_login_button">去登录豆瓣</string>
     <string name="discover_view_all">查看全部(%d)</string>
     <string name="discover_trakt_trending_movies">Trakt 热门电影</string>
     <string name="discover_trakt_trending_shows">Trakt 热门剧集</string>
@@ -1180,6 +1210,8 @@
     <string name="watchlist_empty_hint_middle">标记想看的影视，去</string>
     <string name="watchlist_empty_go_discover">发现页</string>
     <string name="watchlist_empty_hint_suffix">探索更多影视</string>
+    <string name="watchlist_empty_douban_import_prefix">，或从</string>
+    <string name="watchlist_empty_douban_import_link">豆瓣导入标记</string>
     <string name="watched_empty_hint_prefix">你可以尝试：去</string>
     <string name="watched_empty_hint_middle">标记已看过的影视，去</string>
 
