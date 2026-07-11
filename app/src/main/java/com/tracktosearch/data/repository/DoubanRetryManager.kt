@@ -3,11 +3,18 @@ package com.tracktosearch.data.repository
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
@@ -73,6 +80,20 @@ class DoubanRetryManager @Inject constructor(
 ) {
     private val _retryState = MutableStateFlow(RetryState())
     val retryState: StateFlow<RetryState> = _retryState.asStateFlow()
+
+    /** Application scope:监听同步完成事件,不依赖调用者生命周期 */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // 监听同步进度:isComplete 从 false → true 时自动刷新失败项状态
+        // 这样设置页「重试上次失败项」一栏在每次同步完成后自动更新为最新失败数据
+        doubanSyncManager.progress
+            .map { it.isComplete }
+            .distinctUntilChanged()
+            .filter { it }  // 只关心 isComplete = true 的变化
+            .onEach { refreshRetryState() }
+            .launchIn(appScope)
+    }
 
     /** 重新加载失败项统计(用于入口检测和对话框展示) */
     suspend fun refreshRetryState() = withContext(Dispatchers.IO) {

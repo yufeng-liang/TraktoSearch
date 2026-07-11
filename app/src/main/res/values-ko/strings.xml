@@ -142,6 +142,10 @@
     <string name="douban_sync_failed_list_label">실패 항목:</string>
     <string name="douban_sync_failed_more_format">...총 %1$d항목 실패</string>
     <string name="douban_sync_eta_format">약 %1$s 남음</string>
+    <string name="douban_sync_delay_format">%1$d초 대기 중 (%2$s)</string>
+    <string name="douban_sync_delay_detail_crawl">Douban 크롤링 지연</string>
+    <string name="douban_sync_delay_list_crawl">목록 페이지 크롤링 지연</string>
+    <string name="douban_sync_delay_retry">재시도 대기</string>
     <string name="douban_sync_summary_format">성공 %1$d · 건너뜀 %2$d · 캐시 %3$d · 실패 %4$d</string>
 
     <!-- Douban 동기화 실패 항목 재시도 -->

@@ -30,7 +30,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,8 +52,11 @@ import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.remote.douban.DelayInfo
+import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.DoubanSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -77,18 +82,6 @@ class DoubanSyncViewModel @Inject constructor(
     fun cancel() {
         doubanSyncManager.cancel()
     }
-}
-
-/** 把秒数格式化为「X分Y秒」/「X秒」/「X小时Y分」 */
-private fun formatDuration(seconds: Long): String {
-    if (seconds < 0) return ""
-    if (seconds < 60) return "${seconds}秒"
-    val minutes = seconds / 60
-    val secs = seconds % 60
-    if (minutes < 60) return if (secs > 0) "${minutes}分${secs}秒" else "${minutes}分"
-    val hours = minutes / 60
-    val mins = minutes % 60
-    return if (mins > 0) "${hours}小时${mins}分" else "${hours}小时"
 }
 
 /** 获取失败原因的本地化字符串资源 ID */
@@ -130,6 +123,22 @@ fun DoubanSyncDialog(
     val scope = rememberCoroutineScope()
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val p = progress
+
+    // 延时倒计时(豆瓣反爬/列表页/重试等待):基于 delayInfo.startMs + totalSeconds 每秒刷新剩余秒数
+    var delayRemainingSeconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(p.delayInfo) {
+        val info = p.delayInfo
+        if (info == null) {
+            delayRemainingSeconds = 0
+        } else {
+            while (true) {
+                val elapsed = ((System.currentTimeMillis() - info.startMs) / 1000).toInt()
+                delayRemainingSeconds = (info.totalSeconds - elapsed).coerceAtLeast(0)
+                if (delayRemainingSeconds <= 0) break
+                delay(1000)
+            }
+        }
+    }
 
     // 失败项分组折叠状态(默认可恢复展开,不可恢复折叠)
     var recoverableExpanded by remember { mutableStateOf(true) }
@@ -183,13 +192,18 @@ fun DoubanSyncDialog(
                 } else if (p.isRunning) {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 }
-                // 预计剩余时间
-                if (p.isRunning && p.etaSeconds > 0 && p.total > 0) {
+                // 延时倒计时(豆瓣反爬/列表页/重试等待)
+                if (p.isRunning && p.delayInfo != null && delayRemainingSeconds > 0) {
                     Spacer(modifier = Modifier.height(6.dp))
+                    val delayLabel = when (p.delayInfo.type) {
+                        DelayType.DOUBAN_DETAIL_CRAWL -> stringResource(R.string.douban_sync_delay_detail_crawl)
+                        DelayType.DOUBAN_LIST_CRAWL -> stringResource(R.string.douban_sync_delay_list_crawl)
+                        DelayType.DOUBAN_RETRY -> stringResource(R.string.douban_sync_delay_retry)
+                    }
                     Text(
-                        stringResource(R.string.douban_sync_eta_format, formatDuration(p.etaSeconds)),
+                        stringResource(R.string.douban_sync_delay_format, delayRemainingSeconds, delayLabel),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
 

@@ -230,6 +230,10 @@
     <string name="douban_sync_failed_list_label">失败项：</string>
     <string name="douban_sync_failed_more_format">...共 %1$d 项失败</string>
     <string name="douban_sync_eta_format">预计剩余 %1$s</string>
+    <string name="douban_sync_delay_format">等待 %1$d 秒（%2$s）</string>
+    <string name="douban_sync_delay_detail_crawl">豆瓣反爬延迟</string>
+    <string name="douban_sync_delay_list_crawl">列表页爬取延迟</string>
+    <string name="douban_sync_delay_retry">重试前等待</string>
     <string name="douban_sync_summary_format">成功 %1$d · 跳过 %2$d · 缓存命中 %3$d · 失败 %4$d</string>
 
     <!-- 豆瓣同步失败项重试 -->

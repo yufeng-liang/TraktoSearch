@@ -346,7 +346,9 @@ fun MainScreen(
                         onRestartOnboarding = onRestartOnboarding,
                         onDoubanResync = {
                             // 触发同步后切换到 Watchlist tab，让用户通过横幅查看进度
+                            // 同时启动前台 Service 进入后台模式（通知栏显示进度）
                             // 同步弹窗在 Watchlist 页点击横幅打开，转后台时消除弹窗
+                            com.tracktosearch.service.DoubanSyncService.start(context)
                             scope.launch { pagerState.scrollToPage(2) }
                         },
                         onDoubanFailures = onDoubanFailures,
