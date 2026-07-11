@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
@@ -21,7 +22,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
+import javax.inject.Qualifier
 import javax.inject.Singleton
+
+/** 限定符:区分 traktId→doubanId 映射缓存与其他 PersistentTtlCache<String> */
+@Qualifier
+annotation class DoubanIdMapping
 
 /**
  * 豆瓣相关依赖注入模块。
@@ -61,8 +67,10 @@ object DoubanModule {
     @Singleton
     fun provideDoubanRepository(
         detailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
-        cloudDetailsPoolManager: CloudDetailsPoolManager
-    ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager)
+        cloudDetailsPoolManager: CloudDetailsPoolManager,
+        @DoubanIdMapping idMappingCache: PersistentTtlCache<String>,
+        json: Json
+    ): DoubanRepository = DoubanRepository(detailCache, cloudDetailsPoolManager, json, idMappingCache)
 
     /**
      * DoubanFailureExporter 需要 DoubanSyncFailureDao + Json,显式 provide 以便注入 Json 实例。
@@ -74,7 +82,64 @@ object DoubanModule {
         doubanSyncFailureDao: DoubanSyncFailureDao,
         json: Json
     ): DoubanFailureExporter = DoubanFailureExporter(doubanSyncFailureDao, json)
+
+    /**
+     * 豆瓣「为你推荐」持久化缓存（按用户隔离，6 小时 TTL）。
+     *
+     * key 格式: recommend_{type}_{userId}（type=movie/tv）
+     * 退出登录时调用 clearAll() 清除该用户缓存。
+     */
+    @Provides
+    @Singleton
+    fun provideDoubanRecommendCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): PersistentTtlCache<List<DoubanRecommendItem>> {
+        val dataStore = context.doubanRecommendCacheStore
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        return persistentTtlCache(
+            ttlMillis = 6 * 60 * 60 * 1000L, // 6 小时
+            maxSize = 0,
+            dataStore = dataStore,
+            json = json,
+            keyPrefix = "douban_recommend",
+            scope = scope
+        )
+    }
+
+    /**
+     * traktId→doubanId 永久映射缓存。
+     *
+     * key 格式: {traktId}_{movie|show}
+     * value: doubanId 字符串
+     * 用于详情页预查 doubanId，避免每次都搜索豆瓣。
+     * 永不过期（映射关系静态不变）。
+     */
+    @Provides
+    @Singleton
+    @DoubanIdMapping
+    fun provideDoubanIdMappingCache(
+        @ApplicationContext context: Context,
+        json: Json
+    ): PersistentTtlCache<String> {
+        val dataStore = context.doubanIdMappingCacheStore
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        return persistentTtlCache(
+            ttlMillis = Long.MAX_VALUE,
+            maxSize = 5000,
+            dataStore = dataStore,
+            json = json,
+            keyPrefix = "douban_id_mapping",
+            scope = scope
+        )
+    }
 }
 
 /** 豆瓣详情页缓存 DataStore */
 private val Context.doubanDetailCacheStore: DataStore<Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "douban_detail_cache")
+
+/** 豆瓣推荐缓存 DataStore */
+private val Context.doubanRecommendCacheStore: DataStore<Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "douban_recommend_cache")
+
+/** traktId→doubanId 映射缓存 DataStore */
+private val Context.doubanIdMappingCacheStore: DataStore<Preferences> by androidx.datastore.preferences.preferencesDataStore(name = "douban_id_mapping_cache")

@@ -3,6 +3,7 @@ package com.tracktosearch.data.util
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -52,14 +53,28 @@ class PersistentTtlCache<T>(
     suspend fun loadFromDisk() {
         try {
             val prefs = dataStore.data.first()
+            val now = System.currentTimeMillis()
             prefs.asMap().forEach { (key, value) ->
                 val keyStr = key.name
                 if (!keyStr.startsWith("$keyPrefix:")) return@forEach
+                // 跳过 expireAt 元数据 key（格式: {prefix}:{cacheKey}:exp）
+                if (keyStr.endsWith(":exp")) return@forEach
                 val cacheKey = keyStr.removePrefix("$keyPrefix:")
                 val jsonStr = value as? String ?: return@forEach
                 try {
                     val item = json.decodeFromString(serializer, jsonStr)
-                    super.put(cacheKey, item)
+                    // 读取持久化的 expireAt，恢复原始过期时间（避免重启后 TTL 被重置导致缓存永不过期）
+                    val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
+                    if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) {
+                        // 已过期，跳过（不加载到内存）
+                        return@forEach
+                    }
+                    if (expireAt != null) {
+                        putInternal(cacheKey, item, expireAt)
+                    } else {
+                        // 旧格式无 expireAt，降级为重置 TTL
+                        super.put(cacheKey, item)
+                    }
                 } catch (e: Exception) {
                     // 反序列化失败（数据格式变更），跳过该条目
                 }
@@ -79,11 +94,13 @@ class PersistentTtlCache<T>(
     override fun put(key: String, value: T) {
         super.put(key, value)
         // 异步写入磁盘，不阻塞内存写入返回
+        val expireAt = getExpireAt(key) ?: return
         scope.launch {
             try {
                 val jsonStr = json.encodeToString(serializer, value)
                 dataStore.edit { prefs ->
                     prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
+                    prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
                 }
             } catch (e: Exception) {
                 // 磁盘写入失败静默处理，不影响内存缓存
@@ -149,25 +166,29 @@ class PersistentTtlCache<T>(
     suspend fun putAll(entries: Map<String, T>, overwrite: Boolean = false): Int {
         if (entries.isEmpty()) return 0
         var written = 0
+        // 先写入内存缓存（获取 expireAt），再批量写入 DataStore
+        val toWrite = mutableListOf<Pair<String, T>>()
+        entries.forEach { (key, value) ->
+            if (overwrite || get(key) == null) {
+                super.put(key, value)
+                toWrite.add(key to value)
+            }
+        }
         // 批量写入 DataStore（一次事务）
         try {
             dataStore.edit { prefs ->
-                entries.forEach { (key, value) ->
-                    val existing = prefs[stringPreferencesKey("$keyPrefix:$key")]
-                    if (!overwrite && existing != null) return@forEach  // 不覆盖已有
+                toWrite.forEach { (key, value) ->
                     val jsonStr = json.encodeToString(serializer, value)
                     prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
+                    val expireAt = getExpireAt(key)
+                    if (expireAt != null) {
+                        prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
+                    }
                     written++
                 }
             }
         } catch (_: Exception) {
             // 磁盘写入失败静默
-        }
-        // 同步写入内存缓存
-        entries.forEach { (key, value) ->
-            if (overwrite || get(key) == null) {
-                super.put(key, value)
-            }
         }
         return written
     }

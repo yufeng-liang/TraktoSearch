@@ -3,6 +3,7 @@ package com.tracktosearch.data.remote.trakt
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.trakt.dto.*
+import kotlinx.coroutines.CancellationException
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -51,7 +52,8 @@ class TraktAuthManager @Inject constructor(
             )
             val response = traktApiService.exchangeCodeForToken(request)
             if (response.isSuccessful) {
-                val tokenResponse = response.body()!!
+                val tokenResponse = response.body()
+                    ?: return Result.failure(Exception("Empty response body"))
                 tokenStorage.saveTokens(
                     tokenResponse.access_token,
                     tokenResponse.refresh_token,
@@ -61,6 +63,8 @@ class TraktAuthManager @Inject constructor(
             } else {
                 Result.failure(Exception("Token exchange failed: ${response.code()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -79,7 +83,8 @@ class TraktAuthManager @Inject constructor(
             )
             val response = traktApiService.refreshToken(request)
             if (response.isSuccessful) {
-                val tokenResponse = response.body()!!
+                val tokenResponse = response.body()
+                    ?: return Result.failure(Exception("Empty response body"))
                 tokenStorage.saveTokens(
                     tokenResponse.access_token,
                     tokenResponse.refresh_token,
@@ -87,9 +92,15 @@ class TraktAuthManager @Inject constructor(
                 )
                 Result.success(tokenResponse)
             } else {
-                tokenStorage.clearTokens()
+                // 仅 400/401（refresh token 无效或过期）才清除 token；
+                // 5xx/429 等临时故障保留 refresh_token，让下次请求触发重试
+                if (response.code() == 400 || response.code() == 401) {
+                    tokenStorage.clearTokens()
+                }
                 Result.failure(Exception("Token refresh failed: ${response.code()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

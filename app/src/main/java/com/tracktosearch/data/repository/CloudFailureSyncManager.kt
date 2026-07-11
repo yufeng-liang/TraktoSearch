@@ -51,6 +51,8 @@ class CloudFailureSyncManager @Inject constructor(
     @Serializable
     private data class CloudPayload(
         val version: Int = 1,
+        /** 云端数据上传时间戳,用于和本地最新 failedAt 比较判断新旧(0=旧版数据无此字段) */
+        val uploadedAt: Long = 0L,
         val totalFailures: Int,
         val failures: List<CloudFailureDto>
     )
@@ -108,8 +110,9 @@ class CloudFailureSyncManager @Inject constructor(
 
     /**
      * 上传本地失败项到云端(同步完成后调用)。
-     * - 无失败项时:删除云端文件(保持云端干净)
-     * - 有失败项时:加密后上传
+     * - 无失败项时:跳过上传(保留云端历史,避免误删)
+     * - 有失败项时:先比较本地最新 failedAt 和云端 uploadedAt,
+     *   本地不比云端新时跳过上传,新于云端时才加密上传
      *
      * @return true 成功,false 失败(失败只记日志,不阻塞主流程)
      */
@@ -128,8 +131,47 @@ class CloudFailureSyncManager @Inject constructor(
                 return@withContext true
             }
 
+            // 先 GET 云端文件,同时获取 sha(更新必传)和 uploadedAt(时间戳比较)
+            // 注意:文件不存在时 Gitee 可能返回 200 + `[]`,parseContentResponse 会返回 null
+            var existingSha: String? = null
+            var cloudUploadedAt: Long = 0L
+            try {
+                val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
+                if (resp.isSuccessful) {
+                    val body = parseContentResponse(resp.body())
+                    if (body != null) {
+                        existingSha = body.sha
+                        // 尝试解密并解析 payload 获取 uploadedAt
+                        val base64Content = body.content
+                        if (base64Content != null) {
+                            val encrypted = String(
+                                android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
+                                Charsets.UTF_8
+                            )
+                            val jsonStr = AesCrypto.decrypt(encrypted)
+                            if (jsonStr != null) {
+                                val cloudPayload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
+                                cloudUploadedAt = cloudPayload.uploadedAt
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                // GET 失败不阻塞上传(无法比较时间戳时保守上传)
+                Log.d(TAG, "GET 云端失败,跳过时间戳比较: ${e.message}")
+            }
+
+            // 时间戳比较:本地最新 failedAt vs 云端 uploadedAt
+            // cloudUploadedAt > 0 才比较(0=旧版数据或云端不存在,无法比较时保守上传)
+            val localNewest = entities.maxOfOrNull { it.failedAt } ?: 0L
+            if (cloudUploadedAt > 0L && localNewest <= cloudUploadedAt) {
+                Log.d(TAG, "本地数据不比云端新(localNewest=$localNewest, cloudUploadedAt=$cloudUploadedAt),跳过上传")
+                return@withContext true
+            }
+
             val payload = CloudPayload(
                 totalFailures = entities.size,
+                uploadedAt = System.currentTimeMillis(),
                 failures = entities.map { e ->
                     CloudFailureDto(
                         doubanId = e.doubanId,
@@ -155,15 +197,6 @@ class CloudFailureSyncManager @Inject constructor(
                 android.util.Base64.NO_WRAP
             )
 
-            // 先 GET 获取 sha(更新已有文件时必传)
-            // 注意:文件不存在时 Gitee 可能返回 200 + `[]`,parseContentResponse 会返回 null
-            val existingSha = try {
-                val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
-                if (resp.isSuccessful) parseContentResponse(resp.body())?.sha else null
-            } catch (e: Exception) {
-                null
-            }
-
             // Gitee API 区分新建(POST)和更新(PUT):
             // - 文件不存在(sha=null) → POST 创建新文件,不传 sha
             // - 文件已存在(sha≠null) → PUT 更新文件,必传 sha
@@ -186,7 +219,7 @@ class CloudFailureSyncManager @Inject constructor(
                 giteeContentsApi.createFileContent(OWNER, REPO, path, request)
             }
             if (putResp.isSuccessful) {
-                Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"})")
+                Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"}, uploadedAt=${payload.uploadedAt})")
                 true
             } else {
                 val errorBody = putResp.errorBody()?.string()
@@ -237,30 +270,49 @@ class CloudFailureSyncManager @Inject constructor(
     }
 
     /**
-     * 下载云端失败数据并合并到本地 Room。
-     * 用于用户在弹窗中确认后调用。
+     * 下载云端失败数据并替换全部本地失败项。
      *
-     * @return 下载并合并的条目数(失败返回 -1)
+     * 时间戳比较逻辑:
+     * - 云端 uploadedAt > 本地最新 failedAt → 云端更新,下载并 clearAll+insertAll 替换全部
+     * - 本地有数据且云端 uploadedAt <= 本地 failedAt → 本地更新,忽略云端
+     * - 本地无数据(failedAt=0)且云端有失败项 → 无论 uploadedAt 多少都下载替换
+     *
+     * 替换后「查看同步失败项」数量刷新:
+     * - 同步流程中调用([DoubanSyncManager.pullFromCloudBeforeSync])→ 同步完成后 [DoubanRetryManager] 自动刷新
+     * - 手动拉取(设置页/登录页)→ 调用方需在 [DownloadResult.Success] 时调用 [DoubanRetryManager.refreshRetryState]
+     *
+     * @return [DownloadResult] 语义化返回值,调用方根据类型做 UI 反馈和刷新
      */
-    suspend fun downloadAndMerge(): Int = withContext(Dispatchers.IO) {
-        val creds = doubanAuthStorage.getCredentials() ?: return@withContext -1
+    suspend fun downloadAndMerge(): DownloadResult = withContext(Dispatchers.IO) {
+        val creds = doubanAuthStorage.getCredentials() ?: return@withContext DownloadResult.Failed
         val path = buildPath(creds.userId)
 
         try {
             val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
-            if (!resp.isSuccessful) return@withContext -1
-            val body = parseContentResponse(resp.body()) ?: return@withContext -1
-            val base64Content = body.content ?: return@withContext -1
+            if (!resp.isSuccessful) return@withContext DownloadResult.Failed
+            val body = parseContentResponse(resp.body()) ?: return@withContext DownloadResult.Failed
+            val base64Content = body.content ?: return@withContext DownloadResult.Failed
 
             val encrypted = String(
                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                 Charsets.UTF_8
             )
-            val jsonStr = AesCrypto.decrypt(encrypted) ?: return@withContext -1
+            val jsonStr = AesCrypto.decrypt(encrypted) ?: return@withContext DownloadResult.Failed
             val payload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
 
-            if (payload.failures.isEmpty()) return@withContext 0
+            if (payload.failures.isEmpty()) return@withContext DownloadResult.CloudEmpty
 
+            // 时间戳比较:云端 uploadedAt vs 本地最新 failedAt
+            val localEntities = doubanSyncFailureDao.getAll()
+            val localNewest = localEntities.maxOfOrNull { it.failedAt } ?: 0L
+
+            if (localNewest > 0L && payload.uploadedAt <= localNewest) {
+                // 本地有数据且本地更新或相等 → 忽略云端,以本地显示为准
+                Log.d(TAG, "本地数据更新(localNewest=$localNewest, cloudUploadedAt=${payload.uploadedAt}),忽略云端")
+                return@withContext DownloadResult.LocalNewer
+            }
+
+            // 本地无数据 或 云端更新 → 替换全部本地失败数据(先清空再写入)
             val entities = payload.failures.map { dto ->
                 com.tracktosearch.data.local.db.DoubanSyncFailureEntity(
                     doubanId = dto.doubanId,
@@ -278,13 +330,35 @@ class CloudFailureSyncManager @Inject constructor(
                     subtitle = dto.subtitle
                 )
             }
-            // REPLACE 策略:同 doubanId 覆盖,不删除本地云端没有的项(合并而非覆盖)
+            doubanSyncFailureDao.clearAll()
             doubanSyncFailureDao.insertAll(entities)
-            Log.d(TAG, "下载并合并成功: ${entities.size} 条")
-            entities.size
+            Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
+            DownloadResult.Success(entities.size)
         } catch (e: Exception) {
             Log.w(TAG, "下载合并异常: ${e.message}")
-            -1
+            DownloadResult.Failed
         }
     }
+}
+
+/**
+ * 云端失败数据下载结果(语义化返回值)。
+ *
+ * - [CloudEmpty] 云端无失败数据
+ * - [LocalNewer] 本地数据更新,跳过云端(本地数据未变更,无需刷新 UI)
+ * - [Success] 云端更新,已替换全部本地失败数据(调用方需刷新 retryState)
+ * - [Failed] 下载失败(网络/解密/服务端错误)
+ */
+sealed class DownloadResult {
+    /** 云端无失败数据 */
+    object CloudEmpty : DownloadResult()
+
+    /** 本地数据更新,跳过云端(本地数据未变更) */
+    object LocalNewer : DownloadResult()
+
+    /** 云端更新,已替换全部本地失败数据(调用方需刷新 retryState) */
+    data class Success(val count: Int) : DownloadResult()
+
+    /** 下载失败 */
+    object Failed : DownloadResult()
 }

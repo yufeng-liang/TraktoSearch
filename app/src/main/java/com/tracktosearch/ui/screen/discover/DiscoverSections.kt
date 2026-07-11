@@ -1,24 +1,42 @@
 package com.tracktosearch.ui.screen.discover
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
@@ -469,6 +487,199 @@ internal fun TraktShowRecommendationSection(
                             onClick = { onItemClick(item.show) }
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 豆瓣「猜你喜欢」栏目
+ *
+ * 未登录豆瓣时显示引导登录卡片；登录后展示电影/电视剧 Tab 切换 + 个性化推荐列表。
+ * 卡片 subtitle 展示推荐理由（reasonTags 用 " · " 连接）。
+ */
+@Composable
+internal fun DoubanRecommendSection(
+    state: DoubanRecommendState,
+    resolvingItemId: String?,
+    onItemClick: (DoubanRecommendItem) -> Unit,
+    onRetry: () -> Unit,
+    onLoginClick: () -> Unit,
+    onTabSelected: (RecommendTab) -> Unit
+) {
+    Column {
+        // 栏目标题 + Tab 切换条（同一行）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.discover_douban_recommend),
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            CapsuleTabSelector(
+                tabs = listOf(
+                    stringResource(R.string.discover_douban_recommend_movie),
+                    stringResource(R.string.discover_douban_recommend_tv)
+                ),
+                selectedIndex = if (state is DoubanRecommendState.Success && state.currentTab == RecommendTab.TV) 1 else 0,
+                onTabSelected = { index ->
+                    onTabSelected(if (index == 0) RecommendTab.MOVIE else RecommendTab.TV)
+                }
+            )
+        }
+
+        when (state) {
+            is DoubanRecommendState.NotLoggedIn -> {
+                // 引导登录卡片
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = stringResource(R.string.discover_douban_recommend_login_prompt),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(onClick = onLoginClick) {
+                            Text(stringResource(R.string.discover_douban_recommend_login_button))
+                        }
+                    }
+                }
+            }
+
+            is DoubanRecommendState.Loading -> {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    items(5) { DoubanHotCardSkeleton() }
+                }
+            }
+
+            is DoubanRecommendState.Error -> {
+                ErrorRetryRow(error = state.message, onRetry = onRetry)
+            }
+
+            is DoubanRecommendState.Success -> {
+                val items = if (state.currentTab == RecommendTab.MOVIE) state.movieItems else state.tvItems
+                if (items.isEmpty()) {
+                    EmptyRow()
+                } else {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        itemsIndexed(
+                            items,
+                            key = { index, item -> "douban_rec_${state.currentTab.name.lowercase()}_${index}_${item.id}" },
+                            contentType = { _, _ -> "media_card" }
+                        ) { _, item ->
+                            MovieCard(
+                                title = item.title,
+                                posterPath = item.pic?.normal ?: item.pic?.large ?: item.cover,
+                                year = item.year ?: "",
+                                rating = item.rating?.value?.let { String.format("%.1f", it) },
+                                subtitle = item.reasonTags?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                                isResolving = resolvingItemId == item.id,
+                                isInWatchlist = false,
+                                isWatched = false,
+                                tmdbId = 0,
+                                onClick = { onItemClick(item) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 通用胶囊 Tab 分段器（药丸形滑块指示器）
+ *
+ * 滑块贴合无留白，宽度动态测量文字，高度 31dp。
+ * 用于发现页「猜你喜欢」电影/电视剧切换、「趋势」今日/本周切换等。
+ */
+@Composable
+internal fun CapsuleTabSelector(
+    tabs: List<String>,
+    selectedIndex: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    require(tabs.isNotEmpty()) { "tabs 不能为空" }
+    val tabPadding = 12.dp
+    val tabHeight = 31.dp
+    // 用 TextMeasurer 同步测量文字宽度，避免 onTextLayout 异步回调导致宽度跳变
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val tabWidths = tabs.map { label ->
+        remember(label) {
+            val widthPx = textMeasurer.measure(
+                text = label,
+                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            ).size.width
+            with(density) { widthPx.toDp() + tabPadding * 2 }
+        }
+    }
+    val capsuleWidth = tabWidths.fold(0.dp) { acc, w -> acc + w }
+    // 滑块偏移 = 选中项之前所有 Tab 宽度之和
+    val targetOffset = tabWidths.take(selectedIndex).fold(0.dp) { acc, w -> acc + w }
+    val targetWidth = tabWidths.getOrElse(selectedIndex) { 0.dp }
+    val indicatorOffset by animateDpAsState(
+        targetValue = targetOffset,
+        animationSpec = tween(220),
+        label = "capsule_tab_offset"
+    )
+    val indicatorWidth by animateDpAsState(
+        targetValue = targetWidth,
+        animationSpec = tween(220),
+        label = "capsule_tab_width"
+    )
+
+    Box(
+        modifier = Modifier
+            .height(tabHeight)
+            .width(capsuleWidth)
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        // 滑块指示器（贴合无留白）
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(indicatorWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.primary)
+        )
+        // Tab 文字
+        Row(modifier = Modifier.fillMaxHeight()) {
+            tabs.forEachIndexed { index, label ->
+                val selected = index == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .width(tabWidths[index])
+                        .fillMaxHeight()
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { onTabSelected(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        style = TextStyle(
+                            fontSize = 13.sp,
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                        ),
+                        color = if (selected) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

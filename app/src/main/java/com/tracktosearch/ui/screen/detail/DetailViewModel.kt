@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
+import com.tracktosearch.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.data.remote.dto.DiskType
@@ -25,6 +26,9 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.LanguageStorage
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.util.CommentTranslator
 import com.tracktosearch.data.util.PosterColorExtractor
 import android.util.Log
@@ -35,8 +39,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.coroutineScope
@@ -144,8 +150,25 @@ data class DetailUiState(
     // 电影标记已看后弹出评分弹窗
     val showRatingDialog: Boolean = false,
     // 详情页模块可见性设置
-    val sectionVisible: DetailSectionVisibility = DetailSectionVisibility()
+    val sectionVisible: DetailSectionVisibility = DetailSectionVisibility(),
+    // ===== 豆瓣双向同步 =====
+    /** 预查到的 doubanId(null=未就绪/未查到) */
+    val doubanIdForSync: String? = null,
+    /** 豆瓣同步进行中 */
+    val isDoubanSyncing: Boolean = false,
+    /** 是否显示重试按钮(豆瓣同步失败或 ID 未就绪时 true) */
+    val doubanSyncRetryable: Boolean = false,
+    /** 待重试的豆瓣动作 */
+    val pendingDoubanAction: DoubanSyncAction? = null
 )
+
+/** 豆瓣同步动作枚举 */
+enum class DoubanSyncAction {
+    WISH,               // 标记想看
+    COLLECT,            // 标记已看
+    REMOVE_WISH,        // 取消想看
+    REMOVE_COLLECT      // 取消已看
+}
 
 data class DetailSectionVisibility(
     val cast: Boolean = true,
@@ -167,6 +190,10 @@ class DetailViewModel @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val detailSectionStorage: DetailSectionStorage,
     private val languageStorage: LanguageStorage,
+    // 豆瓣双向同步依赖
+    private val doubanRepository: DoubanRepository,
+    private val doubanAuthStorage: DoubanAuthStorage,
+    private val doubanSyncedItemDao: DoubanSyncedItemDao,
     // 海报主色调提取器(对 DetailHeaderContent 暴露,用于在海报加载成功后提取主色)
     val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
@@ -213,6 +240,10 @@ class DetailViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DetailUiState())
     val uiState: StateFlow<DetailUiState> = _uiState.asStateFlow()
+
+    /** Toast 事件(参考 PersonViewModel 模式),用于豆瓣同步成功/失败提示 */
+    private val _toastEvent = MutableSharedFlow<Int>()
+    val toastEvent = _toastEvent.asSharedFlow()
 
     /** 海报主色调提取完成后更新 UiState(由 DetailHeaderContent 在图片加载成功回调中调用) */
     fun updatePosterColor(color: Color) {
@@ -442,6 +473,36 @@ class DetailViewModel @Inject constructor(
                 if (visibility.recommendations) fetchRecommendations()
                 if (currentMediaType == MediaType.MOVIE && collectionId > 0) fetchCollection(collectionId)
             }
+
+            // 预查 doubanId（异步，不阻塞 UI），用于用户标记时同步豆瓣
+            prefetchDoubanId()
+        }
+    }
+
+    /**
+     * 预查 doubanId 链路:永久缓存 → 同步表 by imdbId → 详情缓存 → 网络搜索。
+     * 结果存入 uiState.doubanIdForSync,用户标记时直接取用。
+     */
+    private fun prefetchDoubanId() {
+        if (currentTraktId <= 0) return
+        viewModelScope.launch {
+            val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
+            // 先查同步表（O(1)，零网络）
+            val imdbId = currentImdbId.takeIf { it.isNotBlank() }
+            if (imdbId != null) {
+                val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+                if (syncedItem != null) {
+                    _uiState.value = _uiState.value.copy(doubanIdForSync = syncedItem.doubanId)
+                    // 顺带写入映射缓存
+                    doubanRepository.putDoubanIdMapping(currentTraktId, mediaTypeStr, syncedItem.doubanId)
+                    return@launch
+                }
+            }
+            // 再走 Repository 的完整链路（缓存 → 详情缓存 → 网络搜索）
+            val doubanId = doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
+            if (doubanId != null) {
+                _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+            }
         }
     }
 
@@ -505,40 +566,44 @@ class DetailViewModel @Inject constructor(
         _uiState.value = current.copy(isLoadingMoreComments = true)
 
         viewModelScope.launch {
-            // 判断是否还有更多 Trakt/TMDB 评论
-            val hasMoreTrakt = current.commentPage > 0 // 首页满 10 条时 commentPage=1，可以继续
-            val hasMoreTmdb = current.tmdbCommentPage > 0
+            try {
+                // 判断是否还有更多 Trakt/TMDB 评论
+                val hasMoreTrakt = current.commentPage > 0 // 首页满 10 条时 commentPage=1，可以继续
+                val hasMoreTmdb = current.tmdbCommentPage > 0
 
-            val traktDeferred = async {
-                if (hasMoreTrakt) {
-                    traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = nextTraktPage)
-                        .getOrDefault(emptyList())
-                } else emptyList()
+                val traktDeferred = async {
+                    if (hasMoreTrakt) {
+                        traktRepository.getComments(currentTraktId, currentMediaType, limit = 10, page = nextTraktPage)
+                            .getOrDefault(emptyList())
+                    } else emptyList()
+                }
+                val tmdbDeferred = async {
+                    if (hasMoreTmdb && currentTmdbId > 0) {
+                        tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = nextTmdbPage)
+                    } else null
+                }
+
+                val newTraktComments = traktDeferred.await()
+                val tmdbResponse = tmdbDeferred.await()
+                val newTmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
+
+                // 去重
+                val existingIds = _uiState.value.comments.map { it.id }.toSet()
+                val uniqueNew = (newTraktComments + newTmdbComments).filter { it.id !in existingIds }
+
+                val newHasMoreTrakt = newTraktComments.size >= 10
+                val newHasMoreTmdb = tmdbResponse != null && nextTmdbPage < tmdbResponse.total_pages
+
+                _uiState.value = _uiState.value.copy(
+                    comments = _uiState.value.comments + uniqueNew,
+                    commentPage = if (newTraktComments.isNotEmpty()) nextTraktPage else current.commentPage,
+                    tmdbCommentPage = if (newTmdbComments.isNotEmpty()) nextTmdbPage else current.tmdbCommentPage,
+                    hasMoreComments = newHasMoreTrakt || newHasMoreTmdb,
+                    isLoadingMoreComments = false
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isLoadingMoreComments = false)
             }
-            val tmdbDeferred = async {
-                if (hasMoreTmdb && currentTmdbId > 0) {
-                    tmdbRepository.getReviews(currentTmdbId, currentMediaType, page = nextTmdbPage)
-                } else null
-            }
-
-            val newTraktComments = traktDeferred.await()
-            val tmdbResponse = tmdbDeferred.await()
-            val newTmdbComments = tmdbResponse?.results?.map { it.toTraktComment() } ?: emptyList()
-
-            // 去重
-            val existingIds = _uiState.value.comments.map { it.id }.toSet()
-            val uniqueNew = (newTraktComments + newTmdbComments).filter { it.id !in existingIds }
-
-            val newHasMoreTrakt = newTraktComments.size >= 10
-            val newHasMoreTmdb = tmdbResponse != null && nextTmdbPage < tmdbResponse.total_pages
-
-            _uiState.value = _uiState.value.copy(
-                comments = _uiState.value.comments + uniqueNew,
-                commentPage = if (newTraktComments.isNotEmpty()) nextTraktPage else current.commentPage,
-                tmdbCommentPage = if (newTmdbComments.isNotEmpty()) nextTmdbPage else current.tmdbCommentPage,
-                hasMoreComments = newHasMoreTrakt || newHasMoreTmdb,
-                isLoadingMoreComments = false
-            )
         }
     }
 
@@ -865,9 +930,9 @@ class DetailViewModel @Inject constructor(
                     }
                     _uiState.value = _uiState.value.copy(
                         recommendations = withStatus,
-                        isLoadingRecommendations = false,
-                        isMarkedWatchlist = cachedIds.isInWatchlist(currentTraktId, currentTmdbId, currentMediaType),
-                        isMarkedWatched = cachedIds.isWatched(currentTraktId, currentTmdbId, currentMediaType)
+                        isLoadingRecommendations = false
+                        // 不覆盖 isMarkedWatchlist/isMarkedWatched——推荐加载不应修改当前影视的标记状态，
+                        // 用户在 1.5s 延迟窗口内的手动操作不应被缓存旧值回退
                     )
                 } else {
                     // 未登录：跳过状态查询，直接展示推荐列表
@@ -929,6 +994,92 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isRating = false)
                 }
+        }
+    }
+
+    /**
+     * 提交评分+短评，并同步到豆瓣和 Trakt。
+     *
+     * - Trakt 评分走 addRating
+     * - Trakt 短评走 postComment（comment 非空时才发）
+     * - 豆瓣评分+短评走 markWatchedWithRating（一次性传看过+评分+短评）
+     *   - 若 pendingDoubanAction == COLLECT（标记已看后首次打分）→ 用 markWatchedWithRating 一次性传
+     *   - 否则（已标记过看过，仅修改评分）→ 同样用 markWatchedWithRating 覆盖更新评分+短评
+     *
+     * @param rating Trakt 1-10 分
+     * @param comment 短评（可选，空串表示不写短评）
+     */
+    fun setRatingWithComment(rating: Int, comment: String) {
+        val current = _uiState.value
+        if (current.isRating) return
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
+        _uiState.value = current.copy(isRating = true)
+        viewModelScope.launch {
+            // 1. Trakt 评分
+            val traktRatingResult = traktRepository.addRating(currentTraktId, rating, currentMediaType)
+            // 2. Trakt 短评（非空时才发）
+            var traktCommentResult: Result<*>? = null
+            if (comment.isNotBlank()) {
+                traktCommentResult = traktRepository.postComment(currentTraktId, currentMediaType, comment)
+            }
+            // 3. 豆瓣评分+短评（Trakt 评分成功后才同步豆瓣）
+            val pending = current.pendingDoubanAction
+            if (traktRatingResult.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    userRating = rating,
+                    isRating = false,
+                    pendingDoubanAction = null
+                )
+                saveToCache()
+                // 豆瓣同步:评分映射 Trakt 1-10 → 豆瓣 1-5
+                val doubanRating = Math.round(rating / 2.0).toInt()
+                syncDoubanMarkWithRating(doubanRating, comment, pending == DoubanSyncAction.COLLECT)
+            } else {
+                _uiState.value = _uiState.value.copy(isRating = false)
+            }
+        }
+    }
+
+    /**
+     * 豆瓣评分+短评同步（一次性传看过+评分+短评）。
+     *
+     * @param doubanRating 1..5 豆瓣五星制
+     * @param comment 短评（可选）
+     * @param includeCollect 是否同时标记看过（pendingDoubanAction == COLLECT 时为 true）
+     */
+    private suspend fun syncDoubanMarkWithRating(doubanRating: Int, comment: String, includeCollect: Boolean) {
+        val doubanId = _uiState.value.doubanIdForSync
+        val cred = doubanAuthStorage.getCredentials()
+
+        if (cred == null || doubanId.isNullOrBlank()) {
+            // 豆瓣未就绪 → 显示重试按钮（保留 pendingDoubanAction 供重试）
+            _uiState.value = _uiState.value.copy(doubanSyncRetryable = true)
+            _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isDoubanSyncing = true)
+        val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie)
+        val result = if (ck != null) {
+            if (includeCollect) {
+                // 一次性传看过+评分+短评
+                doubanRepository.markWatchedWithRating(doubanId, cred.cookie, ck, doubanRating, comment).success
+            } else {
+                // 仅更新评分+短评（豆瓣会覆盖原有 collect 状态 + 更新 rating + comment）
+                doubanRepository.markWatchedWithRating(doubanId, cred.cookie, ck, doubanRating, comment).success
+            }
+        } else false
+        _uiState.value = _uiState.value.copy(isDoubanSyncing = false)
+
+        if (result) {
+            _uiState.value = _uiState.value.copy(doubanSyncRetryable = false, pendingDoubanAction = null)
+            _toastEvent.emit(R.string.detail_douban_sync_success)
+        } else {
+            _uiState.value = _uiState.value.copy(doubanSyncRetryable = true)
+            _toastEvent.emit(R.string.detail_douban_sync_failed)
         }
     }
 
@@ -1301,6 +1452,8 @@ class DetailViewModel @Inject constructor(
                             isMarkingWatched = false
                         )
                         saveToCache()
+                        // 豆瓣双向同步:取消已看→豆瓣标记想看(加回 wish)
+                        syncDoubanMark(DoubanSyncAction.REMOVE_COLLECT)
                     }
                     .onFailure {
                         _uiState.value = _uiState.value.copy(isMarkingWatched = false)
@@ -1324,7 +1477,9 @@ class DetailViewModel @Inject constructor(
                         isMarkedWatched = true,
                         isMarkedWatchlist = false,
                         isMarkingWatched = false,
-                        showRatingDialog = true
+                        showRatingDialog = true,
+                        // 延迟豆瓣同步:等打分弹窗确认后一次性传看过+评分+短评
+                        pendingDoubanAction = DoubanSyncAction.COLLECT
                     )
                     saveToCache()
                 }
@@ -1342,9 +1497,13 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(showMarkWatchedDialog = false)
     }
 
-    /** 关闭评分弹窗 */
+    /** 关闭评分弹窗：用户未打分直接关闭时，若有待处理的豆瓣同步则仅同步看过（无评分无短评） */
     fun dismissRatingDialog() {
-        _uiState.value = _uiState.value.copy(showRatingDialog = false)
+        val pending = _uiState.value.pendingDoubanAction
+        _uiState.value = _uiState.value.copy(showRatingDialog = false, pendingDoubanAction = null)
+        if (pending == DoubanSyncAction.COLLECT) {
+            viewModelScope.launch { syncDoubanMark(DoubanSyncAction.COLLECT) }
+        }
     }
 
     /** 提交勾选的季/集为已看 */
@@ -1362,7 +1521,10 @@ class DetailViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isMarkedWatched = true,
                         isMarkedWatchlist = false,
-                        isMarkingWatched = false
+                        isMarkingWatched = false,
+                        showRatingDialog = true,
+                        // 延迟豆瓣同步:等打分弹窗确认后一次性传看过+评分+短评
+                        pendingDoubanAction = DoubanSyncAction.COLLECT
                     )
                     saveToCache()
                 }
@@ -1404,6 +1566,8 @@ class DetailViewModel @Inject constructor(
                     isMarkingWatchlist = false
                 )
                 saveToCache()
+                // 豆瓣双向同步:标记想看→豆瓣 wish,取消想看→豆瓣 remove
+                syncDoubanMark(if (targetState) DoubanSyncAction.WISH else DoubanSyncAction.REMOVE_WISH)
             } else {
                 _uiState.value = _uiState.value.copy(isMarkingWatchlist = false)
             }
@@ -1413,6 +1577,82 @@ class DetailViewModel @Inject constructor(
     /** 关闭登录引导弹窗 */
     fun dismissLoginPrompt() {
         _uiState.value = _uiState.value.copy(showLoginPrompt = false)
+    }
+
+    /**
+     * 豆瓣双向同步:在 Trakt 标记成功后,同步更新豆瓣侧状态。
+     *
+     * - doubanId 未就绪或未登录豆瓣 → 显示重试按钮 + Toast 提示
+     * - 豆瓣同步成功 → Toast 提示「豆瓣数据已同步更新」
+     * - 豆瓣同步失败 → 显示重试按钮 + Toast 提示
+     */
+    private suspend fun syncDoubanMark(action: DoubanSyncAction) {
+        val doubanId = _uiState.value.doubanIdForSync
+        val cred = doubanAuthStorage.getCredentials()
+
+        // 未登录豆瓣或 doubanId 未就绪 → 显示重试按钮
+        if (cred == null || doubanId.isNullOrBlank()) {
+            _uiState.value = _uiState.value.copy(
+                doubanSyncRetryable = true,
+                pendingDoubanAction = action
+            )
+            _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isDoubanSyncing = true)
+        val result = executeDoubanMark(action, doubanId, cred.cookie)
+        _uiState.value = _uiState.value.copy(isDoubanSyncing = false)
+
+        if (result) {
+            _uiState.value = _uiState.value.copy(doubanSyncRetryable = false, pendingDoubanAction = null)
+            _toastEvent.emit(R.string.detail_douban_sync_success)
+        } else {
+            _uiState.value = _uiState.value.copy(doubanSyncRetryable = true, pendingDoubanAction = action)
+            _toastEvent.emit(R.string.detail_douban_sync_failed)
+        }
+    }
+
+    /** 执行豆瓣标记操作,返回是否成功 */
+    private suspend fun executeDoubanMark(
+        action: DoubanSyncAction,
+        doubanId: String,
+        cookie: String
+    ): Boolean {
+        // 先获取 csrf token(ck)
+        val ck = doubanRepository.fetchCsrfToken(doubanId, cookie) ?: return false
+        return when (action) {
+            DoubanSyncAction.WISH -> doubanRepository.markInterest("wish", doubanId, cookie, ck).success
+            DoubanSyncAction.COLLECT -> doubanRepository.markInterest("collect", doubanId, cookie, ck).success
+            DoubanSyncAction.REMOVE_WISH,
+            DoubanSyncAction.REMOVE_COLLECT -> doubanRepository.removeMark(doubanId, cookie, ck).success
+        }
+    }
+
+    /** 用户点击重试按钮:重新执行豆瓣同步 */
+    fun retryDoubanSync() {
+        val action = _uiState.value.pendingDoubanAction ?: return
+        if (_uiState.value.isDoubanSyncing) return
+        viewModelScope.launch {
+            // 若 doubanId 仍未就绪,先重新预查
+            if (_uiState.value.doubanIdForSync.isNullOrBlank()) {
+                val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
+                val imdbId = currentImdbId.takeIf { it.isNotBlank() }
+                // 先查同步表
+                val syncedItem = if (imdbId != null) {
+                    runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+                } else null
+                val doubanId = syncedItem?.doubanId
+                    ?: doubanRepository.findDoubanId(currentTraktId, imdbId, mediaTypeStr)
+                if (doubanId != null) {
+                    _uiState.value = _uiState.value.copy(doubanIdForSync = doubanId)
+                } else {
+                    _toastEvent.emit(R.string.detail_douban_sync_id_not_ready)
+                    return@launch
+                }
+            }
+            syncDoubanMark(action)
+        }
     }
 
     fun markResourceViewed(url: String) {

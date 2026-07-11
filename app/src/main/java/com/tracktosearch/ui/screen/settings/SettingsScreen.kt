@@ -68,6 +68,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
@@ -181,6 +182,9 @@ fun SettingsScreen(
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     // 增量同步冷却期状态(跨设备同步显示)
     val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
+    val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
+    val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
+    var showConsistencyDialog by remember { mutableStateOf(false) }
     var showDoubanLoginPrompt by remember { mutableStateOf(false) }
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
@@ -301,6 +305,7 @@ fun SettingsScreen(
                     is CloudSyncEvent.UploadSuccess -> context.getString(R.string.cloud_sync_upload_success)
                     is CloudSyncEvent.UploadFailed -> context.getString(R.string.cloud_sync_upload_failed)
                     is CloudSyncEvent.CloudEmpty -> context.getString(R.string.cloud_sync_download_empty)
+                    is CloudSyncEvent.LocalNewer -> context.getString(R.string.cloud_sync_download_local_newer)
                     is CloudSyncEvent.DownloadFailed -> context.getString(R.string.cloud_sync_download_failed)
                     is CloudSyncEvent.DownloadSuccess -> "" // 已上面处理
                 }
@@ -611,6 +616,36 @@ fun SettingsScreen(
                             ),
                             onClick = { onDoubanFailures() }
                         )
+                    }
+                }
+                // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
+                if (!isDoubanSyncRunning) {
+                    item(key = "douban_status_consistency") {
+                    SettingsItemCard(
+                        icon = Icons.Rounded.SyncAlt,
+                        title = stringResource(R.string.settings_douban_status_consistency),
+                        subtitle = consistencyCheckState?.let { result ->
+                            if (result.isComplete) {
+                                stringResource(
+                                    R.string.settings_douban_status_consistency_done,
+                                    result.conflictsFound,
+                                    result.traktUpdated,
+                                    result.doubanUpdated
+                                )
+                            } else if (result.isRunning) {
+                                stringResource(R.string.settings_douban_status_consistency_checking)
+                            } else {
+                                stringResource(R.string.settings_douban_status_consistency_desc)
+                            }
+                        } ?: stringResource(R.string.settings_douban_status_consistency_desc),
+                        onClick = {
+                            // 检查未运行时才启动新检查；已运行时直接弹窗恢复进度
+                            if (!viewModel.isCheckRunning()) {
+                                viewModel.startManualConsistencyCheck()
+                            }
+                            showConsistencyDialog = true
+                        }
+                    )
                     }
                 }
                 // 云端同步进行中:显示进度条
@@ -1090,6 +1125,18 @@ fun SettingsScreen(
                     pendingCooldownMode = null
                 }) { Text(stringResource(R.string.cooldown_skip)) }
             }
+        )
+    }
+
+    // 状态一致性检查进度弹窗
+    if (showConsistencyDialog) {
+        ConsistencyCheckDialog(
+            onDismiss = {
+                val p = consistencyCheckState
+                // 检查运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
+                if (!p.isRunning) showConsistencyDialog = false
+            },
+            onBackground = { showConsistencyDialog = false }
         )
     }
 

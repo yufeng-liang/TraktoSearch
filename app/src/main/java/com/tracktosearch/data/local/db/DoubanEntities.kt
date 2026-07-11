@@ -31,6 +31,10 @@ interface DoubanSyncedItemDao {
     @Query("SELECT * FROM douban_synced_items WHERE doubanId = :doubanId")
     suspend fun getByDoubanId(doubanId: String): DoubanSyncedItem?
 
+    /** 按 imdbId 反查同步记录（imdbId 列已有索引），用于详情页预查 doubanId */
+    @Query("SELECT * FROM douban_synced_items WHERE imdbId = :imdbId LIMIT 1")
+    suspend fun getByImdbId(imdbId: String): DoubanSyncedItem?
+
     @Query("SELECT doubanId FROM douban_synced_items")
     suspend fun getAllSyncedDoubanIds(): List<String>
 
@@ -45,6 +49,10 @@ interface DoubanSyncedItemDao {
 
     @Query("SELECT COUNT(*) FROM douban_synced_items")
     suspend fun count(): Int
+
+    /** 状态统一检查后回写本地表 status（豆瓣侧标记成功后同步本地记录） */
+    @Query("UPDATE douban_synced_items SET status = :status WHERE doubanId = :doubanId")
+    suspend fun updateStatus(doubanId: String, status: String)
 }
 
 /**

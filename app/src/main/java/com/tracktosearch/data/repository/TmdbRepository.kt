@@ -37,7 +37,7 @@ class TmdbRepository @Inject constructor(
         private const val TTL_DETAIL = Long.MAX_VALUE       // 详情（海报路径、tmdbId、imdbId 等不变字段）永久缓存
         private const val TTL_CREDITS = Long.MAX_VALUE      // 演职员信息永久缓存（头像、姓名、角色不变）
         private const val TTL_SEARCH = 60 * 60 * 1000L       // 搜索/ID转换 1 小时
-        private const val TTL_PERSON = 60 * 60 * 1000L       // 人物信息 1 小时
+        private const val TTL_PERSON = Long.MAX_VALUE       // 人物信息永久缓存（姓名、头像路径、生日等不变）
         private const val TTL_REVIEWS = 10 * 60 * 1000L      // 评论 10 分钟
         private const val TTL_LISTS = 6 * 60 * 60 * 1000L   // 列表类 6 小时（榜单数据更新不频繁）
         private const val PERSON_CREDITS_PAGE_SIZE = 20      // 人物作品每页数量
@@ -652,7 +652,9 @@ class TmdbRepository @Inject constructor(
 
     /** 获取电影详情（含海报路径），优先读缓存 */
     suspend fun getMovieDetail(movieId: Int): TmdbMovieDetail? {
-        val key = movieId.toString()
+        val key = langKey(movieId)
+        movieDetailCache.get(key)?.let { return it }
+        movieDetailCache.awaitLoaded()
         movieDetailCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getMovieDetail(movieId, language = getTmdbLanguage())
@@ -666,11 +668,19 @@ class TmdbRepository @Inject constructor(
         }
     }
 
-    /** 获取电视剧详情（用于补全 imdb_id 等） */
+    /** 获取电视剧详情（用于补全 imdb_id 等），优先读缓存 */
     suspend fun getTvDetail(tvId: Int): TmdbTvDetail? {
+        val key = langKey(tvId)
+        tvDetailCache.get(key)?.let { return it }
+        tvDetailCache.awaitLoaded()
+        tvDetailCache.get(key)?.let { return it }
         return try {
             val response = tmdbApiService.getTvDetail(tvId, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body() else null
+            if (response.isSuccessful) {
+                val detail = response.body()
+                detail?.let { tvDetailCache.put(key, it) }
+                detail
+            } else null
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }

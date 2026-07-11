@@ -376,6 +376,7 @@
     <string name="detail_rating_cancel">取消</string>
     <string name="detail_rating_no_rating">未评分</string>
     <string name="detail_rating_hint">点击星星左右两侧选择半星/整星，再次点击已选区域可取消评分</string>
+    <string name="detail_rating_comment_hint">短评（可选）</string>
     <string name="detail_videos_section">预告片与截图</string>
     <string name="detail_videos_all">全部(%1$d)</string>
     <string name="detail_videos_all_title">预告片与截图</string>
@@ -717,6 +718,23 @@
     <!-- Douban failures viewer -->
     <string name="settings_douban_view_failures">查看同步失败项</string>
     <string name="settings_douban_view_failures_desc">%1$d 项豆瓣条目同步失败</string>
+    <string name="settings_douban_status_consistency">检查状态一致性</string>
+    <string name="settings_douban_status_consistency_desc">检查豆瓣与 Trakt 的想看/已看状态是否一致</string>
+    <string name="settings_douban_status_consistency_checking">正在检查…</string>
+    <string name="settings_douban_status_consistency_done">发现冲突 %1$d 项，Trakt 更新 %2$d 项，豆瓣更新 %3$d 项</string>
+    <string name="consistency_check_title">状态一致性检查</string>
+    <string name="consistency_check_background">转后台</string>
+    <string name="consistency_check_cancel">取消</string>
+    <string name="consistency_check_complete_banner">检查完成</string>
+    <string name="consistency_check_phase_crawl">爬取豆瓣列表</string>
+    <string name="consistency_check_phase_compare">对比状态</string>
+    <string name="consistency_check_phase_update_trakt">更新 Trakt</string>
+    <string name="consistency_check_phase_update_douban">更新豆瓣</string>
+    <string name="consistency_check_phase_done">完成</string>
+    <string name="consistency_check_summary">检查 %1$d 项，发现 %2$d 个冲突，Trakt 更新 %3$d 项，豆瓣更新 %4$d 项，错误 %5$d 项</string>
+    <string name="consistency_check_sub_wish">想看列表</string>
+    <string name="consistency_check_sub_collect">已看列表</string>
+    <string name="consistency_check_sub_detail_ck">详情页拿ck</string>
     <string name="settings_douban_import_failures">从 JSON 导入失败项</string>
     <string name="settings_douban_import_failures_desc">导入从其他设备导出的失败项 JSON 文件,在此查看</string>
     <string name="screen_douban_failures_title">同步失败项</string>

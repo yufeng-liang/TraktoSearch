@@ -69,6 +69,10 @@ interface TraktApiService {
         @Query("page") page: Int = 1
     ): Response<List<TraktComment>>
 
+    /** POST /comments 添加评论（短评），成功返回 201 */
+    @POST("comments")
+    suspend fun postComment(@Body body: TraktCommentRequest): Response<TraktComment>
+
     @GET("shows/{id}/seasons")
     suspend fun getShowSeasons(
         @Path("id") id: String,

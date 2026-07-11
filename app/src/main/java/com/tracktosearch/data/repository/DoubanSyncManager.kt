@@ -16,6 +16,7 @@ import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.util.PersistentTtlCache
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -99,7 +100,8 @@ class DoubanSyncManager @Inject constructor(
     private val cloudDetailsPoolManager: CloudDetailsPoolManager,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
     private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
 ) {
     private val _progress = MutableStateFlow(DoubanSyncProgress())
     val progress: StateFlow<DoubanSyncProgress> = _progress.asStateFlow()
@@ -141,6 +143,8 @@ class DoubanSyncManager @Inject constructor(
         cancelled = true
         // 异步上传当前进度（不阻塞取消，失败只记日志）
         appScope.launch {
+            // 等待同步作业退出后再上传，避免 dirtyDetailIds toList/clear 竞态导致数据丢失
+            syncJob?.join()
             runCatching {
                 cloudPersonalSyncManager.uploadAll(
                     lastSyncMode = "CANCELLED",
@@ -192,8 +196,14 @@ class DoubanSyncManager @Inject constructor(
         cancelled = false
         dirtyDetailIds.clear()
         syncJob = appScope.launch {
-            if (!checkTraktAvailable()) return@launch
-            runSyncLegacy(forceOverwrite)
+            try {
+                if (!checkTraktAvailable()) return@launch
+                runSyncLegacy(forceOverwrite)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            }
         }
         return true
     }
@@ -211,8 +221,14 @@ class DoubanSyncManager @Inject constructor(
         cancelled = false
         dirtyDetailIds.clear()
         syncJob = appScope.launch {
-            if (!checkTraktAvailable()) return@launch
-            runSync(mode, forceCrawl)
+            try {
+                if (!checkTraktAvailable()) return@launch
+                runSync(mode, forceCrawl)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            }
         }
         return true
     }
@@ -234,8 +250,14 @@ class DoubanSyncManager @Inject constructor(
         cancelled = false
         dirtyDetailIds.clear()
         syncJob = appScope.launch {
-            if (!checkTraktAvailable()) return@launch
-            runResume()
+            try {
+                if (!checkTraktAvailable()) return@launch
+                runResume()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            }
         }
         return true
     }
@@ -276,8 +298,14 @@ class DoubanSyncManager @Inject constructor(
         cancelled = false
         dirtyDetailIds.clear()
         syncJob = appScope.launch {
-            if (!checkTraktAvailable()) return@launch
-            runRetry(failures, selectedReasons)
+            try {
+                if (!checkTraktAvailable()) return@launch
+                runRetry(failures, selectedReasons)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            }
         }
         return true
     }
@@ -1053,7 +1081,13 @@ class DoubanSyncManager @Inject constructor(
     private suspend fun uploadToCloudAfterSync(mode: String, isFullComplete: Boolean) {
         // 先记录本地 sync_meta
         runCatching { doubanSyncMetaStorage.recordLocalSync(mode, isFullComplete) }
-        // 上传个人数据
+        // 状态一致性检查（前移到上传之前）：统一豆瓣与 Trakt 状态并回写本地表，
+        // 确保上传到云端的 synced_items.json 中的 status 是统一后的值
+        runCatching {
+            val result = statusConsistencyChecker.checkAndUnify()
+            android.util.Log.i("DoubanSync", "同步后状态一致性检查: $result")
+        }
+        // 上传个人数据（含统一后的 status）
         runCatching {
             cloudPersonalSyncManager.uploadAll(
                 lastSyncMode = mode,

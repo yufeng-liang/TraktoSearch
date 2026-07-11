@@ -239,7 +239,7 @@ fun AppNavigation(
                         // - 有 pending items → 弹续传对话框(继续同步/完整同步)
                         // - 无 pending items 但有 failures → 弹失败重试对话框(由 SettingsScreen 处理)
                         val doubanSyncManager = hiltViewModel<DoubanSyncViewModel>().doubanSyncManager
-                        var pendingCount by remember { mutableStateOf(0) }
+                        var pendingCount by rememberSaveable { mutableIntStateOf(0) }
                         var pendingChecked by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) {
                             if (!pendingChecked) {
