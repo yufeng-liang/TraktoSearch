@@ -1173,6 +1173,7 @@ class DoubanSyncManager @Inject constructor(
         val imdbId: String,
         val traktId: Int,
         val mediaType: MediaType,
+        val inferredMediaType: String? = null,  // 从详情推断的细分类型(movie/show/variety/documentary),用于失败项标注
         val originalFailure: DoubanSyncFailure? = null  // 重试模式下传入,用于 attemptCount 累加
     )
 
@@ -1261,14 +1262,15 @@ class DoubanSyncManager @Inject constructor(
                         }
                         val imdbId = detail.imdbId
                         if (imdbId.isNullOrEmpty()) {
-                            val failure = buildFailure(item, status, FailureReason.NO_IMDB_ID, existingMap)
+                            val failure = buildFailure(item, status, FailureReason.NO_IMDB_ID, existingMap, inferMediaTypeFromDetail(detail))
                             synchronized(failed) { failed.add(failure) }
                             val done = completedCount.incrementAndGet()
                             onProgress(done, "详情页", 0, item.title, failure)
                             return@async
                         }
                         val mediaType = if (detail.isTvShow) MediaType.SHOW else MediaType.MOVIE
-                        detailChannel.send(SyncResolve(item, imdbId, traktId = 0, mediaType = mediaType, originalFailure = existingMap[item.doubanId]))
+                        val inferredType = inferMediaTypeFromDetail(detail)
+                        detailChannel.send(SyncResolve(item, imdbId, traktId = 0, mediaType = mediaType, inferredMediaType = inferredType, originalFailure = existingMap[item.doubanId]))
                     } catch (e: Exception) {
                         val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
                         synchronized(failed) { failed.add(failure) }
@@ -1301,7 +1303,7 @@ class DoubanSyncManager @Inject constructor(
                         }
                         val done = completedCount.incrementAndGet()
                         if (traktId == null || traktId <= 0) {
-                            val failure = buildFailure(r.item, status, FailureReason.TRAKT_NOT_FOUND, existingMap)
+                            val failure = buildFailure(r.item, status, FailureReason.TRAKT_NOT_FOUND, existingMap, r.inferredMediaType)
                             synchronized(failed) { failed.add(failure) }
                             onProgress(done, "Trakt 查询", 0, r.item.title, failure)
                         } else {
@@ -1436,14 +1438,31 @@ class DoubanSyncManager @Inject constructor(
     }
 
     /**
-     * 构造失败项。
-     * 重试模式下累加 attemptCount,同步模式下 attemptCount=0。
+     * 从豆瓣详情推断细分媒体类型(与 DoubanRetryManager.inferMediaTypeFromDetail 推断逻辑一致)。
+     *
+     * - genres 含"综艺"/"真人秀"/"脱口秀"/"音乐" → "variety"
+     * - genres 含"纪录片" → "documentary"
+     * - episodeCount > 0 → "show"
+     * - 否则 → "movie"
+     *
+     * 同步爬取详情页时调用,让失败项在写入表时即带有推断的类型,无需等用户打开详情页。
      */
+    private fun inferMediaTypeFromDetail(detail: DoubanDetailInfo): String {
+        return when {
+            detail.genres.any { it.contains("综艺") || it.contains("真人秀") || it.contains("脱口秀") || it.contains("音乐") } -> "variety"
+            detail.genres.any { it.contains("纪录片") } -> "documentary"
+            detail.episodeCount != null && detail.episodeCount > 0 -> "show"
+            else -> "movie"
+        }
+    }
+
+    /** 构造失败项。重试模式下累加 attemptCount,同步模式下 attemptCount=0。inferredMediaType 仅在已有 mediaType 为 null 时填充。 */
     private fun buildFailure(
         item: DoubanMarkItem,
         status: DoubanMarkStatus,
         reason: FailureReason,
-        existingMap: Map<String, DoubanSyncFailure>
+        existingMap: Map<String, DoubanSyncFailure>,
+        inferredMediaType: String? = null
     ): DoubanSyncFailure {
         val existing = existingMap[item.doubanId]
         return DoubanSyncFailure(
@@ -1458,8 +1477,8 @@ class DoubanSyncManager @Inject constructor(
             failureReason = reason,
             failedAt = System.currentTimeMillis(),
             attemptCount = (existing?.attemptCount ?: 0) + 1,
-            // 保留用户已标注的 mediaType 和清除标记,避免同步/重试时丢失
-            mediaType = existing?.mediaType,
+            // 保留用户已标注的 mediaType,仅当为 null 时用爬取详情推断的类型填充
+            mediaType = existing?.mediaType ?: inferredMediaType,
             mediaTypeCleared = existing?.mediaTypeCleared ?: false,
             subtitle = existing?.subtitle
         )
