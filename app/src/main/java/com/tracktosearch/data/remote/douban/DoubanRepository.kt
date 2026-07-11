@@ -403,6 +403,52 @@ class DoubanRepository(
     }
 
     /**
+     * 测试用:抓取豆瓣「为你推荐」rexxar 端点(movie/tv),返回原始 JSON + 解析出的片单列表。
+     * 该端点返回的是「片单/豆列(doulist)」而非单部影视;带登录 Cookie 时为个性化推荐。
+     * 仅爬取测试页调用。
+     */
+    suspend fun fetchRecommendForTest(type: String, cookie: String): RecommendTestResult = withContext(Dispatchers.IO) {
+        val startMs = System.currentTimeMillis()
+        val url = "https://m.douban.com/rexxar/api/v2/$type/recommend"
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", mobileUa)
+            .header("Cookie", cookie)
+            .header("Referer", "https://m.douban.com/")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+            .build()
+        client.newCall(request).execute().use { response ->
+            val body = response.body?.string() ?: ""
+            val (itemCount, titles) = parseRecommendItems(body)
+            RecommendTestResult(
+                type = type,
+                statusCode = response.code,
+                durationMs = System.currentTimeMillis() - startMs,
+                body = body,
+                itemCount = itemCount,
+                titles = titles
+            )
+        }
+    }
+
+    /** 从推荐 JSON 解析 items 内的片单标题(用于测试页结果展示) */
+    private fun parseRecommendItems(body: String): Pair<Int?, List<String>> {
+        return try {
+            val obj = org.json.JSONObject(body)
+            val arr = obj.optJSONArray("items") ?: return Pair(null, emptyList())
+            val titles = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+                val it = arr.optJSONObject(i) ?: continue
+                it.optString("title").takeIf { t -> t.isNotBlank() }?.let { titles.add(it) }
+            }
+            Pair<Int?, List<String>>(arr.length(), titles)
+        } catch (_: Exception) {
+            Pair(null, emptyList())
+        }
+    }
+
+    /**
      * 测试用:对一个标记动作探测候选写接口端点,返回对照结果。
      * 仅爬取测试页调用,用于逆向确认端点与字段(不进入正式业务逻辑)。
      *
@@ -763,6 +809,16 @@ data class MarkWriteResult(
     val success: Boolean,
     val statusCode: Int,
     val message: String
+)
+
+/** 测试页「为你推荐」抓取结果 */
+data class RecommendTestResult(
+    val type: String,           // "movie" / "tv"
+    val statusCode: Int,
+    val durationMs: Long,
+    val body: String,           // 原始 JSON 响应体
+    val itemCount: Int?,        // 解析出的 items 数量(null=非 JSON 或解析失败)
+    val titles: List<String>    // 片单标题列表
 )
 
 /** 豆瓣标记状态 */

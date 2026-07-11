@@ -817,6 +817,15 @@
     <string name="douban_spider_test_mark_result">结果</string>
     <string name="douban_spider_test_copy_result">复制结果</string>
     <string name="douban_spider_test_mark_copied">已复制结果</string>
+    <string name="douban_spider_test_recommend_section">为你推荐（带 Cookie）</string>
+    <string name="douban_spider_test_recommend_type">类型</string>
+    <string name="douban_spider_test_recommend_movie">电影</string>
+    <string name="douban_spider_test_recommend_tv">电视剧</string>
+    <string name="douban_spider_test_recommend_run">测试推荐</string>
+    <string name="douban_spider_test_recommend_no_login">需先登录豆瓣才能测试个性化推荐</string>
+    <string name="douban_spider_test_recommend_doulist">片单</string>
+    <string name="douban_spider_test_recommending">测试中…</string>
+    <string name="douban_spider_test_recommend_no_items">未解析到片单（见原始 JSON）</string>
 
     <!-- 豆瓣失败项查看页:筛选与搜索 -->
     <string name="filter_title">筛选</string>

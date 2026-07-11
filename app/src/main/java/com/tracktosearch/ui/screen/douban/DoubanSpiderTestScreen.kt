@@ -98,6 +98,7 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DoubanSpider
 import com.tracktosearch.data.remote.douban.MarkTestResult
+import com.tracktosearch.data.remote.douban.RecommendTestResult
 import com.tracktosearch.data.remote.douban.TestFetchResult
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
@@ -142,7 +143,12 @@ data class SpiderTestUiState(
     val isMarking: Boolean = false,
     val markResult: MarkTestResult? = null,
     val markError: String? = null,
-    val markRemoveMode: String = "web_remove" // 取消标记方式: "web_remove"(POST /subject/{id}/remove 网页表单) / "j_remove"(POST /j/subject/{id}/remove)
+    val markRemoveMode: String = "web_remove", // 取消标记方式: "web_remove"(POST /subject/{id}/remove 网页表单) / "j_remove"(POST /j/subject/{id}/remove)
+    // ── 为你推荐测试(带 cookie) ──
+    val recommendType: String = "tv",      // "movie" | "tv"
+    val isRecommending: Boolean = false,
+    val recommendResult: RecommendTestResult? = null,
+    val recommendError: String? = null
 )
 
 /** 本地已缓存的豆瓣条目(用于快选弹窗展示) */
@@ -295,6 +301,28 @@ class DoubanSpiderTestViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isMarking = false, markResult = result)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isMarking = false, markError = e.stackTraceToString())
+            }
+        }
+    }
+
+    /** 更新为你推荐测试的类型(movie / tv) */
+    fun updateRecommendType(type: String) {
+        _uiState.value = _uiState.value.copy(recommendType = type, recommendError = null, recommendResult = null)
+    }
+
+    /**
+     * 为你推荐测试:带当前 cookie 请求 m.douban.com/rexxar/api/v2/{type}/recommend。
+     * 仅用于逆向确认端点返回结构(片单/豆列),不进入正式业务逻辑。
+     */
+    fun recommendTest() {
+        val current = _uiState.value
+        _uiState.value = current.copy(isRecommending = true, recommendError = null, recommendResult = null)
+        viewModelScope.launch {
+            try {
+                val result = doubanRepository.fetchRecommendForTest(current.recommendType, current.cookie)
+                _uiState.value = _uiState.value.copy(isRecommending = false, recommendResult = result)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isRecommending = false, recommendError = e.stackTraceToString())
             }
         }
     }
@@ -674,6 +702,140 @@ fun DoubanSpiderTestScreen(
                                         }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                // ── 为你推荐测试(带 Cookie) ──
+                item {
+                    SectionCard(title = stringResource(R.string.douban_spider_test_recommend_section)) {
+                        // 类型切换:电影 / 电视剧
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_recommend_type),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            FilterChip(
+                                selected = uiState.recommendType == "movie",
+                                border = if (uiState.recommendType == "movie") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("movie") },
+                                label = { Text(stringResource(R.string.douban_spider_test_recommend_movie)) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            FilterChip(
+                                selected = uiState.recommendType == "tv",
+                                border = if (uiState.recommendType == "tv") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateRecommendType("tv") },
+                                label = { Text(stringResource(R.string.douban_spider_test_recommend_tv)) },
+                                modifier = Modifier.height(32.dp)
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            Button(
+                                onClick = { view.performHaptic(HapticType.CLICK); viewModel.recommendTest() },
+                                enabled = uiState.isLoggedIn && !uiState.isRecommending,
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                if (uiState.isRecommending) {
+                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(stringResource(R.string.douban_spider_test_recommending))
+                                } else {
+                                    Text(stringResource(R.string.douban_spider_test_recommend_run))
+                                }
+                            }
+                        }
+                        // 未登录提示
+                        if (!uiState.isLoggedIn) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.douban_spider_test_recommend_no_login),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        // 测试中
+                        if (uiState.isRecommending) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(stringResource(R.string.douban_spider_test_recommending), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        // 错误(技术堆栈/英文)
+                        uiState.recommendError?.let { err ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.errorContainer) {
+                                Text(
+                                    text = err,
+                                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        // 结果
+                        uiState.recommendResult?.let { res ->
+                            val copyCtx = LocalContext.current
+                            val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${res.type.uppercase()} · HTTP ${res.statusCode} · ${res.durationMs}ms" +
+                                        (res.itemCount?.let { " · $it ${stringResource(R.string.douban_spider_test_recommend_doulist)}" } ?: ""),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                TextButton(
+                                    onClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("recommend", res.body))
+                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(stringResource(R.string.douban_spider_test_copy_result))
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            if (res.titles.isNotEmpty()) {
+                                res.titles.forEachIndexed { i, title ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Row(modifier = Modifier.padding(8.dp)) {
+                                            Text(
+                                                text = "${i + 1}.",
+                                                modifier = Modifier.width(24.dp),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = title,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = stringResource(R.string.douban_spider_test_recommend_no_items),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
                         }
                     }

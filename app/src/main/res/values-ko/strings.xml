@@ -698,6 +698,15 @@
     <string name="douban_spider_test_pick_cached">캐시된 항목 선택</string>
     <string name="douban_spider_test_pick_cached_title">캐시된 더우반 항목</string>
     <string name="douban_spider_test_no_cached">캐시된 항목이 아직 없습니다</string>
+    <string name="douban_spider_test_recommend_section">추천 (Cookie 포함)</string>
+    <string name="douban_spider_test_recommend_type">유형</string>
+    <string name="douban_spider_test_recommend_movie">영화</string>
+    <string name="douban_spider_test_recommend_tv">드라마</string>
+    <string name="douban_spider_test_recommend_run">추천 테스트</string>
+    <string name="douban_spider_test_recommend_no_login">개인화된 추천을 테스트하려면 먼저 더우반에 로그인하세요</string>
+    <string name="douban_spider_test_recommend_doulist">두리스트</string>
+    <string name="douban_spider_test_recommending">테스트 중…</string>
+    <string name="douban_spider_test_recommend_no_items">두리스트를 파싱하지 못했습니다(원시 JSON 참조)</string>
 
     <!--豆瓣 실패 항목 조회 페이지: 필터와 검색 -->
     <string name="filter_title">필터</string>

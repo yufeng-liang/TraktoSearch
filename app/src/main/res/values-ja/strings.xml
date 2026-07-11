@@ -698,6 +698,15 @@
     <string name="douban_spider_test_pick_cached">キャッシュ済みアイテムを選択</string>
     <string name="douban_spider_test_pick_cached_title">キャッシュ済み豆瓣アイテム</string>
     <string name="douban_spider_test_no_cached">キャッシュ済みアイテムはまだありません</string>
+    <string name="douban_spider_test_recommend_section">おすすめ（Cookie付き）</string>
+    <string name="douban_spider_test_recommend_type">タイプ</string>
+    <string name="douban_spider_test_recommend_movie">映画</string>
+    <string name="douban_spider_test_recommend_tv">ドラマ</string>
+    <string name="douban_spider_test_recommend_run">おすすめをテスト</string>
+    <string name="douban_spider_test_recommend_no_login">パーソナライズされたおすすめをテストするには、先に豆瓣にログインしてください</string>
+    <string name="douban_spider_test_recommend_doulist">豆リスト</string>
+    <string name="douban_spider_test_recommending">テスト中…</string>
+    <string name="douban_spider_test_recommend_no_items">豆リストが解析されませんでした（生JSONを参照）</string>
 
     <!-- 豆瓣失敗項查看頁:フィルターと検索 -->
     <string name="filter_title">フィルター</string>
