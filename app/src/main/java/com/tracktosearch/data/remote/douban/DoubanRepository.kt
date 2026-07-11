@@ -6,6 +6,9 @@ import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -16,6 +19,34 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
+
+/**
+ * 延时信息(用于同步进度弹窗展示倒计时)。
+ *
+ * 当 DoubanRepository 执行 delay() 前,通过 [DoubanRepository.delayEvent] 上报延时信息,
+ * UI 层基于 startMs 和 totalSeconds 计算剩余秒数做倒计时展示。delay() 结束后清 null。
+ *
+ * @param type 延时类型(决定 UI 展示的文案)
+ * @param totalSeconds 总延时秒数
+ * @param startMs 延时开始的时间戳(System.currentTimeMillis)
+ */
+data class DelayInfo(
+    val type: DelayType,
+    val totalSeconds: Int,
+    val startMs: Long
+)
+
+/** 延时类型 */
+enum class DelayType(val displayKey: String) {
+    /** 豆瓣详情页反爬延迟(3-5秒) */
+    DOUBAN_DETAIL_CRAWL("douban_detail_crawl"),
+
+    /** 豆瓣列表页爬取延迟(5-10秒) */
+    DOUBAN_LIST_CRAWL("douban_list_crawl"),
+
+    /** 豆瓣重试前等待(2-4秒) */
+    DOUBAN_RETRY("douban_retry")
+}
 
 /**
  * 豆瓣详情页解析结果的持久化缓存条目。
@@ -86,6 +117,21 @@ class DoubanRepository(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
+    /**
+     * 延时事件流:delay() 前上报延时信息,delay() 后清 null。
+     * DoubanSyncManager collect 此流合并到 progress,UI 层做倒计时展示。
+     */
+    private val _delayEvent = MutableStateFlow<DelayInfo?>(null)
+    val delayEvent: StateFlow<DelayInfo?> = _delayEvent.asStateFlow()
+
+    /** 带延时上报的 delay 封装:delay 前设 delayEvent,delay 后清 null */
+    private suspend fun delayWithEvent(type: DelayType, millisRange: LongRange) {
+        val millis = Random.nextLong(millisRange.first, millisRange.last + 1)
+        _delayEvent.value = DelayInfo(type, (millis / 1000).toInt(), System.currentTimeMillis())
+        delay(millis)
+        _delayEvent.value = null
+    }
+
     // 不自动跟随重定向的客户端: 豆瓣网页删除收藏表单 POST /subject/{id}/remove 成功后返回 302
     // 重定向回详情页, 需禁止自动跟随才能观测到 302 状态码与 Location, 用于确认删除是否真正生效。
     private val noRedirectClient = client.newBuilder()
@@ -144,7 +190,7 @@ class DoubanRepository(
             // 反爬延迟前再检查一次,取消后不再等待
             if (isCancelled()) break
             // 反爬延迟：每页间 5-10 秒
-            delay(Random.nextLong(5000, 10000))
+            delayWithEvent(DelayType.DOUBAN_LIST_CRAWL, 5000L..10000L)
         }
         return !cookieExpired
     }
@@ -211,9 +257,9 @@ class DoubanRepository(
         var lastHtml: String? = null
         for (attempt in 0..1) {
             if (attempt > 0) {
-                delay(Random.nextLong(2000, 4000)) // 重试前等待
+                delayWithEvent(DelayType.DOUBAN_RETRY, 2000L..4000L) // 重试前等待
             }
-            delay(Random.nextLong(3000, 5000)) // 反爬延迟 3-5 秒
+            delayWithEvent(DelayType.DOUBAN_DETAIL_CRAWL, 3000L..5000L) // 反爬延迟 3-5 秒
             val html = fetchHtml(doubanUrl, cookie)
             if (DoubanSpider.isLoginPage(html)) return Pair(null, false) // Cookie 过期，不重试
             lastHtml = html

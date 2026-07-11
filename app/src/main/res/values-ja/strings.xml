@@ -142,6 +142,10 @@
     <string name="douban_sync_failed_list_label">失敗項目：</string>
     <string name="douban_sync_failed_more_format">...合計 %1$d 項目失敗</string>
     <string name="douban_sync_eta_format">残り約 %1$s</string>
+    <string name="douban_sync_delay_format">%1$d 秒待機中（%2$s）</string>
+    <string name="douban_sync_delay_detail_crawl">Douban アンチクロール遅延</string>
+    <string name="douban_sync_delay_list_crawl">リストページクロール遅延</string>
+    <string name="douban_sync_delay_retry">リトライ待機</string>
     <string name="douban_sync_summary_format">成功 %1$d · スキップ %2$d · キャッシュ %3$d · 失敗 %4$d</string>
 
     <!-- 豆瓣同期失敗項目リトライ -->

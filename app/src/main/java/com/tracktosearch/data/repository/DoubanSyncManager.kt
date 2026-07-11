@@ -14,6 +14,7 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.util.PersistentTtlCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -57,11 +58,12 @@ data class DoubanSyncProgress(
     val failedItems: List<DoubanSyncFailure> = emptyList(), // 完整失败项
     val isComplete: Boolean = false,
     val startTimeMs: Long = 0,      // 同步开始时间戳（用于计算剩余时间）
-    val etaSeconds: Long = -1,      // 预计剩余秒数（-1=未知）
+    val etaSeconds: Long = -1,      // 预计剩余秒数（-1=未知,保留供内部计算,UI 不展示）
     val cookieExpired: Boolean = false,  // 豆瓣 Cookie 过期（需引导用户重新登录）
     val currentTitle: String? = null,    // 当前正在处理的条目标题
     val recentFailures: List<DoubanSyncFailure> = emptyList(), // 最近 5 条失败(滚动展示)
-    val isRetry: Boolean = false    // true=重试模式(从失败项数据走,不爬列表)
+    val isRetry: Boolean = false,   // true=重试模式(从失败项数据走,不爬列表)
+    val delayInfo: DelayInfo? = null  // 当前延时信息(豆瓣反爬/重试等待,UI 做倒计时展示)
 )
 
 /**
@@ -104,6 +106,16 @@ class DoubanSyncManager @Inject constructor(
 
     /** Application scope：同步协程在此运行，Activity/Service 销毁不影响 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // 监听 DoubanRepository 的延时事件,合并到 progress.delayInfo
+        // UI 层基于 delayInfo(startMs + totalSeconds)做倒计时展示
+        appScope.launch {
+            doubanRepository.delayEvent.collect { info ->
+                _progress.value = _progress.value.copy(delayInfo = info)
+            }
+        }
+    }
 
     @Volatile
     private var syncJob: Job? = null
@@ -497,6 +509,21 @@ class DoubanSyncManager @Inject constructor(
         var totalCacheHit = 0
         var totalStatusChanged = 0
 
+        // 增量同步跳过已知失败项:不可恢复失败(NO_IMDB_ID/TRAKT_NOT_FOUND) + 重试超限(attemptCount>=3)的可恢复失败
+        // 避免每次增量都重爬已知查不到 imdb/trakt 的条目,节省 API 调用
+        val skipFailuresIds = runCatching {
+            doubanSyncFailureDao.getAll()
+                .filter { entity ->
+                    val reason = FailureReason.fromString(entity.failureReason)
+                    !reason.recoverable || entity.attemptCount >= 3
+                }
+                .map { it.doubanId }
+                .toSet()
+        }.getOrDefault(emptySet())
+        if (skipFailuresIds.isNotEmpty()) {
+            android.util.Log.i("DoubanSyncManager", "增量同步跳过 ${skipFailuresIds.size} 条已知失败项")
+        }
+
         for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
             if (cancelled) break
             val phaseName = if (status == DoubanMarkStatus.WISH) "爬取想看列表" else "爬取看过列表"
@@ -590,7 +617,8 @@ class DoubanSyncManager @Inject constructor(
                         currentTitle = currentTitle,
                         recentFailures = recentFailuresBuffer.toList()
                     )
-                }
+                },
+                skipFailuresIds = skipFailuresIds
             )
             allFailed.addAll(result.failed)
             totalSuccess += result.success
@@ -1113,10 +1141,12 @@ class DoubanSyncManager @Inject constructor(
      * @return PullResult，失败时返回空的 PullResult
      */
     private suspend fun pullFromCloudBeforeSync(): CloudPersonalSyncManager.PullResult {
-        return runCatching { cloudPersonalSyncManager.downloadAndMerge() }
-            .getOrElse {
-                CloudPersonalSyncManager.PullResult()
-            }
+        // 拉取个人数据(synced/pending/mappings/meta)
+        val result = runCatching { cloudPersonalSyncManager.downloadAndMerge() }
+            .getOrElse { CloudPersonalSyncManager.PullResult() }
+        // 同时拉取云端失败数据(A 手机上传的失败项合并到本地,供增量同步跳过已知失败项)
+        runCatching { cloudFailureSyncManager.downloadAndMerge() }
+        return result
     }
 
     /**
@@ -1176,12 +1206,14 @@ class DoubanSyncManager @Inject constructor(
         syncedIds: Set<String>,
         watchlistWatchedIds: TraktRepository.WatchlistWatchedIds?,
         onProgress: (current: Int, subPhase: String, cacheHitDelta: Int, currentTitle: String?, recentFailure: DoubanSyncFailure?) -> Unit,
-        existingFailures: List<DoubanSyncFailure>? = null
+        existingFailures: List<DoubanSyncFailure>? = null,
+        skipFailuresIds: Set<String> = emptySet()
     ): BatchSyncResult {
         val failed = mutableListOf<DoubanSyncFailure>()
         val existingMap = existingFailures?.associateBy { it.doubanId } ?: emptyMap()
 
-        val pending = items.filter { it.doubanId !in syncedIds }
+        // 跳过已同步 + 已知失败项(增量同步场景:不可恢复失败 + 重试超限的可恢复失败)
+        val pending = items.filter { it.doubanId !in syncedIds && it.doubanId !in skipFailuresIds }
         val skippedCount = items.size - pending.size
 
         if (pending.isEmpty()) {

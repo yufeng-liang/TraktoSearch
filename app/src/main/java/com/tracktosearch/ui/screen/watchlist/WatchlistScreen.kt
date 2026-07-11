@@ -4,7 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -195,6 +199,12 @@ fun WatchlistScreen(
     val tabScope = rememberCoroutineScope()
     // 控制豆瓣同步进度弹窗显示（点击横幅重新打开）
     var showSyncDialog by rememberSaveable { mutableStateOf(false) }
+    // 海报加载失败横幅关闭状态(用户点关闭后隐藏,数据刷新后自动恢复)
+    var posterErrorDismissed by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState.tmdbUnavailable) {
+        // tmdbUnavailable 变 false 时重置关闭状态,下次再失败时重新显示横幅
+        if (!uiState.tmdbUnavailable) posterErrorDismissed = false
+    }
 
     // 保存每个 (mode, tab) 组合的滚动位置
     val savedScrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
@@ -805,6 +815,16 @@ fun WatchlistScreen(
                         // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
                         val syncProgress = uiState.doubanSyncProgress
                         if (syncProgress != null) {
+                            // 同步进行中时图标无限旋转动画
+                            val spinTransition = rememberInfiniteTransition(label = "sync_spin")
+                            val spinRotation by spinTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                ),
+                                label = "sync_rotation"
+                            )
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -823,7 +843,12 @@ fun WatchlistScreen(
                                         contentDescription = null,
                                         tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
                                             else MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .then(
+                                                if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = spinRotation }
+                                                else Modifier
+                                            )
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Column(modifier = Modifier.weight(1f)) {
@@ -861,8 +886,8 @@ fun WatchlistScreen(
                             }
                         }
 
-                        // TMDB 不可用提示
-                        if (uiState.tmdbUnavailable) {
+                        // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
+                        if (uiState.tmdbUnavailable && !posterErrorDismissed) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 color = MaterialTheme.colorScheme.errorContainer
@@ -883,8 +908,20 @@ fun WatchlistScreen(
                                     Text(
                                         text = stringResource(R.string.watchlist_poster_error),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                        color = MaterialTheme.colorScheme.onErrorContainer,
+                                        modifier = Modifier.weight(1f)
                                     )
+                                    IconButton(
+                                        onClick = { posterErrorDismissed = true },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Close,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
