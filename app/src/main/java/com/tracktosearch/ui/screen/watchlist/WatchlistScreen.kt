@@ -77,16 +77,12 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RangeSlider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -132,7 +128,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -141,7 +136,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.GlassSearchBar
+import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -541,12 +537,11 @@ fun WatchlistScreen(
                         val item = items[index]
                         val isSelected = selectedItems[item.traktId] == true
                         Box {
-                            MovieCard(
+                            PosterCard(
+                                imageUrl = item.posterUrl,
                                 title = item.displayTitle,
-                                year = item.year,
+                                year = item.year?.toString(),
                                 genres = item.genres,
-                                posterUrl = item.posterUrl,
-                                tmdbId = item.tmdbId,
                                 onClick = {
                                     if (isMultiSelectMode) {
                                         if (isSelected) selectedItems.remove(item.traktId)
@@ -574,7 +569,7 @@ fun WatchlistScreen(
                                     Box(
                                         modifier = Modifier
                                             .matchParentSize()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
                                     )
                                 }
@@ -689,17 +684,24 @@ fun WatchlistScreen(
                             val gaps = 8.dp * 2
                             val searchBoxWidth = (screenWidth - capsuleWidth - filterButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
 
-                            // 搜索框
-                            val searchInteractionSource = remember { MutableInteractionSource() }
-                            BasicTextField(
+                            // 毛玻璃搜索栏
+                            GlassSearchBar(
+                                placeholder = if (searchQuery.isBlank()) {
+                                    when (selectedMode) {
+                                        0 -> stringResource(R.string.watchlist_search_watchlist)
+                                        else -> stringResource(R.string.watchlist_search_history)
+                                    }
+                                } else stringResource(R.string.search_placeholder_watchlist),
+                                typeLabel = if (selectedTab == 0) stringResource(R.string.watchlist_tab_movies) else stringResource(R.string.watchlist_tab_shows),
+                                onClick = { },
+                                onTypeClick = {
+                                    view.performHaptic(HapticType.CLICK)
+                                    selectedTab = if (selectedTab == 0) 1 else 0
+                                },
+                                hazeState = hazeState,
+                                modifier = Modifier.width(searchBoxWidth),
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                modifier = Modifier
-                                    .width(searchBoxWidth)
-                                    .height(45.dp)
-                                    .focusRequester(focusRequester),
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                 keyboardActions = KeyboardActions(
                                     onSearch = {
@@ -712,50 +714,19 @@ fun WatchlistScreen(
                                         }
                                     }
                                 ),
-                                interactionSource = searchInteractionSource,
-                                decorationBox = { innerTextField ->
-                                    OutlinedTextFieldDefaults.DecorationBox(
-                                        value = searchQuery,
-                                        innerTextField = innerTextField,
-                                        enabled = true,
-                                        singleLine = true,
-                                        visualTransformation = VisualTransformation.None,
-                                        interactionSource = searchInteractionSource,
-                                        placeholder = {
-                                            Text(
-                                                if (searchQuery.isBlank()) {
-                                                    when (selectedMode) {
-                                                        0 -> stringResource(R.string.watchlist_search_watchlist)
-                                                        else -> stringResource(R.string.watchlist_search_history)
-                                                    }
-                                                } else stringResource(R.string.search_placeholder_watchlist),
-                                                style = MaterialTheme.typography.bodyMedium
-                                            )
-                                        },
-                                        trailingIcon = {
-                                            if (searchQuery.isNotEmpty()) {
-                                                IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                                                    Icon(
-                                                        Icons.Rounded.Close,
-                                                        contentDescription = stringResource(R.string.content_desc_clear),
-                                                        modifier = Modifier.size(19.dp)
-                                                    )
-                                                }
-                                            } else {
-                                                Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
-                                            }
-                                        },
-                                        contentPadding = PaddingValues(start = 12.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
-                                        container = {
-                                            OutlinedTextFieldDefaults.Container(
-                                                enabled = true,
-                                                isError = false,
-                                                interactionSource = searchInteractionSource,
-                                                colors = OutlinedTextFieldDefaults.colors(),
-                                                shape = RoundedCornerShape(22.dp)
+                                focusRequester = focusRequester,
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                                            Icon(
+                                                Icons.Rounded.Close,
+                                                contentDescription = stringResource(R.string.content_desc_clear),
+                                                modifier = Modifier.size(19.dp)
                                             )
                                         }
-                                    )
+                                    } else {
+                                        Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
+                                    }
                                 }
                             )
                             // 筛选按钮（有筛选条件生效时图标变 primary 色）
@@ -768,8 +739,8 @@ fun WatchlistScreen(
                                 )
                             }
 
-                            // 胶囊切换条：想看 / 已看
-                            val tabHeight = 44.dp
+                            // 大胶囊切换条：想看 / 已看
+                            val tabHeight = 48.dp
                             val indicatorOffset by animateDpAsState(
                                 targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
                                 animationSpec = tween(200),
@@ -784,15 +755,15 @@ fun WatchlistScreen(
                                 modifier = Modifier
                                     .height(tabHeight)
                                     .width(capsuleWidth)
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .clip(RoundedCornerShape(28.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .offset(x = indicatorOffset)
                                         .width(indicatorWidth)
                                         .fillMaxHeight()
-                                        .clip(RoundedCornerShape(22.dp))
+                                        .clip(RoundedCornerShape(28.dp))
                                         .background(MaterialTheme.colorScheme.primary)
                                 )
                                 Row(modifier = Modifier.fillMaxSize()) {
@@ -814,7 +785,7 @@ fun WatchlistScreen(
                                             style = TextStyle(
                                                 fontSize = 16.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = if (isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = if (isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                             )
                                         )
                                     }
@@ -836,7 +807,7 @@ fun WatchlistScreen(
                                             style = TextStyle(
                                                 fontSize = 16.sp,
                                                 fontWeight = FontWeight.Medium,
-                                                color = if (!isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                                color = if (!isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
                                             )
                                         )
                                     }
@@ -844,23 +815,47 @@ fun WatchlistScreen(
                             }
                         }
 
-                        // 分类 Tab
+                        // 分类 Tab（下划线样式）
                         val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
                         val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = Color.Transparent
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)
                         ) {
-                            Tab(
-                                selected = selectedTab == 0,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
-                                text = { Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)") }
-                            )
-                            Tab(
-                                selected = selectedTab == 1,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
-                                text = { Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)") }
-                            )
+                            listOf(
+                                stringResource(R.string.watchlist_tab_movies) to movieCount,
+                                stringResource(R.string.watchlist_tab_shows) to showCount
+                            ).forEachIndexed { index, (label, count) ->
+                                val selected = selectedTab == index
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        view.performHaptic(HapticType.CLICK)
+                                        selectedTab = index
+                                    }
+                                ) {
+                                    Text(
+                                        text = "$label($count)",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .width(24.dp)
+                                            .height(3.dp)
+                                            .clip(RoundedCornerShape(1.5.dp))
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                            )
+                                    )
+                                }
+                            }
                         }
 
                         // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
