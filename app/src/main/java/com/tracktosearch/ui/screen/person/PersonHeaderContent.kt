@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
@@ -130,372 +131,390 @@ internal fun PersonHeaderContent(
     // biography 优先用 TMDB（跟随语言），如果为空则用 Trakt 的
     val displayBiography = if (biography.isNotEmpty()) biography else traktBiography
 
-    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 48.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+    // 生卒日期文本
+    val lifeText = remember(birthday, deathday) {
+        if (birthday != null && birthday.isNotEmpty()) {
+            val dateText = if (birthday.length >= 10) {
+                "${birthday.substring(0, 4)}-${birthday.substring(5, 7)}-${birthday.substring(8, 10)}"
+            } else birthday
+            if (deathday != null && deathday.isNotEmpty()) {
+                val deathText = if (deathday.length >= 4) deathday.substring(0, 4) else deathday
+                val birthYear = if (birthday.length >= 4) birthday.substring(0, 4) else ""
+                "$birthYear - $deathText"
+            } else {
+                dateText
+            }
+        } else null
+    }
+
+    // 元信息聚合
+    val metaItems = remember(knownForDepartment, genderText, ageText, lifeText, placeOfBirth) {
+        buildList {
+            if (knownForDepartment.isNotEmpty()) add(knownForDepartment)
+            genderText?.let { add(it) }
+            ageText?.let { add(it) }
+            lifeText?.let { add(it) }
+            if (placeOfBirth != null && placeOfBirth.isNotEmpty()) add(placeOfBirth)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // 头像
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier
+                .width(140.dp)
+                .height(210.dp)
         ) {
-            // 头像
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .width(120.dp)
-                    .height(180.dp)
-            ) {
-                if (profileUrl != null) {
-                    val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                        with(sharedTransitionScope) {
-                            Modifier
-                                .sharedElement(
-                                    rememberSharedContentState(key = "person-avatar-$personId"),
-                                    animatedVisibilityScope = animatedVisibilityScope
-                                )
-                                .fillMaxSize()
-                        }
-                    } else {
-                        Modifier.fillMaxSize()
+            if (profileUrl != null) {
+                val imageModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .sharedElement(
+                                rememberSharedContentState(key = "person-avatar-$personId"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .fillMaxSize()
                     }
-                    SubcomposeAsyncImage(
-                        model = remember(profileUrl) {
-                            ImageRequest.Builder(context)
-                                .data(profileUrl)
-                                .size(200)
-                                .crossfade(false)
-                                .build()
-                        },
-                        contentDescription = name,
-                        contentScale = ContentScale.Crop,
-                        modifier = imageModifier,
-                        loading = {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(20.dp),
-                                    strokeWidth = 2.dp
-                                )
-                            }
-                        },
-                        error = {
-                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                                Icon(
-                                    Icons.Rounded.Person,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(28.dp)
-                                )
-                            }
-                        }
-                    )
                 } else {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(28.dp)
-                        )
+                    Modifier.fillMaxSize()
+                }
+                SubcomposeAsyncImage(
+                    model = remember(profileUrl) {
+                        ImageRequest.Builder(context)
+                            .data(profileUrl)
+                            .size(200)
+                            .crossfade(false)
+                            .build()
+                    },
+                    contentDescription = name,
+                    contentScale = ContentScale.Crop,
+                    modifier = imageModifier,
+                    loading = {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
                     }
+                )
+            } else {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Icon(
+                        Icons.Rounded.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(28.dp)
+                    )
                 }
             }
+        }
 
-            // 右侧信息
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 姓名
+        if (isLoading && name.isBlank()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.55f)
+                    .height(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(skeletonColor)
+            )
+        } else {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // 原名
+        if (originalName == null && isLoading) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 6.dp)
+                    .fillMaxWidth(0.4f)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(skeletonColor)
+            )
+        } else if (!originalName.isNullOrEmpty() && originalName != name) {
+            Text(
+                text = originalName,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .padding(top = 4.dp)
+                    .fillMaxWidth()
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // 元信息
+        if (isLoading && metaItems.isEmpty()) {
             Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                if (isLoading && name.isBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.7f)
-                            .height(24.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonColor)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonColor)
+                )
+            }
+        } else if (metaItems.isNotEmpty()) {
+            Text(
+                text = metaItems.joinToString(" · "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // 主页链接 + 维基百科链接
+        if (isLoadingTrakt && traktPerson == null) {
+            Box(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth(0.5f)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(skeletonColor)
+            )
+        } else if (!traktHomepage.isNullOrEmpty() || !wikipediaUrl.isNullOrEmpty()) {
+            Row(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!traktHomepage.isNullOrEmpty()) {
                     Text(
-                        text = name,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-                // 原名显示
-                if (originalName == null && isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else if (!originalName.isNullOrEmpty() && originalName != name) {
-                    Text(
-                        text = originalName,
+                        text = traktHomepage,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                // 主页链接 + 维基百科链接
-                if (isLoadingTrakt && traktPerson == null) {
-                    Box(
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(14.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else if (!traktHomepage.isNullOrEmpty() || !wikipediaUrl.isNullOrEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (!traktHomepage.isNullOrEmpty()) {
-                            Text(
-                                text = traktHomepage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        try {
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(traktHomepage))
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) { }
-                                    }
-                            )
-                        }
-                        if (!wikipediaUrl.isNullOrEmpty()) {
-                            Row(
-                                modifier = Modifier
-                                    .clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        try {
-                                            val url = if (wikipediaUrl.startsWith("http")) {
-                                                wikipediaUrl
-                                            } else {
-                                                "https://en.wikipedia.org/wiki/${wikipediaUrl.replace(" ", "_")}"
-                                            }
-                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                                            context.startActivity(intent)
-                                        } catch (_: Exception) { }
-                                    },
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
                             ) {
-                                Icon(
-                                    painter = painterResource(id = R.drawable.ic_wikipedia),
-                                    contentDescription = "Wikipedia",
-                                    tint = Color(0xFF636466),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = "Wikipedia",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                try {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(traktHomepage))
+                                    context.startActivity(intent)
+                                } catch (_: Exception) { }
                             }
-                        }
-                    }
-                }
-                if (isLoading && knownForDepartment.isBlank()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else if (knownForDepartment.isNotEmpty()) {
-                    Text(
-                        text = knownForDepartment,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                // 性别显示
-                if (genderText != null) {
-                    Text(
-                        text = genderText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (isLoading && birthday.isNullOrEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else if (birthday != null && birthday.isNotEmpty()) {
-                    val dateText = if (birthday.length >= 10) {
-                        "${birthday.substring(0, 4)}-${birthday.substring(5, 7)}-${birthday.substring(8, 10)}"
-                    } else birthday
-                    val lifeText = if (deathday != null && deathday.isNotEmpty()) {
-                        val deathText = if (deathday.length >= 4) deathday.substring(0, 4) else deathday
-                        val birthYear = if (birthday.length >= 4) birthday.substring(0, 4) else ""
-                        "$birthYear - $deathText"
-                    } else {
-                        dateText
-                    }
-                    // 日期 + 年龄
-                    val displayText = if (ageText != null) "$lifeText · $ageText" else lifeText
-                    Text(
-                        text = displayText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (isLoading && placeOfBirth.isNullOrEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(0.5f)
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
-                    )
-                } else if (placeOfBirth != null && placeOfBirth.isNotEmpty()) {
-                    Text(
-                        text = placeOfBirth,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                // 社交媒体图标
-                if (isLoadingTrakt && traktPerson == null) {
-                    // Trakt 数据未加载时显示单行骨架屏，减少加载后高度跳变
+                if (!wikipediaUrl.isNullOrEmpty()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) {
+                                try {
+                                    val url = if (wikipediaUrl.startsWith("http")) {
+                                        wikipediaUrl
+                                    } else {
+                                        "https://en.wikipedia.org/wiki/${wikipediaUrl.replace(" ", "_")}"
+                                    }
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                    context.startActivity(intent)
+                                } catch (_: Exception) { }
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .width(80.dp)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_wikipedia),
+                            contentDescription = "Wikipedia",
+                            tint = Color(0xFF636466),
+                            modifier = Modifier.size(16.dp)
                         )
-                        Box(
-                            modifier = Modifier
-                                .width(90.dp)
-                                .height(16.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(skeletonColor)
+                        Text(
+                            text = "Wikipedia",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    }
-                } else if (!facebookId.isNullOrEmpty() || !instagramId.isNullOrEmpty() || !twitterId.isNullOrEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (!facebookId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_facebook,
-                                label = facebookId,
-                                tint = Color(0xFF1877F2),
-                                labelColor = Color(0xFF1877F2),
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
-                        if (!instagramId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_instagram,
-                                label = instagramId,
-                                tint = Color(0xFFE4405F),
-                                labelColor = Color(0xFFE4405F),
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
-                        if (!twitterId.isNullOrEmpty()) {
-                            SocialMediaIcon(
-                                iconRes = R.drawable.ic_x_twitter,
-                                label = twitterId,
-                                tint = MaterialTheme.colorScheme.onSurface,
-                                labelColor = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f, fill = false),
-                                onClick = {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
-                                        context.startActivity(intent)
-                                    } catch (_: Exception) { }
-                                }
-                            )
-                        }
                     }
                 }
             }
         }
 
-        // 简介
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = stringResource(R.string.detail_overview_label),
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        if (displayBiography.isNotEmpty()) {
-            Text(
-                text = displayBiography,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = if (showFullBio) Int.MAX_VALUE else 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { showFullBio = !showFullBio }
-            )
-        } else if (isLoadingTrakt) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                repeat(4) { index ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(
-                                when (index) {
-                                    0 -> 1f
-                                    1 -> 0.95f
-                                    2 -> 0.9f
-                                    else -> 0.7f
-                                }
-                            )
-                            .height(16.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(skeletonColor)
+        // 社交媒体图标
+        if (isLoadingTrakt && traktPerson == null) {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonColor)
+                )
+                Box(
+                    modifier = Modifier
+                        .width(90.dp)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(skeletonColor)
+                )
+            }
+        } else if (!facebookId.isNullOrEmpty() || !instagramId.isNullOrEmpty() || !twitterId.isNullOrEmpty()) {
+            Row(
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!facebookId.isNullOrEmpty()) {
+                    SocialMediaIcon(
+                        iconRes = R.drawable.ic_facebook,
+                        label = facebookId,
+                        tint = Color(0xFF1877F2),
+                        labelColor = Color(0xFF1877F2),
+                        modifier = Modifier.weight(1f, fill = false),
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://facebook.com/$facebookId"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) { }
+                        }
+                    )
+                }
+                if (!instagramId.isNullOrEmpty()) {
+                    SocialMediaIcon(
+                        iconRes = R.drawable.ic_instagram,
+                        label = instagramId,
+                        tint = Color(0xFFE4405F),
+                        labelColor = Color(0xFFE4405F),
+                        modifier = Modifier.weight(1f, fill = false),
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://instagram.com/$instagramId"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) { }
+                        }
+                    )
+                }
+                if (!twitterId.isNullOrEmpty()) {
+                    SocialMediaIcon(
+                        iconRes = R.drawable.ic_x_twitter,
+                        label = twitterId,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        labelColor = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f, fill = false),
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://x.com/$twitterId"))
+                                context.startActivity(intent)
+                            } catch (_: Exception) { }
+                        }
                     )
                 }
             }
-        } else {
-            Text(
-                text = stringResource(R.string.person_no_biography),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 简介卡片
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.detail_overview_label),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (displayBiography.isNotEmpty()) {
+                    Text(
+                        text = displayBiography,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (showFullBio) Int.MAX_VALUE else 4,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { showFullBio = !showFullBio }
+                    )
+                } else if (isLoadingTrakt) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        repeat(4) { index ->
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(
+                                        when (index) {
+                                            0 -> 1f
+                                            1 -> 0.95f
+                                            2 -> 0.9f
+                                            else -> 0.7f
+                                        }
+                                    )
+                                    .height(16.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(skeletonColor)
+                            )
+                        }
+                    }
+                } else {
+                    Text(
+                        text = stringResource(R.string.person_no_biography),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

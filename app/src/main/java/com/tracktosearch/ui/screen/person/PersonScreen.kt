@@ -10,12 +10,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,17 +42,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.util.showToast
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
@@ -112,6 +117,22 @@ fun PersonScreen(
                     }
                 }
                 else -> {
+                    // 顶部渐变背景
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
+                            .align(Alignment.TopCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        MaterialTheme.colorScheme.surface,
+                                        Color.Transparent
+                                    )
+                                )
+                            )
+                    )
+
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
@@ -149,27 +170,16 @@ fun PersonScreen(
                         if (uiState.personImages.isNotEmpty() || uiState.isLoadingPersonImages) {
                             item(key = "person_images_section") {
                                 Column(modifier = Modifier.padding(top = 16.dp)) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, bottom = 2.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.person_images),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (uiState.personImages.isNotEmpty()) {
-                                            Text(
-                                                text = stringResource(R.string.person_all_count, uiState.personImages.size),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.clickable { showAllPersonImages = true }
-                                            )
-                                        }
-                                    }
+                                    SectionHeader(
+                                        title = stringResource(R.string.person_images),
+                                        actionText = if (uiState.personImages.isNotEmpty()) {
+                                            stringResource(R.string.person_all_count, uiState.personImages.size)
+                                        } else null,
+                                        onActionClick = if (uiState.personImages.isNotEmpty()) {
+                                            { showAllPersonImages = true }
+                                        } else null,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp)
+                                    )
                                     if (uiState.personImages.isEmpty() && uiState.isLoadingPersonImages) {
                                         // 骨架屏
                                         LazyRow(
@@ -181,7 +191,7 @@ fun PersonScreen(
                                                     modifier = Modifier
                                                         .width(110.dp)
                                                         .height(165.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .clip(RoundedCornerShape(14.dp))
                                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                                 )
                                             }
@@ -192,21 +202,16 @@ fun PersonScreen(
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             itemsIndexed(uiState.personImages, key = { index, url -> "person_img_$index" }, contentType = { _, _ -> "image" }) { index, url ->
-                                                SubcomposeAsyncImage(
-                                                    model = remember(url) {
-                                                        ImageRequest.Builder(context)
-                                                            .data(url)
-                                                            .size(200)
-                                                            .crossfade(false)
-                                                            .build()
-                                                    },
-                                                    contentDescription = null,
-                                                    contentScale = ContentScale.Crop,
+                                                PosterCard(
+                                                    imageUrl = url,
+                                                    title = uiState.person?.name ?: personName,
+                                                    onClick = { selectedPersonImageIndex = index },
                                                     modifier = Modifier
                                                         .width(110.dp)
-                                                        .height(165.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
-                                                        .clickable { selectedPersonImageIndex = index }
+                                                        .background(
+                                                            MaterialTheme.colorScheme.surfaceVariant,
+                                                            RoundedCornerShape(14.dp)
+                                                        )
                                                 )
                                             }
                                         }
@@ -218,51 +223,39 @@ fun PersonScreen(
                         if (uiState.movieCredits.isNotEmpty() || uiState.isLoadingMovies) {
                             item(key = "movie_credits_section") {
                                 Column {
-                                    // 标题 + 全部按钮
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, top = 32.dp, bottom = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.person_movie_credits),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (uiState.movieCredits.isNotEmpty()) {
-                                            Text(
-                                                text = stringResource(R.string.person_all_count, uiState.movieCredits.size),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.clickable { showAllMovies = true }
-                                            )
-                                        }
-                                    }
+                                    SectionHeader(
+                                        title = stringResource(R.string.person_movie_credits),
+                                        actionText = if (uiState.movieCredits.isNotEmpty()) {
+                                            stringResource(R.string.person_all_count, uiState.movieCredits.size)
+                                        } else null,
+                                        onActionClick = if (uiState.movieCredits.isNotEmpty()) {
+                                            { showAllMovies = true }
+                                        } else null,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)
+                                    )
                                     if (uiState.movieCredits.isEmpty() && uiState.isLoadingMovies) {
                                         // 骨架屏
                                         LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             items(5) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .width(120.dp)
-                                                        .height(180.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .width(100.dp)
+                                                        .height(150.dp)
+                                                        .clip(RoundedCornerShape(14.dp))
                                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                                 )
                                             }
                                         }
                                     } else {
                                         LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             itemsIndexed(uiState.movieCredits, key = { index, credit -> "movie_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { _, credit ->
-                                                CreditCard(
+                                                CreditPosterCard(
                                                     title = credit.title,
                                                     subtitle = credit.character,
                                                     year = credit.release_date.take(4),
@@ -304,51 +297,39 @@ fun PersonScreen(
                         if (uiState.tvCredits.isNotEmpty() || uiState.isLoadingTvShows) {
                             item(key = "tv_credits_section") {
                                 Column {
-                                    // 标题 + 全部按钮
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, top = 32.dp, bottom = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.person_tv_credits),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        if (uiState.tvCredits.isNotEmpty()) {
-                                            Text(
-                                                text = stringResource(R.string.person_all_count, uiState.tvCredits.size),
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.clickable { showAllTvShows = true }
-                                            )
-                                        }
-                                    }
+                                    SectionHeader(
+                                        title = stringResource(R.string.person_tv_credits),
+                                        actionText = if (uiState.tvCredits.isNotEmpty()) {
+                                            stringResource(R.string.person_all_count, uiState.tvCredits.size)
+                                        } else null,
+                                        onActionClick = if (uiState.tvCredits.isNotEmpty()) {
+                                            { showAllTvShows = true }
+                                        } else null,
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 32.dp)
+                                    )
                                     if (uiState.tvCredits.isEmpty() && uiState.isLoadingTvShows) {
                                         // 骨架屏
                                         LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             items(5) {
                                                 Box(
                                                     modifier = Modifier
-                                                        .width(120.dp)
-                                                        .height(180.dp)
-                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .width(100.dp)
+                                                        .height(150.dp)
+                                                        .clip(RoundedCornerShape(14.dp))
                                                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
                                                 )
                                             }
                                         }
                                     } else {
                                         LazyRow(
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             contentPadding = PaddingValues(horizontal = 16.dp)
                                         ) {
                                             itemsIndexed(uiState.tvCredits, key = { index, credit -> "tv_${credit.id}_$index" }, contentType = { _, _ -> "media_card" }) { _, credit ->
-                                                CreditCard(
+                                                CreditPosterCard(
                                                     title = credit.name,
                                                     subtitle = credit.character,
                                                     year = credit.first_air_date.take(4),
@@ -486,6 +467,70 @@ fun PersonScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CreditPosterCard(
+    title: String,
+    subtitle: String,
+    year: String,
+    posterUrl: String?,
+    isResolving: Boolean,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier.width(100.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(modifier = Modifier.width(100.dp)) {
+            PosterCard(
+                imageUrl = posterUrl,
+                title = title,
+                year = year.takeIf { it.isNotEmpty() },
+                onClick = if (isResolving) ({ }) else onClick,
+                modifier = Modifier
+                    .width(100.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(14.dp)
+                    )
+            )
+            if (isResolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (subtitle.isNotEmpty()) {
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, textAlign = TextAlign.Center),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
