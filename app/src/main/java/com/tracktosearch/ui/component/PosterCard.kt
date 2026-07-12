@@ -41,9 +41,10 @@ import coil.request.ImageRequest
  * @param imageUrl 海报图片 URL
  * @param title 影视标题（用于内容描述）
  * @param year 年份，null 时不显示
- * @param genres 类型字符串，null 或空时不显示
  * @param rating 评分，null 时不显示
  * @param onClick 点击回调
+ * @param modifier 外层修饰符
+ * @param genres 类型字符串，null 或空时不显示
  * @param onLongClick 长按回调，null 时不启用长按
  * @param posterModifier 作用于海报容器的修饰符，用于共享元素转场等场景
  * @param imageSize 指定 Coil 解码尺寸，null 时直接使用 imageUrl 作为 model
@@ -55,10 +56,10 @@ fun PosterCard(
     imageUrl: String?,
     title: String,
     year: String? = null,
-    genres: String? = null,
     rating: Double? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    genres: String? = null,
     onLongClick: (() -> Unit)? = null,
     posterModifier: Modifier = Modifier,
     imageSize: Int? = null,
