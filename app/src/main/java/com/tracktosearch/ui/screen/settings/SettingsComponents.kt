@@ -1,8 +1,11 @@
 package com.tracktosearch.ui.screen.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +23,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
@@ -37,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -52,6 +58,53 @@ fun SettingsSectionHeader(title: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
+    )
+}
+
+/**
+ * 设置分组卡片：半透明圆角卡片，顶部显示 12sp 大写加粗分组标题。
+ * 内部内容由调用方自行组织，通常配合 [GroupDivider] 在项之间添加细分隔线。
+ */
+@Composable
+fun SettingsGroupCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp, bottom = 12.dp)
+        ) {
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                ),
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            content()
+        }
+    }
+}
+
+/** 分组卡片内设置项之间的细 divider。 */
+@Composable
+fun ColumnScope.GroupDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier.padding(horizontal = 16.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     )
 }
 
@@ -109,7 +162,8 @@ internal fun SettingsItemCard(
     title: String,
     subtitle: String,
     onClick: () -> Unit,
-    trailing: @Composable (() -> Unit)? = null
+    trailing: @Composable (() -> Unit)? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
     Surface(
@@ -117,7 +171,7 @@ internal fun SettingsItemCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Row(
             modifier = Modifier
@@ -352,12 +406,13 @@ internal fun DataFlowCard(
     modifier: Modifier = Modifier,
     icon: ImageVector,
     title: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -388,7 +443,8 @@ internal fun SettingsCard(
     iconTintColor: Color = MaterialTheme.colorScheme.primary,
     loadingIcon: Boolean = false,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
     Surface(
@@ -396,7 +452,7 @@ internal fun SettingsCard(
             .fillMaxWidth()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -464,13 +520,14 @@ internal fun SearchSourceCard(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onConfigClick: (() -> Unit)? = null,
-    configContentDescription: String? = null
+    configContentDescription: String? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
     Surface(
         modifier = modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Row(
             modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -519,7 +576,8 @@ internal fun SearchSourceCard(
 internal fun SearchSourceAddCard(
     modifier: Modifier = Modifier,
     title: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
     Surface(
@@ -527,7 +585,7 @@ internal fun SearchSourceAddCard(
             .fillMaxSize()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(
             modifier = Modifier
@@ -556,29 +614,46 @@ internal fun SearchSourceAddCard(
 }
 
 /**
- * 观看统计卡片：横跨整宽的单卡片（图标 + 标题 + 描述小字 + 右箭头）。
+ * 观看统计大卡片：左侧图标放在主题色浅色背景方块中，右侧显示统计数字与描述。
  * 作为设置页第一位置，无类目 Header。
+ *
+ * @param count 已看影片/剧集数量，用于入口数字展示。
  */
 @Composable
-internal fun StatisticsCard(modifier: Modifier = Modifier, onClick: () -> Unit) {
+internal fun StatisticsCard(
+    modifier: Modifier = Modifier,
+    count: Int,
+    onClick: () -> Unit
+) {
     val view = LocalView.current
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Rounded.BarChart,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.BarChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -586,11 +661,21 @@ internal fun StatisticsCard(modifier: Modifier = Modifier, onClick: () -> Unit) 
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    text = stringResource(R.string.settings_view_statistics_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Text(
+                        text = count.toString(),
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(R.string.settings_view_statistics_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
             }
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,

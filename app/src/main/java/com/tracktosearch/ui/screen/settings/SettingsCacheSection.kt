@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +49,8 @@ import com.tracktosearch.R
 fun CacheManagementItem(
     breakdown: SettingsViewModel.CacheBreakdown,
     onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
 
@@ -58,7 +60,7 @@ fun CacheManagementItem(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 概览行（整卡可点击展开/收起）

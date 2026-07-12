@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -184,6 +183,7 @@ fun SettingsScreen(
     val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
+    val statisticsCount by viewModel.statisticsCount.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
     // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
     var showConsistencyConfirm by remember { mutableStateOf(false) }
@@ -414,286 +414,377 @@ fun SettingsScreen(
                         )
                     }
                 } else { Modifier }
-                StatisticsCard(modifier = statisticsEntryModifier, onClick = onStatisticsClick)
+                StatisticsCard(
+                    modifier = statisticsEntryModifier,
+                    count = statisticsCount,
+                    onClick = onStatisticsClick
+                )
             }
 
             // 外观
-            item(key = "header_appearance") { SettingsSectionHeader(stringResource(R.string.settings_appearance)) }
-            item(key = "appearance") {
-                val themeName = when (currentTheme) {
-                    ThemeStorage.MODE_DARK -> stringResource(R.string.theme_dark)
-                    ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
-                    else -> stringResource(R.string.theme_system)
+            item(key = "group_appearance") {
+                SettingsGroupCard(title = stringResource(R.string.settings_appearance)) {
+                    val themeName = when (currentTheme) {
+                        ThemeStorage.MODE_DARK -> stringResource(R.string.theme_dark)
+                        ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
+                        else -> stringResource(R.string.theme_system)
+                    }
+                    val accentName = currentAccent?.let { stringResource(it.labelResId) }
+                        ?: stringResource(R.string.settings_accent_dynamic)
+                    val languageName = when (currentLanguage) {
+                        LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
+                        LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
+                        LanguageStorage.LANGUAGE_JAPANESE -> stringResource(R.string.language_japanese)
+                        LanguageStorage.LANGUAGE_KOREAN -> stringResource(R.string.language_korean)
+                        else -> stringResource(R.string.language_system)
+                    }
+                    val tabName = when (currentDefaultTab) {
+                        0 -> stringResource(R.string.tab_search)
+                        1 -> stringResource(R.string.tab_discover)
+                        else -> stringResource(R.string.tab_me)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.DarkMode,
+                            title = stringResource(R.string.settings_theme),
+                            subtitle = themeName,
+                            mergeTitleAndSubtitle = true,
+                            onClick = { showThemeDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Palette,
+                            title = stringResource(R.string.settings_accent_color),
+                            subtitle = accentName,
+                            mergeTitleAndSubtitle = true,
+                            onClick = { showAccentColorDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Language,
+                            title = stringResource(R.string.settings_language),
+                            subtitle = languageName,
+                            mergeTitleAndSubtitle = true,
+                            onClick = { showLanguageDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Home,
+                            title = stringResource(R.string.settings_default_tab),
+                            subtitle = tabName,
+                            mergeTitleAndSubtitle = true,
+                            onClick = { showDefaultTabDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                    }
+                    // 共享元素转场动画开关(默认关闭):关闭时所有页面间转场降级为 NavHost 默认过渡
+                    SharedTransitionSwitchCard(
+                        enabled = sharedTransitionEnabled,
+                        onToggle = { viewModel.setSharedTransitionEnabled(it) },
+                        containerColor = Color.Transparent
+                    )
                 }
-                val accentName = currentAccent?.let { stringResource(it.labelResId) }
-                    ?: stringResource(R.string.settings_accent_dynamic)
-                val languageName = when (currentLanguage) {
-                    LanguageStorage.LANGUAGE_CHINESE -> stringResource(R.string.language_chinese)
-                    LanguageStorage.LANGUAGE_ENGLISH -> stringResource(R.string.language_english)
-                    LanguageStorage.LANGUAGE_JAPANESE -> stringResource(R.string.language_japanese)
-                    LanguageStorage.LANGUAGE_KOREAN -> stringResource(R.string.language_korean)
-                    else -> stringResource(R.string.language_system)
-                }
-                val tabName = when (currentDefaultTab) {
-                    0 -> stringResource(R.string.tab_search)
-                    1 -> stringResource(R.string.tab_discover)
-                    else -> stringResource(R.string.tab_me)
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.DarkMode, title = stringResource(R.string.settings_theme), subtitle = themeName, mergeTitleAndSubtitle = true, onClick = { showThemeDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Palette, title = stringResource(R.string.settings_accent_color), subtitle = accentName, mergeTitleAndSubtitle = true, onClick = { showAccentColorDialog = true })
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Language, title = stringResource(R.string.settings_language), subtitle = languageName, mergeTitleAndSubtitle = true, onClick = { showLanguageDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Home, title = stringResource(R.string.settings_default_tab), subtitle = tabName, mergeTitleAndSubtitle = true, onClick = { showDefaultTabDialog = true })
-                }
-                // 共享元素转场动画开关(默认关闭):关闭时所有页面间转场降级为 NavHost 默认过渡
-                SharedTransitionSwitchCard(
-                    enabled = sharedTransitionEnabled,
-                    onToggle = { viewModel.setSharedTransitionEnabled(it) }
-                )
             }
 
             // 搜索源
-            item(key = "header_search") { SettingsSectionHeader(stringResource(R.string.settings_search)) }
-            item(key = "search_sources") {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "PanSou", checked = pansouEnabled, onCheckedChange = { viewModel.setPansouEnabled(it) })
-                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "Panhub", checked = panhubEnabled, onCheckedChange = { viewModel.setPanhubEnabled(it) }, onConfigClick = { showPanHubConfigDialog = true }, configContentDescription = stringResource(R.string.settings_panhub_config))
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SearchSourceCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), name = "Zreso", checked = zresoEnabled, onCheckedChange = { viewModel.setZresoEnabled(it) })
-                    SearchSourceAddCard(modifier = Modifier.weight(1f).heightIn(min = 60.dp), title = stringResource(R.string.settings_add_source), onClick = {
-                        showEditCustomSource = CustomSearchSource(
-                            id = java.util.UUID.randomUUID().toString(),
-                            name = "",
-                            baseUrl = "",
-                            apiPath = "api/search",
-                            keywordParam = "kw",
-                            cloudTypesParam = "cloud_types",
-                            cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
-                            srcParam = "src",
-                            srcValue = "all"
+            item(key = "group_search") {
+                SettingsGroupCard(title = stringResource(R.string.settings_search)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SearchSourceCard(
+                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                            name = "PanSou",
+                            checked = pansouEnabled,
+                            onCheckedChange = { viewModel.setPansouEnabled(it) },
+                            containerColor = Color.Transparent
                         )
-                    })
+                        SearchSourceCard(
+                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                            name = "Panhub",
+                            checked = panhubEnabled,
+                            onCheckedChange = { viewModel.setPanhubEnabled(it) },
+                            onConfigClick = { showPanHubConfigDialog = true },
+                            configContentDescription = stringResource(R.string.settings_panhub_config),
+                            containerColor = Color.Transparent
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SearchSourceCard(
+                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                            name = "Zreso",
+                            checked = zresoEnabled,
+                            onCheckedChange = { viewModel.setZresoEnabled(it) },
+                            containerColor = Color.Transparent
+                        )
+                        SearchSourceAddCard(
+                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                            title = stringResource(R.string.settings_add_source),
+                            onClick = {
+                                showEditCustomSource = CustomSearchSource(
+                                    id = java.util.UUID.randomUUID().toString(),
+                                    name = "",
+                                    baseUrl = "",
+                                    apiPath = "api/search",
+                                    keywordParam = "kw",
+                                    cloudTypesParam = "cloud_types",
+                                    cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
+                                    srcParam = "src",
+                                    srcValue = "all"
+                                )
+                            },
+                            containerColor = Color.Transparent
+                        )
+                    }
+                    // 自定义搜索源列表项
+                    customSources.forEachIndexed { index, source ->
+                        val testResult = testResults[source.id]
+                        CustomSearchSourceItem(
+                            source = source,
+                            testResult = testResult,
+                            onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
+                            onEdit = { showEditCustomSource = source },
+                            onDelete = { showDeleteCustomSource = source },
+                            onTest = { viewModel.testCustomSource(source) }
+                        )
+                        if (index < customSources.size - 1) GroupDivider()
+                    }
                 }
-            }
-
-            // 自定义搜索源列表项（已添加的自定义源仍按原列表项展示）
-            items(customSources.size, key = { customSources[it].id }) { index ->
-                val source = customSources[index]
-                val testResult = testResults[source.id]
-                CustomSearchSourceItem(
-                    source = source,
-                    testResult = testResult,
-                    onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
-                    onEdit = { showEditCustomSource = source },
-                    onDelete = { showDeleteCustomSource = source },
-                    onTest = { viewModel.testCustomSource(source) }
-                )
             }
 
             // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
             if (isLoggedIn) {
-                item(key = "header_notification") { SettingsSectionHeader(stringResource(R.string.settings_notification)) }
-                item(key = "notification") { NotificationItem(viewModel = viewModel) }
+                item(key = "group_notification") {
+                    SettingsGroupCard(title = stringResource(R.string.settings_notification)) {
+                        NotificationItem(
+                            viewModel = viewModel,
+                            containerColor = Color.Transparent
+                        )
+                    }
+                }
             }
 
-            // 自定义板块（合并原「发现页栏目」+「自定义详情页」，删除原两个类目 Header）
-            item(key = "header_custom") { SettingsSectionHeader(stringResource(R.string.settings_custom_section)) }
-            item(key = "custom_section") {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Explore, title = stringResource(R.string.settings_discover_page), onClick = { showDiscoverSectionsDialog = true })
-                    SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.Movie, title = stringResource(R.string.settings_detail_page), onClick = { showDetailSectionsDialog = true })
+            // 自定义板块（合并原「发现页栏目」+「自定义详情页」）
+            item(key = "group_custom") {
+                SettingsGroupCard(title = stringResource(R.string.settings_custom_section)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Explore,
+                            title = stringResource(R.string.settings_discover_page),
+                            onClick = { showDiscoverSectionsDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                        SettingsCard(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Rounded.Movie,
+                            title = stringResource(R.string.settings_detail_page),
+                            onClick = { showDetailSectionsDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                    }
                 }
             }
 
             // 数据管理（仅登录用户可见，依赖 Trakt API）
             if (isLoggedIn) {
-                item(key = "header_data") { SettingsSectionHeader(stringResource(R.string.settings_data_management)) }
-                if (exportImportState.isExporting) {
-                    item(key = "export_progress") {
-                        LinearProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        )
-                    }
-                }
-                item(key = "data_flow") {
-                    DataFlowGridItem(
-                        onExport = {
-                            if (!exportImportState.isExporting) {
-                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
-                                exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                item(key = "group_data") {
+                    SettingsGroupCard(title = stringResource(R.string.settings_data_management)) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (exportImportState.isExporting) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
                             }
-                        },
-                        onImportImdb = {
-                            if (!exportImportState.isImporting) {
-                                importImdbLauncher.launch("text/*")
-                            }
-                        },
-                        onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
-                        onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() }
-                    )
-                }
-                item(key = "douban_resync") {
-                    SettingsItemCard(
-                        icon = Icons.Rounded.Sync,
-                        title = stringResource(R.string.settings_douban_resync),
-                        subtitle = stringResource(R.string.settings_douban_resync_desc),
-                        onClick = {
-                            // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
-                            if (doubanLoggedIn) {
-                                // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
-                                scope.launch { viewModel.refreshCooldownStatus() }
-                                showSyncModePicker = true
-                            } else {
-                                showDoubanLoginPrompt = true
-                            }
-                        },
-                        trailing = {
-                            // 冷却期状态标签(右对齐):从未同步不显示,冷却中显示剩余天数,可同步显示可同步
-                            cooldownStatus?.let { status ->
-                                if (!status.neverSynced) {
-                                    Surface(
-                                        shape = MaterialTheme.shapes.small,
-                                        color = if (status.isCoolingDown)
-                                            MaterialTheme.colorScheme.tertiaryContainer
-                                        else MaterialTheme.colorScheme.secondaryContainer
-                                    ) {
-                                        Text(
-                                            text = if (status.isCoolingDown)
-                                                stringResource(R.string.cooldown_remaining_days, status.remainingDays)
-                                            else stringResource(R.string.cooldown_available),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (status.isCoolingDown)
-                                                MaterialTheme.colorScheme.onTertiaryContainer
-                                            else MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+
+                            val dataItems = buildList<@Composable () -> Unit> {
+                                add {
+                                    DataFlowGridItem(
+                                        onExport = {
+                                            if (!exportImportState.isExporting) {
+                                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                                exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                                            }
+                                        },
+                                        onImportImdb = {
+                                            if (!exportImportState.isImporting) {
+                                                importImdbLauncher.launch("text/*")
+                                            }
+                                        },
+                                        onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
+                                        onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() },
+                                        containerColor = Color.Transparent
+                                    )
+                                }
+                                add {
+                                    SettingsItemCard(
+                                        icon = Icons.Rounded.Sync,
+                                        title = stringResource(R.string.settings_douban_resync),
+                                        subtitle = stringResource(R.string.settings_douban_resync_desc),
+                                        onClick = {
+                                            // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
+                                            if (doubanLoggedIn) {
+                                                // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
+                                                scope.launch { viewModel.refreshCooldownStatus() }
+                                                showSyncModePicker = true
+                                            } else {
+                                                showDoubanLoginPrompt = true
+                                            }
+                                        },
+                                        trailing = {
+                                            // 冷却期状态标签(右对齐):从未同步不显示,冷却中显示剩余天数,可同步显示可同步
+                                            cooldownStatus?.let { status ->
+                                                if (!status.neverSynced) {
+                                                    Surface(
+                                                        shape = MaterialTheme.shapes.small,
+                                                        color = if (status.isCoolingDown)
+                                                            MaterialTheme.colorScheme.tertiaryContainer
+                                                        else MaterialTheme.colorScheme.secondaryContainer
+                                                    ) {
+                                                        Text(
+                                                            text = if (status.isCoolingDown)
+                                                                stringResource(R.string.cooldown_remaining_days, status.remainingDays)
+                                                            else stringResource(R.string.cooldown_available),
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = if (status.isCoolingDown)
+                                                                MaterialTheme.colorScheme.onTertiaryContainer
+                                                            else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        containerColor = Color.Transparent
+                                    )
+                                }
+                                if (doubanRetryState.hasFailures) {
+                                    add {
+                                        SettingsItemCard(
+                                            icon = Icons.Rounded.Replay,
+                                            title = stringResource(R.string.settings_douban_retry_failures),
+                                            subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
+                                            onClick = {
+                                                // 重试失败项:弹重试选择对话框
+                                                showDoubanRetryDialog = true
+                                            },
+                                            containerColor = Color.Transparent
+                                        )
+                                    }
+                                    add {
+                                        SettingsItemCard(
+                                            icon = Icons.Rounded.BrokenImage,
+                                            title = stringResource(R.string.settings_douban_view_failures),
+                                            subtitle = stringResource(
+                                                R.string.settings_douban_view_failures_desc,
+                                                doubanRetryState.totalFailures
+                                            ),
+                                            onClick = { onDoubanFailures() },
+                                            containerColor = Color.Transparent
+                                        )
+                                    }
+                                }
+                                // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
+                                if (!isDoubanSyncRunning) {
+                                    add {
+                                        SettingsItemCard(
+                                            icon = Icons.Rounded.SyncAlt,
+                                            title = stringResource(R.string.settings_douban_status_consistency),
+                                            subtitle = consistencyCheckState?.let { result ->
+                                                if (result.isComplete) {
+                                                    stringResource(
+                                                        R.string.settings_douban_status_consistency_done,
+                                                        result.conflictsFound,
+                                                        result.traktUpdated,
+                                                        result.doubanUpdated
+                                                    )
+                                                } else if (result.isRunning) {
+                                                    stringResource(R.string.settings_douban_status_consistency_checking)
+                                                } else {
+                                                    stringResource(R.string.settings_douban_status_consistency_desc)
+                                                }
+                                            } ?: stringResource(R.string.settings_douban_status_consistency_desc),
+                                            onClick = {
+                                                // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
+                                                if (viewModel.isCheckRunning()) {
+                                                    showConsistencyDialog = true
+                                                } else {
+                                                    // 异步读取上次检查时间并格式化，然后弹二次确认
+                                                    scope.launch {
+                                                        val lastMs = viewModel.getLastConsistencyCheckAt()
+                                                        lastCheckTimeText = formatLastCheckTime(lastMs, context)
+                                                        showConsistencyConfirm = true
+                                                    }
+                                                }
+                                            },
+                                            containerColor = Color.Transparent
                                         )
                                     }
                                 }
                             }
-                        }
-                    )
-                }
-                item(key = "douban_retry") {
-                    if (doubanRetryState.hasFailures) {
-                        SettingsItemCard(
-                            icon = Icons.Rounded.Replay,
-                            title = stringResource(R.string.settings_douban_retry_failures),
-                            subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
-                            onClick = {
-                                // 重试失败项:弹重试选择对话框
-                                showDoubanRetryDialog = true
+                            dataItems.forEachIndexed { index, item ->
+                                item()
+                                if (index < dataItems.size - 1) GroupDivider()
                             }
-                        )
-                    }
-                }
-                item(key = "douban_view_failures") {
-                    // 「查看同步失败项」入口:仅在有失败项时显示,卡片独占一行
-                    if (doubanRetryState.hasFailures) {
-                        SettingsItemCard(
-                            icon = Icons.Rounded.BrokenImage,
-                            title = stringResource(R.string.settings_douban_view_failures),
-                            subtitle = stringResource(
-                                R.string.settings_douban_view_failures_desc,
-                                doubanRetryState.totalFailures
-                            ),
-                            onClick = { onDoubanFailures() }
-                        )
-                    }
-                }
-                // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
-                if (!isDoubanSyncRunning) {
-                    item(key = "douban_status_consistency") {
-                    SettingsItemCard(
-                        icon = Icons.Rounded.SyncAlt,
-                        title = stringResource(R.string.settings_douban_status_consistency),
-                        subtitle = consistencyCheckState?.let { result ->
-                            if (result.isComplete) {
-                                stringResource(
-                                    R.string.settings_douban_status_consistency_done,
-                                    result.conflictsFound,
-                                    result.traktUpdated,
-                                    result.doubanUpdated
-                                )
-                            } else if (result.isRunning) {
-                                stringResource(R.string.settings_douban_status_consistency_checking)
-                            } else {
-                                stringResource(R.string.settings_douban_status_consistency_desc)
-                            }
-                        } ?: stringResource(R.string.settings_douban_status_consistency_desc),
-                        onClick = {
-                            // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
-                            if (viewModel.isCheckRunning()) {
-                                showConsistencyDialog = true
-                            } else {
-                                // 异步读取上次检查时间并格式化，然后弹二次确认
-                                scope.launch {
-                                    val lastMs = viewModel.getLastConsistencyCheckAt()
-                                    lastCheckTimeText = formatLastCheckTime(lastMs, context)
-                                    showConsistencyConfirm = true
+
+                            // 云端同步进行中:显示进度条
+                            if (cloudSyncLoading) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.cloud_sync_in_progress),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                        }
-                    )
-                    }
-                }
-                // 云端同步进行中:显示进度条
-                if (cloudSyncLoading) {
-                    item(key = "cloud_sync_progress") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.cloud_sync_in_progress),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                exportImportState.syncProgress?.let { progress ->
-                    if (exportImportState.isImporting) {
-                        item(key = "import_progress") {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                            ) {
-                                LinearProgressIndicator(
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = progress,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            exportImportState.syncProgress?.let { progress ->
+                                if (exportImportState.isImporting) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    ) {
+                                        LinearProgressIndicator(
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = progress,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -701,58 +792,66 @@ fun SettingsScreen(
             }
 
             // 账户：已登录用户显示 Trakt+豆瓣账号信息；访客显示"登录 Trakt"入口
-            item(key = "header_account") { SettingsSectionHeader(stringResource(R.string.settings_account)) }
-            item(key = "account") {
-                if (isLoggedIn) {
-                    AccountItem(
-                        viewModel = viewModel,
-                        onTraktLogout = { showLogoutDialog = true },
-                        onDoubanLogin = { onNavigateToDoubanLogin() },
-                        onDoubanLogout = { showDoubanLogoutDialog = true }
-                    )
-                } else {
-                    // 访客模式：显示登录 Trakt 入口（豆瓣导入需先登录 Trakt）
-                    GuestLoginItem(onNavigateToLogin = onNavigateToLogin)
+            item(key = "group_account") {
+                SettingsGroupCard(title = stringResource(R.string.settings_account)) {
+                    if (isLoggedIn) {
+                        AccountItem(
+                            viewModel = viewModel,
+                            onTraktLogout = { showLogoutDialog = true },
+                            onDoubanLogin = { onNavigateToDoubanLogin() },
+                            onDoubanLogout = { showDoubanLogoutDialog = true },
+                            containerColor = Color.Transparent
+                        )
+                    } else {
+                        // 访客模式：显示登录 Trakt 入口（豆瓣导入需先登录 Trakt）
+                        GuestLoginItem(
+                            onNavigateToLogin = onNavigateToLogin,
+                            containerColor = Color.Transparent
+                        )
+                    }
                 }
             }
 
             // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
-            item(key = "header_storage") { SettingsSectionHeader(stringResource(R.string.settings_storage)) }
-            item(key = "cache_management") {
-                CacheManagementSectionItem(
-                    viewModel = viewModel,
-                    onClearCategory = { category ->
-                        pendingClearCategory = category
-                        showClearCategoryDialog = true
-                    },
-                    onClearAll = { showClearCacheDialog = true }
-                )
+            item(key = "group_storage") {
+                SettingsGroupCard(title = stringResource(R.string.settings_storage)) {
+                    CacheManagementSectionItem(
+                        viewModel = viewModel,
+                        onClearCategory = { category ->
+                            pendingClearCategory = category
+                            showClearCategoryDialog = true
+                        },
+                        onClearAll = { showClearCacheDialog = true },
+                        containerColor = Color.Transparent
+                    )
+                }
             }
 
             // 关于
-            item(key = "header_about") { SettingsSectionHeader(stringResource(R.string.settings_about)) }
-            item(key = "about") {
-                AboutItem(
-                    hasUpdate = updateInfo?.hasUpdate == true,
-                    latestVersion = latestVersion,
-                    isCheckingUpdate = isCheckingUpdate,
-                    onVersionClick = { viewModel.checkUpdate() },
-                    onChangelogClick = {
-                        viewModel.loadChangelog()
-                        showChangelogDialog = true
-                    },
-                    onHelpClick = onHelpClick,
-                    onRestartOnboarding = onRestartOnboarding
-                )
-            }
-            // 源代码仓库（卡片独占一行，保留小字）
-            item(key = "source_repo") {
-                SettingsItemCard(
-                    icon = Icons.Rounded.Code,
-                    title = stringResource(R.string.settings_source_repo),
-                    subtitle = "yufeng-liang/TrackToSearch-release",
-                    onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") }
-                )
+            item(key = "group_about") {
+                SettingsGroupCard(title = stringResource(R.string.settings_about)) {
+                    AboutItem(
+                        hasUpdate = updateInfo?.hasUpdate == true,
+                        latestVersion = latestVersion,
+                        isCheckingUpdate = isCheckingUpdate,
+                        onVersionClick = { viewModel.checkUpdate() },
+                        onChangelogClick = {
+                            viewModel.loadChangelog()
+                            showChangelogDialog = true
+                        },
+                        onHelpClick = onHelpClick,
+                        onRestartOnboarding = onRestartOnboarding,
+                        containerColor = Color.Transparent
+                    )
+                    GroupDivider()
+                    SettingsItemCard(
+                        icon = Icons.Rounded.Code,
+                        title = stringResource(R.string.settings_source_repo),
+                        subtitle = "yufeng-liang/TrackToSearch-release",
+                        onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") },
+                        containerColor = Color.Transparent
+                    )
+                }
             }
         }
             // 普通标题栏（含状态栏）
@@ -1217,7 +1316,8 @@ fun SettingsScreen(
 @Composable
 private fun SharedTransitionSwitchCard(
     enabled: Boolean,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val view = LocalView.current
     Surface(
@@ -1225,7 +1325,7 @@ private fun SharedTransitionSwitchCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Row(
             modifier = Modifier
@@ -1270,7 +1370,10 @@ private fun SharedTransitionSwitchCard(
  * 开关变化只重组本函数，不波及 LazyColumn 其他 item。
  */
 @Composable
-private fun NotificationItem(viewModel: SettingsViewModel) {
+private fun NotificationItem(
+    viewModel: SettingsViewModel,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
     val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
     val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
     val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
@@ -1286,7 +1389,7 @@ private fun NotificationItem(viewModel: SettingsViewModel) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             val view = LocalView.current
@@ -1396,7 +1499,8 @@ private fun DataFlowGridItem(
     onExport: () -> Unit,
     onImportImdb: () -> Unit,
     onUploadCloud: () -> Unit,
-    onDownloadCloud: () -> Unit
+    onDownloadCloud: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -1406,13 +1510,15 @@ private fun DataFlowGridItem(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.FileUpload,
             title = stringResource(R.string.settings_export_marks_data),
-            onClick = onExport
+            onClick = onExport,
+            containerColor = containerColor
         )
         DataFlowCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.FileDownload,
             title = stringResource(R.string.settings_import_imdb),
-            onClick = onImportImdb
+            onClick = onImportImdb,
+            containerColor = containerColor
         )
     }
     Row(
@@ -1423,13 +1529,15 @@ private fun DataFlowGridItem(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.CloudUpload,
             title = stringResource(R.string.settings_douban_upload_cloud),
-            onClick = onUploadCloud
+            onClick = onUploadCloud,
+            containerColor = containerColor
         )
         DataFlowCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.CloudDownload,
             title = stringResource(R.string.settings_douban_download_cloud),
-            onClick = onDownloadCloud
+            onClick = onDownloadCloud,
+            containerColor = containerColor
         )
     }
 }
@@ -1446,7 +1554,8 @@ private fun AboutItem(
     onVersionClick: () -> Unit,
     onChangelogClick: () -> Unit,
     onHelpClick: () -> Unit,
-    onRestartOnboarding: () -> Unit
+    onRestartOnboarding: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val versionSubtitle = if (hasUpdate && latestVersion != null) {
         stringResource(R.string.settings_new_version, latestVersion)
@@ -1467,16 +1576,35 @@ private fun AboutItem(
             mergeTitleAndSubtitle = true,
             loadingIcon = isCheckingUpdate,
             subtitleColor = versionSubtitleColor,
-            onClick = onVersionClick
+            onClick = onVersionClick,
+            containerColor = containerColor
         )
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.AutoMirrored.Rounded.EventNote, title = stringResource(R.string.settings_changelog), onClick = onChangelogClick)
+        SettingsCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.AutoMirrored.Rounded.EventNote,
+            title = stringResource(R.string.settings_changelog),
+            onClick = onChangelogClick,
+            containerColor = containerColor
+        )
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.AutoMirrored.Rounded.HelpOutline, title = stringResource(R.string.settings_help), onClick = onHelpClick)
-        SettingsCard(modifier = Modifier.weight(1f), icon = Icons.Rounded.School, title = stringResource(R.string.settings_restart_onboarding), onClick = onRestartOnboarding)
+        SettingsCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.AutoMirrored.Rounded.HelpOutline,
+            title = stringResource(R.string.settings_help),
+            onClick = onHelpClick,
+            containerColor = containerColor
+        )
+        SettingsCard(
+            modifier = Modifier.weight(1f),
+            icon = Icons.Rounded.School,
+            title = stringResource(R.string.settings_restart_onboarding),
+            onClick = onRestartOnboarding,
+            containerColor = containerColor
+        )
     }
 }
 
@@ -1487,13 +1615,15 @@ private fun AboutItem(
 private fun CacheManagementSectionItem(
     viewModel: SettingsViewModel,
     onClearCategory: (SettingsViewModel.CacheCategory) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val breakdown by viewModel.cacheBreakdown.collectAsStateWithLifecycle()
     CacheManagementItem(
         breakdown = breakdown,
         onClearCategory = onClearCategory,
-        onClearAll = onClearAll
+        onClearAll = onClearAll,
+        containerColor = containerColor
     )
 }
 
@@ -1507,7 +1637,8 @@ private fun AccountItem(
     viewModel: SettingsViewModel,
     onTraktLogout: () -> Unit,
     onDoubanLogin: () -> Unit,
-    onDoubanLogout: () -> Unit
+    onDoubanLogout: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
@@ -1517,7 +1648,7 @@ private fun AccountItem(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             AccountRow(

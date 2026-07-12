@@ -452,6 +452,10 @@ class SettingsViewModel @Inject constructor(
     private val _cacheBreakdown = MutableStateFlow(CacheBreakdown())
     val cacheBreakdown: StateFlow<CacheBreakdown> = _cacheBreakdown.asStateFlow()
 
+    /** 设置页统计入口显示的观影数量（已看影片 + 剧集） */
+    private val _statisticsCount = MutableStateFlow(0)
+    val statisticsCount: StateFlow<Int> = _statisticsCount.asStateFlow()
+
     /** 旧 API：兼容只显示总大小的调用方 */
     val cacheInfo: StateFlow<String> = _cacheBreakdown
         .map { formatFileSize(it.totalBytes) }
@@ -613,6 +617,10 @@ class SettingsViewModel @Inject constructor(
     fun refreshCacheInfo() {
         viewModelScope.launch {
             try {
+                // 统计入口数量（已看影片 + 剧集）
+                val cacheInfo = offlineCacheManager.getCacheInfo()
+                _statisticsCount.value = cacheInfo.historyMovies + cacheInfo.historyShows
+
                 // DataStore 文件大小（含影视数据 + ID 映射 + 豆瓣详情，共用同一个目录）
                 val dataStoreTotal = offlineCacheManager.getDataStoreSizeBytes()
                 // 按 PersistentTtlCache.getSizeBytes() 比例拆分影视数据 vs ID 映射

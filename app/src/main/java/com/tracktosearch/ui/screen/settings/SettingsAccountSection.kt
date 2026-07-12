@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -314,14 +315,17 @@ internal fun DoubanLoginPromptRow(
  * 豆瓣导入需先登录 Trakt，所以访客模式下只显示 Trakt 登录入口。
  */
 @Composable
-fun GuestLoginItem(onNavigateToLogin: () -> Unit) {
+fun GuestLoginItem(
+    onNavigateToLogin: () -> Unit,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+) {
     val view = LocalView.current
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = containerColor
     ) {
         Row(
             modifier = Modifier
