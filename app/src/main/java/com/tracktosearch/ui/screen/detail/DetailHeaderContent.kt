@@ -362,6 +362,8 @@ internal fun DetailHeaderContent(
                             icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                             label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
                             selected = uiState.userRating != null && uiState.userRating > 0,
+                            enabled = !uiState.isRating,
+                            isLoading = uiState.isRating,
                             onClick = {
                                 view.performHaptic(HapticType.TICK)
                                 onShowRatingDialog()
