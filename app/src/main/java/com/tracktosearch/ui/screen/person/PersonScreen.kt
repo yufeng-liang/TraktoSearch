@@ -492,7 +492,7 @@ private fun CreditPosterCard(
                 imageUrl = posterUrl,
                 title = title,
                 year = year.takeIf { it.isNotEmpty() },
-                onClick = { },
+                onClick = null,
                 modifier = Modifier
                     .width(100.dp)
                     .background(

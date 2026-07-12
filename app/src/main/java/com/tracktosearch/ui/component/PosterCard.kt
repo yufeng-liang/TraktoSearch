@@ -42,7 +42,7 @@ import coil.request.ImageRequest
  * @param title 影视标题（用于内容描述）
  * @param year 年份，null 时不显示
  * @param rating 评分，null 时不显示
- * @param onClick 点击回调
+ * @param onClick 点击回调，null 时不附加点击手势（由外部容器统一处理）
  * @param modifier 外层修饰符
  * @param genres 类型字符串，null 或空时不显示
  * @param onLongClick 长按回调，null 时不启用长按
@@ -57,7 +57,7 @@ fun PosterCard(
     title: String,
     year: String? = null,
     rating: Double? = null,
-    onClick: () -> Unit,
+    onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     genres: String? = null,
     onLongClick: (() -> Unit)? = null,
@@ -98,19 +98,23 @@ fun PosterCard(
                 .clip(RoundedCornerShape(14.dp))
                 .then(posterModifier)
                 .then(
-                    if (onLongClick != null) {
-                        Modifier.combinedClickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onClick,
-                            onLongClick = onLongClick
-                        )
+                    if (onClick != null) {
+                        if (onLongClick != null) {
+                            Modifier.combinedClickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = onClick,
+                                onLongClick = onLongClick
+                            )
+                        } else {
+                            Modifier.clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = onClick
+                            )
+                        }
                     } else {
-                        Modifier.clickable(
-                            interactionSource = interactionSource,
-                            indication = null,
-                            onClick = onClick
-                        )
+                        Modifier
                     }
                 )
         ) {
