@@ -36,11 +36,11 @@ private val DarkColorScheme = darkColorScheme(
     primaryContainer = Red700,
     secondary = QuarkBlue,
     onSecondary = Color.White,
-    background = DarkBackground,
+    background = CinemaBackground,
     onBackground = Color.White,
-    surface = DarkSurface,
+    surface = CinemaSurface,
     onSurface = Color.White,
-    surfaceVariant = DarkCard,
+    surfaceVariant = CinemaCard,
     onSurfaceVariant = LightGray,
 )
 
@@ -74,11 +74,11 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
             onSecondary = onSecondary,
             secondaryContainer = secondaryContainer,
             onSecondaryContainer = onSecondaryContainer,
-            background = DarkBackground,
+            background = CinemaBackground,
             onBackground = Color.White,
-            surface = DarkSurface,
+            surface = CinemaSurface,
             onSurface = Color.White,
-            surfaceVariant = DarkCard,
+            surfaceVariant = CinemaCard,
             onSurfaceVariant = LightGray,
         )
     } else {

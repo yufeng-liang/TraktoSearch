@@ -43,3 +43,10 @@ enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dar
     WATER_LILY_GREEN(R.string.accent_water_lily_green, Color(0xFF4A9A6A), Color(0xFF6AB88A)),
     BOAT_BREAKFAST(R.string.accent_boat_breakfast, Color(0xFF3A8AA0), Color(0xFF5AA8C0));
 }
+
+// UI 重设计新增颜色
+val CinemaBackground = Color(0xFF0F0F1A)
+val CinemaSurface = Color(0xFF1A1A2E)
+val CinemaCard = Color(0xFF242442)
+val RatingGold = Color(0xFFF4A460)
+val RatingGoldDim = Color(0xFFF4A460).copy(alpha = 0.7f)
