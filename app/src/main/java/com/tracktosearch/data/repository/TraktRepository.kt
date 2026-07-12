@@ -19,6 +19,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import retrofit2.Response
@@ -83,47 +85,63 @@ class TraktRepository @Inject constructor(
     @Volatile
     private var watchlistWatchedIds: WatchlistWatchedIds? = null
 
+    /** 保护 watchlistWatchedIds 的 read-modify-write 操作,防止并发更新丢失 */
+    private val watchlistWatchedIdsLock = Any()
+
+    /** loadWatchlistWatchedIds 并发去重,避免多个调用方同时触发网络全量拉取 */
+    private val loadWatchlistMutex = Mutex()
+
     /** 加载全局想看/已看 ID 缓存（登录后调用，仅加载一次）。
-     *  优先读持久化缓存（6h TTL，跨 App 重启复用），未命中或过期时走网络全量拉取并写回持久化缓存 */
+     *  优先读持久化缓存（6h TTL，跨 App 重启复用），未命中或过期时走网络全量拉取并写回持久化缓存。
+     *  并发去重：多个调用方共享同一次网络加载，避免重复发 4 个 sync 请求 */
     suspend fun loadWatchlistWatchedIds(): WatchlistWatchedIds {
         watchlistWatchedIds?.let { return it }
         // 先尝试持久化缓存（避免每次启动都发 4 个 /sync/* 请求）
         val cacheKey = "watchlist_watched_ids"
         watchlistWatchedIdsCache.awaitLoaded()
         watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
-            watchlistWatchedIds = cached
+            synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
             return cached
         }
-        return try {
-            coroutineScope {
-                val movieWatchlistDef = async { getAllMovieWatchlist() }
-                val showWatchlistDef = async { getAllShowWatchlist() }
-                val movieHistoryDef = async { getAllMovieHistory(extended = "min") }
-                val showHistoryDef = async { getAllShowHistory(extended = "min") }
-                val movieWatchlist = movieWatchlistDef.await().getOrDefault(emptyList())
-                val showWatchlist = showWatchlistDef.await().getOrDefault(emptyList())
-                val movieHistory = movieHistoryDef.await().getOrDefault(emptyList())
-                val showHistory = showHistoryDef.await().getOrDefault(emptyList())
-                val ids = WatchlistWatchedIds(
-                    movieWatchlistTraktIds = movieWatchlist.map { it.movie.ids.trakt }.toSet(),
-                    movieWatchlistTmdbIds = movieWatchlist.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
-                    showWatchlistTraktIds = showWatchlist.map { it.show.ids.trakt }.toSet(),
-                    showWatchlistTmdbIds = showWatchlist.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
-                    movieWatchedTraktIds = movieHistory.map { it.movie.ids.trakt }.toSet(),
-                    movieWatchedTmdbIds = movieHistory.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
-                    showWatchedTraktIds = showHistory.map { it.show.ids.trakt }.toSet(),
-                    showWatchedTmdbIds = showHistory.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
-                    movieTmdbToTrakt = (movieWatchlist + movieHistory).associate { it.movie.ids.tmdb to it.movie.ids.trakt }.filterKeys { it > 0 },
-                    showTmdbToTrakt = (showWatchlist + showHistory).associate { it.show.ids.tmdb to it.show.ids.trakt }.filterKeys { it > 0 }
-                )
-                watchlistWatchedIds = ids
-                // 写回持久化缓存（异步落盘，6h TTL）
-                watchlistWatchedIdsCache.put(cacheKey, ids)
-                ids
+        // 并发去重:同一时刻只允许一个网络全量拉取,其他调用方等待结果
+        return loadWatchlistMutex.withLock {
+            // double-check:等待期间可能已被其他协程填充
+            watchlistWatchedIds?.let { return it }
+            watchlistWatchedIdsCache.get(cacheKey)?.let { cached ->
+                synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = cached }
+                return cached
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Log.w("TraktRepo", "loadWatchlistWatchedIds failed: ${e.message}")
-            WatchlistWatchedIds()
+            try {
+                coroutineScope {
+                    val movieWatchlistDef = async { getAllMovieWatchlist() }
+                    val showWatchlistDef = async { getAllShowWatchlist() }
+                    val movieHistoryDef = async { getAllMovieHistory(extended = "min") }
+                    val showHistoryDef = async { getAllShowHistory(extended = "min") }
+                    val movieWatchlist = movieWatchlistDef.await().getOrDefault(emptyList())
+                    val showWatchlist = showWatchlistDef.await().getOrDefault(emptyList())
+                    val movieHistory = movieHistoryDef.await().getOrDefault(emptyList())
+                    val showHistory = showHistoryDef.await().getOrDefault(emptyList())
+                    val ids = WatchlistWatchedIds(
+                        movieWatchlistTraktIds = movieWatchlist.map { it.movie.ids.trakt }.toSet(),
+                        movieWatchlistTmdbIds = movieWatchlist.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
+                        showWatchlistTraktIds = showWatchlist.map { it.show.ids.trakt }.toSet(),
+                        showWatchlistTmdbIds = showWatchlist.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
+                        movieWatchedTraktIds = movieHistory.map { it.movie.ids.trakt }.toSet(),
+                        movieWatchedTmdbIds = movieHistory.map { it.movie.ids.tmdb }.filter { it > 0 }.toSet(),
+                        showWatchedTraktIds = showHistory.map { it.show.ids.trakt }.toSet(),
+                        showWatchedTmdbIds = showHistory.map { it.show.ids.tmdb }.filter { it > 0 }.toSet(),
+                        movieTmdbToTrakt = (movieWatchlist + movieHistory).associate { it.movie.ids.tmdb to it.movie.ids.trakt }.filterKeys { it > 0 },
+                        showTmdbToTrakt = (showWatchlist + showHistory).associate { it.show.ids.tmdb to it.show.ids.trakt }.filterKeys { it > 0 }
+                    )
+                    synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = ids }
+                    // 写回持久化缓存（异步落盘，6h TTL）
+                    watchlistWatchedIdsCache.put(cacheKey, ids)
+                    ids
+                }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Log.w("TraktRepo", "loadWatchlistWatchedIds failed: ${e.message}")
+                WatchlistWatchedIds()
+            }
         }
     }
 
@@ -132,7 +150,7 @@ class TraktRepository @Inject constructor(
 
     /** 清除全局想看/已看缓存及所有用户私有内存缓存（退出登录时调用） */
     fun clearWatchlistWatchedCache() {
-        watchlistWatchedIds = null
+        synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = null }
         // 清除所有用户私有内存缓存，避免下一用户看到上一用户的历史/评分/想看列表
         commentsCache.clear()
         relatedMoviesCache.clear()
@@ -163,83 +181,91 @@ class TraktRepository @Inject constructor(
 
     /** 缓存已加载时，添加想看 ID 到缓存 */
     private fun addToWatchlistCache(traktId: Int, tmdbId: Int, type: MediaType) {
-        watchlistWatchedIds?.let { current ->
-            watchlistWatchedIds = when (type) {
-                MediaType.MOVIE -> current.copy(
-                    movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
-                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
-                )
-                MediaType.SHOW -> current.copy(
-                    showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
-                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
-                )
-                else -> current
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds?.let { current ->
+                watchlistWatchedIds = when (type) {
+                    MediaType.MOVIE -> current.copy(
+                        movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
+                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
+                    )
+                    MediaType.SHOW -> current.copy(
+                        showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
+                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
+                    )
+                    else -> current
+                }
+                persistWatchlistWatchedIds()
             }
-            persistWatchlistWatchedIds()
         }
     }
 
     /** 缓存已加载时，从想看缓存移除 ID */
     private fun removeFromWatchlistCache(traktId: Int, tmdbId: Int, type: MediaType) {
-        watchlistWatchedIds?.let { current ->
-            watchlistWatchedIds = when (type) {
-                MediaType.MOVIE -> current.copy(
-                    movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
-                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
-                )
-                MediaType.SHOW -> current.copy(
-                    showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
-                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
-                )
-                else -> current
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds?.let { current ->
+                watchlistWatchedIds = when (type) {
+                    MediaType.MOVIE -> current.copy(
+                        movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
+                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
+                    )
+                    MediaType.SHOW -> current.copy(
+                        showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
+                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
+                    )
+                    else -> current
+                }
+                persistWatchlistWatchedIds()
             }
-            persistWatchlistWatchedIds()
         }
     }
 
     /** 缓存已加载时，添加已看 ID 到缓存 */
     private fun addToWatchedCache(traktId: Int, tmdbId: Int, type: MediaType) {
-        watchlistWatchedIds?.let { current ->
-            watchlistWatchedIds = when (type) {
-                MediaType.MOVIE -> current.copy(
-                    movieWatchedTraktIds = current.movieWatchedTraktIds + traktId,
-                    movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds + tmdbId else current.movieWatchedTmdbIds,
-                    // 标记已看后从想看缓存移除
-                    movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
-                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
-                )
-                MediaType.SHOW -> current.copy(
-                    showWatchedTraktIds = current.showWatchedTraktIds + traktId,
-                    showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds + tmdbId else current.showWatchedTmdbIds,
-                    showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
-                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
-                )
-                else -> current
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds?.let { current ->
+                watchlistWatchedIds = when (type) {
+                    MediaType.MOVIE -> current.copy(
+                        movieWatchedTraktIds = current.movieWatchedTraktIds + traktId,
+                        movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds + tmdbId else current.movieWatchedTmdbIds,
+                        // 标记已看后从想看缓存移除
+                        movieWatchlistTraktIds = current.movieWatchlistTraktIds - traktId,
+                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds - tmdbId else current.movieWatchlistTmdbIds
+                    )
+                    MediaType.SHOW -> current.copy(
+                        showWatchedTraktIds = current.showWatchedTraktIds + traktId,
+                        showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds + tmdbId else current.showWatchedTmdbIds,
+                        showWatchlistTraktIds = current.showWatchlistTraktIds - traktId,
+                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds - tmdbId else current.showWatchlistTmdbIds
+                    )
+                    else -> current
+                }
+                persistWatchlistWatchedIds()
             }
-            persistWatchlistWatchedIds()
         }
     }
 
     /** 缓存已加载时，从已看缓存移除 ID */
     private fun removeFromWatchedCache(traktId: Int, tmdbId: Int, type: MediaType) {
-        watchlistWatchedIds?.let { current ->
-            watchlistWatchedIds = when (type) {
-                MediaType.MOVIE -> current.copy(
-                    movieWatchedTraktIds = current.movieWatchedTraktIds - traktId,
-                    movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds - tmdbId else current.movieWatchedTmdbIds,
-                    // 取消已看后加回想看缓存
-                    movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
-                    movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
-                )
-                MediaType.SHOW -> current.copy(
-                    showWatchedTraktIds = current.showWatchedTraktIds - traktId,
-                    showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds - tmdbId else current.showWatchedTmdbIds,
-                    showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
-                    showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
-                )
-                else -> current
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds?.let { current ->
+                watchlistWatchedIds = when (type) {
+                    MediaType.MOVIE -> current.copy(
+                        movieWatchedTraktIds = current.movieWatchedTraktIds - traktId,
+                        movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds - tmdbId else current.movieWatchedTmdbIds,
+                        // 取消已看后加回想看缓存
+                        movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
+                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
+                    )
+                    MediaType.SHOW -> current.copy(
+                        showWatchedTraktIds = current.showWatchedTraktIds - traktId,
+                        showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds - tmdbId else current.showWatchedTmdbIds,
+                        showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
+                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
+                    )
+                    else -> current
+                }
+                persistWatchlistWatchedIds()
             }
-            persistWatchlistWatchedIds()
         }
     }
 

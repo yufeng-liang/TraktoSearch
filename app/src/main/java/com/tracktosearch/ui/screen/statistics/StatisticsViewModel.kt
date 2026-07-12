@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tracktosearch.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -82,11 +83,33 @@ class StatisticsViewModel @Inject constructor(
                 // 2. show history 降级 extended=min（仅需时间戳，episode 级数据量大）
                 // 3. ratings 并行而非串行在最后
                 // 4. 删除 N+1 getShowWatchedProgress（watchedShows 已有 completed 字段）
-                val movieHistoryDeferred = async { traktRepository.getAllMovieHistory(extended = "full") }
-                val showHistoryDeferred = async { traktRepository.getAllShowHistory(extended = "min") }
-                val watchedShowsDeferred = async { traktRepository.getWatchedShowsWithEpisodes() }
-                val userStatsDeferred = async { traktRepository.getUserStats() }
-                val ratingsDeferred = async { traktRepository.getAllUserRatings() }
+                // 每个 async 包 try-catch 返回 Result.failure,确保即使未被 await(因前置 await
+                // 提前 return@launch)也不会产生被静默吞掉的异常
+                val movieHistoryDeferred = async {
+                    try { traktRepository.getAllMovieHistory(extended = "full") }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Result.failure(e) }
+                }
+                val showHistoryDeferred = async {
+                    try { traktRepository.getAllShowHistory(extended = "min") }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Result.failure(e) }
+                }
+                val watchedShowsDeferred = async {
+                    try { traktRepository.getWatchedShowsWithEpisodes() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Result.failure(e) }
+                }
+                val userStatsDeferred = async {
+                    try { traktRepository.getUserStats() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Result.failure(e) }
+                }
+                val ratingsDeferred = async {
+                    try { traktRepository.getAllUserRatings() }
+                    catch (e: CancellationException) { throw e }
+                    catch (e: Exception) { Result.failure(e) }
+                }
 
                 val movies = movieHistoryDeferred.await().getOrElse {
                     _uiState.value = _uiState.value.copy(isLoading = false, error = it.message ?: context.getString(R.string.error_load_failed))

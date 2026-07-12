@@ -121,6 +121,12 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         checkJob?.cancel()
     }
 
+    /** 重置进度状态（完成后调用，避免 StateFlow 旧值 isComplete=true 导致重复弹窗） */
+    fun resetProgress() {
+        if (isRunning()) return  // 运行中不重置
+        _checkProgress.value = ConsistencyCheckResult()
+    }
+
     /**
      * 同步后自动触发：仅读本地表快照对比（秒级，不爬豆瓣列表）。
      *
@@ -192,10 +198,17 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 )
                 throw e
             } catch (e: Exception) {
+                // 网络错误(DNS 解析失败、连接超时等)提供友好提示,不暴露原始异常信息
+                val friendlyMsg = when {
+                    e.message?.contains("resolve", ignoreCase = true) == true ||
+                    e.message?.contains("address", ignoreCase = true) == true -> "网络连接失败,请检查网络后重试"
+                    e.message?.contains("timeout", ignoreCase = true) == true -> "网络请求超时,请重试"
+                    else -> "检查异常: ${e.message}"
+                }
                 _checkProgress.value = _checkProgress.value.copy(
                     isRunning = false,
                     isComplete = true,
-                    phase = "检查异常: ${e.message}"
+                    phase = friendlyMsg
                 )
             } finally {
                 releaseWakeLock()

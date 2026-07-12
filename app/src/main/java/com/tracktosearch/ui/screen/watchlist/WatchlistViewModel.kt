@@ -19,8 +19,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tracktosearch.R
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -122,6 +124,12 @@ class WatchlistViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
+
+    // 各加载协程的 Job 引用,refresh() 前统一 cancel,避免旧协程写入覆盖新数据
+    private var loadMoviesJob: Job? = null
+    private var loadShowsJob: Job? = null
+    private var loadHistoryMoviesJob: Job? = null
+    private var loadHistoryShowsJob: Job? = null
 
     /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
     private val _syncCompleteEvent = MutableSharedFlow<Unit>()
@@ -242,6 +250,8 @@ class WatchlistViewModel @Inject constructor(
                         _syncCompleteEvent.emit(Unit)
                         delay(5000)
                         _uiState.value = _uiState.value.copy(doubanSyncProgress = null)
+                        // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗
+                        doubanSyncManager.resetProgress()
                     }
                 }
             }
@@ -255,6 +265,8 @@ class WatchlistViewModel @Inject constructor(
                         _consistencyCheckCompleteEvent.emit(Unit)
                         delay(5000)
                         _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
+                        // 重置 checkProgress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗
+                        statusConsistencyChecker.resetProgress()
                     }
                 }
             }
@@ -266,7 +278,7 @@ class WatchlistViewModel @Inject constructor(
             return
         }
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
-        viewModelScope.launch {
+        loadMoviesJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoadingMovies = !silent,
                 moviesError = if (silent) _uiState.value.moviesError else null
@@ -344,7 +356,7 @@ class WatchlistViewModel @Inject constructor(
             return
         }
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
-        viewModelScope.launch {
+        loadShowsJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoadingShows = !silent,
                 showsError = if (silent) _uiState.value.showsError else null
@@ -421,7 +433,7 @@ class WatchlistViewModel @Inject constructor(
             return
         }
         if (_uiState.value.isLoadingHistoryMovies) return
-        viewModelScope.launch {
+        loadHistoryMoviesJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoadingHistoryMovies = true,
                 historyMoviesError = null
@@ -470,7 +482,7 @@ class WatchlistViewModel @Inject constructor(
             return
         }
         if (_uiState.value.isLoadingHistoryShows) return
-        viewModelScope.launch {
+        loadHistoryShowsJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isLoadingHistoryShows = true,
                 historyShowsError = null
@@ -557,6 +569,12 @@ class WatchlistViewModel @Inject constructor(
     }
 
     fun refresh() {
+        // 取消所有正在进行的加载协程,避免旧协程完成后覆盖刚重置的新数据
+        loadMoviesJob?.cancel()
+        loadShowsJob?.cancel()
+        loadHistoryMoviesJob?.cancel()
+        loadHistoryShowsJob?.cancel()
+
         val wasHistoryLoaded = _uiState.value.historyMoviesLoaded || _uiState.value.historyShowsLoaded
         _uiState.value = WatchlistUiState()
         loadMovies(forceReload = true)
@@ -611,39 +629,39 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    /** 从想看列表批量移除 */
-    fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
-        viewModelScope.launch {
-            val isMovie = type == MediaType.MOVIE
-            val results = traktIds.map { id ->
+    /** 从想看列表批量移除（suspend，调用方等待完成后关闭多选栏） */
+    suspend fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
+        val isMovie = type == MediaType.MOVIE
+        val results = coroutineScope {
+            traktIds.map { id ->
                 async { traktRepository.removeFromWatchlist(id, type) }
             }.awaitAll()
-            val allSuccess = results.all { it.isSuccess }
-            if (allSuccess) {
-                // 全部成功才更新 UI，避免部分失败时 UI 与服务端不一致
-                _uiState.value = if (isMovie) {
-                    _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
-                } else {
-                    _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
-                }
+        }
+        val allSuccess = results.all { it.isSuccess }
+        if (allSuccess) {
+            // 全部成功才更新 UI，避免部分失败时 UI 与服务端不一致
+            _uiState.value = if (isMovie) {
+                _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
+            } else {
+                _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
             }
         }
     }
 
-    /** 从已看历史批量移除 */
-    fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType) {
-        viewModelScope.launch {
-            val isMovie = type == MediaType.MOVIE
-            val results = traktIds.map { id ->
+    /** 从已看历史批量移除（suspend，调用方等待完成后关闭多选栏） */
+    suspend fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType) {
+        val isMovie = type == MediaType.MOVIE
+        val results = coroutineScope {
+            traktIds.map { id ->
                 async { traktRepository.removeWatched(id, type) }
             }.awaitAll()
-            val allSuccess = results.all { it.isSuccess }
-            if (allSuccess) {
-                _uiState.value = if (isMovie) {
-                    _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
-                } else {
-                    _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
-                }
+        }
+        val allSuccess = results.all { it.isSuccess }
+        if (allSuccess) {
+            _uiState.value = if (isMovie) {
+                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
+            } else {
+                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
             }
         }
     }
@@ -654,7 +672,8 @@ class WatchlistViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoadingMovies = true)
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200) }
             result.onSuccess { (items, totalPages) ->
-                val uiItems = items.map { item ->
+                // 用 mapIndexed 而非 map,避免与 kotlinx.coroutines.flow.map 导入产生歧义
+                val deferredItems = items.mapIndexed { _, item ->
                     async {
                         enrichMediaItem(
                             traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
@@ -663,7 +682,8 @@ class WatchlistViewModel @Inject constructor(
                             listedAt = item.listed_at, isMovie = true
                         )
                     }
-                }.awaitAll()
+                }
+                val uiItems = deferredItems.awaitAll()
                 _uiState.value = _uiState.value.copy(
                     movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
                     isLoadingMovies = false,

@@ -35,6 +35,7 @@ import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -1102,10 +1103,15 @@ class DiscoverViewModel @Inject constructor(
                     } else {
                         _toastEvent.emit(R.string.card_resolve_not_found)
                     }
+                }.onFailure {
+                    _toastEvent.emit(R.string.card_resolve_error)
                 }
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                _toastEvent.emit(R.string.card_resolve_error)
             }
         }
     }
@@ -1201,10 +1207,15 @@ class DiscoverViewModel @Inject constructor(
                     } else {
                         _toastEvent.emit(R.string.card_resolve_not_found)
                     }
+                }.onFailure {
+                    _toastEvent.emit(R.string.card_resolve_error)
                 }
                 _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                _toastEvent.emit(R.string.card_resolve_error)
             }
         }
     }

@@ -5,6 +5,7 @@ import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendResponse
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.util.PersistentTtlCache
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
@@ -180,7 +181,23 @@ class DoubanRepository(
             // 每页爬取前检查取消标志,避免取消后还要爬完当前页(5-10 秒反爬延迟)
             if (isCancelled()) break
             val url = "https://movie.douban.com/people/${userId}/${status.path}?start=${start}&sort=time&mode=grid"
-            val html = fetchHtml(url, cookie)
+            // 捕获网络异常(超时/连接失败),重试一次
+            val html = try {
+                fetchHtml(url, cookie)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 网络异常重试一次
+                delayWithEvent(DelayType.DOUBAN_RETRY, 2000L..4000L)
+                try {
+                    fetchHtml(url, cookie)
+                } catch (e2: CancellationException) {
+                    throw e2
+                } catch (e2: Exception) {
+                    // 重试仍失败,中止爬取(返回已爬取的数据)
+                    break
+                }
+            }
             if (DoubanSpider.isLoginPage(html)) {
                 cookieExpired = true
                 break
@@ -270,7 +287,16 @@ class DoubanRepository(
                 delayWithEvent(DelayType.DOUBAN_RETRY, 2000L..4000L) // 重试前等待
             }
             delayWithEvent(DelayType.DOUBAN_DETAIL_CRAWL, 3000L..5000L) // 反爬延迟 3-5 秒
-            val html = fetchHtml(doubanUrl, cookie)
+            // 捕获网络异常(超时/连接失败),重试一次
+            val html = try {
+                fetchHtml(doubanUrl, cookie)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (attempt == 0) continue  // 第一次失败,重试
+                lastHtml = null
+                break  // 第二次仍失败,退出循环
+            }
             if (DoubanSpider.isLoginPage(html)) return Pair(null, false) // Cookie 过期，不重试
             lastHtml = html
             // 解析成功就跳出

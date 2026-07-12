@@ -542,8 +542,10 @@ class RetryInterceptor(
             // 优先读 Retry-After header（429 响应通常携带，单位秒），否则用指数退避
             val retryAfterSec = response.header("Retry-After")?.toLongOrNull()
             response.close()
-            val delayMs = retryAfterSec?.let { it * 1000 }
-                ?: baseDelayMs * 2.0.pow(retries.toDouble()).toLong()
+            // 限制最大延迟 10 秒,避免 Retry-After 几十秒时长时间阻塞 OkHttp dispatcher 线程
+            val delayMs = (retryAfterSec?.let { it * 1000 }
+                ?: baseDelayMs * 2.0.pow(retries.toDouble()).toLong())
+                .coerceAtMost(10_000L)
             try {
                 Thread.sleep(delayMs)
             } catch (_: InterruptedException) {

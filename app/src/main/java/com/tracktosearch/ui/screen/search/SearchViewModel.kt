@@ -457,6 +457,22 @@ class SearchViewModel @Inject constructor(
     fun search(keyword: String) {
         if (keyword.isBlank()) return
 
+        // 缓存检查在协程启动前,命中则同步返回,避免 isLoading=true→false 闪烁
+        val cached = searchResultCache.get(keyword.trim())
+        if (cached != null) {
+            searchJob?.cancel()
+            _uiState.value = _uiState.value.copy(
+                isLoading = false,
+                keyword = keyword,
+                resources = cached,
+                error = null,
+                typeFilter = ResourceType.ALL
+            )
+            // 搜索历史仍需记录(异步,不阻塞 UI)
+            viewModelScope.launch { searchHistoryStorage.add(keyword, "disk") }
+            return
+        }
+
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             searchHistoryStorage.add(keyword, "disk")
@@ -469,16 +485,6 @@ class SearchViewModel @Inject constructor(
             )
 
             try {
-                // 10 分钟内相同关键词用缓存
-                val cached = searchResultCache.get(keyword.trim())
-                if (cached != null) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        resources = cached
-                    )
-                    return@launch
-                }
-
                 resourceRepository.searchResourcesFlow(keyword = keyword)
                     .collect { items ->
                         if (items.isNotEmpty()) {

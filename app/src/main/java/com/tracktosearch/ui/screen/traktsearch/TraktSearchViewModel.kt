@@ -257,47 +257,52 @@ class TraktSearchViewModel @Inject constructor(
                         hasSearched = true
                     ))
                     // 同时用 TMDB 多类型搜索填充电影和剧集标签页
-                    val multiResult = tmdbRepository.searchMulti(query)
-                    if (multiResult != null) {
-                        val movieResults = multiResult.results.filter { it.media_type == "movie" }
-                        val tvResults = multiResult.results.filter { it.media_type == "tv" }
-                        if (movieResults.isNotEmpty()) {
-                            val movieItems = movieResults.map { r ->
-                                TraktSearchUiItem(
-                                    tmdbId = r.id,
-                                    title = r.name ?: r.title ?: "",
-                                    displayTitle = r.title ?: r.name ?: "",
-                                    posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
-                                    year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
-                                )
+                    // 仅在对应 tab 未搜索过时填充,避免覆盖用户已有的搜索结果
+                    val movieTabSearched = _uiState.value.movieState.hasSearched
+                    val showTabSearched = _uiState.value.showState.hasSearched
+                    if (!movieTabSearched || !showTabSearched) {
+                        val multiResult = tmdbRepository.searchMulti(query)
+                        if (multiResult != null) {
+                            val movieResults = multiResult.results.filter { it.media_type == "movie" }
+                            val tvResults = multiResult.results.filter { it.media_type == "tv" }
+                            if (!movieTabSearched && movieResults.isNotEmpty()) {
+                                val movieItems = movieResults.map { r ->
+                                    TraktSearchUiItem(
+                                        tmdbId = r.id,
+                                        title = r.name ?: r.title ?: "",
+                                        displayTitle = r.title ?: r.name ?: "",
+                                        posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
+                                        year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
+                                    )
+                                }
+                                updateTabState(MediaType.MOVIE, SearchTabState(
+                                    results = movieItems,
+                                    isLoading = false,
+                                    totalCount = movieItems.size,
+                                    currentPage = 1,
+                                    hasMore = false,
+                                    hasSearched = true
+                                ))
                             }
-                            updateTabState(MediaType.MOVIE, SearchTabState(
-                                results = movieItems,
-                                isLoading = false,
-                                totalCount = movieItems.size,
-                                currentPage = 1,
-                                hasMore = false,
-                                hasSearched = true
-                            ))
-                        }
-                        if (tvResults.isNotEmpty()) {
-                            val tvItems = tvResults.map { r ->
-                                TraktSearchUiItem(
-                                    tmdbId = r.id,
-                                    title = r.name ?: r.title ?: "",
-                                    displayTitle = r.title ?: r.name ?: "",
-                                    posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
-                                    year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
-                                )
+                            if (!showTabSearched && tvResults.isNotEmpty()) {
+                                val tvItems = tvResults.map { r ->
+                                    TraktSearchUiItem(
+                                        tmdbId = r.id,
+                                        title = r.name ?: r.title ?: "",
+                                        displayTitle = r.title ?: r.name ?: "",
+                                        posterUrl = r.poster_path?.let { TmdbImageUrls.build(it) },
+                                        year = (r.release_date ?: r.first_air_date ?: "").take(4).toIntOrNull() ?: 0
+                                    )
+                                }
+                                updateTabState(MediaType.SHOW, SearchTabState(
+                                    results = tvItems,
+                                    isLoading = false,
+                                    totalCount = tvItems.size,
+                                    currentPage = 1,
+                                    hasMore = false,
+                                    hasSearched = true
+                                ))
                             }
-                            updateTabState(MediaType.SHOW, SearchTabState(
-                                results = tvItems,
-                                isLoading = false,
-                                totalCount = tvItems.size,
-                                currentPage = 1,
-                                hasMore = false,
-                                hasSearched = true
-                            ))
                         }
                     }
                 }.onFailure { e ->

@@ -14,7 +14,8 @@ import javax.inject.Singleton
 
 @Singleton
 class TraktAuthManager @Inject constructor(
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    baseClient: OkHttpClient
 ) {
     companion object {
         const val AUTH_URL = "https://trakt.tv/oauth/authorize"
@@ -24,8 +25,10 @@ class TraktAuthManager @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
+    // 复用 baseClient 的连接池和 DNS,只覆盖 timeout
+    // 不挂业务拦截器(避免 TraktAuthenticator 递归调用 refreshAccessToken)
     private val traktApiService: TraktApiService by lazy {
-        val client = OkHttpClient.Builder()
+        val client = baseClient.newBuilder()
             .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)

@@ -51,9 +51,10 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
 
     override fun onCreate() {
         super.onCreate()
-        // 只在主进程初始化，避免 :pushcore 子进程重复初始化 Hilt 注入依赖、CrashHandler、JPush
+        // CrashHandler 在所有进程初始化(包括 :pushcore 子进程),确保子进程崩溃也能记录日志
+        CrashHandler.init(this)
+        // 只在主进程初始化，避免 :pushcore 子进程重复初始化 Hilt 注入依赖、JPush
         if (isMainProcess()) {
-            CrashHandler.init(this)
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()

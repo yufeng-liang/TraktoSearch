@@ -1127,6 +1127,11 @@ class DetailViewModel @Inject constructor(
                     val newEpisodes = _uiState.value.episodes.toMutableMap()
                     newEpisodes[seasonNumber] = localized
                     _uiState.value = _uiState.value.copy(episodes = newEpisodes)
+                }.onFailure {
+                    // 加载失败:回滚展开状态,避免空白展开
+                    _uiState.value = _uiState.value.copy(
+                        expandedSeasons = _uiState.value.expandedSeasons - seasonNumber
+                    )
                 }
             }
         }
@@ -1556,6 +1561,49 @@ class DetailViewModel @Inject constructor(
         }
 
         val targetState = !current.isMarkedWatchlist
+
+        // 已看过时点击想看:从已看列表移除 + 添加到想看列表(把看过变成想看)
+        if (targetState && current.isMarkedWatched) {
+            _uiState.value = current.copy(
+                isMarkingWatchlist = true,
+                isMarkingWatched = true,
+                watchlistChanged = true,
+                watchedChanged = true
+            )
+            viewModelScope.launch {
+                // 先从已看列表移除
+                traktRepository.removeWatched(currentTraktId, currentMediaType, currentTmdbId)
+                    .onSuccess {
+                        // 再添加到想看列表
+                        traktRepository.addToWatchlist(currentTraktId, currentMediaType, currentTmdbId)
+                            .onSuccess {
+                                _uiState.value = _uiState.value.copy(
+                                    isMarkedWatched = false,
+                                    isMarkedWatchlist = true,
+                                    isMarkingWatchlist = false,
+                                    isMarkingWatched = false
+                                )
+                                saveToCache()
+                                // 豆瓣双向同步:已看→想看,豆瓣标记为 wish
+                                syncDoubanMark(DoubanSyncAction.WISH)
+                            }
+                            .onFailure {
+                                _uiState.value = _uiState.value.copy(
+                                    isMarkingWatchlist = false,
+                                    isMarkingWatched = false
+                                )
+                            }
+                    }
+                    .onFailure {
+                        _uiState.value = _uiState.value.copy(
+                            isMarkingWatchlist = false,
+                            isMarkingWatched = false
+                        )
+                    }
+            }
+            return
+        }
+
         _uiState.value = current.copy(
             isMarkingWatchlist = true,
             watchlistChanged = targetState || current.watchlistChanged

@@ -24,6 +24,7 @@
     <string name="search_placeholder_person">名前を入力して人物を検索</string>
     <string name="search_placeholder_watchlist">ウォッチリストまたはTrakt映画・番組を検索</string>
     <string name="card_resolve_not_found">対応する結果が見つかりません。後でもう一度お試しください</string>
+    <string name="card_resolve_error">解決に失敗しました。ネットワークを確認して再試行してください</string>
     <string name="scroll_to_top">一番上にスクロール</string>
     <string name="content_desc_clear">クリア</string>
     <string name="content_desc_saved">保存済み</string>

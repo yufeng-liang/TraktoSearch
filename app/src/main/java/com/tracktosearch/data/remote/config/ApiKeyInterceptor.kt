@@ -5,18 +5,19 @@ import okhttp3.Response
 import javax.inject.Inject
 
 /**
- * API key 注入 + 失败轮换拦截器。
+ * API key 注入拦截器（不做重试，避免与 RetryInterceptor 产生乘法效应）。
  *
  * 工作流程:
  * 1. 从 ApiKeyProvider 取当前 key,注入到请求头
- * 2. 收到 429/401/403 响应 → 标记当前 key 失效 → 切下一个 key 重试
- * 3. 单请求最多重试 [maxRetries] 次,避免死循环
+ * 2. 收到 403 响应 → 标记当前 key 失效,切到下一个 key 再试一次
+ * 3. 429 交给 RetryInterceptor 处理(它有 Retry-After 感知)
+ * 4. 401 交给 OkHttp Authenticator 处理(如 TraktAuthenticator 刷新 token)
  *
- * 应放在 RetryInterceptor 之前,这样 RetryInterceptor 重试时本拦截器能感知到上一次失败状态码并切 key。
+ * 不做 while 循环重试,避免与后续 RetryInterceptor 产生乘法效应
+ * (旧实现: ApiKeyInterceptor 最多 4 次 × RetryInterceptor 最多 3 次 = 12 次请求)。
  *
  * @param headerName 请求头名(如 "Authorization" / "trakt-api-key" / "X-API-Key")
  * @param headerValueTemplate 把 key 转成请求头值的函数(如 { key -> "Bearer $key" })
- * @param maxRetries 单请求最大重试次数(默认 3,覆盖 3-key 池)
  */
 class ApiKeyInterceptor @Inject constructor(
     private val apiKeyProvider: ApiKeyProvider,
@@ -25,39 +26,27 @@ class ApiKeyInterceptor @Inject constructor(
     private val maxRetries: Int = 3
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {
-        var currentKey = apiKeyProvider.pickKey()
-        var retryCount = 0
+        val currentKey = apiKeyProvider.pickKey()
+        val request = chain.request().newBuilder()
+            .header(headerName, headerValueTemplate(currentKey))
+            .build()
+        val response = chain.proceed(request)
 
-        while (true) {
-            val request = chain.request().newBuilder()
-                .header(headerName, headerValueTemplate(currentKey))
+        // 仅 403 → 切 key 重试一次(403 = API key 无效/权限不足)
+        // 401 交给 OkHttp Authenticator 处理(token 刷新,不是 key 问题)
+        // 429 交给 RetryInterceptor 处理(它有 Retry-After 感知)
+        if (response.code == 403) {
+            response.close()
+            apiKeyProvider.markAndRotate(currentKey, response.code)
+            val nextKey = apiKeyProvider.pickKey()
+            // 有其他 key 可换才重试,否则用当前 key 返回让上层处理
+            val retryKey = if (nextKey != currentKey) nextKey else currentKey
+            val retryRequest = chain.request().newBuilder()
+                .header(headerName, headerValueTemplate(retryKey))
                 .build()
-            val response = chain.proceed(request)
-
-            // 429 / 401 / 403 → 切 key 重试
-            if (response.code == 429 || response.code == 401 || response.code == 403) {
-                response.close()
-                if (retryCount >= maxRetries) {
-                    // 重试上限,不再切 key,直接用当前 key 重发一次让上层处理
-                    val finalRequest = chain.request().newBuilder()
-                        .header(headerName, headerValueTemplate(currentKey))
-                        .build()
-                    return chain.proceed(finalRequest)
-                }
-                apiKeyProvider.markAndRotate(currentKey, response.code)
-                val nextKey = apiKeyProvider.pickKey()
-                if (nextKey == currentKey) {
-                    // 没有其他 key 可换,用当前 key 重发(让上层报错)
-                    val finalRequest = chain.request().newBuilder()
-                        .header(headerName, headerValueTemplate(currentKey))
-                        .build()
-                    return chain.proceed(finalRequest)
-                }
-                currentKey = nextKey
-                retryCount++
-            } else {
-                return response
-            }
+            return chain.proceed(retryRequest)
         }
+
+        return response
     }
 }

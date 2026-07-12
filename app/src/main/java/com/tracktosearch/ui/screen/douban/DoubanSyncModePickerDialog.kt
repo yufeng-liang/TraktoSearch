@@ -219,6 +219,7 @@ fun DoubanFirstSyncGuideDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
         title = { Text(stringResource(R.string.douban_first_sync_title)) },
         text = { Text(stringResource(R.string.douban_first_sync_message)) },

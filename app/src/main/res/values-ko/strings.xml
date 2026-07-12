@@ -24,6 +24,7 @@
     <string name="search_placeholder_person">이름을 입력하여 인물 검색</string>
     <string name="search_placeholder_watchlist">위시리스트 또는 Trakt 영화/프로그램 검색</string>
     <string name="card_resolve_not_found">일치하는 결과를 찾을 없습니다. 나중에 다시 시도해 주세요</string>
+    <string name="card_resolve_error">해결에 실패했습니다. 네트워크를 확인하고 재시도해 주세요</string>
     <string name="scroll_to_top">맨 위로 스크롤</string>
     <string name="content_desc_clear">지우기</string>
     <string name="content_desc_saved">저장됨</string>

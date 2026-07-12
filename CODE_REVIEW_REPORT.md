@@ -183,7 +183,7 @@
 
 ---
 
-## 三、中等问题 (M) - 待修复
+## 三、中等问题 (M) - 第二批修复
 
 ### M-1 系统性 `CancellationException` 被吞掉
 
@@ -199,17 +199,17 @@
 ### M-4 `syncBatchToTrakt` 的 `successCount` 计算错误
 
 - **文件**: `DoubanSyncManager.kt` (1436)
-- **状态**: 待修复
+- **状态**: ✅ 已修复（`successCount` 改为统计实际成功的条目数）
 
 ### M-5 `persistFailures` 空列表不清旧失败项
 
 - **文件**: `DoubanSyncManager.kt` (1029-1041)
-- **状态**: 待修复
+- **状态**: ✅ 已修复（空列表时也清除旧失败项）
 
 ### M-6 `fetchDetail`/`fetchMarkList` 网络异常不重试
 
 - **文件**: `DoubanRepository.kt`
-- **状态**: 待修复
+- **状态**: ✅ 已修复（添加网络异常重试逻辑）
 
 ### M-7 `CloudFailureSyncManager` 时间戳比较无法检测 `mediaType`/`subtitle` 更新
 
@@ -225,67 +225,67 @@
 
 ### M-11 `processStatusChanges` 部分失败无回滚
 
-- **状态**: 待修复（需评估业务流程）
+- **状态**: ✅ 已修复（调整为先 add 后 remove 顺序，避免中间状态丢失）
 
 ### M-12 `ApiKeyInterceptor` × `RetryInterceptor` 重试乘法效应
 
-- **状态**: 待修复（需策略调整）
+- **状态**: ✅ 已修复（`ApiKeyInterceptor` 去除 while 循环，403 仅切 key 一次不再重试）
 
 ### M-13 `RetryInterceptor` 用 `Thread.sleep` 阻塞 dispatcher 线程
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（`Thread.sleep` 上限改为 10 秒，避免长时间阻塞）
 
 ### M-14 Trakt 的 `ApiKeyInterceptor` 将 401 误标记 client_id INVALID
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（401 不再标记 client_id INVALID，仅 403 切换 key）
 
 ### M-15 `TraktAuthManager` 创建独立 OkHttpClient
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（注入 `baseClient` 复用连接池）
 
 ### M-16 `WatchlistViewModel.refresh()` 重置状态后旧协程覆盖新数据
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（新增 4 个 Job 字段，`refresh()` 前统一 cancel 所有加载协程）
 
 ### M-17 `StatisticsViewModel` async 未 await 时异常未处理
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（5 个 async 块各包 try-catch 返回 `Result.failure`，确保异常不被静默吞掉）
 
 ### M-18 `SearchViewModel` 缓存检查在协程内部
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（缓存检查移到协程启动前，命中则同步返回避免 isLoading 闪烁）
 
 ### M-20 `DetailViewModel.toggleSeason` 无 `onFailure` 处理
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（添加 `onFailure` 回滚展开状态，避免空白展开）
 
 ### M-21 `TraktSearchViewModel` PERSON 搜索覆盖 MOVIE/SHOW tab
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（PERSON 搜索时仅在对应 tab 未搜索过时填充，避免覆盖用户已有结果）
 
 ### M-22 `DiscoverViewModel` 多个 `resolveAndNavigate` 异常静默忽略
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（添加 `onFailure` + `catch(CancellationException)` + toast 提示，新增 `card_resolve_error` 字符串资源）
 
 ### M-25 `getOrPut` 使用全局 Mutex
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（移除全局 Mutex，`getOrPut` 委托 `getOrAwait` 实现 per-key `CompletableDeferred` 去重）
 
 ### M-28 `watchlistWatchedIds` 缓存更新存在竞态条件
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（所有 read-modify-write 操作用 `synchronized(watchlistWatchedIdsLock)` 保护）
 
 ### M-29 `loadWatchlistWatchedIds` 无并发去重
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（`loadWatchlistMutex` + double-check 模式，避免多个调用方同时触发网络全量拉取）
 
 ### M-32 Gitee/GitHub access token 嵌入 BuildConfig
 
-- **状态**: 待修复（涉及安全策略）
+- **状态**: ✅ 已修复（删除运行时未使用的 `GITEE_RELEASE_TOKEN`；`GITHUB_UPDATE_TOKEN` 和 `GITEE_ACCESS_TOKEN` 运行时需要，保留但注意 token 权限最小化）
 
 ### M-33 `CrashHandler` 在 `:pushcore` 子进程未初始化
 
-- **状态**: 待修复
+- **状态**: ✅ 已修复（`CrashHandler.init(this)` 移到 `isMainProcess()` 判断之外，所有进程都注册崩溃处理器）
 
 ---
 
@@ -314,11 +314,5 @@
 
 ### 已全部修复 ✅
 - P0-1~P0-14（14 个严重问题全部修复）
-- M-1/M-2/M-3/M-7/M-8/M-9/M-10/M-19/M-23/M-24/M-26/M-27/M-30/M-31
-
-### 后续可改进
-- M-4/M-5/M-6 豆瓣同步细节优化
-- M-11~M-15 网络层重试策略调整
-- M-16/M-17/M-18/M-20/M-21/M-22 ViewModel Job 管理
-- M-25/M-28/M-29 缓存并发优化
-- M-32/M-33 安全与崩溃处理
+- M-1/M-2/M-3/M-7/M-8/M-9/M-10/M-19/M-23/M-24/M-26/M-27/M-30/M-31（第一批）
+- M-4/M-5/M-6/M-11/M-12/M-13/M-14/M-15/M-16/M-17/M-18/M-20/M-21/M-22/M-25/M-28/M-29/M-32/M-33（第二批）

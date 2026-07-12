@@ -804,17 +804,21 @@ class DoubanSyncManager @Inject constructor(
 
                 when (newStatus) {
                     DoubanMarkStatus.WISH -> {
-                        // COLLECT → WISH: removeFromWatched + addToWatchlist
-                        traktRepository.batchRemoveFromWatched(movieIds, showIds)
+                        // COLLECT → WISH: 先 add 到 watchlist,再 remove 从 watched
+                        // (先 add 后 remove:如果第二步失败,标记同时存在于两个列表,
+                        //  下次一致性检查会自动统一为 watched 优先,不会丢失标记)
                         traktRepository.batchAddToWatchlist(movieIds, showIds)
+                        traktRepository.batchRemoveFromWatched(movieIds, showIds)
                     }
                     DoubanMarkStatus.COLLECT -> {
-                        // WISH → COLLECT: removeFromWatchlist + markAsWatched(带豆瓣标记时间)
-                        traktRepository.batchRemoveFromWatchlist(movieIds, showIds)
+                        // WISH → COLLECT: 先 markAsWatched,再 remove 从 watchlist
+                        // (先 add 后 remove:如果第二步失败,标记同时存在于两个列表,
+                        //  下次一致性检查会自动统一为 watched 优先,不会丢失标记)
                         val watchedAtIso = markedAtToIso(item.markedAt)
                         val movieItems = if (mediaType == MediaType.MOVIE) listOf(traktId to watchedAtIso) else emptyList()
                         val showItems = if (mediaType == MediaType.SHOW) listOf(traktId to watchedAtIso) else emptyList()
                         traktRepository.batchMarkAsWatchedAt(movieItems, showItems)
+                        traktRepository.batchRemoveFromWatchlist(movieIds, showIds)
                     }
                 }
 
@@ -823,8 +827,11 @@ class DoubanSyncManager @Inject constructor(
                     synced.copy(status = newStatus.path, syncedAt = System.currentTimeMillis())
                 ))
                 successCount++
-            } catch (_: Exception) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 // 状态变化失败:不更新 status 字段,下次重试时仍会检测到变化
+                android.util.Log.w("DoubanSyncManager", "processStatusChanges failed for ${item.doubanId}: ${e.message}")
             }
         }
         return successCount
@@ -1129,8 +1136,9 @@ class DoubanSyncManager @Inject constructor(
             doubanSyncFailureDao.deleteByDoubanId(doubanId)
         }
 
-        // 仍然失败的项:更新 attemptCount + failureReason,覆盖回表
-        persistFailures(allStillFailed)
+        // 仍然失败的项:更新 attemptCount + failureReason,用 REPLACE 覆盖回表
+        // (重试模式:不删除未重试的失败项)
+        persistFailures(allStillFailed, isRetry = true)
 
         val finalProgress = DoubanSyncProgress(
             isRunning = false,
@@ -1165,16 +1173,36 @@ class DoubanSyncManager @Inject constructor(
      * 现在改为:只覆盖当前有数据的 status,保留其他 status 的旧失败项记录。
      * 如果本次同步确实没有任何失败项(正常完成),则按 status 清空对应记录。
      */
-    private suspend fun persistFailures(failures: List<DoubanSyncFailure>) {
-        if (failures.isEmpty()) {
-            // 没有失败项:不调用 clearAll(),保留之前其他 status 的失败项记录
-            // (取消时可能只处理了部分 status,其他 status 的失败项记录应保留)
-            return
-        }
-        // 按 status 分组覆盖写入:只清空当前有数据的 status（事务包装）
-        val byStatus = failures.groupBy { it.status }
-        for ((status, items) in byStatus) {
-            doubanSyncFailureDao.replaceByStatus(status.path, items.map { it.toEntity() })
+    /**
+     * 持久化失败项到 douban_sync_failures 表。
+     *
+     * 正常同步流程:对 WISH 和 COLLECT 两个 status 都执行 replaceByStatus,
+     * 即使 failures 为空也清空对应 status 的旧失败项记录
+     * (否则上次同步的失败项在本次成功后仍然保留在表中)。
+     *
+     * 重试流程:只覆盖仍然失败的项,不删除未重试的失败项。
+     *
+     * @param failures 失败项列表
+     * @param isRetry true=重试模式,用 REPLACE 语义覆盖(不删除未重试项);
+     *                false=正常同步,按 status 覆盖(清空处理过的 status 的旧记录)
+     */
+    private suspend fun persistFailures(
+        failures: List<DoubanSyncFailure>,
+        isRetry: Boolean = false
+    ) {
+        if (isRetry) {
+            // 重试模式:用 REPLACE 语义覆盖仍然失败的项,不影响未重试的项
+            if (failures.isNotEmpty()) {
+                doubanSyncFailureDao.insertAll(failures.map { it.toEntity() })
+            }
+        } else {
+            // 正常同步:对两个 status 都执行 replaceByStatus
+            // 即使 failures 为空也清空对应 status 的旧失败项记录
+            val byStatus = failures.groupBy { it.status }
+            for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
+                val items = byStatus[status] ?: emptyList()
+                doubanSyncFailureDao.replaceByStatus(status.path, items.map { it.toEntity() })
+            }
         }
     }
 
@@ -1548,6 +1576,7 @@ class DoubanSyncManager @Inject constructor(
         // ===== 阶段 4：批量 POST Trakt =====
         onProgress(withTraktId.size, "写入 Trakt", 0, null, null)
         if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
+        var writeFailedCount = 0
         try {
             withTimeout(60_000L) {
                 when (status) {
@@ -1566,18 +1595,22 @@ class DoubanSyncManager @Inject constructor(
                 }
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            writeFailedCount = withTraktId.size
             val timeoutFailures = withTraktId.map { r ->
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_TIMEOUT, existingMap)
             }
             synchronized(failed) { failed.addAll(timeoutFailures) }
         } catch (e: Exception) {
+            writeFailedCount = withTraktId.size
             val writeFailures = withTraktId.map { r ->
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
             }
             synchronized(failed) { failed.addAll(writeFailures) }
         }
 
-        val successCount = (withTraktId.size - failed.size).coerceAtLeast(0)
+        // successCount = 成功写入 Trakt 的数量 = 有 Trakt ID 的数量 - 写入失败的数量
+        // (failed 列表包含阶段1详情页失败项,不能直接用 withTraktId.size - failed.size)
+        val successCount = withTraktId.size - writeFailedCount
         return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit)
     }
 

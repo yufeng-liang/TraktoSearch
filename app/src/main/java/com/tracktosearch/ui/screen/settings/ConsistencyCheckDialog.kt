@@ -69,6 +69,7 @@ fun ConsistencyCheckDialog(
             // 检查运行中不允许点击外部关闭（需点「转后台」或「取消」）
             if (!p.isRunning) onDismiss()
         },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Text(text = stringResource(R.string.consistency_check_title))
         },

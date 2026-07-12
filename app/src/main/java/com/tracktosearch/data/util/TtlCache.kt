@@ -2,8 +2,6 @@ package com.tracktosearch.data.util
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -13,7 +11,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * - TTL：到期条目在 get 时惰性清理。
  * - maxSize：超过容量时按 LRU 策略淘汰最久未访问条目；为 0 表示无上限。
- * - getOrPut：用 Mutex single-flight 防止缓存击穿（同一 key 并发 miss 只触发一次 defaultValue）。
+ * - getOrPut：委托 getOrAwait 实现 per-key single-flight 防止缓存击穿。
  * - getOrAwait：飞行中去重，同一 key 并发请求共享一次 fetch，避免重复网络请求。
  *
  * @param ttlMillis 缓存有效期，默认 10 分钟
@@ -27,7 +25,6 @@ open class TtlCache<T>(
 
     private val cache = ConcurrentHashMap<String, Entry<T>>()
     private val accessCounter = AtomicLong(0L)
-    private val loadMutex = Mutex()
 
     /** 飞行中请求追踪：同一 key 的并发调用共享同一个 CompletableDeferred */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableDeferred<T>>()
@@ -61,12 +58,8 @@ open class TtlCache<T>(
     protected fun getExpireAt(key: String): Long? = cache[key]?.expireAt
 
     suspend fun getOrPut(key: String, defaultValue: suspend () -> T): T {
-        get(key)?.let { return it }
-        // single-flight：防止缓存击穿，同一时刻只允许一个 defaultValue 执行
-        return loadMutex.withLock {
-            // double-check：等待期间可能已被其他协程填充
-            get(key) ?: defaultValue().also { put(key, it) }
-        }
+        // 委托给 getOrAwait,使用 per-key 飞行中去重,避免全局 Mutex 瓶颈
+        return getOrAwait(key, fetch = defaultValue)
     }
 
     /**

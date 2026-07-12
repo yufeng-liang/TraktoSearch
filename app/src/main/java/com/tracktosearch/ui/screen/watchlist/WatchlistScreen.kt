@@ -1079,16 +1079,16 @@ fun WatchlistScreen(
                                     onClick = {
                                         isRemoving = true
                                         val ids = selectedItems.keys.toList()
-                                        if (selectedMode == 0) {
-                                            viewModel.batchRemoveFromWatchlist(
-                                                ids,
-                                                if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
-                                            )
-                                        } else {
-                                            viewModel.batchRemoveFromHistory(
-                                                ids,
-                                                if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
-                                            )
+                                        val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
+                                        tabScope.launch {
+                                            if (selectedMode == 0) {
+                                                viewModel.batchRemoveFromWatchlist(ids, type)
+                                            } else {
+                                                viewModel.batchRemoveFromHistory(ids, type)
+                                            }
+                                            // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
+                                            isMultiSelectMode = false
+                                            isRemoving = false
                                         }
                                     },
                                     enabled = !isRemoving,
