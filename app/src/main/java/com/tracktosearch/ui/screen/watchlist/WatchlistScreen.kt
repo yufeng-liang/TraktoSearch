@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.watchlist
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -138,12 +139,15 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.util.PosterColorExtractor
+import dagger.hilt.android.EntryPointAccessors
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.GlassSearchBar
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterCard
+import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -160,7 +164,10 @@ import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
@@ -410,770 +417,770 @@ fun WatchlistScreen(
         },
         LocalActivePosterClickToken provides activeClickToken
     ) {
-    Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-
-            // 弹性下拉刷新指示器
-            if (overscrollOffset > 0f || isRefreshing) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = statusBarHeight + 60.dp)
-                        .graphicsLayer { translationY = animatedOverscrollDp.toPx() },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = null,
-                        modifier = Modifier.size(26.dp),
-                        tint = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = if (isRefreshing) stringResource(R.string.watchlist_refreshing)
-                        else if (isThresholdReached) stringResource(R.string.watchlist_release_to_refresh)
-                        else stringResource(R.string.watchlist_pull_to_refresh),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            // 空列表引导 UI
-            if (currentItems.isEmpty() && !isCurrentLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Movie,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (selectedMode == 0)
-                                stringResource(R.string.watchlist_empty_title)
-                            else
-                                stringResource(R.string.watched_empty_title),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            buildAnnotatedString {
-                                append(if (selectedMode == 0)
-                                    stringResource(R.string.watchlist_empty_hint_prefix)
-                                else
-                                    stringResource(R.string.watched_empty_hint_prefix)
-                                )
-                                withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
-                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
-                                }) {
-                                    append(stringResource(R.string.watchlist_empty_go_trakt))
-                                }
-                                append(stringResource(R.string.watchlist_empty_hint_middle))
-                                withLink(LinkAnnotation.Clickable(
-                                    tag = "discover",
-                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                )) {
-                                    append(stringResource(R.string.watchlist_empty_go_discover))
-                                }
-                                append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                // 「，或从豆瓣导入标记」超链接
-                                append(stringResource(R.string.watchlist_empty_douban_import_prefix))
-                                withLink(LinkAnnotation.Clickable(
-                                    tag = "douban_import",
-                                    linkInteractionListener = LinkInteractionListener {
-                                        // 已登录豆瓣 → 弹同步弹窗；未登录 → 跳转豆瓣登录页
-                                        val hasDouban = viewModel.isDoubanLoggedIn()
-                                        if (hasDouban) {
-                                            showSyncDialog = true
-                                        } else {
-                                            onNavigateToDoubanLogin()
-                                        }
-                                    }
-                                )) {
-                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
-                                }
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-            LazyVerticalGrid(
-                state = currentGridState,
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(
-                    start = 8.dp,
-                    end = 8.dp,
-                    top = 110.dp + statusBarHeight,
-                    bottom = if (isMultiSelectMode) 80.dp else 80.dp
-                ),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .nestedScroll(pullToRefreshConnection)
-                    .graphicsLayer { translationY = animatedOverscrollDp.toPx() }
-                    .hazeSource(state = hazeState)
-                ) {
-                    // 根据 selectedMode 和 selectedTab 渲染对应列表
-                    val items = currentItems
-                    items(items.size, key = { items[it].traktId }, contentType = { "media_card" }) { index ->
-                        val item = items[index]
-                        val isSelected = selectedItems[item.traktId] == true
-                        val isResolving = isRemoving && isSelected
-                        WatchlistPosterCard(
-                            item = item,
-                            isInWatchlist = selectedMode == 0,
-                            isWatched = selectedMode == 1,
-                            isSelected = isSelected,
-                            isResolving = isResolving,
-                            isMultiSelectMode = isMultiSelectMode,
-                            onClick = {
-                                if (isMultiSelectMode) {
-                                    if (isSelected) selectedItems.remove(item.traktId)
-                                    else selectedItems[item.traktId] = true
-                                    if (selectedItems.isEmpty()) isMultiSelectMode = false
-                                } else {
-                                    val inWatchlist = selectedMode == 0
-                                    val isWatched = selectedMode == 1
-                                    if (selectedTab == 0) {
-                                        onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
-                                    } else {
-                                        onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
-                                    }
-                                }
-                            },
-                            onLongClick = {
-                                if (!isMultiSelectMode) {
-                                    isMultiSelectMode = true
-                                }
-                                selectedItems[item.traktId] = true
-                            }
-                        )
-                    }
-                }
-            }
-
-            ScrollToTopButton(
-                gridState = currentGridState,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 100.dp, end = 16.dp),
-                hazeState = hazeState
-            )
-
-            // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        ) { paddingValues ->
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
-                // 搜索框 + Tab 栏（非多选模式时显示）
-                AnimatedVisibility(
-                    visible = !isMultiSelectMode,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                    modifier = Modifier.fillMaxWidth()
+                val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    
+                // 弹性下拉刷新指示器
+                if (overscrollOffset > 0f || isRefreshing) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = statusBarHeight + 60.dp)
+                            .graphicsLayer { translationY = animatedOverscrollDp.toPx() },
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(26.dp),
+                            tint = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (isRefreshing) stringResource(R.string.watchlist_refreshing)
+                            else if (isThresholdReached) stringResource(R.string.watchlist_release_to_refresh)
+                            else stringResource(R.string.watchlist_pull_to_refresh),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isThresholdReached) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+    
+                // 空列表引导 UI
+                if (currentItems.isEmpty() && !isCurrentLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Movie,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = if (selectedMode == 0)
+                                    stringResource(R.string.watchlist_empty_title)
+                                else
+                                    stringResource(R.string.watched_empty_title),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                buildAnnotatedString {
+                                    append(if (selectedMode == 0)
+                                        stringResource(R.string.watchlist_empty_hint_prefix)
+                                    else
+                                        stringResource(R.string.watched_empty_hint_prefix)
+                                    )
+                                    withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
+                                    }) {
+                                        append(stringResource(R.string.watchlist_empty_go_trakt))
+                                    }
+                                    append(stringResource(R.string.watchlist_empty_hint_middle))
+                                    withLink(LinkAnnotation.Clickable(
+                                        tag = "discover",
+                                        linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                    )) {
+                                        append(stringResource(R.string.watchlist_empty_go_discover))
+                                    }
+                                    append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                    // 「，或从豆瓣导入标记」超链接
+                                    append(stringResource(R.string.watchlist_empty_douban_import_prefix))
+                                    withLink(LinkAnnotation.Clickable(
+                                        tag = "douban_import",
+                                        linkInteractionListener = LinkInteractionListener {
+                                            // 已登录豆瓣 → 弹同步弹窗；未登录 → 跳转豆瓣登录页
+                                            val hasDouban = viewModel.isDoubanLoggedIn()
+                                            if (hasDouban) {
+                                                showSyncDialog = true
+                                            } else {
+                                                onNavigateToDoubanLogin()
+                                            }
+                                        }
+                                    )) {
+                                        append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                LazyVerticalGrid(
+                    state = currentGridState,
+                    columns = GridCells.Fixed(3),
+                    contentPadding = PaddingValues(
+                        start = 8.dp,
+                        end = 8.dp,
+                        top = 110.dp + statusBarHeight,
+                        bottom = if (isMultiSelectMode) 80.dp else 80.dp
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .nestedScroll(pullToRefreshConnection)
+                        .graphicsLayer { translationY = animatedOverscrollDp.toPx() }
+                        .hazeSource(state = hazeState)
+                    ) {
+                        // 根据 selectedMode 和 selectedTab 渲染对应列表
+                        val items = currentItems
+                        items(items.size, key = { items[it].traktId }, contentType = { "media_card" }) { index ->
+                            val item = items[index]
+                            val isSelected = selectedItems[item.traktId] == true
+                            val isResolving = isRemoving && isSelected
+                            WatchlistPosterCard(
+                                item = item,
+                                isInWatchlist = selectedMode == 0,
+                                isWatched = selectedMode == 1,
+                                isSelected = isSelected,
+                                isResolving = isResolving,
+                                isMultiSelectMode = isMultiSelectMode,
+                                onClick = {
+                                    if (isMultiSelectMode) {
+                                        if (isSelected) selectedItems.remove(item.traktId)
+                                        else selectedItems[item.traktId] = true
+                                        if (selectedItems.isEmpty()) isMultiSelectMode = false
+                                    } else {
+                                        val inWatchlist = selectedMode == 0
+                                        val isWatched = selectedMode == 1
+                                        if (selectedTab == 0) {
+                                            onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                        } else {
+                                            onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                        }
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!isMultiSelectMode) {
+                                        isMultiSelectMode = true
+                                    }
+                                    selectedItems[item.traktId] = true
+                                }
+                            )
+                        }
+                    }
+                }
+    
+                ScrollToTopButton(
+                    gridState = currentGridState,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 100.dp, end = 16.dp),
+                    hazeState = hazeState
+                )
+    
+                // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.thin()
+                        )
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                 ) {
-                    Column {
-                        // 状态栏 Spacer
-                        Spacer(
-                            modifier = Modifier
-                                .statusBarsPadding()
-                                .fillMaxWidth()
-                                .clickable {
-                                    gridCoroutineScope.launch {
-                                        currentGridState.animateScrollToItem(0)
+                    // 搜索框 + Tab 栏（非多选模式时显示）
+                    AnimatedVisibility(
+                        visible = !isMultiSelectMode,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            // 状态栏 Spacer
+                            Spacer(
+                                modifier = Modifier
+                                    .statusBarsPadding()
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        gridCoroutineScope.launch {
+                                            currentGridState.animateScrollToItem(0)
+                                        }
+                                    }
+                            )
+                            // 搜索栏 + 胶囊切换条
+                            val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = false, onClick = {})
+                                    .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // 测量切换条文字宽度，动态计算搜索框宽度
+                                val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
+                                val watchedLabel = stringResource(R.string.watchlist_mode_watched)
+                                val isWatchlist = selectedMode == 0
+                                val tabPadding = 20.dp
+                                val textMeasurer = rememberTextMeasurer()
+                                val watchlistTextWidthPx = remember(watchlistLabel) {
+                                    textMeasurer.measure(
+                                        text = watchlistLabel,
+                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                    ).size.width
+                                }
+                                val watchedTextWidthPx = remember(watchedLabel) {
+                                    textMeasurer.measure(
+                                        text = watchedLabel,
+                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                    ).size.width
+                                }
+                                val capsuleDensity = LocalDensity.current
+                                val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
+                                val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
+                                val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
+                                val filterButtonSize = 48.dp
+                                val rowPadding = 12.dp * 2
+                                val gaps = 8.dp * 2
+                                val searchBoxWidth = (screenWidth - capsuleWidth - filterButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
+    
+                                // 毛玻璃搜索栏
+                                GlassSearchBar(
+                                    placeholder = if (searchQuery.isBlank()) {
+                                        when (selectedMode) {
+                                            0 -> stringResource(R.string.watchlist_search_watchlist)
+                                            else -> stringResource(R.string.watchlist_search_history)
+                                        }
+                                    } else stringResource(R.string.search_placeholder_watchlist),
+                                    typeLabel = if (selectedTab == 0) stringResource(R.string.watchlist_tab_movies) else stringResource(R.string.watchlist_tab_shows),
+                                    onClick = { },
+                                    onTypeClick = {
+                                        view.performHaptic(HapticType.CLICK)
+                                        selectedTab = if (selectedTab == 0) 1 else 0
+                                    },
+                                    hazeState = hazeState,
+                                    modifier = Modifier.width(searchBoxWidth),
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                    keyboardActions = KeyboardActions(
+                                        onSearch = {
+                                            focusManager.clearFocus()
+                                            if (searchQuery.isNotBlank() && selectedMode == 0) {
+                                                val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
+                                                if (noResults) {
+                                                    onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                                }
+                                            }
+                                        }
+                                    ),
+                                    focusRequester = focusRequester,
+                                    trailingIcon = {
+                                        if (searchQuery.isNotEmpty()) {
+                                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                                                Icon(
+                                                    Icons.Rounded.Close,
+                                                    contentDescription = stringResource(R.string.content_desc_clear),
+                                                    modifier = Modifier.size(19.dp)
+                                                )
+                                            }
+                                        } else {
+                                            Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
+                                        }
+                                    }
+                                )
+                                // 筛选按钮（有筛选条件生效时图标变 primary 色）
+                                IconButton(onClick = { showFilterSheet = true }) {
+                                    Icon(
+                                        Icons.Rounded.Tune,
+                                        contentDescription = stringResource(R.string.filter_title),
+                                        tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+    
+                                // 大胶囊切换条：想看 / 已看
+                                val tabHeight = 48.dp
+                                val indicatorOffset by animateDpAsState(
+                                    targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
+                                    animationSpec = tween(200),
+                                    label = "modeIndicator"
+                                )
+                                val indicatorWidth by animateDpAsState(
+                                    targetValue = if (isWatchlist) watchlistTabWidthDp else watchedTabWidthDp,
+                                    animationSpec = tween(200),
+                                    label = "modeIndicatorWidth"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .height(tabHeight)
+                                        .width(capsuleWidth)
+                                        .clip(RoundedCornerShape(28.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .offset(x = indicatorOffset)
+                                            .width(indicatorWidth)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(28.dp))
+                                            .background(MaterialTheme.colorScheme.primary)
+                                    )
+                                    Row(modifier = Modifier.fillMaxSize()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .width(watchlistTabWidthDp)
+                                                .fillMaxHeight()
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    view.performHaptic(HapticType.CLICK)
+                                                    selectedMode = 0
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = watchlistLabel,
+                                                style = TextStyle(
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = if (isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            )
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .width(watchedTabWidthDp)
+                                                .fillMaxHeight()
+                                                .clickable(
+                                                    interactionSource = remember { MutableInteractionSource() },
+                                                    indication = null
+                                                ) {
+                                                    view.performHaptic(HapticType.CLICK)
+                                                    selectedMode = 1
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = watchedLabel,
+                                                style = TextStyle(
+                                                    fontSize = 16.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = if (!isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                                )
+                                            )
+                                        }
                                     }
                                 }
-                        )
-                        // 搜索栏 + 胶囊切换条
-                        val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = false, onClick = {})
-                                .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // 测量切换条文字宽度，动态计算搜索框宽度
-                            val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
-                            val watchedLabel = stringResource(R.string.watchlist_mode_watched)
-                            val isWatchlist = selectedMode == 0
-                            val tabPadding = 20.dp
-                            val textMeasurer = rememberTextMeasurer()
-                            val watchlistTextWidthPx = remember(watchlistLabel) {
-                                textMeasurer.measure(
-                                    text = watchlistLabel,
-                                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                ).size.width
                             }
-                            val watchedTextWidthPx = remember(watchedLabel) {
-                                textMeasurer.measure(
-                                    text = watchedLabel,
-                                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                ).size.width
-                            }
-                            val capsuleDensity = LocalDensity.current
-                            val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
-                            val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
-                            val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
-                            val filterButtonSize = 48.dp
-                            val rowPadding = 12.dp * 2
-                            val gaps = 8.dp * 2
-                            val searchBoxWidth = (screenWidth - capsuleWidth - filterButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
-
-                            // 毛玻璃搜索栏
-                            GlassSearchBar(
-                                placeholder = if (searchQuery.isBlank()) {
-                                    when (selectedMode) {
-                                        0 -> stringResource(R.string.watchlist_search_watchlist)
-                                        else -> stringResource(R.string.watchlist_search_history)
+    
+                            // 分类 Tab（下划线样式）
+                            val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+                            val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)
+                            ) {
+                                listOf(
+                                    stringResource(R.string.watchlist_tab_movies) to movieCount,
+                                    stringResource(R.string.watchlist_tab_shows) to showCount
+                                ).forEachIndexed { index, (label, count) ->
+                                    val selected = selectedTab == index
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        modifier = Modifier.clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) {
+                                            view.performHaptic(HapticType.CLICK)
+                                            selectedTab = index
+                                        }
+                                    ) {
+                                        Text(
+                                            text = "$label($count)",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .width(24.dp)
+                                                .height(3.dp)
+                                                .clip(RoundedCornerShape(1.5.dp))
+                                                .background(
+                                                    if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
+                                                )
+                                        )
                                     }
-                                } else stringResource(R.string.search_placeholder_watchlist),
-                                typeLabel = if (selectedTab == 0) stringResource(R.string.watchlist_tab_movies) else stringResource(R.string.watchlist_tab_shows),
-                                onClick = { },
-                                onTypeClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    selectedTab = if (selectedTab == 0) 1 else 0
-                                },
-                                hazeState = hazeState,
-                                modifier = Modifier.width(searchBoxWidth),
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                keyboardActions = KeyboardActions(
-                                    onSearch = {
-                                        focusManager.clearFocus()
-                                        if (searchQuery.isNotBlank() && selectedMode == 0) {
-                                            val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
-                                            if (noResults) {
-                                                onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                }
+                            }
+    
+                            // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
+                            val syncProgress = uiState.doubanSyncProgress
+                            if (syncProgress != null) {
+                                // 同步进行中时图标无限旋转动画
+                                val spinTransition = rememberInfiniteTransition(label = "sync_spin")
+                                val spinRotation by spinTransition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 360f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                    ),
+                                    label = "sync_rotation"
+                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showSyncDialog = true },
+                                    color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
+                                        else MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .then(
+                                                    if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = spinRotation }
+                                                    else Modifier
+                                                )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (syncProgress.cookieExpired) {
+                                                    stringResource(R.string.douban_sync_cookie_expired_banner)
+                                                } else if (syncProgress.isComplete) {
+                                                    stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
+                                                } else if (syncProgress.total > 0) {
+                                                    "${syncProgress.phase} (${syncProgress.current}/${syncProgress.total})"
+                                                } else {
+                                                    syncProgress.phase
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                    else MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                            if (syncProgress.isRunning && syncProgress.total > 0) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                        if (syncProgress.cookieExpired) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.douban_sync_relogin),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+    
+                            // 状态一致性检查进度横幅（检查进行中或刚完成 5 秒内显示）
+                            val checkProgress = uiState.consistencyCheckProgress
+                            if (checkProgress != null) {
+                                val checkSpinTransition = rememberInfiniteTransition(label = "check_spin")
+                                val checkSpinRotation by checkSpinTransition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 360f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                    ),
+                                    label = "check_rotation"
+                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showConsistencyDialog = true },
+                                    color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
+                                        else MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (checkProgress.isRunning) Icons.Rounded.Sync
+                                                else Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                else MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .then(
+                                                    if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = checkSpinRotation }
+                                                    else Modifier
+                                                )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (checkProgress.cookieExpired) {
+                                                    stringResource(R.string.douban_sync_cookie_expired_banner)
+                                                } else if (checkProgress.isComplete) {
+                                                    stringResource(R.string.consistency_check_complete_banner)
+                                                } else if (checkProgress.total > 0) {
+                                                    "${checkProgress.phase} (${checkProgress.current}/${checkProgress.total})"
+                                                } else {
+                                                    checkProgress.phase
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
+                                                    else MaterialTheme.colorScheme.onTertiaryContainer
+                                            )
+                                            if (checkProgress.isRunning && checkProgress.total > 0) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { (checkProgress.current.toFloat() / checkProgress.total).coerceIn(0f, 1f) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
                                             }
                                         }
                                     }
-                                ),
-                                focusRequester = focusRequester,
-                                trailingIcon = {
-                                    if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                                            Icon(
-                                                Icons.Rounded.Close,
-                                                contentDescription = stringResource(R.string.content_desc_clear),
-                                                modifier = Modifier.size(19.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
-                                    }
-                                }
-                            )
-                            // 筛选按钮（有筛选条件生效时图标变 primary 色）
-                            IconButton(onClick = { showFilterSheet = true }) {
-                                Icon(
-                                    Icons.Rounded.Tune,
-                                    contentDescription = stringResource(R.string.filter_title),
-                                    tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-
-                            // 大胶囊切换条：想看 / 已看
-                            val tabHeight = 48.dp
-                            val indicatorOffset by animateDpAsState(
-                                targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
-                                animationSpec = tween(200),
-                                label = "modeIndicator"
-                            )
-                            val indicatorWidth by animateDpAsState(
-                                targetValue = if (isWatchlist) watchlistTabWidthDp else watchedTabWidthDp,
-                                animationSpec = tween(200),
-                                label = "modeIndicatorWidth"
-                            )
-                            Box(
-                                modifier = Modifier
-                                    .height(tabHeight)
-                                    .width(capsuleWidth)
-                                    .clip(RoundedCornerShape(28.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .offset(x = indicatorOffset)
-                                        .width(indicatorWidth)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(28.dp))
-                                        .background(MaterialTheme.colorScheme.primary)
-                                )
-                                Row(modifier = Modifier.fillMaxSize()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .width(watchlistTabWidthDp)
-                                            .fillMaxHeight()
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                view.performHaptic(HapticType.CLICK)
-                                                selectedMode = 0
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = watchlistLabel,
-                                            style = TextStyle(
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .width(watchedTabWidthDp)
-                                            .fillMaxHeight()
-                                            .clickable(
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                indication = null
-                                            ) {
-                                                view.performHaptic(HapticType.CLICK)
-                                                selectedMode = 1
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = watchedLabel,
-                                            style = TextStyle(
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = if (!isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        )
-                                    }
                                 }
                             }
-                        }
-
-                        // 分类 Tab（下划线样式）
-                        val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
-                        val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally)
-                        ) {
-                            listOf(
-                                stringResource(R.string.watchlist_tab_movies) to movieCount,
-                                stringResource(R.string.watchlist_tab_shows) to showCount
-                            ).forEachIndexed { index, (label, count) ->
-                                val selected = selectedTab == index
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier.clickable(
-                                        interactionSource = remember { MutableInteractionSource() },
-                                        indication = null
-                                    ) {
-                                        view.performHaptic(HapticType.CLICK)
-                                        selectedTab = index
-                                    }
+    
+                            // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
+                            if (tmdbUnavailable && !posterErrorDismissed) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = MaterialTheme.colorScheme.errorContainer
                                 ) {
-                                    Text(
-                                        text = "$label($count)",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Box(
+                                    Row(
                                         modifier = Modifier
-                                            .width(24.dp)
-                                            .height(3.dp)
-                                            .clip(RoundedCornerShape(1.5.dp))
-                                            .background(
-                                                if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-                                            )
-                                    )
-                                }
-                            }
-                        }
-
-                        // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
-                        val syncProgress = uiState.doubanSyncProgress
-                        if (syncProgress != null) {
-                            // 同步进行中时图标无限旋转动画
-                            val spinTransition = rememberInfiniteTransition(label = "sync_spin")
-                            val spinRotation by spinTransition.animateFloat(
-                                initialValue = 0f,
-                                targetValue = 360f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
-                                ),
-                                label = "sync_rotation"
-                            )
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showSyncDialog = true },
-                                color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                    else MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
-                                        contentDescription = null,
-                                        tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                            else MaterialTheme.colorScheme.onPrimaryContainer,
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .then(
-                                                if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = spinRotation }
-                                                else Modifier
-                                            )
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (syncProgress.cookieExpired) {
-                                                stringResource(R.string.douban_sync_cookie_expired_banner)
-                                            } else if (syncProgress.isComplete) {
-                                                stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
-                                            } else if (syncProgress.total > 0) {
-                                                "${syncProgress.phase} (${syncProgress.current}/${syncProgress.total})"
-                                            } else {
-                                                syncProgress.phase
-                                            },
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        if (syncProgress.isRunning && syncProgress.total > 0) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            LinearProgressIndicator(
-                                                progress = { (syncProgress.current.toFloat() / syncProgress.total).coerceIn(0f, 1f) },
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                    if (syncProgress.cookieExpired) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = stringResource(R.string.douban_sync_relogin),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onErrorContainer
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 状态一致性检查进度横幅（检查进行中或刚完成 5 秒内显示）
-                        val checkProgress = uiState.consistencyCheckProgress
-                        if (checkProgress != null) {
-                            val checkSpinTransition = rememberInfiniteTransition(label = "check_spin")
-                            val checkSpinRotation by checkSpinTransition.animateFloat(
-                                initialValue = 0f,
-                                targetValue = 360f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(durationMillis = 1000, easing = LinearEasing)
-                                ),
-                                label = "check_rotation"
-                            )
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { showConsistencyDialog = true },
-                                color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                    else MaterialTheme.colorScheme.tertiaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (checkProgress.isRunning) Icons.Rounded.Sync
-                                            else Icons.Rounded.CheckCircle,
-                                        contentDescription = null,
-                                        tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                            else MaterialTheme.colorScheme.onTertiaryContainer,
-                                        modifier = Modifier
-                                            .size(18.dp)
-                                            .then(
-                                                if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = checkSpinRotation }
-                                                else Modifier
-                                            )
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = if (checkProgress.cookieExpired) {
-                                                stringResource(R.string.douban_sync_cookie_expired_banner)
-                                            } else if (checkProgress.isComplete) {
-                                                stringResource(R.string.consistency_check_complete_banner)
-                                            } else if (checkProgress.total > 0) {
-                                                "${checkProgress.phase} (${checkProgress.current}/${checkProgress.total})"
-                                            } else {
-                                                checkProgress.phase
-                                            },
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onTertiaryContainer
-                                        )
-                                        if (checkProgress.isRunning && checkProgress.total > 0) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            LinearProgressIndicator(
-                                                progress = { (checkProgress.current.toFloat() / checkProgress.total).coerceIn(0f, 1f) },
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
-                        if (tmdbUnavailable && !posterErrorDismissed) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.errorContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Warning,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = stringResource(R.string.watchlist_poster_error),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onErrorContainer,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    IconButton(
-                                        onClick = { posterErrorDismissed = true },
-                                        modifier = Modifier.size(20.dp)
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            Icons.Rounded.Close,
+                                            Icons.Rounded.Warning,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.onErrorContainer,
                                             modifier = Modifier.size(16.dp)
                                         )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 多选操作栏（多选模式时显示）
-                AnimatedVisibility(
-                    visible = isMultiSelectMode,
-                    enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                    exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column {
-                        Spacer(modifier = Modifier.statusBarsPadding())
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = false, onClick = {})
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            IconButton(onClick = { isMultiSelectMode = false }) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.ArrowBack,
-                                    contentDescription = stringResource(R.string.common_cancel),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Text(
-                                text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Row {
-                                Button(
-                                    onClick = {
-                                        isRemoving = true
-                                        val ids = selectedItems.keys.toList()
-                                        val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
-                                        tabScope.launch {
-                                            if (selectedMode == 0) {
-                                                viewModel.batchRemoveFromWatchlist(ids, type)
-                                            } else {
-                                                viewModel.batchRemoveFromHistory(ids, type)
-                                            }
-                                            // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
-                                            isMultiSelectMode = false
-                                            isRemoving = false
-                                        }
-                                    },
-                                    enabled = !isRemoving,
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.error
-                                    )
-                                ) {
-                                    if (isRemoving) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(18.dp),
-                                            strokeWidth = 2.dp,
-                                            color = MaterialTheme.colorScheme.onError
-                                        )
-                                    } else {
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
-                                            else stringResource(R.string.watchlist_remove_history)
+                                            text = stringResource(R.string.watchlist_poster_error),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            modifier = Modifier.weight(1f)
                                         )
+                                        IconButton(
+                                            onClick = { posterErrorDismissed = true },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Rounded.Close,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
-                                    Text(stringResource(R.string.common_cancel))
+                            }
+                        }
+                    }
+    
+                    // 多选操作栏（多选模式时显示）
+                    AnimatedVisibility(
+                        visible = isMultiSelectMode,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column {
+                            Spacer(modifier = Modifier.statusBarsPadding())
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = false, onClick = {})
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                IconButton(onClick = { isMultiSelectMode = false }) {
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.ArrowBack,
+                                        contentDescription = stringResource(R.string.common_cancel),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Row {
+                                    Button(
+                                        onClick = {
+                                            isRemoving = true
+                                            val ids = selectedItems.keys.toList()
+                                            val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
+                                            tabScope.launch {
+                                                if (selectedMode == 0) {
+                                                    viewModel.batchRemoveFromWatchlist(ids, type)
+                                                } else {
+                                                    viewModel.batchRemoveFromHistory(ids, type)
+                                                }
+                                                // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
+                                                isMultiSelectMode = false
+                                                isRemoving = false
+                                            }
+                                        },
+                                        enabled = !isRemoving,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = MaterialTheme.colorScheme.error
+                                        )
+                                    ) {
+                                        if (isRemoving) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(18.dp),
+                                                strokeWidth = 2.dp,
+                                                color = MaterialTheme.colorScheme.onError
+                                            )
+                                        } else {
+                                            Text(
+                                                if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
+                                                else stringResource(R.string.watchlist_remove_history)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
+                                        Text(stringResource(R.string.common_cancel))
+                                    }
                                 }
                             }
                         }
                     }
                 }
+    
+                // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
+                val isLoading = if (selectedMode == 0) {
+                    if (selectedTab == 0) uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
+                    else uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
+                } else {
+                    if (selectedTab == 0) uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
+                    else uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
+                }
+                if (isLoading) {
+                    WatchlistSkeletonGrid(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 112.dp + statusBarHeight)
+                    )
+                }
             }
-
-            // 骨架屏：首次加载且列表为空时显示（避免 TMDB 富化过程中部分卡片已显示但骨架仍叠加）
-            val isLoading = if (selectedMode == 0) {
-                if (selectedTab == 0) uiState.isLoadingMovies && !uiState.moviesLoaded && uiState.movies.isEmpty()
-                else uiState.isLoadingShows && !uiState.showsLoaded && uiState.shows.isEmpty()
-            } else {
-                if (selectedTab == 0) uiState.isLoadingHistoryMovies && !uiState.historyMoviesLoaded && uiState.historyMovies.isEmpty()
-                else uiState.isLoadingHistoryShows && !uiState.historyShowsLoaded && uiState.historyShows.isEmpty()
+    
+            // 豆瓣同步进度弹窗（点击横幅重新打开）
+            if (showSyncDialog) {
+                DoubanSyncDialog(
+                    onDismiss = {
+                        // 同步运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
+                        val p = uiState.doubanSyncProgress
+                        if (p == null || !p.isRunning) {
+                            showSyncDialog = false
+                        }
+                    },
+                    onBackground = {
+                        // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
+                        showSyncDialog = false
+                    },
+                    onRelogin = {
+                        showSyncDialog = false
+                        onNavigateToDoubanLogin()
+                    },
+                    onTraktLogin = {
+                        showSyncDialog = false
+                        onNavigateToLogin()
+                    }
+                )
             }
-            if (isLoading) {
-                WatchlistSkeletonGrid(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(top = 112.dp + statusBarHeight)
+    
+            // 状态一致性检查进度弹窗（点击横幅重新打开）
+            if (showConsistencyDialog) {
+                com.tracktosearch.ui.screen.settings.ConsistencyCheckDialog(
+                    onDismiss = {
+                        val p = uiState.consistencyCheckProgress
+                        if (p == null || !p.isRunning) {
+                            showConsistencyDialog = false
+                        }
+                    },
+                    onBackground = { showConsistencyDialog = false }
+                )
+            }
+    
+            // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
+            if (showFirstSyncGuide) {
+                DoubanFirstSyncGuideDialog(
+                    onDismiss = { showFirstSyncGuide = false },
+                    onStartImport = {
+                        showFirstSyncGuide = false
+                        showSyncModePicker = true
+                    }
+                )
+            }
+    
+            // 同步模式选择弹窗（引导弹窗确认后弹出）
+            if (showSyncModePicker) {
+                DoubanSyncModePickerDialog(
+                    syncedCount = 0,
+                    cooldownStatus = null,
+                    onDismiss = { showSyncModePicker = false },
+                    onModeSelected = { mode ->
+                        showSyncModePicker = false
+                        viewModel.startDoubanSync(mode)
+                    }
+                )
+            }
+    
+            // 筛选 ModalBottomSheet
+            if (showFilterSheet) {
+                WatchlistFilterSheet(
+                    filterState = filterState,
+                    availableGenres = availableGenres,
+                    decadeOptions = viewModel.decadeOptions.collectAsStateWithLifecycle().value,
+                    onGenresChange = viewModel::updateSelectedGenres,
+                    onDecadeToggle = viewModel::toggleDecade,
+                    onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
+                    onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
+                    onRatingRangeChange = viewModel::updateRatingRange,
+                    onReset = viewModel::resetFilters,
+                    onApply = { showFilterSheet = false }
                 )
             }
         }
-
-        // 豆瓣同步进度弹窗（点击横幅重新打开）
-        if (showSyncDialog) {
-            DoubanSyncDialog(
-                onDismiss = {
-                    // 同步运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
-                    val p = uiState.doubanSyncProgress
-                    if (p == null || !p.isRunning) {
-                        showSyncDialog = false
-                    }
-                },
-                onBackground = {
-                    // 「转后台」:仅隐藏弹窗,同步在 Application scope 继续运行,横幅会继续显示进度
-                    showSyncDialog = false
-                },
-                onRelogin = {
-                    showSyncDialog = false
-                    onNavigateToDoubanLogin()
-                },
-                onTraktLogin = {
-                    showSyncDialog = false
-                    onNavigateToLogin()
-                }
-            )
-        }
-
-        // 状态一致性检查进度弹窗（点击横幅重新打开）
-        if (showConsistencyDialog) {
-            com.tracktosearch.ui.screen.settings.ConsistencyCheckDialog(
-                onDismiss = {
-                    val p = uiState.consistencyCheckProgress
-                    if (p == null || !p.isRunning) {
-                        showConsistencyDialog = false
-                    }
-                },
-                onBackground = { showConsistencyDialog = false }
-            )
-        }
-
-        // 首次同步引导弹窗（已登录豆瓣但从未同步过时自动弹出）
-        if (showFirstSyncGuide) {
-            DoubanFirstSyncGuideDialog(
-                onDismiss = { showFirstSyncGuide = false },
-                onStartImport = {
-                    showFirstSyncGuide = false
-                    showSyncModePicker = true
-                }
-            )
-        }
-
-        // 同步模式选择弹窗（引导弹窗确认后弹出）
-        if (showSyncModePicker) {
-            DoubanSyncModePickerDialog(
-                syncedCount = 0,
-                cooldownStatus = null,
-                onDismiss = { showSyncModePicker = false },
-                onModeSelected = { mode ->
-                    showSyncModePicker = false
-                    viewModel.startDoubanSync(mode)
-                }
-            )
-        }
-
-        // 筛选 ModalBottomSheet
-        if (showFilterSheet) {
-            WatchlistFilterSheet(
-                filterState = filterState,
-                availableGenres = availableGenres,
-                decadeOptions = viewModel.decadeOptions.collectAsStateWithLifecycle().value,
-                onGenresChange = viewModel::updateSelectedGenres,
-                onDecadeToggle = viewModel::toggleDecade,
-                onMarkedTimePresetChange = viewModel::updateMarkedTimePreset,
-                onMarkedTimeOrderChange = viewModel::updateMarkedTimeOrder,
-                onRatingRangeChange = viewModel::updateRatingRange,
-                onReset = viewModel::resetFilters,
-                onApply = { showFilterSheet = false }
-            )
-        }
-    }
     } // CompositionLocalProvider
 }
 
@@ -1227,6 +1234,44 @@ private fun WatchlistPosterCard(
         Modifier
     }
 
+    val context = LocalContext.current
+    // 通过 EntryPoint 获取 PosterColorExtractor 单例，用于提前提取海报主色写入缓存
+    val posterColorExtractor = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            PosterColorExtractorProvider::class.java
+        ).posterColorExtractor()
+    }
+    // 海报加载成功 + 卡片仍在屏幕上 1.5s 后才提取主色，避免快速滑动时大量触发 Palette 计算
+    var posterLoaded by remember { mutableStateOf(false) }
+    var colorExtracted by remember { mutableStateOf(false) }
+    var posterLoadedBitmap: Bitmap? by remember { mutableStateOf(null) }
+
+    LaunchedEffect(item.posterUrl) {
+        posterLoaded = false
+        colorExtracted = false
+        posterLoadedBitmap = null
+    }
+
+    LaunchedEffect(posterLoaded, item.posterUrl) {
+        if (posterLoaded && !colorExtracted && item.posterUrl != null) {
+            delay(1500L)
+            if (posterLoaded && !colorExtracted) {
+                val bitmap = posterLoadedBitmap
+                if (bitmap != null) {
+                    withContext(Dispatchers.Default) {
+                        posterColorExtractor.extractDominantColor(item.posterUrl, bitmap)
+                    }
+                    colorExtracted = true
+                }
+            }
+        }
+    }
+
+    DisposableEffect(item.posterUrl) {
+        onDispose { posterLoadedBitmap = null }
+    }
+
     Column {
         Box {
             PosterCard(
@@ -1234,6 +1279,11 @@ private fun WatchlistPosterCard(
                 title = item.displayTitle,
                 year = item.year?.toString(),
                 genres = null,
+                imageSize = 264,
+                onImageSuccess = { bitmap ->
+                    posterLoadedBitmap = bitmap
+                    posterLoaded = true
+                },
                 onClick = wrappedOnClick,
                 onLongClick = if (isMultiSelectMode) null else onLongClick,
                 posterModifier = posterModifier
@@ -1348,6 +1398,17 @@ private fun WatchlistPosterCard(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
         )
+        if (item.genres.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = item.genres,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
+        }
     }
 }
 

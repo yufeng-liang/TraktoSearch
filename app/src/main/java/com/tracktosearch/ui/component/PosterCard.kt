@@ -25,10 +25,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 /**
  * 统一海报卡片
@@ -43,6 +46,8 @@ import coil.compose.AsyncImage
  * @param onClick 点击回调
  * @param onLongClick 长按回调，null 时不启用长按
  * @param posterModifier 作用于海报容器的修饰符，用于共享元素转场等场景
+ * @param imageSize 指定 Coil 解码尺寸，null 时直接使用 imageUrl 作为 model
+ * @param onImageSuccess 海报加载成功回调，用于外部提取主色等场景
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -55,14 +60,33 @@ fun PosterCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    posterModifier: Modifier = Modifier
+    posterModifier: Modifier = Modifier,
+    imageSize: Int? = null,
+    onImageSuccess: ((android.graphics.Bitmap) -> Unit)? = null
 ) {
+    val context = LocalContext.current
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         label = "poster_scale"
     )
+    val model = remember(imageUrl, imageSize, onImageSuccess) {
+        if (imageSize != null || onImageSuccess != null) {
+            ImageRequest.Builder(context)
+                .data(imageUrl)
+                .apply { if (imageSize != null) size(imageSize) }
+                .crossfade(false)
+                .listener(
+                    onSuccess = { _, result ->
+                        onImageSuccess?.invoke(result.drawable.toBitmap())
+                    }
+                )
+                .build()
+        } else {
+            imageUrl
+        }
+    }
 
     Box(modifier = modifier.scale(scale)) {
         Box(
@@ -90,7 +114,7 @@ fun PosterCard(
                 )
         ) {
             AsyncImage(
-                model = imageUrl,
+                model = model,
                 contentDescription = title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
