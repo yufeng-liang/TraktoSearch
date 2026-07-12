@@ -8,7 +8,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -91,6 +94,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -121,6 +126,7 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
@@ -903,34 +909,15 @@ fun DoubanHotCategorySection(
 ) {
     Column {
         // 榜单标题 + 全部按钮
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = doubanCategoryLabel(category.id),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            Row(
-                modifier = Modifier
-                    .clickable { onViewAll() }
-                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.search_view_all_count, doubanCategoryTotal(category.id)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
+        com.tracktosearch.ui.component.SectionHeader(
+            title = doubanCategoryLabel(category.id),
+            actionText = stringResource(R.string.search_view_all_count, doubanCategoryTotal(category.id)),
+            onActionClick = onViewAll
+        )
 
         if (category.isLoading) {
             androidx.compose.foundation.lazy.LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(5) {
                     com.tracktosearch.ui.component.DoubanHotCardSkeleton()
@@ -958,7 +945,7 @@ fun DoubanHotCategorySection(
             }
         } else {
             androidx.compose.foundation.lazy.LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(category.items, key = { it.id ?: it.title }) { item ->
                     DoubanHotCard(
@@ -975,7 +962,7 @@ fun DoubanHotCategorySection(
                                 .width(40.dp)
                                 .height(172.dp)
                                 .clickable { onViewAll() },
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             ),
@@ -1008,98 +995,96 @@ fun DoubanHotCard(
 ) {
     val context = LocalContext.current
     val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)
+    val rating = ratingMatch?.groupValues?.get(1)?.toDoubleOrNull()
     val displayTitle = item.title
         .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
         .replace(Regex("^#\\d+\\s*"), "")
 
-    Card(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "douban_hot_card_scale"
+    )
+
+    Column(
         modifier = Modifier
             .width(105.dp)
-            .clickable(enabled = !isResolving) { onClick() },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .scale(scale)
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-            ) {
-                if (!item.cover.isNullOrBlank()) {
-                    val imageRequest = remember(item.cover) {
-                        coil.request.ImageRequest.Builder(context)
-                            .data(item.cover)
-                            .size(200)
-                            .crossfade(false)
-                            .build()
-                    }
-                    coil.compose.AsyncImage(
-                        model = imageRequest,
-                        contentDescription = displayTitle,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .shadow(8.dp, RoundedCornerShape(14.dp))
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(
+                    enabled = !isResolving,
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+        ) {
+            if (!item.cover.isNullOrBlank()) {
+                val imageRequest = remember(item.cover) {
+                    coil.request.ImageRequest.Builder(context)
+                        .data(item.cover)
+                        .size(200)
+                        .crossfade(false)
+                        .build()
+                }
+                coil.compose.AsyncImage(
+                    model = imageRequest,
+                    contentDescription = displayTitle,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                     )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                    }
-                }
-                if (rating != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF68BD5B)
-                    ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-                if (isResolving) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                            color = Color.White
-                        )
-                    }
                 }
             }
-            Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
-                Text(
-                    text = displayTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+            if (rating != null) {
+                RatingBadge(
+                    rating = rating,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
                 )
             }
+            if (isResolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+            Text(
+                text = displayTitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onBackground
+            )
         }
     }
 }

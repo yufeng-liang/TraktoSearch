@@ -20,7 +20,10 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.FilterList
@@ -48,6 +51,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -198,6 +203,73 @@ fun DiscoverScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
+                // 顶部 Hero 分类快捷入口
+                item(key = "discover_hero_categories") {
+                    val heroCategories = listOf(
+                        HeroCategory(
+                            id = "tmdb-popular",
+                            title = stringResource(R.string.discover_trending),
+                            count = uiState.tmdbPopularMovies.size,
+                            gradient = Brush.linearGradient(
+                                listOf(Color(0xFFE8534F), Color(0xFFF4A460))
+                            ),
+                            onClick = { showPopularAll = true }
+                        ),
+                        HeroCategory(
+                            id = "tmdb-upcoming",
+                            title = stringResource(R.string.discover_upcoming),
+                            count = uiState.tmdbUpcomingMovies.size,
+                            gradient = Brush.linearGradient(
+                                listOf(Color(0xFF4A6FA5), Color(0xFF8A7AC4))
+                            ),
+                            onClick = { showUpcomingAll = true }
+                        ),
+                        HeroCategory(
+                            id = "trakt-recommendations",
+                            title = stringResource(R.string.discover_recommended),
+                            count = uiState.traktRecommendations.size,
+                            gradient = Brush.linearGradient(
+                                listOf(Color(0xFF6B3FA0), Color(0xFFC88AB8))
+                            ),
+                            onClick = { showRecommendationsAll = true }
+                        ),
+                        HeroCategory(
+                            id = "douban-hot",
+                            title = stringResource(R.string.discover_douban_new_movies),
+                            count = uiState.doubanHotCategories.sumOf { it.items.size },
+                            gradient = Brush.linearGradient(
+                                listOf(Color(0xFF2E7D52), Color(0xFF4DB6AC))
+                            ),
+                            onClick = {
+                                val firstCategory = uiState.doubanHotCategories.firstOrNull()
+                                showDoubanAllDialog = firstCategory?.id ?: "douban-movie"
+                            }
+                        ),
+                        HeroCategory(
+                            id = "trakt-lists",
+                            title = stringResource(R.string.discover_trending_lists),
+                            count = uiState.trendingLists.size,
+                            gradient = Brush.linearGradient(
+                                listOf(Color(0xFF374151), Color(0xFF60A5FA))
+                            ),
+                            onClick = { showTrendingListsAll = true }
+                        )
+                    )
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 0.dp)
+                    ) {
+                        items(heroCategories, key = { it.id }) { category ->
+                            CategoryHeroCard(
+                                title = category.title,
+                                count = category.count,
+                                gradient = category.gradient,
+                                onClick = category.onClick
+                            )
+                        }
+                    }
+                }
+
                 // 根据用户设置（显示/隐藏 + 排序）渲染各栏目
                 sectionConfigs.filter { it.visible }.forEach { config ->
                     when (config.id) {
@@ -433,10 +505,10 @@ fun DiscoverScreen(
                         "trakt-lists" -> {
                             item(key = "trakt_lists") {
                                 Column {
-                                    Text(
-                                        text = stringResource(R.string.discover_trending_lists),
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    com.tracktosearch.ui.component.SectionHeader(
+                                        title = stringResource(R.string.discover_trending_lists),
+                                        actionText = if (uiState.trendingLists.isNotEmpty()) stringResource(R.string.common_view_all) else null,
+                                        onActionClick = if (uiState.trendingLists.isNotEmpty()) { { showTrendingListsAll = true } } else null
                                     )
                                     val listsError = uiState.trendingListsError
                                     if (uiState.isLoadingTraktLists) {
@@ -524,35 +596,39 @@ fun DiscoverScreen(
                     } else {
                         Modifier.fillMaxWidth()
                     }
-                    Card(
+                    Box(
                         modifier = cardModifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    listOf(
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                                    )
+                                )
+                            )
                             .clickable {
                                 activeFilterEntry = "card"
                                 onFilterDiscoverClick()
-                            },
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            }
+                            .padding(24.dp)
                     ) {
                         Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
                                 text = stringResource(R.string.discover_filter_more_title),
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = Color.White.copy(alpha = 0.9f)
                             )
                             Text(
                                 text = stringResource(R.string.discover_filter_more_button),
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.Bold
                                 ),
-                                color = MaterialTheme.colorScheme.primary
+                                color = Color.White
                             )
                         }
                     }
@@ -799,6 +875,60 @@ fun DiscoverScreen(
             viewModel = settingsViewModel,
             onDismiss = { showDiscoverSectionsDialog = false }
         )
+    }
+}
+
+/**
+ * Hero 分类项数据类
+ */
+private data class HeroCategory(
+    val id: String,
+    val title: String,
+    val count: Int,
+    val gradient: Brush,
+    val onClick: () -> Unit
+)
+
+/**
+ * Hero 分类卡片
+ *
+ * 用于发现页顶部分类快捷入口，大圆角 + 渐变背景。
+ */
+@Composable
+private fun CategoryHeroCard(
+    title: String,
+    count: Int?,
+    gradient: Brush,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .width(150.dp)
+            .height(95.dp)
+            .clip(RoundedCornerShape(20.dp))
+            .background(gradient)
+            .clickable(onClick = onClick)
+            .padding(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.align(Alignment.BottomStart),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            if (count != null && count > 0) {
+                Text(
+                    text = stringResource(R.string.discover_view_all, count),
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp
+                )
+            }
+        }
     }
 }
 

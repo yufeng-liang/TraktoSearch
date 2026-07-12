@@ -47,6 +47,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
+import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.data.repository.MediaType
 
 @Composable
@@ -63,36 +64,15 @@ internal fun TmdbMovieSection(
 ) {
     Column {
         if (title.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-                if (movies.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .clickable { onViewAll() }
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.discover_view_all, movies.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
+            SectionHeader(
+                title = title,
+                actionText = if (movies.isNotEmpty()) stringResource(R.string.discover_view_all, movies.size) else null,
+                onActionClick = if (movies.isNotEmpty()) onViewAll else null
+            )
         }
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
@@ -103,7 +83,7 @@ internal fun TmdbMovieSection(
                 EmptyRow()
             }
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
                         MovieCard(
                             title = movie.title,
@@ -136,35 +116,14 @@ internal fun TraktRecommendationSection(
     onViewAll: () -> Unit
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (movies.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, movies.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        SectionHeader(
+            title = title,
+            actionText = if (movies.isNotEmpty()) stringResource(R.string.discover_view_all, movies.size) else null,
+            onActionClick = if (movies.isNotEmpty()) onViewAll else null
+        )
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
@@ -175,7 +134,7 @@ internal fun TraktRecommendationSection(
                 EmptyRow()
             }
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(movies, key = { index, movie -> "trakt_movie_${index}_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
                         MovieCard(
                             title = movie.title,
@@ -210,42 +169,21 @@ internal fun TraktTrendingMovieSection(
     onRetry: () -> Unit = {}
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.discover_trakt_trending_movies),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (totalCount > 0) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, totalCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        SectionHeader(
+            title = stringResource(R.string.discover_trakt_trending_movies),
+            actionText = if (totalCount > 0) stringResource(R.string.discover_view_all, totalCount) else null,
+            onActionClick = if (totalCount > 0) onViewAll else null
+        )
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(items, key = { index, item -> "trending_movie_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                         MovieCard(
                             title = item.movie.title,
@@ -280,42 +218,21 @@ internal fun TraktTrendingShowSection(
     onRetry: () -> Unit = {}
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.discover_trakt_trending_shows),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (totalCount > 0) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, totalCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        SectionHeader(
+            title = stringResource(R.string.discover_trakt_trending_shows),
+            actionText = if (totalCount > 0) stringResource(R.string.discover_view_all, totalCount) else null,
+            onActionClick = if (totalCount > 0) onViewAll else null
+        )
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                         MovieCard(
                             title = item.show.title,
@@ -352,42 +269,21 @@ internal fun TraktAnticipatedSection(
     onRetry: () -> Unit = {}
 ) {
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.discover_trakt_anticipated),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (totalCount > 0) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, totalCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        SectionHeader(
+            title = stringResource(R.string.discover_trakt_anticipated),
+            actionText = if (totalCount > 0) stringResource(R.string.discover_view_all, totalCount) else null,
+            onActionClick = if (totalCount > 0) onViewAll else null
+        )
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             anticipatedMovies.isEmpty() && anticipatedShows.isEmpty() -> EmptyRow()
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // 先展示电影，再展示剧集
                     itemsIndexed(anticipatedMovies, key = { index, item -> "anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                         MovieCard(
@@ -438,42 +334,21 @@ internal fun TraktShowRecommendationSection(
 ) {
     if (items.isEmpty() && !isLoading && error == null) return // 未登录时无数据不显示
     Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.discover_trakt_recommendations_shows),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            if (totalCount > 0) {
-                Row(
-                    modifier = Modifier
-                        .clickable { onViewAll() }
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_view_all, totalCount),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-            }
-        }
+        SectionHeader(
+            title = stringResource(R.string.discover_trakt_recommendations_shows),
+            actionText = if (totalCount > 0) stringResource(R.string.discover_view_all, totalCount) else null,
+            onActionClick = if (totalCount > 0) onViewAll else null
+        )
         when {
             isLoading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
             error != null -> ErrorRetryRow(error = error, onRetry = onRetry)
             items.isEmpty() -> EmptyRow()
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                         MovieCard(
                             title = item.show.title,
@@ -514,13 +389,14 @@ internal fun DoubanRecommendSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
                 text = stringResource(R.string.discover_douban_recommend),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onBackground
             )
-            Spacer(modifier = Modifier.width(12.dp))
             CapsuleTabSelector(
                 tabs = listOf(
                     stringResource(R.string.discover_douban_recommend_movie),
@@ -559,7 +435,7 @@ internal fun DoubanRecommendSection(
             }
 
             is DoubanRecommendState.Loading -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
                 }
             }
@@ -573,7 +449,7 @@ internal fun DoubanRecommendSection(
                 if (items.isEmpty()) {
                     EmptyRow()
                 } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(
                             items,
                             key = { index, item -> "douban_rec_${state.currentTab.name.lowercase()}_${index}_${item.id}" },

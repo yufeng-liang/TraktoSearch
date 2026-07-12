@@ -33,6 +33,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +65,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.RatingBadge
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -99,179 +105,179 @@ internal fun MovieCard(
         else TmdbImageUrls.build(it)
     }
 
-    Card(
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "movie_card_scale"
+    )
+    val ratingValue = rating?.toDoubleOrNull()
+
+    Column(
         modifier = Modifier
             .width(105.dp)
-            .clickable(enabled = !isResolving) {
-                // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
-                if (tmdbId > 0) {
-                    myClickToken = setActivePosterTmdbId(tmdbId)
-                }
-                onClick()
-            },
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .scale(scale)
     ) {
-        Column {
-            // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
-            val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(2f / 3f)
-                        .sharedElement(
-                            rememberSharedContentState(key = "poster-$tmdbId"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                        .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-                }
-            } else {
+        // 当 enableShared 且两个 scope 可用时，给海报 Box 加 sharedElement 修饰（与详情页海报配对）
+        val posterBoxModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+            with(sharedTransitionScope) {
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-            }
-            Box(
-                modifier = posterBoxModifier
-            ) {
-                if (posterUrl != null) {
-                    val imageRequest = remember(posterUrl) {
-                        ImageRequest.Builder(context)
-                            .data(posterUrl)
-                            .size(264)
-                            .crossfade(false)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                    .sharedElement(
+                        rememberSharedContentState(key = "poster-$tmdbId"),
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = title.take(2),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-                // 想看/已看角标（海报左上角）
-                if (isWatched || isInWatchlist) {
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(
-                                color = if (isWatched) Color(0xCC000000)
-                                else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        if (isWatched) {
-                            Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = Color.White
-                            )
-                            Text(
-                                text = stringResource(R.string.cd_watched_badge),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Rounded.Bookmark,
-                                contentDescription = null,
-                                modifier = Modifier.size(10.dp),
-                                tint = Color.White
-                            )
-                            Text(
-                                text = stringResource(R.string.cd_watchlist_badge),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                color = Color.White
-                            )
+                    .clip(RoundedCornerShape(14.dp))
+            }
+        } else {
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
+                .clip(RoundedCornerShape(14.dp))
+        }
+        Box(
+            modifier = posterBoxModifier
+                .shadow(8.dp, RoundedCornerShape(14.dp))
+                .clickable(
+                    enabled = !isResolving,
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = {
+                        // 点击时记录当前海报为活跃状态,并获取新 token,确保只有这个卡片参与转场
+                        if (tmdbId > 0) {
+                            myClickToken = setActivePosterTmdbId(tmdbId)
                         }
+                        onClick()
                     }
+                )
+        ) {
+            if (posterUrl != null) {
+                val imageRequest = remember(posterUrl) {
+                    ImageRequest.Builder(context)
+                        .data(posterUrl)
+                        .size(264)
+                        .crossfade(false)
+                        .build()
                 }
-                if (rating != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF68BD5B)
-                    ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                AsyncImage(
+                    model = imageRequest,
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = title.take(2),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                }
+            }
+            // 想看/已看角标（海报左上角）
+            if (isWatched || isInWatchlist) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            color = if (isWatched) Color(0xCC000000)
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
                         )
-                    }
-                }
-                if (isResolving) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
+                        .padding(horizontal = 5.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (isWatched) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            text = stringResource(R.string.cd_watched_badge),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Bookmark,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            text = stringResource(R.string.cd_watchlist_badge),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                             color = Color.White
                         )
                     }
                 }
-                // 年份角标（海报右下角）
-                if (year.isNotEmpty()) {
-                    Text(
-                        text = year,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = Color.Black,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.9f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+            }
+            if (ratingValue != null) {
+                RatingBadge(
+                    rating = ratingValue,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                )
+            }
+            if (isResolving) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
                     )
                 }
             }
-            Column(modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp)) {
+            // 年份角标（海报右下角）
+            if (year.isNotEmpty()) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = year,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.5f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                }
+            }
+        }
+        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
             }
         }
     }
