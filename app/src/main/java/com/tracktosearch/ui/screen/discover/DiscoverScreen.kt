@@ -530,7 +530,7 @@ fun DiscoverScreen(
                                         }
                                     } else {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            uiState.trendingLists.take(5).forEach { listResponse ->
+                                            uiState.trendingLists.take(5).forEachIndexed { index, listResponse ->
                                                 // 社区列表卡片与详情页标题栏整体配对（sharedBounds 转场）
                                                 val listCardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                                                     with(sharedTransitionScope) {
@@ -540,7 +540,7 @@ fun DiscoverScreen(
                                                         )
                                                     }
                                                 } else { Modifier }
-                                                Box(modifier = Modifier.fillMaxWidth().then(listCardModifier)) {
+                                                Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
                                                     Card(
     modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),

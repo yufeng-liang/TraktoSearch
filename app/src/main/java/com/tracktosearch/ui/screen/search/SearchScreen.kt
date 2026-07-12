@@ -44,6 +44,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -119,6 +120,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.tracktosearch.R
+import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
@@ -947,37 +949,41 @@ fun DoubanHotCategorySection(
             androidx.compose.foundation.lazy.LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(category.items, key = { it.id ?: it.title }) { item ->
-                    DoubanHotCard(
-                        item = item,
-                        isResolving = resolvingItemId == item.id,
-                        onClick = { onItemClick(item) }
-                    )
+                itemsIndexed(category.items, key = { _, item -> item.id ?: item.title }) { index, item ->
+                    Box(modifier = Modifier.fadeSlideIn(index)) {
+                        DoubanHotCard(
+                            item = item,
+                            isResolving = resolvingItemId == item.id,
+                            onClick = { onItemClick(item) }
+                        )
+                    }
                 }
                 // Top250 保留箭头卡片
                 if (category.id == "douban-top250") {
                     item {
-                        Card(
-                            modifier = Modifier
-                                .width(40.dp)
-                                .height(172.dp)
-                                .clickable { onViewAll() },
-                            shape = RoundedCornerShape(14.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
+                        Box(modifier = Modifier.fadeSlideIn(category.items.size)) {
+                            Card(
+                                modifier = Modifier
+                                    .width(40.dp)
+                                    .height(172.dp)
+                                    .clickable { onViewAll() },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                             ) {
-                                Icon(
-                                    Icons.AutoMirrored.Rounded.ArrowForwardIos,
-                                    contentDescription = stringResource(R.string.content_desc_view_all),
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                        contentDescription = stringResource(R.string.content_desc_view_all),
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                     }
