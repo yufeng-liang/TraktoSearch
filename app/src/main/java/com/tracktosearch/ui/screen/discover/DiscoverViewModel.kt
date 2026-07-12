@@ -1220,6 +1220,105 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
+    /** 豆瓣推荐卡片点击：通过标题搜索 TMDB，再转换为 Trakt ID 后跳转详情页 */
+    fun resolveAndNavigateRecommend(
+        item: DoubanRecommendItem,
+        isMovieTab: Boolean,
+        onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit
+    ) {
+        val cleanTitle = item.title.trim()
+        val mediaType = if (isMovieTab) MediaType.MOVIE else MediaType.SHOW
+
+        // 同步检查缓存 → 命中则秒进不转圈
+        val cachedTmdb = doubanTmdbCache.get(cleanTitle)
+        if (cachedTmdb != null && cachedTmdb.id > 0) {
+            // 想看/已看缓存
+            val wlCached = _watchlistWatchedIds.value?.traktIdByTmdb(cachedTmdb.id, mediaType)
+            if (wlCached != null && wlCached > 0) {
+                val inWl = _watchlistWatchedIds.value?.isInWatchlist(wlCached, cachedTmdb.id, mediaType) == true
+                val isW = _watchlistWatchedIds.value?.isWatched(wlCached, cachedTmdb.id, mediaType) == true
+                onNavigate(wlCached, cachedTmdb.id, cachedTmdb.title, "", 0.0, inWl, isW)
+                return
+            }
+            // ID 转换缓存
+            val idCached = traktRepository.getCachedTraktId(cachedTmdb.id, mediaType)
+            if (idCached != null && idCached > 0) {
+                val inWl = _watchlistWatchedIds.value?.isInWatchlist(idCached, cachedTmdb.id, mediaType) == true
+                val isW = _watchlistWatchedIds.value?.isWatched(idCached, cachedTmdb.id, mediaType) == true
+                onNavigate(idCached, cachedTmdb.id, cachedTmdb.title, "", 0.0, inWl, isW)
+                return
+            }
+            // 负缓存命中：之前搜过没找到
+            if (idCached == 0) {
+                viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
+                return
+            }
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(resolvingRecommendItemId = item.id)
+            try {
+                // 1. 用 TMDB 搜索（优先从缓存获取）
+                val searchResult = doubanTmdbCache.get(cleanTitle) ?: run {
+                    val result = tmdbRepository.searchMovie(cleanTitle)
+                    if (result != null && result.id > 0) {
+                        doubanTmdbCache.put(cleanTitle, result)
+                    }
+                    result
+                }
+                if (searchResult == null || searchResult.id <= 0) {
+                    _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    return@launch
+                }
+
+                // 2. 优先从全局缓存中查找
+                val cachedTraktId = _watchlistWatchedIds.value?.traktIdByTmdb(searchResult.id, mediaType)
+                if (cachedTraktId != null && cachedTraktId > 0) {
+                    val inWl = _watchlistWatchedIds.value?.isInWatchlist(cachedTraktId, searchResult.id, mediaType) == true
+                    val isW = _watchlistWatchedIds.value?.isWatched(cachedTraktId, searchResult.id, mediaType) == true
+                    onNavigate(cachedTraktId, searchResult.id, searchResult.title, "", 0.0, inWl, isW)
+                    _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                    return@launch
+                }
+
+                // 3. ID 转换缓存查找
+                val idCached = traktRepository.getCachedTraktId(searchResult.id, mediaType)
+                if (idCached != null && idCached > 0) {
+                    val inWl = _watchlistWatchedIds.value?.isInWatchlist(idCached, searchResult.id, mediaType) == true
+                    val isW = _watchlistWatchedIds.value?.isWatched(idCached, searchResult.id, mediaType) == true
+                    onNavigate(idCached, searchResult.id, searchResult.title, "", 0.0, inWl, isW)
+                    _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                    return@launch
+                }
+                // 负缓存命中
+                if (idCached == 0) {
+                    _toastEvent.emit(R.string.card_resolve_not_found)
+                    _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                    return@launch
+                }
+
+                // 4. 缓存未命中，用 Trakt search/tmdb/{id} 转换
+                val traktResult = traktRepository.searchByTmdb(searchResult.id, mediaType)
+                traktResult.onSuccess { searchResults ->
+                    val first = searchResults.firstOrNull()
+                    val traktId = if (mediaType == MediaType.MOVIE) first?.movie?.ids?.trakt else first?.show?.ids?.trakt
+                    val imdbId = if (mediaType == MediaType.MOVIE) first?.movie?.ids?.imdb ?: "" else first?.show?.ids?.imdb ?: ""
+                    if (traktId != null && traktId > 0) {
+                        val inWl = _watchlistWatchedIds.value?.isInWatchlist(traktId, searchResult.id, mediaType) == true
+                        val isW = _watchlistWatchedIds.value?.isWatched(traktId, searchResult.id, mediaType) == true
+                        onNavigate(traktId, searchResult.id, searchResult.title, imdbId, 0.0, inWl, isW)
+                    } else {
+                        _toastEvent.emit(R.string.card_resolve_not_found)
+                    }
+                }
+                _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+            }
+        }
+    }
+
     fun markViewed(url: String) {
         viewModelScope.launch {
             viewedItemStorage.markViewed(url)
