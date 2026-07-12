@@ -140,6 +140,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.ui.animation.fadeSlideIn
 import dagger.hilt.android.EntryPointAccessors
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.GlassSearchBar
@@ -549,35 +550,37 @@ fun WatchlistScreen(
                             val item = items[index]
                             val isSelected = selectedItems[item.traktId] == true
                             val isResolving = isRemoving && isSelected
-                            WatchlistPosterCard(
-                                item = item,
-                                isInWatchlist = selectedMode == 0,
-                                isWatched = selectedMode == 1,
-                                isSelected = isSelected,
-                                isResolving = isResolving,
-                                isMultiSelectMode = isMultiSelectMode,
-                                onClick = {
-                                    if (isMultiSelectMode) {
-                                        if (isSelected) selectedItems.remove(item.traktId)
-                                        else selectedItems[item.traktId] = true
-                                        if (selectedItems.isEmpty()) isMultiSelectMode = false
-                                    } else {
-                                        val inWatchlist = selectedMode == 0
-                                        val isWatched = selectedMode == 1
-                                        if (selectedTab == 0) {
-                                            onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                            Box(modifier = Modifier.fadeSlideIn(index)) {
+                                WatchlistPosterCard(
+                                    item = item,
+                                    isInWatchlist = selectedMode == 0,
+                                    isWatched = selectedMode == 1,
+                                    isSelected = isSelected,
+                                    isResolving = isResolving,
+                                    isMultiSelectMode = isMultiSelectMode,
+                                    onClick = {
+                                        if (isMultiSelectMode) {
+                                            if (isSelected) selectedItems.remove(item.traktId)
+                                            else selectedItems[item.traktId] = true
+                                            if (selectedItems.isEmpty()) isMultiSelectMode = false
                                         } else {
-                                            onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                            val inWatchlist = selectedMode == 0
+                                            val isWatched = selectedMode == 1
+                                            if (selectedTab == 0) {
+                                                onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                            } else {
+                                                onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
+                                            }
                                         }
+                                    },
+                                    onLongClick = {
+                                        if (!isMultiSelectMode) {
+                                            isMultiSelectMode = true
+                                        }
+                                        selectedItems[item.traktId] = true
                                     }
-                                },
-                                onLongClick = {
-                                    if (!isMultiSelectMode) {
-                                        isMultiSelectMode = true
-                                    }
-                                    selectedItems[item.traktId] = true
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }

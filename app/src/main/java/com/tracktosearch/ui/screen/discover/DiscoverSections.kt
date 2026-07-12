@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
+import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
@@ -84,18 +85,20 @@ internal fun TmdbMovieSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                        MovieCard(
-                            title = movie.title,
-                            posterPath = movie.poster_path,
-                            year = movie.release_date.take(4),
-                            rating = null,
-                            isResolving = resolvingItemId == movie.id,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
-                            tmdbId = movie.id,
-                            onClick = { onItemClick(movie) }
-                        )
+                    itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = movie.title,
+                                posterPath = movie.poster_path,
+                                year = movie.release_date.take(4),
+                                rating = null,
+                                isResolving = resolvingItemId == movie.id,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
+                                tmdbId = movie.id,
+                                onClick = { onItemClick(movie) }
+                            )
+                        }
                     }
                 }
             }
@@ -135,19 +138,21 @@ internal fun TraktRecommendationSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(movies, key = { index, movie -> "trakt_movie_${index}_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                        MovieCard(
-                            title = movie.title,
-                            posterPath = movie.posterPath,
-                            year = if (movie.year > 0) movie.year.toString() else "",
-                            rating = if (movie.rating > 0)
-                                String.format("%.1f", movie.rating) else null,
-                            isResolving = resolvingItemId == movie.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
-                            tmdbId = movie.ids.tmdb,
-                            onClick = { onItemClick(movie) }
-                        )
+                    itemsIndexed(movies, key = { index, movie -> "trakt_movie_${index}_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = movie.title,
+                                posterPath = movie.posterPath,
+                                year = if (movie.year > 0) movie.year.toString() else "",
+                                rating = if (movie.rating > 0)
+                                    String.format("%.1f", movie.rating) else null,
+                                isResolving = resolvingItemId == movie.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                                tmdbId = movie.ids.tmdb,
+                                onClick = { onItemClick(movie) }
+                            )
+                        }
                     }
                 }
             }
@@ -184,19 +189,21 @@ internal fun TraktTrendingMovieSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(items, key = { index, item -> "trending_movie_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                        MovieCard(
-                            title = item.movie.title,
-                            posterPath = item.movie.posterPath,
-                            year = if (item.movie.year > 0) item.movie.year.toString() else "",
-                            rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
-                            subtitle = stringResource(R.string.discover_watchers, item.watchers),
-                            isResolving = resolvingItemId == item.movie.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
-                            tmdbId = item.movie.ids.tmdb,
-                            onClick = { onItemClick(item.movie) }
-                        )
+                    itemsIndexed(items, key = { index, item -> "trending_movie_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = item.movie.title,
+                                posterPath = item.movie.posterPath,
+                                year = if (item.movie.year > 0) item.movie.year.toString() else "",
+                                rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
+                                subtitle = stringResource(R.string.discover_watchers, item.watchers),
+                                isResolving = resolvingItemId == item.movie.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                                tmdbId = item.movie.ids.tmdb,
+                                onClick = { onItemClick(item.movie) }
+                            )
+                        }
                     }
                 }
             }
@@ -233,19 +240,21 @@ internal fun TraktTrendingShowSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                        MovieCard(
-                            title = item.show.title,
-                            posterPath = item.show.posterPath,
-                            year = if (item.show.year > 0) item.show.year.toString() else "",
-                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
-                            subtitle = stringResource(R.string.discover_watchers, item.watchers),
-                            isResolving = resolvingItemId == item.show.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            tmdbId = item.show.ids.tmdb,
-                            onClick = { onItemClick(item.show) }
-                        )
+                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = item.show.title,
+                                posterPath = item.show.posterPath,
+                                year = if (item.show.year > 0) item.show.year.toString() else "",
+                                rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                                subtitle = stringResource(R.string.discover_watchers, item.watchers),
+                                isResolving = resolvingItemId == item.show.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                tmdbId = item.show.ids.tmdb,
+                                onClick = { onItemClick(item.show) }
+                            )
+                        }
                     }
                 }
             }
@@ -285,33 +294,37 @@ internal fun TraktAnticipatedSection(
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // 先展示电影，再展示剧集
-                    itemsIndexed(anticipatedMovies, key = { index, item -> "anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                        MovieCard(
-                            title = item.movie.title,
-                            posterPath = item.movie.posterPath,
-                            year = if (item.movie.year > 0) item.movie.year.toString() else "",
-                            rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
-                            subtitle = stringResource(R.string.discover_list_count, item.list_count),
-                            isResolving = resolvingItemId == item.movie.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
-                            tmdbId = item.movie.ids.tmdb,
-                            onClick = { onMovieClick(item.movie) }
-                        )
+                    itemsIndexed(anticipatedMovies, key = { index, item -> "anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = item.movie.title,
+                                posterPath = item.movie.posterPath,
+                                year = if (item.movie.year > 0) item.movie.year.toString() else "",
+                                rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
+                                subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                                isResolving = resolvingItemId == item.movie.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                                tmdbId = item.movie.ids.tmdb,
+                                onClick = { onMovieClick(item.movie) }
+                            )
+                        }
                     }
-                    itemsIndexed(anticipatedShows, key = { index, item -> "anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                        MovieCard(
-                            title = item.show.title,
-                            posterPath = item.show.posterPath,
-                            year = if (item.show.year > 0) item.show.year.toString() else "",
-                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
-                            subtitle = stringResource(R.string.discover_list_count, item.list_count),
-                            isResolving = resolvingItemId == item.show.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            tmdbId = item.show.ids.tmdb,
-                            onClick = { onShowClick(item.show) }
-                        )
+                    itemsIndexed(anticipatedShows, key = { index, item -> "anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = item.show.title,
+                                posterPath = item.show.posterPath,
+                                year = if (item.show.year > 0) item.show.year.toString() else "",
+                                rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                                subtitle = stringResource(R.string.discover_list_count, item.list_count),
+                                isResolving = resolvingItemId == item.show.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                tmdbId = item.show.ids.tmdb,
+                                onClick = { onShowClick(item.show) }
+                            )
+                        }
                     }
                 }
             }
@@ -349,18 +362,20 @@ internal fun TraktShowRecommendationSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                        MovieCard(
-                            title = item.show.title,
-                            posterPath = item.show.posterPath,
-                            year = if (item.show.year > 0) item.show.year.toString() else "",
-                            rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
-                            isResolving = resolvingItemId == item.show.ids.tmdb,
-                            isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                            tmdbId = item.show.ids.tmdb,
-                            onClick = { onItemClick(item.show) }
-                        )
+                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                            MovieCard(
+                                title = item.show.title,
+                                posterPath = item.show.posterPath,
+                                year = if (item.show.year > 0) item.show.year.toString() else "",
+                                rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
+                                isResolving = resolvingItemId == item.show.ids.tmdb,
+                                isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                                tmdbId = item.show.ids.tmdb,
+                                onClick = { onItemClick(item.show) }
+                            )
+                        }
                     }
                 }
             }
@@ -454,19 +469,21 @@ internal fun DoubanRecommendSection(
                             items,
                             key = { index, item -> "douban_rec_${state.currentTab.name.lowercase()}_${index}_${item.id}" },
                             contentType = { _, _ -> "media_card" }
-                        ) { _, item ->
-                            MovieCard(
-                                title = item.title,
-                                posterPath = item.pic?.normal ?: item.pic?.large ?: item.cover,
-                                year = item.year ?: "",
-                                rating = item.rating?.value?.let { String.format("%.1f", it) },
-                                subtitle = item.reasonTags?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
-                                isResolving = resolvingItemId == item.id,
-                                isInWatchlist = false,
-                                isWatched = false,
-                                tmdbId = 0,
-                                onClick = { onItemClick(item) }
-                            )
+                        ) { index, item ->
+                            Box(modifier = Modifier.fadeSlideIn(index)) {
+                                MovieCard(
+                                    title = item.title,
+                                    posterPath = item.pic?.normal ?: item.pic?.large ?: item.cover,
+                                    year = item.year ?: "",
+                                    rating = item.rating?.value?.let { String.format("%.1f", it) },
+                                    subtitle = item.reasonTags?.takeIf { it.isNotEmpty() }?.joinToString(" · "),
+                                    isResolving = resolvingItemId == item.id,
+                                    isInWatchlist = false,
+                                    isWatched = false,
+                                    tmdbId = 0,
+                                    onClick = { onItemClick(item) }
+                                )
+                            }
                         }
                     }
                 }

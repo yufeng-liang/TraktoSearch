@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,6 +64,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DiscoverSectionStorage
+import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -259,13 +260,15 @@ fun DiscoverScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(horizontal = 0.dp)
                     ) {
-                        items(heroCategories, key = { it.id }) { category ->
-                            CategoryHeroCard(
-                                title = category.title,
-                                count = category.count,
-                                gradient = category.gradient,
-                                onClick = category.onClick
-                            )
+                        itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->
+                            Box(modifier = Modifier.fadeSlideIn(index)) {
+                                CategoryHeroCard(
+                                    title = category.title,
+                                    count = category.count,
+                                    gradient = category.gradient,
+                                    onClick = category.onClick
+                                )
+                            }
                         }
                     }
                 }
