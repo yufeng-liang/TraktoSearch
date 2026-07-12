@@ -121,7 +121,7 @@ class TraktRepository @Inject constructor(
                 watchlistWatchedIdsCache.put(cacheKey, ids)
                 ids
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w("TraktRepo", "loadWatchlistWatchedIds failed: ${e.message}")
             WatchlistWatchedIds()
         }
@@ -149,7 +149,7 @@ class TraktRepository @Inject constructor(
         notFoundImdbIds.clear()
         // 同步清除持久化缓存，避免下次登录仍读到旧账号数据
         persistentScope.launch {
-            try { watchlistWatchedIdsCache.clearAll() } catch (_: Exception) {}
+            try { watchlistWatchedIdsCache.clearAll() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
         }
     }
 
@@ -157,7 +157,7 @@ class TraktRepository @Inject constructor(
     private fun persistWatchlistWatchedIds() {
         val current = watchlistWatchedIds ?: return
         persistentScope.launch {
-            try { watchlistWatchedIdsCache.put("watchlist_watched_ids", current) } catch (_: Exception) {}
+            try { watchlistWatchedIdsCache.put("watchlist_watched_ids", current) } catch (e: CancellationException) { throw e } catch (_: Exception) {}
         }
     }
 
@@ -249,38 +249,38 @@ class TraktRepository @Inject constructor(
 
     // 持久化缓存（永久）：tmdb↔trakt ID 映射，跨 App 重启保留
     private val searchByTmdbCache = persistentTtlCache<List<TraktSearchResult>>(
-        TTL_ID_MAPPING, 100, persistentDataStore, json, "tmdb_search", persistentScope
+        TTL_ID_MAPPING, 100, persistentDataStore, json, "tmdb_search_v1", persistentScope
     )
     // imdbId → Trakt 反查缓存（永不过期，imdb↔trakt 映射不会变）
     private val searchByImdbCache = persistentTtlCache<List<TraktSearchResult>>(
-        TTL_ID_MAPPING, 100, persistentDataStore, json, "imdb_search", persistentScope
+        TTL_ID_MAPPING, 100, persistentDataStore, json, "imdb_search_v1", persistentScope
     )
     // 想看/已看 ID 集合持久化缓存（6 小时）：跨 App 重启复用，避免每次启动都发 4 个 /sync/* 请求
     // 增删想看/已看时同步更新，退出登录时清除
     private val watchlistWatchedIdsCache = persistentTtlCache<WatchlistWatchedIds>(
-        TTL_WATCHLIST_IDS, 1, persistentDataStore, json, "watchlist_watched_ids", persistentScope
+        TTL_WATCHLIST_IDS, 1, persistentDataStore, json, "watchlist_watched_ids_v1", persistentScope
     )
     // 持久化缓存（6 小时）：发现页栏目数据，跨 App 重启保留，避免重启后重新请求
     private val recommendationsCache = persistentTtlCache<List<TraktMovie>>(
-        TTL_RECOMMENDATIONS, 30, persistentDataStore, json, "recommendations", persistentScope
+        TTL_RECOMMENDATIONS, 30, persistentDataStore, json, "recommendations_v1", persistentScope
     )
     private val trendingMoviesCache = persistentTtlCache<Pair<List<TraktTrendingMovieResponse>, Int>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "trending_movies", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_movies_v1", persistentScope
     )
     private val trendingShowsCache = persistentTtlCache<Pair<List<TraktTrendingShowResponse>, Int>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "trending_shows", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_shows_v1", persistentScope
     )
     private val anticipatedMoviesCache = persistentTtlCache<Pair<List<TraktAnticipatedMovieResponse>, Int>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_movies", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_movies_v1", persistentScope
     )
     private val anticipatedShowsCache = persistentTtlCache<Pair<List<TraktAnticipatedShowResponse>, Int>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_shows", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "anticipated_shows_v1", persistentScope
     )
     private val showRecommendationsCache = persistentTtlCache<List<TraktRecommendationShowResponse>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "show_recommendations", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "show_recommendations_v1", persistentScope
     )
     private val trendingListsCache = persistentTtlCache<List<TraktTrendingListResponse>>(
-        TTL_TRENDING, 5, persistentDataStore, json, "trending_lists", persistentScope
+        TTL_TRENDING, 5, persistentDataStore, json, "trending_lists_v1", persistentScope
     )
 
     /** 持久化缓存列表，供 Application 启动时批量加载 */
@@ -399,7 +399,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -432,7 +432,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to search by imdb: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -489,7 +489,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch movie history: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -504,7 +504,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch show history: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -563,7 +563,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to get watched shows: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -621,7 +621,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch comments: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -649,7 +649,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to post comment: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -662,7 +662,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch seasons: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -675,7 +675,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch episodes: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -689,7 +689,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch watched progress: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -706,7 +706,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to mark episode: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -724,7 +724,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to mark episodes: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -741,7 +741,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to unmark episode watched: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -764,14 +764,14 @@ class TraktRepository @Inject constructor(
                     if (!removeResp.isSuccessful) {
                         Log.w("TraktRepository", "markAsWatched 副操作 removeFromWatchlist 失败: ${removeResp.code()}, traktId=$traktId")
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     Log.w("TraktRepository", "markAsWatched 副操作 removeFromWatchlist 异常: ${e.message}, traktId=$traktId")
                 }
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to mark as watched: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -794,14 +794,14 @@ class TraktRepository @Inject constructor(
                     if (!addResp.isSuccessful) {
                         Log.w("TraktRepository", "removeWatched 副操作 addToWatchlist 失败: ${addResp.code()}, traktId=$traktId")
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     Log.w("TraktRepository", "removeWatched 副操作 addToWatchlist 异常: ${e.message}, traktId=$traktId")
                 }
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove watched: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -818,7 +818,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch related movies: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -835,105 +835,45 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch related shows: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    /** 检查某个影视是否在想看列表中 */
+    /** 检查某个影视是否在想看列表中（优先用全局缓存，避免网络请求） */
     suspend fun checkInWatchlist(traktId: Int, type: MediaType): Boolean {
-        return try {
-            when (type) {
-                MediaType.MOVIE -> {
-                    val response = traktApiService.getWatchlist(
-                        type = "movies", extended = "full", page = 1, limit = 200
-                    )
-                    if (response.isSuccessful) {
-                        response.body()?.any { it.movie.ids.trakt == traktId } ?: false
-                    } else false
-                }
-                MediaType.SHOW -> {
-                    val response = traktApiService.getShowWatchlist(
-                        type = "shows", extended = "full", page = 1, limit = 200
-                    )
-                    if (response.isSuccessful) {
-                        response.body()?.any { it.show.ids.trakt == traktId } ?: false
-                    } else false
-                }
-                MediaType.PERSON -> false
-                MediaType.DISK -> false
-            }
-        } catch (e: Exception) {
-            false
+        // 优先查全局缓存（已加载则秒进，不转圈）
+        watchlistWatchedIds?.let { return it.isInWatchlist(traktId, null, type) }
+        // 缓存未加载：先尝试加载，再查缓存
+        if (watchlistWatchedIds == null) {
+            runCatching { loadWatchlistWatchedIds() }
+            watchlistWatchedIds?.let { return it.isInWatchlist(traktId, null, type) }
         }
+        return false
     }
 
-    /** 检查某个影视是否已在已看历史中 */
+    /** 检查某个影视是否已在已看历史中（优先用全局缓存，避免网络请求） */
     suspend fun checkWatched(traktId: Int, type: MediaType): Boolean {
-        return try {
-            when (type) {
-                MediaType.MOVIE -> {
-                    val response = traktApiService.getMovieHistory()
-                    if (response.isSuccessful) {
-                        response.body()?.any { it.movie.ids.trakt == traktId } ?: false
-                    } else false
-                }
-                MediaType.SHOW -> {
-                    val response = traktApiService.getShowHistory()
-                    if (response.isSuccessful) {
-                        response.body()?.any { it.show.ids.trakt == traktId } ?: false
-                    } else false
-                }
-                MediaType.PERSON -> false
-                MediaType.DISK -> false
-            }
-        } catch (e: Exception) {
-            false
+        watchlistWatchedIds?.let { return it.isWatched(traktId, null, type) }
+        if (watchlistWatchedIds == null) {
+            runCatching { loadWatchlistWatchedIds() }
+            watchlistWatchedIds?.let { return it.isWatched(traktId, null, type) }
         }
+        return false
     }
 
     /** 批量获取推荐项的想看/已看状态，返回 traktId -> (inWatchlist, watched) 映射 */
     suspend fun batchCheckStatus(traktIds: List<Int>, type: MediaType): Map<Int, Pair<Boolean, Boolean>> {
         if (traktIds.isEmpty()) return emptyMap()
-        return try {
-            val watchlistIds = mutableSetOf<Int>()
-            val watchedIds = mutableSetOf<Int>()
-
-            when (type) {
-                MediaType.MOVIE -> {
-                    val watchlistResp = traktApiService.getWatchlist(
-                        type = "movies", extended = "full", page = 1, limit = 200
-                    )
-                    if (watchlistResp.isSuccessful) {
-                        watchlistResp.body()?.forEach { watchlistIds.add(it.movie.ids.trakt) }
-                    }
-                    val historyResp = traktApiService.getMovieHistory()
-                    if (historyResp.isSuccessful) {
-                        historyResp.body()?.forEach { watchedIds.add(it.movie.ids.trakt) }
-                    }
-                }
-                MediaType.SHOW -> {
-                    val watchlistResp = traktApiService.getShowWatchlist(
-                        type = "shows", extended = "full", page = 1, limit = 200
-                    )
-                    if (watchlistResp.isSuccessful) {
-                        watchlistResp.body()?.forEach { watchlistIds.add(it.show.ids.trakt) }
-                    }
-                    val historyResp = traktApiService.getShowHistory()
-                    if (historyResp.isSuccessful) {
-                        historyResp.body()?.forEach { watchedIds.add(it.show.ids.trakt) }
-                    }
-                }
-                MediaType.PERSON -> { /* PERSON not applicable */ }
-                MediaType.DISK -> {} 
+        // 优先用全局缓存（覆盖全量数据，不受 200 条限制）
+        val cached = watchlistWatchedIds ?: runCatching { loadWatchlistWatchedIds() }.getOrNull()
+        if (cached != null) {
+            return traktIds.associateWith { id ->
+                Pair(cached.isInWatchlist(id, null, type), cached.isWatched(id, null, type))
             }
-
-            traktIds.associateWith { id ->
-                Pair(watchlistIds.contains(id), watchedIds.contains(id))
-            }
-        } catch (e: Exception) {
-            traktIds.associateWith { Pair(false, false) }
         }
+        // 缓存加载失败时降级返回 false
+        return traktIds.associateWith { Pair(false, false) }
     }
 
     /** 添加到想看列表 */
@@ -953,7 +893,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to add to watchlist: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -975,7 +915,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to remove from watchlist: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -997,7 +937,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to add rating: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1039,7 +979,7 @@ class TraktRepository @Inject constructor(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1104,7 +1044,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("batchAddRatings failed: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1134,7 +1074,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("batchAddRatingsAt failed: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1156,7 +1096,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to remove rating: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1182,7 +1122,7 @@ class TraktRepository @Inject constructor(
                     }
                 }?.rating
             } else null
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }
     }
@@ -1206,7 +1146,7 @@ class TraktRepository @Inject constructor(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1232,7 +1172,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("Failed to fetch recommendations: ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1250,7 +1190,7 @@ class TraktRepository @Inject constructor(
             } else {
                 Result.failure(Exception("HTTP ${response.code()}"))
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1266,7 +1206,7 @@ class TraktRepository @Inject constructor(
                 trendingMoviesCache.put(key, result)
                 Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getTrendingShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktTrendingShowResponse>, Int>> {
@@ -1280,7 +1220,7 @@ class TraktRepository @Inject constructor(
                 trendingShowsCache.put(key, result)
                 Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getAnticipatedMovies(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedMovieResponse>, Int>> {
@@ -1294,7 +1234,7 @@ class TraktRepository @Inject constructor(
                 anticipatedMoviesCache.put(key, result)
                 Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getAnticipatedShows(page: Int = 1, limit: Int = 10): Result<Pair<List<TraktAnticipatedShowResponse>, Int>> {
@@ -1308,7 +1248,7 @@ class TraktRepository @Inject constructor(
                 anticipatedShowsCache.put(key, result)
                 Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun getShowRecommendations(limit: Int = 10): Result<List<TraktRecommendationShowResponse>> {
@@ -1321,7 +1261,7 @@ class TraktRepository @Inject constructor(
                 showRecommendationsCache.put(key, result)
                 Result.success(result)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取影视的 Trakt 视频列表 */
@@ -1336,7 +1276,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取影视的 Trakt 图片（fanart等） */
@@ -1358,7 +1298,7 @@ class TraktRepository @Inject constructor(
                 MediaType.PERSON -> Result.success(TraktImages())
                 MediaType.DISK -> Result.success(TraktImages())
             }
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取人物的 Trakt 图片 */
@@ -1368,7 +1308,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(response.body()?.images ?: TraktImages())
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取人物电影参演 */
@@ -1378,7 +1318,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(response.body() ?: TraktPersonCreditsResponse())
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取人物电视剧参演 */
@@ -1388,7 +1328,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(response.body() ?: TraktPersonCreditsResponse())
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     /** 获取人物别名 */
@@ -1398,7 +1338,7 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 Result.success(response.body() ?: emptyList())
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 社区热门列表
@@ -1413,7 +1353,7 @@ class TraktRepository @Inject constructor(
                 Result.success(result)
             }
             else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 列表详情条目
@@ -1426,7 +1366,7 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.getListItems(listId, limit, page)
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 用户统计。带 5 分钟 TTL 缓存
@@ -1452,7 +1392,7 @@ class TraktRepository @Inject constructor(
                 userProfileStorage.saveProfile(profile)
                 Result.success(profile)
             } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     suspend fun clearUserProfileCache() {
@@ -1470,7 +1410,7 @@ class TraktRepository @Inject constructor(
                 Result.success(stats)
             }
             else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 全量电影评分
@@ -1479,7 +1419,7 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.getAllMovieRatings()
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 全量剧集评分
@@ -1488,7 +1428,7 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.getAllShowRatings()
             if (response.isSuccessful) Result.success(response.body() ?: emptyList())
             else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
     // 合并全量评分（并行请求）。带 5 分钟 TTL 缓存
@@ -1504,7 +1444,7 @@ class TraktRepository @Inject constructor(
                 userRatingsCache.put("all", combined)
                 Result.success(combined)
             }
-        } catch (e: Exception) { Result.failure(e) }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 }
 

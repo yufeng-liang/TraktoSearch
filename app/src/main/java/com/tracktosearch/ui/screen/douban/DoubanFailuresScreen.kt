@@ -228,7 +228,12 @@ class DoubanFailuresViewModel @Inject constructor(
 
     /** 从 doubanRetryManager 加载全部失败项 */
     fun loadFailures() {
-        _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        // 已有数据时不显示 loading(静默刷新),避免返回页面时 grid 被销毁导致滚动位置丢失
+        val hasExistingData = _uiState.value.failures.isNotEmpty()
+        _uiState.value = _uiState.value.copy(
+            isLoading = !hasExistingData,
+            error = null
+        )
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val list = doubanRetryManager.getAllFailures()
@@ -386,6 +391,8 @@ fun DoubanFailuresScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val hazeState = remember { HazeState() }
+    // gridState 提到条件块外部,确保返回页面时 rememberSaveable 能正确恢复滚动位置
+    val gridState = rememberLazyGridState()
 
     // 0=想看(WISH), 1=已看(COLLECT)
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
@@ -616,7 +623,6 @@ fun DoubanFailuresScreen(
                         )
                     }
                 } else if (!uiState.isLoading && filtered.isNotEmpty()) {
-                    val gridState = rememberLazyGridState()
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(3),

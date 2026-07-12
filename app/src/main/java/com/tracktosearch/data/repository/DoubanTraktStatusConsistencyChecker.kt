@@ -1,13 +1,17 @@
 package com.tracktosearch.data.repository
 
+import android.content.Context
+import android.os.PowerManager
 import android.util.Log
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DelayInfo
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,7 +78,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val traktRepository: TraktRepository,
     private val doubanRepository: DoubanRepository,
-    private val doubanAuthStorage: DoubanAuthStorage
+    private val doubanAuthStorage: DoubanAuthStorage,
+    private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
+    @ApplicationContext private val context: Context
 ) {
     companion object {
         private const val TAG = "StatusConsistency"
@@ -93,6 +99,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
 
     @Volatile
     private var cancelled = false
+
+    /** WakeLock:手动检查期间保持 CPU 唤醒,避免息屏后网络请求 timeout */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     init {
         // 监听 DoubanRepository 的延时事件，合并到 checkProgress.delayInfo
@@ -148,6 +157,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             errors = errors,
             isComplete = true
         )
+        // 记录检查完成时间（供设置页二次确认弹窗显示）
+        runCatching { lastConsistencyCheckStorage.recordCheck() }
         Log.i(TAG, "状态一致性检查完成（本地表对比）: $result")
         result
     }
@@ -167,10 +178,18 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     fun checkAndUnifyWithCrawl(): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 息屏时保持 CPU 唤醒,避免豆瓣爬取过程中网络请求 timeout
+        acquireWakeLock()
         checkJob = appScope.launch {
             try {
                 runCheckWithCrawl()
             } catch (e: CancellationException) {
+                // 取消时更新进度状态,否则 isRunning 仍为 true 导致弹窗不响应
+                _checkProgress.value = _checkProgress.value.copy(
+                    isRunning = false,
+                    isComplete = true,
+                    phase = "已取消"
+                )
                 throw e
             } catch (e: Exception) {
                 _checkProgress.value = _checkProgress.value.copy(
@@ -178,9 +197,26 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isComplete = true,
                     phase = "检查异常: ${e.message}"
                 )
+            } finally {
+                releaseWakeLock()
             }
         }
         return true
+    }
+
+    /** 获取 PARTIAL_WAKE_LOCK,保持 CPU 唤醒避免息屏后网络请求 timeout */
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TrackToSearch:ConsistencyCheck")
+        // 30 分钟超时,避免异常情况下 WakeLock 泄漏
+        wakeLock?.acquire(30 * 60 * 1000L)
+    }
+
+    /** 释放 WakeLock */
+    private fun releaseWakeLock() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
     }
 
     private suspend fun runCheckWithCrawl() {
@@ -368,6 +404,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             errors = errors,
             delayInfo = null
         )
+        // 记录检查完成时间（供设置页二次确认弹窗显示）
+        runCatching { lastConsistencyCheckStorage.recordCheck() }
         Log.i(TAG, "状态一致性检查完成（爬豆瓣列表）: ${_checkProgress.value}")
     }
 

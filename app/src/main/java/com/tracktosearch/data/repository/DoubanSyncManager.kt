@@ -9,6 +9,8 @@ import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemDao
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemEntity
+import com.tracktosearch.data.local.db.DoubanSyncRollbackDao
+import com.tracktosearch.data.local.db.DoubanSyncRollbackEntity
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
@@ -95,6 +97,7 @@ class DoubanSyncManager @Inject constructor(
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
     private val doubanSyncPendingItemDao: DoubanSyncPendingItemDao,
+    private val doubanSyncRollbackDao: DoubanSyncRollbackDao,
     private val cloudFailureSyncManager: CloudFailureSyncManager,
     private val cloudPersonalSyncManager: CloudPersonalSyncManager,
     private val cloudDetailsPoolManager: CloudDetailsPoolManager,
@@ -210,7 +213,6 @@ class DoubanSyncManager @Inject constructor(
 
     /**
      * 启动同步(指定模式,非 suspend,立即返回)。
-     * - [SyncMode.INCREMENTAL_ONLY]: 等价于 forceOverwrite=false
      * - [SyncMode.INCREMENTAL_WITH_CHANGES]: 跳过已同步且状态一致的,处理状态变化的
      * - [SyncMode.FULL_REWRITE]: 先清空已同步标记,再 forceOverwrite=true
      *
@@ -277,6 +279,91 @@ class DoubanSyncManager @Inject constructor(
     }
 
     /**
+     * 查询回滚记录数量(用于 App 启动时检测是否有未恢复的完整同步残留)。
+     *
+     * 返回 >0 表示上次完整重写同步未完成,用户有 N 个标记被删除但未恢复。
+     */
+    suspend fun getRollbackCount(): Int {
+        return doubanSyncRollbackDao.count()
+    }
+
+    /**
+     * 恢复回滚数据:将被删除的标记重新添加到 Trakt watchlist/history。
+     *
+     * 使用场景:上次完整重写同步失败/取消后,用户选择恢复被删除的标记。
+     * 恢复完成后清除回滚表。
+     *
+     * @return 恢复的条目数(0=无回滚数据或恢复失败)
+     */
+    suspend fun restoreRollback(): Int {
+        val rollbackItems = doubanSyncRollbackDao.getAll()
+        if (rollbackItems.isEmpty()) return 0
+
+        val wishMovieIds = mutableListOf<Int>()
+        val wishShowIds = mutableListOf<Int>()
+        val collectMovieIds = mutableListOf<Int>()
+        val collectShowIds = mutableListOf<Int>()
+        for (item in rollbackItems) {
+            when (item.status) {
+                "wish" -> when (item.mediaType) {
+                    "movie" -> wishMovieIds.add(item.traktId)
+                    "show" -> wishShowIds.add(item.traktId)
+                }
+                "collect" -> when (item.mediaType) {
+                    "movie" -> collectMovieIds.add(item.traktId)
+                    "show" -> collectShowIds.add(item.traktId)
+                }
+            }
+        }
+
+        val total = rollbackItems.size
+        _progress.value = DoubanSyncProgress(
+            isRunning = true, startTimeMs = System.currentTimeMillis(),
+            phase = "恢复被删除的标记", total = total, current = 0
+        )
+
+        try {
+            if (wishMovieIds.isNotEmpty() || wishShowIds.isNotEmpty()) {
+                traktRepository.batchAddToWatchlist(wishMovieIds, wishShowIds)
+            }
+            if (collectMovieIds.isNotEmpty() || collectShowIds.isNotEmpty()) {
+                traktRepository.batchMarkAsWatched(collectMovieIds, collectShowIds)
+            }
+            // 恢复评分
+            for (item in rollbackItems) {
+                val rating = item.rating ?: continue
+                if (rating > 0) {
+                    val traktRating = rating * 2  // 豆瓣 1-5 → Trakt 1-10
+                    val mediaType = if (item.mediaType == "movie") MediaType.MOVIE else MediaType.SHOW
+                    runCatching {
+                        traktRepository.addRating(item.traktId, traktRating, mediaType)
+                    }
+                }
+            }
+            _progress.value = _progress.value.copy(
+                current = total, successCount = total,
+                phase = "恢复完成", isComplete = true, isRunning = false
+            )
+            doubanSyncRollbackDao.clearAll()
+            return total
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _progress.value = _progress.value.copy(
+                phase = "恢复失败: ${e.message}", isComplete = true, isRunning = false
+            )
+            return 0
+        }
+    }
+
+    /**
+     * 丢弃回滚数据(用户选择不恢复时调用)。
+     */
+    suspend fun discardRollback() {
+        doubanSyncRollbackDao.clearAll()
+    }
+
+    /**
      * 启动失败项重试(非 suspend,立即返回)。
      *
      * 重试流程:
@@ -312,7 +399,6 @@ class DoubanSyncManager @Inject constructor(
 
     private suspend fun runSync(mode: SyncMode, forceCrawl: Boolean = false) {
         when (mode) {
-            SyncMode.INCREMENTAL_ONLY -> runSyncIncremental(includeStatusChanges = false, forceCrawl = forceCrawl)
             SyncMode.INCREMENTAL_WITH_CHANGES -> runSyncIncremental(includeStatusChanges = true, forceCrawl = forceCrawl)
             SyncMode.FULL_REWRITE -> runSyncFullRewrite()
         }
@@ -677,7 +763,7 @@ class DoubanSyncManager @Inject constructor(
         )
         _progress.value = finalProgress
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
-        val mode = if (includeStatusChanges) "INCREMENTAL_WITH_CHANGES" else "INCREMENTAL_ONLY"
+        val mode = "INCREMENTAL_WITH_CHANGES"
         uploadToCloudAfterSync(mode = mode, isFullComplete = !cancelled)
     }
 
@@ -748,9 +834,11 @@ class DoubanSyncManager @Inject constructor(
      * 完全重写主流程(模式 C)。
      *
      * 1. 读 douban_synced_items 全表,按 status + mediaType 分组
-     * 2. 批量 removeFromWatchlist + removeFromWatched
-     * 3. 清空 douban_synced_items 表
-     * 4. 走 forceOverwrite=true 的同步流程
+     * 2. **保存回滚快照**到 douban_sync_rollback 表(同步失败时用于恢复)
+     * 3. 批量 removeFromWatchlist + removeFromWatched
+     * 4. 清空 douban_synced_items 表
+     * 5. 走 forceOverwrite=true 的同步流程
+     * 6. 同步成功 → 清除回滚表;同步失败/取消 → 保留回滚表(下次启动提示恢复)
      */
     private suspend fun runSyncFullRewrite() {
         val creds = doubanAuthStorage.getCredentials()
@@ -786,6 +874,23 @@ class DoubanSyncManager @Inject constructor(
             }
         }
 
+        // 保存回滚快照:记录即将删除的标记,同步失败时用于恢复
+        val rollbackItems = allSynced.mapNotNull { item ->
+            val traktId = item.traktId ?: return@mapNotNull null
+            DoubanSyncRollbackEntity(
+                doubanId = item.doubanId,
+                traktId = traktId,
+                title = item.title,
+                status = item.status,
+                mediaType = item.mediaType,
+                rating = item.rating,
+                rollbackAt = System.currentTimeMillis()
+            )
+        }
+        if (rollbackItems.isNotEmpty()) {
+            doubanSyncRollbackDao.replaceAll(rollbackItems)
+        }
+
         _progress.value = _progress.value.copy(
             total = allSynced.size, current = 0,
             subPhase = "移除 watchlist + watched"
@@ -806,6 +911,12 @@ class DoubanSyncManager @Inject constructor(
 
         _progress.value = _progress.value.copy(phase = "重新应用豆瓣状态")
         runSyncLegacy(forceOverwrite = true)
+
+        // 同步成功(未取消且 phase 为"同步完成")→ 清除回滚表
+        // 同步取消/失败 → 保留回滚表,下次启动提示用户恢复
+        if (!cancelled && _progress.value.phase == "同步完成") {
+            doubanSyncRollbackDao.clearAll()
+        }
     }
 
     /**
@@ -1060,11 +1171,10 @@ class DoubanSyncManager @Inject constructor(
             // (取消时可能只处理了部分 status,其他 status 的失败项记录应保留)
             return
         }
-        // 按 status 分组覆盖写入:只清空当前有数据的 status
+        // 按 status 分组覆盖写入:只清空当前有数据的 status（事务包装）
         val byStatus = failures.groupBy { it.status }
         for ((status, items) in byStatus) {
-            doubanSyncFailureDao.deleteByStatus(status.path)
-            doubanSyncFailureDao.insertAll(items.map { it.toEntity() })
+            doubanSyncFailureDao.replaceByStatus(status.path, items.map { it.toEntity() })
         }
     }
 
@@ -1510,6 +1620,8 @@ class DoubanSyncManager @Inject constructor(
             status = status,
             failureReason = reason,
             failedAt = System.currentTimeMillis(),
+            // 保留用户之前标注的 updatedAt,避免重新构建失败项时丢失云同步时间戳
+            updatedAt = existing?.updatedAt ?: 0L,
             attemptCount = (existing?.attemptCount ?: 0) + 1,
             // 保留用户已标注的 mediaType,仅当为 null 时用爬取详情推断的类型填充
             mediaType = existing?.mediaType ?: inferredMediaType,

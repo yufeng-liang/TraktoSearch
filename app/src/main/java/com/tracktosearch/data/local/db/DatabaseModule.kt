@@ -134,6 +134,28 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v8 → v9: 新增 douban_sync_rollback 表 + douban_sync_failures 新增 updatedAt 列
+            // rollback 表: 「完整重写」同步失败时保存被删除的标记,支持下次启动恢复
+            // updatedAt 列: mediaType/subtitle/status 等字段最近修改时间,用于云同步时间戳比较
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS douban_sync_rollback (
+                    doubanId TEXT NOT NULL PRIMARY KEY,
+                    traktId INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    mediaType TEXT NOT NULL,
+                    rating INTEGER,
+                    rollbackAt INTEGER NOT NULL
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_sync_rollback_status ON douban_sync_rollback(status)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_sync_rollback_mediaType ON douban_sync_rollback(mediaType)")
+            db.execSQL("ALTER TABLE douban_sync_failures ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -142,7 +164,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tracktosearch.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
             .build()
     }
 
@@ -169,4 +191,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDoubanSyncPendingItemDao(db: AppDatabase): DoubanSyncPendingItemDao = db.doubanSyncPendingItemDao()
+
+    @Provides
+    @Singleton
+    fun provideDoubanSyncRollbackDao(db: AppDatabase): DoubanSyncRollbackDao = db.doubanSyncRollbackDao()
 }

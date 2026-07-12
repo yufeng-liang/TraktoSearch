@@ -185,6 +185,9 @@ fun SettingsScreen(
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
+    // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
+    var showConsistencyConfirm by remember { mutableStateOf(false) }
+    var lastCheckTimeText by remember { mutableStateOf<String?>(null) }
     var showDoubanLoginPrompt by remember { mutableStateOf(false) }
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
@@ -639,11 +642,17 @@ fun SettingsScreen(
                             }
                         } ?: stringResource(R.string.settings_douban_status_consistency_desc),
                         onClick = {
-                            // 检查未运行时才启动新检查；已运行时直接弹窗恢复进度
-                            if (!viewModel.isCheckRunning()) {
-                                viewModel.startManualConsistencyCheck()
+                            // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
+                            if (viewModel.isCheckRunning()) {
+                                showConsistencyDialog = true
+                            } else {
+                                // 异步读取上次检查时间并格式化，然后弹二次确认
+                                scope.launch {
+                                    val lastMs = viewModel.getLastConsistencyCheckAt()
+                                    lastCheckTimeText = formatLastCheckTime(lastMs, context)
+                                    showConsistencyConfirm = true
+                                }
                             }
-                            showConsistencyDialog = true
                         }
                     )
                     }
@@ -1128,6 +1137,45 @@ fun SettingsScreen(
         )
     }
 
+    // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
+    if (showConsistencyConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConsistencyConfirm = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.consistency_check_confirm_title)) },
+            text = {
+                Column {
+                    val lastText = lastCheckTimeText
+                        ?: stringResource(R.string.consistency_check_confirm_never)
+                    Text(
+                        text = stringResource(R.string.consistency_check_confirm_last, lastText),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.consistency_check_confirm_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConsistencyConfirm = false
+                    viewModel.startManualConsistencyCheck()
+                    showConsistencyDialog = true
+                }) {
+                    Text(stringResource(R.string.consistency_check_confirm_button))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConsistencyConfirm = false }) {
+                    Text(stringResource(R.string.douban_retry_cancel))
+                }
+            }
+        )
+    }
+
     // 状态一致性检查进度弹窗
     if (showConsistencyDialog) {
         ConsistencyCheckDialog(
@@ -1499,6 +1547,35 @@ private fun AccountItem(
             } else {
                 DoubanLoginPromptRow(onLogin = onDoubanLogin)
             }
+        }
+    }
+}
+
+/**
+ * 格式化上次状态一致性检查时间为相对时间字符串。
+ *
+ * - 0 或负数 → null（调用方用"从未检查过"兜底）
+ * - < 1 分钟 → "刚刚"
+ * - < 1 小时 → "X 分钟前"
+ * - < 1 天 → "X 小时前"
+ * - < 30 天 → "X 天前"
+ * - >= 30 天 → "YYYY-MM-DD"
+ */
+private fun formatLastCheckTime(timestampMs: Long, context: android.content.Context): String? {
+    if (timestampMs <= 0L) return null
+    val diff = System.currentTimeMillis() - timestampMs
+    val minutes = diff / (60 * 1000L)
+    val hours = diff / (60 * 60 * 1000L)
+    val days = diff / (24 * 60 * 60 * 1000L)
+
+    return when {
+        minutes < 1 -> context.getString(R.string.consistency_check_time_just_now)
+        minutes < 60 -> context.getString(R.string.consistency_check_time_minutes_ago, minutes.toInt())
+        hours < 24 -> context.getString(R.string.consistency_check_time_hours_ago, hours.toInt())
+        days < 30 -> context.getString(R.string.consistency_check_time_days_ago, days.toInt())
+        else -> {
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            sdf.format(java.util.Date(timestampMs))
         }
     }
 }

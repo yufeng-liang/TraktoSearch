@@ -13,6 +13,7 @@ import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
+import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.CooldownStatus
 import com.tracktosearch.data.local.DiscoverSectionConfig
 import com.tracktosearch.data.local.DetailSectionConfig
@@ -95,6 +96,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val cloudPersonalSyncManager: CloudPersonalSyncManager,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
@@ -549,6 +551,9 @@ class SettingsViewModel @Inject constructor(
 
     /** 检查是否在运行中 */
     fun isCheckRunning(): Boolean = statusConsistencyChecker.isRunning()
+
+    /** 获取上次状态一致性检查时间戳（包括同步后自动检查和手动检查），0=从未检查 */
+    suspend fun getLastConsistencyCheckAt(): Long = lastConsistencyCheckStorage.getLastCheckAt()
 
     /** 手动触发：爬豆瓣列表拿最新状态后对比（分钟级，进度通过 checkProgress 暴露） */
     fun startManualConsistencyCheck() {

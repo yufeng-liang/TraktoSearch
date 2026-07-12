@@ -295,7 +295,7 @@ object NetworkModule {
             maxSize = 0,
             dataStore = dataStore,
             json = json,
-            keyPrefix = "douban_hot",
+            keyPrefix = "douban_hot_v1",
             scope = scope
         )
     }

@@ -940,7 +940,7 @@ fun DetailScreen(
             if (showRatingDialog || uiState.showRatingDialog) {
                 RatingDialog(
                     initialRating = uiState.userRating,
-                    initialComment = null,
+                    initialComment = uiState.userComment,
                     isSubmitting = uiState.isRating,
                     onDismiss = {
                         showRatingDialog = false
@@ -948,8 +948,9 @@ fun DetailScreen(
                     },
                     onConfirm = { rating, comment ->
                         showRatingDialog = false
-                        viewModel.dismissRatingDialog()
                         view.performHaptic(HapticType.HEAVY_CLICK)
+                        // 不调用 dismissRatingDialog():setRatingWithComment/removeRating 内部会关闭弹窗并处理豆瓣同步
+                        // 否则会先 syncDoubanMark(COLLECT) 再 syncDoubanMarkWithRating,导致两次豆瓣同步 toast
                         if (rating == null || rating == 0) viewModel.removeRating() else viewModel.setRatingWithComment(rating, comment)
                     }
                 )

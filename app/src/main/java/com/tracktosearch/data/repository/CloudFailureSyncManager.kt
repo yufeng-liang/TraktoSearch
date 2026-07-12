@@ -69,6 +69,7 @@ class CloudFailureSyncManager @Inject constructor(
         val status: String,
         val failureReason: String,
         val failedAt: Long,
+        val updatedAt: Long = 0L,
         val attemptCount: Int,
         val mediaType: String? = null,
         val subtitle: String? = null
@@ -161,9 +162,10 @@ class CloudFailureSyncManager @Inject constructor(
                 Log.d(TAG, "GET 云端失败,跳过时间戳比较: ${e.message}")
             }
 
-            // 时间戳比较:本地最新 failedAt vs 云端 uploadedAt
+            // 时间戳比较:本地最新 max(failedAt, updatedAt) vs 云端 uploadedAt
             // cloudUploadedAt > 0 才比较(0=旧版数据或云端不存在,无法比较时保守上传)
-            val localNewest = entities.maxOfOrNull { it.failedAt } ?: 0L
+            // 使用 max(failedAt, updatedAt) 确保用户标注 mediaType/subtitle 后(只更新 updatedAt)也能触发上传
+            val localNewest = entities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
             if (cloudUploadedAt > 0L && localNewest <= cloudUploadedAt) {
                 Log.d(TAG, "本地数据不比云端新(localNewest=$localNewest, cloudUploadedAt=$cloudUploadedAt),跳过上传")
                 return@withContext true
@@ -184,6 +186,7 @@ class CloudFailureSyncManager @Inject constructor(
                         status = e.status,
                         failureReason = e.failureReason,
                         failedAt = e.failedAt,
+                        updatedAt = e.updatedAt,
                         attemptCount = e.attemptCount,
                         mediaType = e.mediaType,
                         subtitle = e.subtitle
@@ -302,9 +305,9 @@ class CloudFailureSyncManager @Inject constructor(
 
             if (payload.failures.isEmpty()) return@withContext DownloadResult.CloudEmpty
 
-            // 时间戳比较:云端 uploadedAt vs 本地最新 failedAt
+            // 时间戳比较:云端 uploadedAt vs 本地最新 max(failedAt, updatedAt)
             val localEntities = doubanSyncFailureDao.getAll()
-            val localNewest = localEntities.maxOfOrNull { it.failedAt } ?: 0L
+            val localNewest = localEntities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
 
             if (localNewest > 0L && payload.uploadedAt <= localNewest) {
                 // 本地有数据且本地更新或相等 → 忽略云端,以本地显示为准
@@ -312,7 +315,7 @@ class CloudFailureSyncManager @Inject constructor(
                 return@withContext DownloadResult.LocalNewer
             }
 
-            // 本地无数据 或 云端更新 → 替换全部本地失败数据(先清空再写入)
+            // 本地无数据 或 云端更新 → 替换全部本地失败数据(事务包装)
             val entities = payload.failures.map { dto ->
                 com.tracktosearch.data.local.db.DoubanSyncFailureEntity(
                     doubanId = dto.doubanId,
@@ -325,13 +328,13 @@ class CloudFailureSyncManager @Inject constructor(
                     status = dto.status,
                     failureReason = dto.failureReason,
                     failedAt = dto.failedAt,
+                    updatedAt = dto.updatedAt,
                     attemptCount = dto.attemptCount,
                     mediaType = dto.mediaType,
                     subtitle = dto.subtitle
                 )
             }
-            doubanSyncFailureDao.clearAll()
-            doubanSyncFailureDao.insertAll(entities)
+            doubanSyncFailureDao.replaceAll(entities)
             Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
             DownloadResult.Success(entities.size)
         } catch (e: Exception) {

@@ -97,6 +97,72 @@ fun DoubanPendingItemsDialog(
     )
 }
 
+/**
+ * 豆瓣同步回滚恢复对话框。
+ *
+ * 触发条件:App 启动时检测到 douban_sync_rollback 表有数据
+ * (上次完整重写同步失败/取消,标记已从 Trakt 删除但未恢复)。
+ *
+ * 两个选项:
+ * 1. 恢复标记:将被删除的标记重新添加到 Trakt(推荐)
+ * 2. 不恢复:放弃恢复,标记将永久丢失
+ *
+ * 优先级:rollback 优先于 pending items 和 failures 重试。
+ */
+@Composable
+fun DoubanRollbackDialog(
+    rollbackCount: Int,
+    onDismiss: () -> Unit,
+    onRestore: () -> Unit,    // 恢复标记
+    onDiscard: () -> Unit     // 丢弃,不恢复
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(R.string.douban_rollback_title)) },
+        text = {
+            Column {
+                Text(
+                    stringResource(R.string.douban_rollback_subtitle, rollbackCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 选项 1:恢复标记(推荐)
+                ResumeOptionItem(
+                    icon = Icons.Rounded.Refresh,
+                    title = stringResource(R.string.douban_rollback_restore),
+                    subtitle = stringResource(R.string.douban_rollback_restore_desc),
+                    onClick = {
+                        onDismiss()
+                        onRestore()
+                    },
+                    isRecommended = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // 选项 2:不恢复
+                ResumeOptionItem(
+                    icon = Icons.Rounded.ChevronRight,
+                    title = stringResource(R.string.douban_rollback_discard),
+                    subtitle = stringResource(R.string.douban_rollback_discard_desc),
+                    onClick = {
+                        onDismiss()
+                        onDiscard()
+                    }
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.douban_resume_cancel))
+            }
+        }
+    )
+}
+
 /** 续传选项行 */
 @Composable
 private fun ResumeOptionItem(
