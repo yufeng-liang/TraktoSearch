@@ -1,9 +1,15 @@
 package com.tracktosearch.ui.screen.person
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
+import androidx.core.graphics.drawable.toBitmap
+import coil.imageLoader
+import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPerson
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
@@ -12,10 +18,13 @@ import com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,13 +53,16 @@ data class PersonUiState(
     val totalMovieCredits: Int = 0,
     val totalTvCredits: Int = 0,
     val originalName: String? = null,
-    val isLoadingTrakt: Boolean = true // Trakt 数据是否正在加载（控制社媒/简介骨架占位）
+    val isLoadingTrakt: Boolean = true, // Trakt 数据是否正在加载（控制社媒/简介骨架占位）
+    val avatarDominantColor: Color? = null // 头像主色（用于顶部渐变背景）
 )
 
 @HiltViewModel
 class PersonViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val tmdbRepository: TmdbRepository,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    private val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     companion object {
@@ -110,6 +122,8 @@ class PersonViewModel @Inject constructor(
                     if (originalName != null) {
                         _uiState.value = _uiState.value.copy(originalName = originalName)
                     }
+                    // 预取头像主色（用于顶部沉浸式渐变背景）
+                    prefetchAvatarColor(person.profile_path)
                 }
 
                 // 电影作品加载完成，独立更新
@@ -135,6 +149,43 @@ class PersonViewModel @Inject constructor(
                 _uiState.value = PersonUiState(error = "Failed to load person data")
             }
         }
+    }
+
+    /**
+     * 预取头像主色：先查持久化缓存命中则瞬间生效，未命中则用 Coil 加载头像 bitmap
+     * 并延迟 1.5s 后提取主色，避免快速滑过时浪费 CPU。
+     */
+    private fun prefetchAvatarColor(profilePath: String?) {
+        if (profilePath.isNullOrBlank()) return
+        val avatarUrl = TmdbImageUrls.build(profilePath)
+        // 已有主色或缓存命中则直接生效
+        if (_uiState.value.avatarDominantColor != null) return
+        viewModelScope.launch {
+            posterColorExtractor.getCachedColor(avatarUrl)?.let { argb ->
+                if (argb != 0L) {
+                    _uiState.value = _uiState.value.copy(avatarDominantColor = Color(argb))
+                }
+            }
+        }
+        // 使用 Coil 加载头像 bitmap，加载成功后延迟提取主色
+        val request = ImageRequest.Builder(context)
+            .data(avatarUrl)
+            .size(200)
+            .crossfade(false)
+            .listener(
+                onSuccess = { _, result ->
+                    val bitmap = result.drawable.toBitmap()
+                    viewModelScope.launch {
+                        delay(1500)
+                        val argb = posterColorExtractor.extractDominantColor(avatarUrl, bitmap)
+                        if (argb != 0L) {
+                            _uiState.value = _uiState.value.copy(avatarDominantColor = Color(argb))
+                        }
+                    }
+                }
+            )
+            .build()
+        context.imageLoader.enqueue(request)
     }
 
     private fun loadTraktPerson(tmdbId: Int, personName: String) {

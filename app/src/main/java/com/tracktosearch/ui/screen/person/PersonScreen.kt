@@ -117,7 +117,7 @@ fun PersonScreen(
                     }
                 }
                 else -> {
-                    // 顶部渐变背景
+                    // 顶部渐变背景（从头像主色过渡到透明）
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -126,7 +126,7 @@ fun PersonScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colors = listOf(
-                                        MaterialTheme.colorScheme.surface,
+                                        uiState.avatarDominantColor ?: MaterialTheme.colorScheme.surface,
                                         Color.Transparent
                                     )
                                 )
@@ -211,7 +211,8 @@ fun PersonScreen(
                                                         .background(
                                                             MaterialTheme.colorScheme.surfaceVariant,
                                                             RoundedCornerShape(14.dp)
-                                                        )
+                                                        ),
+                                                    imageSize = 200
                                                 )
                                             }
                                         }
@@ -481,7 +482,9 @@ private fun CreditPosterCard(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier.width(100.dp),
+        modifier = Modifier
+            .width(100.dp)
+            .clickable(enabled = !isResolving, onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(modifier = Modifier.width(100.dp)) {
@@ -489,13 +492,14 @@ private fun CreditPosterCard(
                 imageUrl = posterUrl,
                 title = title,
                 year = year.takeIf { it.isNotEmpty() },
-                onClick = if (isResolving) ({ }) else onClick,
+                onClick = { },
                 modifier = Modifier
                     .width(100.dp)
                     .background(
                         MaterialTheme.colorScheme.surfaceVariant,
                         RoundedCornerShape(14.dp)
-                    )
+                    ),
+                imageSize = 264
             )
             if (isResolving) {
                 Box(
