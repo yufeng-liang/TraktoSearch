@@ -94,6 +94,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -228,21 +229,22 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
-            // alpha 0.70:增强沉浸效果,让海报主色调更明显(+15%)
-            .then(
-                uiState.posterDominantColor?.let { c ->
-                    Modifier.background(
+        ) {
+            // 沉浸式顶部渐变背景：固定 260dp 高度，海报主色 → 透明，无海报色时回退 surface → 透明
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .align(Alignment.TopCenter)
+                    .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                c.copy(alpha = 0.70f),
-                                MaterialTheme.colorScheme.background
+                                uiState.posterDominantColor ?: MaterialTheme.colorScheme.surface,
+                                Color.Transparent
                             )
                         )
                     )
-                } ?: Modifier
             )
-        ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
             // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
@@ -268,12 +270,20 @@ fun DetailScreen(
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
-            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
+            // 吸顶时状态栏区域使用毛玻璃背景,非吸顶透明(透出渐变)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(tabContainerColor)
+                    .then(
+                        if (isPinned) {
+                            Modifier.hazeEffect(
+                                state = detailHazeState,
+                                style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                            )
+                        } else Modifier
+                    )
+                    .background(Color.Transparent)
                     .align(Alignment.TopCenter)
             )
 
@@ -329,6 +339,7 @@ fun DetailScreen(
                         posterColorExtractor = viewModel.posterColorExtractor,
                         onPosterColorExtracted = viewModel::updatePosterColor,
                         sectionVisible = uiState.sectionVisible,
+                        hazeState = detailHazeState,
                         // 头部下方内容(cast/视频/简介/季集)淡入,海报+标题+按钮始终可见
                         contentAlpha = contentAlpha
                     )
@@ -343,31 +354,46 @@ fun DetailScreen(
                 if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
                     // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = tabContainerColor,
-                        contentColor = tabContentColor,
-                        modifier = Modifier.alpha(contentAlpha)
+                    // 吸顶时 Tab 栏使用毛玻璃背景，indicator 保持主题色
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isPinned) {
+                                    Modifier.hazeEffect(
+                                        state = detailHazeState,
+                                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                                    )
+                                } else Modifier
+                            )
+                            .background(Color.Transparent)
                     ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
-                            text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1) }
-                        )
-                        if (showCommentsTab) {
+                        PrimaryTabRow(
+                            selectedTabIndex = selectedTab,
+                            containerColor = Color.Transparent,
+                            contentColor = tabContentColor,
+                            modifier = Modifier.alpha(contentAlpha)
+                        ) {
                             Tab(
-                                selected = selectedTab == 1,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
-                                text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1) }
+                                selected = selectedTab == 0,
+                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
+                                text = { Text("${stringResource(R.string.detail_tab_resources)}(${uiState.resources.size})", maxLines = 1) }
                             )
-                        }
-                        if (showRecommendationsTab) {
-                            val recTabIndex = if (showCommentsTab) 2 else 1
-                            Tab(
-                                selected = selectedTab == recTabIndex,
-                                onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
-                                text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1) }
-                            )
+                            if (showCommentsTab) {
+                                Tab(
+                                    selected = selectedTab == 1,
+                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 1 },
+                                    text = { Text("${stringResource(R.string.detail_tab_comments)}(${uiState.comments.size})", maxLines = 1) }
+                                )
+                            }
+                            if (showRecommendationsTab) {
+                                val recTabIndex = if (showCommentsTab) 2 else 1
+                                Tab(
+                                    selected = selectedTab == recTabIndex,
+                                    onClick = { view.performHaptic(HapticType.CLICK); selectedTab = recTabIndex },
+                                    text = { Text("${stringResource(R.string.detail_tab_recommendations)}(${uiState.recommendations.size})", maxLines = 1) }
+                                )
+                            }
                         }
                     }
                 }

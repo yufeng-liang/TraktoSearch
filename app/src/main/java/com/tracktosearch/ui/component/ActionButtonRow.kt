@@ -9,7 +9,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -18,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
@@ -66,6 +69,7 @@ fun ActionButtonRow(
             } else {
                 HazeMaterials.thin(MaterialTheme.colorScheme.background)
             }
+            val contentAlpha = if (action.enabled && !action.isLoading) 1f else 0.5f
 
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -86,15 +90,25 @@ fun ActionButtonRow(
                     .clickable(
                         interactionSource = interactionSource,
                         indication = null,
+                        enabled = action.enabled && !action.isLoading,
                         onClick = action.onClick
                     )
+                    .alpha(contentAlpha)
                     .padding(vertical = 10.dp)
             ) {
-                Icon(
-                    imageVector = action.icon,
-                    contentDescription = action.label,
-                    tint = Color.White
-                )
+                if (action.isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = action.icon,
+                        contentDescription = action.label,
+                        tint = Color.White
+                    )
+                }
                 Text(
                     text = action.label,
                     color = Color.White,
@@ -113,5 +127,7 @@ data class ActionItem(
     val icon: ImageVector,
     val label: String,
     val selected: Boolean = false,
+    val enabled: Boolean = true,
+    val isLoading: Boolean = false,
     val onClick: () -> Unit
 )

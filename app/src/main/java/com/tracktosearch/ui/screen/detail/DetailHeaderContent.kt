@@ -1,7 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -25,11 +24,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -62,12 +63,15 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.ui.component.ActionButtonRow
+import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.data.util.PosterColorExtractor
+import dev.chrisbanes.haze.HazeState
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.launch
 
@@ -101,7 +105,8 @@ internal fun DetailHeaderContent(
     sectionVisible: DetailSectionVisibility = DetailSectionVisibility(),
     // 头部下方内容(cast/视频/简介/季集)的透明度,用于"沉浸背景先现,内容后显"淡入效果
     // 1f=完全显示,0f=隐藏;海报+标题+按钮始终不透明
-    contentAlpha: Float = 1f
+    contentAlpha: Float = 1f,
+    hazeState: HazeState
 ) {
     val context = LocalContext.current
     val view = LocalView.current
@@ -328,144 +333,44 @@ internal fun DetailHeaderContent(
                         }
                     }
                 }
-                // 用户评分控件（始终预留固定高度避免布局跳动）
-                Box(modifier = Modifier.height(56.dp)) {
-                    if (uiState.userRating != null) {
-                        UserRatingBar(
-                            userRating = uiState.userRating,
-                            isRating = uiState.isRating,
-                            isRatingLoading = uiState.isRatingLoading,
-                            onClick = onShowRatingDialog
-                        )
-                    }
-                }
-                // 标记已看按钮 + 想看按钮
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(32.dp),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    // 左半区：想看按钮
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Surface(
-                            onClick = if (isMarkingWatchlist) ({}) else ({
+                // 操作按钮组：想看 / 已看 / 评分
+                ActionButtonRow(
+                    actions = listOf(
+                        ActionItem(
+                            icon = if (isMarkedWatchlist) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                            label = stringResource(if (isMarkedWatchlist) R.string.detail_marked_watchlist else R.string.detail_mark_watchlist),
+                            selected = isMarkedWatchlist,
+                            enabled = !isMarkingWatchlist,
+                            isLoading = isMarkingWatchlist,
+                            onClick = {
                                 view.performHaptic(HapticType.TICK)
                                 onToggleWatchlist()
-                            }),
-                            enabled = !isMarkingWatchlist,
-                            shape = RoundedCornerShape(16.dp),
-                            border = if (!isMarkedWatchlist && !isMarkingWatchlist) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
-                            color = when {
-                                isMarkingWatchlist -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                isMarkedWatchlist -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                            },
-                            tonalElevation = 0.dp,
-                            shadowElevation = 0.dp,
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                if (isMarkingWatchlist) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = if (isMarkedWatchlist) Icons.Rounded.Check else Icons.Rounded.BookmarkBorder,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp),
-                                        tint = if (isMarkedWatchlist) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    text = when {
-                                        isMarkingWatchlist -> stringResource(R.string.detail_mark_processing)
-                                        isMarkedWatchlist -> stringResource(R.string.detail_marked_watchlist)
-                                        else -> stringResource(R.string.detail_mark_watchlist)
-                                    },
-                                    maxLines = 1,
-                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                                    color = when {
-                                        isMarkingWatchlist -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                        isMarkedWatchlist -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.onSurface
-                                    }
-                                )
                             }
-                        }
-                    }
-                    // 右半区：已看按钮（起点对齐 RT 评分）
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Surface(
-                            onClick = if (isMarkingWatched) ({}) else ({
+                        ),
+                        ActionItem(
+                            icon = if (isMarkedWatched) Icons.Rounded.Check else Icons.Rounded.Visibility,
+                            label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
+                            selected = isMarkedWatched,
+                            enabled = !isMarkingWatched,
+                            isLoading = isMarkingWatched,
+                            onClick = {
                                 view.performHaptic(HapticType.TICK)
                                 onToggleWatched()
-                            }),
-                            enabled = !isMarkingWatched,
-                            shape = RoundedCornerShape(16.dp),
-                            border = if (!isMarkedWatched && !isMarkingWatched) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)) else null,
-                            color = when {
-                                isMarkingWatched -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-                                isMarkedWatched -> MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
-                            },
-                            tonalElevation = 0.dp,
-                            shadowElevation = 0.dp,
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                if (isMarkingWatched) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = if (isMarkedWatched) Icons.Rounded.Check else Icons.Rounded.Visibility,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(15.dp),
-                                        tint = if (isMarkedWatched) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Text(
-                                    text = when {
-                                        isMarkingWatched -> stringResource(R.string.detail_mark_processing)
-                                        isMarkedWatched -> stringResource(R.string.detail_marked_watched)
-                                        else -> stringResource(R.string.detail_mark_watched)
-                                    },
-                                    style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                                    color = when {
-                                        isMarkingWatched -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                                        isMarkedWatched -> MaterialTheme.colorScheme.primary
-                                        else -> MaterialTheme.colorScheme.onSurface
-                                    },
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
                             }
-                        }
-                    }
-                }
+                        ),
+                        ActionItem(
+                            icon = if (uiState.userRating != null && uiState.userRating > 0) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                            label = stringResource(if (uiState.userRating != null && uiState.userRating > 0) R.string.detail_rated else R.string.detail_rate),
+                            selected = uiState.userRating != null && uiState.userRating > 0,
+                            onClick = {
+                                view.performHaptic(HapticType.TICK)
+                                onShowRatingDialog()
+                            }
+                        )
+                    ),
+                    hazeState = hazeState,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
 

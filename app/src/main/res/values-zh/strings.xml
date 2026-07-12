@@ -144,6 +144,8 @@
     <string name="detail_mark_watchlist">想看</string>
     <string name="detail_marked_watchlist">已想看</string>
     <string name="detail_mark_processing">处理中</string>
+    <string name="detail_rate">评分</string>
+    <string name="detail_rated">已评分</string>
     <string name="detail_login_required_title">需要登录</string>
     <string name="detail_login_required_message">请先登录，即可使用想看、已看和评分功能。</string>
     <string name="detail_login_go">去登录</string>

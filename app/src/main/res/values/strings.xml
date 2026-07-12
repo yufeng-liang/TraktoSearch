@@ -144,6 +144,8 @@
     <string name="detail_mark_watchlist">Watchlist</string>
     <string name="detail_marked_watchlist">In Watchlist</string>
     <string name="detail_mark_processing">Processing</string>
+    <string name="detail_rate">Rate</string>
+    <string name="detail_rated">Rated</string>
     <string name="detail_login_required_title">Login Required</string>
     <string name="detail_login_required_message">Please log in to use watchlist, watched, and rating features.</string>
     <string name="detail_login_go">Log In</string>
