@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.discoverfilter
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -34,11 +33,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -325,72 +322,51 @@ fun DiscoverFilterScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // 类型
-                FilterChip(
+                GlassFilterChip(
                     selected = uiState.selectedGenreIds.isNotEmpty(),
-                    border = if (uiState.selectedGenreIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showGenreDialog = true },
-                    label = {
-                        Text(
-                            text = if (uiState.selectedGenreIds.isEmpty())
-                                stringResource(R.string.discover_filter_genre)
-                            else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}",
-                            maxLines = 1
-                        )
-                    }
+                    hazeState = hazeState,
+                    text = if (uiState.selectedGenreIds.isEmpty())
+                        stringResource(R.string.discover_filter_genre)
+                    else "${uiState.selectedGenreIds.size} ${stringResource(R.string.discover_filter_genre)}"
                 )
                 // 地区
-                FilterChip(
+                GlassFilterChip(
                     selected = uiState.selectedCountries.isNotEmpty(),
-                    border = if (uiState.selectedCountries.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showRegionDialog = true },
-                    label = {
-                        Text(
-                            text = if (uiState.selectedCountries.isEmpty())
-                                stringResource(R.string.discover_filter_region)
-                            else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}",
-                            maxLines = 1
-                        )
-                    }
+                    hazeState = hazeState,
+                    text = if (uiState.selectedCountries.isEmpty())
+                        stringResource(R.string.discover_filter_region)
+                    else "${uiState.selectedCountries.size} ${stringResource(R.string.discover_filter_region)}"
                 )
                 // 标签
-                FilterChip(
+                GlassFilterChip(
                     selected = uiState.selectedKeywordIds.isNotEmpty(),
-                    border = if (uiState.selectedKeywordIds.isNotEmpty()) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { showTagDialog = true },
-                    label = {
-                        Text(
-                            text = if (uiState.selectedKeywordIds.isEmpty())
-                                stringResource(R.string.discover_filter_tag)
-                            else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}",
-                            maxLines = 1
-                        )
-                    }
+                    hazeState = hazeState,
+                    text = if (uiState.selectedKeywordIds.isEmpty())
+                        stringResource(R.string.discover_filter_tag)
+                    else "${uiState.selectedKeywordIds.size} ${stringResource(R.string.discover_filter_tag)}"
                 )
                 // 评分（显示"评分 0.0-10.0"）
-                FilterChip(
+                GlassFilterChip(
                     selected = uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f,
-                    border = if (uiState.voteAverageMin > 0f || uiState.voteAverageMax < 10f) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                     onClick = { viewModel.toggleAdvanced() },
-                    label = {
-                        Text(
-                            text = stringResource(R.string.discover_filter_rating_label) + " " +
-                                stringResource(
-                                    R.string.discover_filter_rating_range,
-                                    uiState.voteAverageMin,
-                                    uiState.voteAverageMax
-                                ),
-                            maxLines = 1
+                    hazeState = hazeState,
+                    text = stringResource(R.string.discover_filter_rating_label) + " " +
+                        stringResource(
+                            R.string.discover_filter_rating_range,
+                            uiState.voteAverageMin,
+                            uiState.voteAverageMax
                         )
-                    }
                 )
-                // 高级筛选图标
-                IconButton(onClick = { viewModel.toggleAdvanced() }) {
-                    Icon(
-                        Icons.Rounded.Tune,
-                        contentDescription = stringResource(R.string.discover_filter_advanced),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
+                // 高级筛选
+                GlassFilterChip(
+                    selected = uiState.showAdvanced,
+                    onClick = { viewModel.toggleAdvanced() },
+                    hazeState = hazeState,
+                    text = stringResource(R.string.discover_filter_advanced)
+                )
             }
 
             // 高级筛选展开区（防御性消费垂直拖拽：避免拖拽冒泡到结果列表触发 collapse）
@@ -456,22 +432,19 @@ fun DiscoverFilterScreen(
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             TmdbRepository.DiscoverSort.entries.forEach { sort ->
-                                FilterChip(
+                                val sortText = when (sort) {
+                                    TmdbRepository.DiscoverSort.POPULARITY_DESC -> stringResource(R.string.discover_filter_sort_popularity)
+                                    TmdbRepository.DiscoverSort.RELEASE_DATE_DESC -> stringResource(R.string.discover_filter_sort_release_date)
+                                    TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC -> stringResource(R.string.discover_filter_sort_vote_average)
+                                }
+                                GlassFilterChip(
                                     selected = uiState.sortBy == sort,
-                                    border = if (uiState.sortBy == sort) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         viewModel.setSortBy(sort)
                                     },
-                                    label = {
-                                        Text(
-                                            text = when (sort) {
-                                                TmdbRepository.DiscoverSort.POPULARITY_DESC -> stringResource(R.string.discover_filter_sort_popularity)
-                                                TmdbRepository.DiscoverSort.RELEASE_DATE_DESC -> stringResource(R.string.discover_filter_sort_release_date)
-                                                TmdbRepository.DiscoverSort.VOTE_AVERAGE_DESC -> stringResource(R.string.discover_filter_sort_vote_average)
-                                            }
-                                        )
-                                    }
+                                    hazeState = hazeState,
+                                    text = sortText
                                 )
                             }
                         }
@@ -494,22 +467,19 @@ fun DiscoverFilterScreen(
                             verticalArrangement = Arrangement.spacedBy(0.dp)
                         ) {
                             viewModel.decadeOptions.forEach { opt ->
-                                FilterChip(
+                                val decadeText = if (opt.specialLabelRes != null) {
+                                    stringResource(opt.specialLabelRes)
+                                } else {
+                                    stringResource(R.string.decade_format, opt.startYear)
+                                }
+                                GlassFilterChip(
                                     selected = opt.key in uiState.selectedDecadeKeys,
-                                    border = if (opt.key in uiState.selectedDecadeKeys) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         viewModel.toggleDecade(opt.key)
                                     },
-                                    label = {
-                                        Text(
-                                            if (opt.specialLabelRes != null) {
-                                                stringResource(opt.specialLabelRes)
-                                            } else {
-                                                stringResource(R.string.decade_format, opt.startYear)
-                                            }
-                                        )
-                                    }
+                                    hazeState = hazeState,
+                                    text = decadeText
                                 )
                             }
                         }
@@ -643,8 +613,10 @@ private fun DiscoverFilterListItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .clickable(onClick = onClick)
-            .padding(4.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 海报（80×120）
@@ -744,7 +716,9 @@ private fun DiscoverFilterItemSkeleton() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(4.dp),
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 海报骨架 80×120
@@ -848,14 +822,13 @@ private fun MultiSelectDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     options.forEach { (id, name) ->
-                        FilterChip(
+                        GlassFilterChip(
                             selected = id in selectedIds,
-                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
                                 onToggle(id)
                             },
-                            label = { Text(name) }
+                            text = name
                         )
                     }
                 }
@@ -867,14 +840,13 @@ private fun MultiSelectDialog(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     options.forEach { (id, name) ->
-                        FilterChip(
+                        GlassFilterChip(
                             selected = id in selectedIds,
-                            border = if (id in selectedIds) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
                                 onToggle(id)
                             },
-                            label = { Text(name) }
+                            text = name
                         )
                     }
                 }
@@ -889,5 +861,47 @@ private fun MultiSelectDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * 毛玻璃筛选标签
+ *
+ * 未选中时使用半透明毛玻璃背景，选中时使用主题色填充。
+ * 当 [hazeState] 为 null 时退化为普通半透明背景（用于弹窗等无 hazeSource 的场景）。
+ */
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+private fun GlassFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    text: String,
+    hazeState: HazeState? = null,
+    modifier: Modifier = Modifier
+) {
+    val baseModifier = modifier
+        .clip(RoundedCornerShape(16.dp))
+        .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
+        .clickable(onClick = onClick)
+        .padding(horizontal = 12.dp, vertical = 6.dp)
+
+    Box(
+        modifier = if (hazeState != null) {
+            baseModifier.hazeEffect(
+                state = hazeState,
+                style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+            )
+        } else {
+            baseModifier
+        },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.9f),
+            style = MaterialTheme.typography.labelLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
