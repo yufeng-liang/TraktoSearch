@@ -17,6 +17,8 @@
 
     <!-- Search Screen -->
     <string name="search_title">Search Resources</string>
+    <string name="search_subtitle">Discover your next watch</string>
+    <string name="hot_search">Hot Searches</string>
     <string name="search_back">Back</string>
     <string name="search_placeholder">Enter movie title to search cloud resources</string>
     <string name="search_placeholder_movie">Enter movie title to search movies</string>

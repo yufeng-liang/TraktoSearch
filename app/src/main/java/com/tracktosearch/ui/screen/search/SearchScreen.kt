@@ -69,6 +69,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextFieldDefaults
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.LottieConstants
@@ -126,6 +127,11 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import androidx.compose.foundation.lazy.grid.items as gridItems
 
 @EntryPoint
@@ -142,7 +148,7 @@ interface CloudThemeProvider {
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SearchScreen(
     initialKeyword: String = "",
@@ -226,6 +232,9 @@ fun SearchScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
 
+    // Haze 毛玻璃状态
+    val hazeState = remember { HazeState() }
+
     // Animation state for search box width
     val animatedWidthFraction = remember { Animatable(0.75f) }
     val isActive = isSearchFocused || searchQuery.isNotEmpty()
@@ -265,6 +274,7 @@ fun SearchScreen(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
+            .hazeSource(state = hazeState)
     ) {
         // Main content area
         Column(
@@ -337,9 +347,27 @@ fun SearchScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(max = 260.dp)
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
+                .heightIn(max = 300.dp)
         ) {
+            // 标题区
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.search_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.search_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             // 云朵图标 — 带显隐动画
             CloudIconWithAnimation(cloudThemeManager, isActive)
 
@@ -429,15 +457,23 @@ fun SearchScreen(
             // Spacer between icon and search box
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Search box - animated width
+            // Search box - glass container
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
-                    modifier = Modifier.fillMaxWidth(animatedWidthFraction.value)
+                    modifier = Modifier
+                        .fillMaxWidth(animatedWidthFraction.value)
+                        .clip(RoundedCornerShape(28.dp))
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                        )
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
                     SearchBarTop(
                         searchQuery = searchQuery,
@@ -601,6 +637,18 @@ private fun SearchBarTop(
             },
             singleLine = true,
             shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent,
+                focusedTextColor = MaterialTheme.colorScheme.onBackground,
+                unfocusedTextColor = MaterialTheme.colorScheme.onBackground
+            ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
             trailingIcon = {
@@ -815,7 +863,7 @@ private fun PopularSearchesSection(
             .fillMaxWidth()
     ) {
         Text(
-            text = stringResource(R.string.search_popular_title),
+            text = stringResource(R.string.hot_search),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 8.dp)
@@ -825,12 +873,19 @@ private fun PopularSearchesSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             popularSearches.forEach { keyword ->
-                FilterChip(
-                    selected = false,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
-                    onClick = { onPopularClick(keyword) },
-                    label = { Text(keyword) }
-                )
+                Surface(
+                    modifier = Modifier.clickable { onPopularClick(keyword) },
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                ) {
+                    Text(
+                        text = keyword,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
             }
         }
     }

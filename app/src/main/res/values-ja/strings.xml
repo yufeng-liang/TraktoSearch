@@ -17,6 +17,8 @@
 
     <!-- Search Screen -->
     <string name="search_title">リソース検索</string>
+    <string name="search_subtitle">次の視聴作品を見つけよう</string>
+    <string name="hot_search">人気の検索</string>
     <string name="search_back">戻る</string>
     <string name="search_placeholder">映画タイトルを入力してクラウドリソースを検索</string>
     <string name="search_placeholder_movie">映画タイトルを入力して映画を検索</string>

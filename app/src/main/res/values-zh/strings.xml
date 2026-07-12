@@ -17,6 +17,8 @@
 
     <!-- Search Screen -->
     <string name="search_title">搜索资源</string>
+    <string name="search_subtitle">发现你的下一部观影</string>
+    <string name="hot_search">热门搜索</string>
     <string name="search_back">返回</string>
     <string name="search_placeholder">输入片名搜索网盘资源</string>
     <string name="search_placeholder_movie">输入片名搜索电影</string>
