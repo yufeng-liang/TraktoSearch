@@ -107,7 +107,7 @@ fun GlassSearchBar(
                 modifier = textFieldModifier,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White.copy(alpha = 0.9f),
                     fontSize = 14.sp
                 ),
                 keyboardOptions = keyboardOptions,

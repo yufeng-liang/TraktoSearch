@@ -15,8 +15,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,6 +58,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
+import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Sync
@@ -123,6 +125,7 @@ import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withLink
@@ -137,6 +140,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.component.GlassSearchBar
+import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
@@ -144,7 +150,6 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
@@ -159,7 +164,7 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
@@ -536,76 +541,36 @@ fun WatchlistScreen(
                     items(items.size, key = { items[it].traktId }, contentType = { "media_card" }) { index ->
                         val item = items[index]
                         val isSelected = selectedItems[item.traktId] == true
-                        Box {
-                            PosterCard(
-                                imageUrl = item.posterUrl,
-                                title = item.displayTitle,
-                                year = item.year?.toString(),
-                                genres = item.genres,
-                                onClick = {
-                                    if (isMultiSelectMode) {
-                                        if (isSelected) selectedItems.remove(item.traktId)
-                                        else selectedItems[item.traktId] = true
-                                        if (selectedItems.isEmpty()) isMultiSelectMode = false
+                        val isResolving = isRemoving && isSelected
+                        WatchlistPosterCard(
+                            item = item,
+                            isInWatchlist = selectedMode == 0,
+                            isWatched = selectedMode == 1,
+                            isSelected = isSelected,
+                            isResolving = isResolving,
+                            isMultiSelectMode = isMultiSelectMode,
+                            onClick = {
+                                if (isMultiSelectMode) {
+                                    if (isSelected) selectedItems.remove(item.traktId)
+                                    else selectedItems[item.traktId] = true
+                                    if (selectedItems.isEmpty()) isMultiSelectMode = false
+                                } else {
+                                    val inWatchlist = selectedMode == 0
+                                    val isWatched = selectedMode == 1
+                                    if (selectedTab == 0) {
+                                        onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
                                     } else {
-                                        val inWatchlist = selectedMode == 0
-                                        val isWatched = selectedMode == 1
-                                        if (selectedTab == 0) {
-                                            onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
-                                        } else {
-                                            onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
-                                        }
-                                    }
-                                },
-                                onLongClick = {
-                                    if (!isMultiSelectMode) {
-                                        isMultiSelectMode = true
-                                    }
-                                    selectedItems[item.traktId] = true
-                                }
-                            )
-                            if (isMultiSelectMode) {
-                                if (isSelected) {
-                                    Box(
-                                        modifier = Modifier
-                                            .matchParentSize()
-                                            .clip(RoundedCornerShape(14.dp))
-                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(4.dp)
-                                        .size(28.dp)
-                                        .then(
-                                            if (isSelected) {
-                                                Modifier
-                                                    .clip(CircleShape)
-                                                    .background(MaterialTheme.colorScheme.primary)
-                                            } else {
-                                                Modifier
-                                                    .clip(CircleShape)
-                                                    .background(Color.Transparent)
-                                                    .border(
-                                                        BorderStroke(2.dp, Color.White.copy(alpha = 0.7f)),
-                                                        CircleShape
-                                                    )
-                                            }
-                                        ),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.CheckCircle,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(22.dp)
-                                        )
+                                        onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
                                     }
                                 }
+                            },
+                            onLongClick = {
+                                if (!isMultiSelectMode) {
+                                    isMultiSelectMode = true
+                                }
+                                selectedItems[item.traktId] = true
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -1210,6 +1175,180 @@ fun WatchlistScreen(
         }
     }
     } // CompositionLocalProvider
+}
+
+/**
+ * Watchlist 网格项包装器：基于 PosterCard 显示海报，并补充标题、状态角标、
+ * 加载遮罩、多选遮罩以及共享元素转场。
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun WatchlistPosterCard(
+    item: MediaUiItem,
+    isInWatchlist: Boolean,
+    isWatched: Boolean,
+    isSelected: Boolean,
+    isResolving: Boolean,
+    isMultiSelectMode: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val activePosterTmdbId = LocalActivePosterTmdbId.current
+    val setActivePosterTmdbId = LocalActivePosterClickSetter.current
+    val activeClickToken = LocalActivePosterClickToken.current
+    var myClickToken by rememberSaveable { mutableStateOf(0) }
+    // 只有被点击激活的当前页海报才启用共享元素转场，避免同 tmdbId 卡片误匹配
+    val enableShared = item.tmdbId > 0
+            && item.tmdbId == activePosterTmdbId
+            && myClickToken != 0
+            && myClickToken == activeClickToken
+
+    val wrappedOnClick = remember(onClick, item.tmdbId, isMultiSelectMode) {
+        {
+            if (!isMultiSelectMode && item.tmdbId > 0) {
+                myClickToken = setActivePosterTmdbId(item.tmdbId)
+            }
+            onClick()
+        }
+    }
+
+    val posterModifier = if (enableShared && sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+        with(sharedTransitionScope) {
+            Modifier
+                .sharedElement(
+                    rememberSharedContentState(key = "poster-${item.tmdbId}"),
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+                .clip(RoundedCornerShape(14.dp))
+        }
+    } else {
+        Modifier
+    }
+
+    Column {
+        Box {
+            PosterCard(
+                imageUrl = item.posterUrl,
+                title = item.displayTitle,
+                year = item.year?.toString(),
+                genres = null,
+                onClick = wrappedOnClick,
+                onLongClick = if (isMultiSelectMode) null else onLongClick,
+                posterModifier = posterModifier
+            )
+            // 想看/已看角标（海报左上角，沿用 MovieCard 样式）
+            if (isWatched || isInWatchlist) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(4.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            color = if (isWatched) Color(0xCC000000)
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    if (isWatched) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            text = stringResource(R.string.cd_watched_badge),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = Color.White
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Bookmark,
+                            contentDescription = null,
+                            modifier = Modifier.size(10.dp),
+                            tint = Color.White
+                        )
+                        Text(
+                            text = stringResource(R.string.cd_watchlist_badge),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+            // 加载遮罩
+            if (isResolving) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                }
+            }
+            // 多选模式的选中遮罩与勾选图标
+            if (isMultiSelectMode) {
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.35f))
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(28.dp)
+                        .then(
+                            if (isSelected) {
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            } else {
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(Color.Transparent)
+                                    .border(
+                                        BorderStroke(2.dp, Color.White.copy(alpha = 0.7f)),
+                                        CircleShape
+                                    )
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+        // 标题（与之前 MovieCard 字号一致，最多两行）
+        Text(
+            text = item.displayTitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+        )
+    }
 }
 
 /** 骨架屏网格 - 3列，海报占位 + 标题条 + 类型条，呼吸动画 */

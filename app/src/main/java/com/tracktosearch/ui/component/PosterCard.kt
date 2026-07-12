@@ -42,6 +42,7 @@ import coil.compose.AsyncImage
  * @param rating 评分，null 时不显示
  * @param onClick 点击回调
  * @param onLongClick 长按回调，null 时不启用长按
+ * @param posterModifier 作用于海报容器的修饰符，用于共享元素转场等场景
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -53,7 +54,8 @@ fun PosterCard(
     rating: Double? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    posterModifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -69,6 +71,7 @@ fun PosterCard(
                 .aspectRatio(2f / 3f)
                 .shadow(8.dp, RoundedCornerShape(14.dp))
                 .clip(RoundedCornerShape(14.dp))
+                .then(posterModifier)
                 .then(
                     if (onLongClick != null) {
                         Modifier.combinedClickable(
