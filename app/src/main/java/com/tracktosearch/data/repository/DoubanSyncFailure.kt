@@ -24,6 +24,7 @@ data class DoubanSyncFailure(
     val status: DoubanMarkStatus,
     val failureReason: FailureReason,
     val failedAt: Long,
+    val updatedAt: Long = 0L,
     val attemptCount: Int = 0,
     val mediaType: String? = null,   // "movie" / "show" / null(未分类),用户手动标注
     val mediaTypeCleared: Boolean = false, // 用户主动清除标注(区分"从未标注"与"清除标注")
@@ -41,6 +42,7 @@ data class DoubanSyncFailure(
         status = status.path,
         failureReason = failureReason.name,
         failedAt = failedAt,
+        updatedAt = updatedAt,
         attemptCount = attemptCount,
         mediaType = mediaType,
         mediaTypeCleared = mediaTypeCleared,
@@ -71,6 +73,7 @@ data class DoubanSyncFailure(
             status = DoubanMarkStatus.fromString(e.status),
             failureReason = FailureReason.fromString(e.failureReason),
             failedAt = e.failedAt,
+            updatedAt = e.updatedAt,
             attemptCount = e.attemptCount,
             mediaType = e.mediaType,
             mediaTypeCleared = e.mediaTypeCleared,

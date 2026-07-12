@@ -85,38 +85,38 @@ class TmdbRepository @Inject constructor(
     // maxSize 放大到 1000:覆盖超大 watchlist(>1000 条)+ 已看历史,
     // loadFromDisk 调 super.put 触发 LRU 淘汰,若 maxSize 小于磁盘条目数会导致第二次启动仍走网络
     private val movieDetailCache = persistentTtlCache<TmdbMovieDetail>(
-        TTL_DETAIL, 1000, persistentDataStore, json, "movie_detail", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "movie_detail_v1", persistentScope
     )
     private val tvDetailCache = persistentTtlCache<TmdbTvDetail>(
-        TTL_DETAIL, 1000, persistentDataStore, json, "tv_detail", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "tv_detail_v1", persistentScope
     )
     private val creditsCache = persistentTtlCache<TmdbCreditsResponse>(
-        TTL_CREDITS, 500, persistentDataStore, json, "credits", persistentScope
+        TTL_CREDITS, 500, persistentDataStore, json, "credits_v1", persistentScope
     )
     private val personDetailCache = persistentTtlCache<TmdbPerson>(
-        TTL_PERSON, 500, persistentDataStore, json, "person_detail", persistentScope
+        TTL_PERSON, 500, persistentDataStore, json, "person_detail_v1", persistentScope
     )
     // 别名（alternative_titles）持久化缓存：中文译名等不变字段，跨 App 重启复用，
     // 避免每个 watchlist 条目每次启动都重新请求 alternative_titles 接口
     private val movieAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
-        TTL_DETAIL, 1000, persistentDataStore, json, "movie_alt_titles", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "movie_alt_titles_v1", persistentScope
     )
     private val tvAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
-        TTL_DETAIL, 1000, persistentDataStore, json, "tv_alt_titles", persistentScope
+        TTL_DETAIL, 1000, persistentDataStore, json, "tv_alt_titles_v1", persistentScope
     )
 
     // 持久化缓存（6 小时）：发现页 TMDB 列表类栏目，跨 App 重启保留
     private val popularMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
-        TTL_LISTS, 10, persistentDataStore, json, "popular_movies", persistentScope
+        TTL_LISTS, 10, persistentDataStore, json, "popular_movies_v1", persistentScope
     )
     private val upcomingMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
-        TTL_LISTS, 10, persistentDataStore, json, "upcoming_movies", persistentScope
+        TTL_LISTS, 10, persistentDataStore, json, "upcoming_movies_v1", persistentScope
     )
     private val topRatedMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
-        TTL_LISTS, 10, persistentDataStore, json, "top_rated_movies", persistentScope
+        TTL_LISTS, 10, persistentDataStore, json, "top_rated_movies_v1", persistentScope
     )
     private val trendingMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
-        TTL_LISTS, 10, persistentDataStore, json, "trending_movies", persistentScope
+        TTL_LISTS, 10, persistentDataStore, json, "trending_movies_v1", persistentScope
     )
 
     // 内存缓存（短期，App 进程内有效）

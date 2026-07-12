@@ -99,6 +99,25 @@ object OAuthCallback {
     }
 }
 
+/** 通知深链路导航指令，供 MainActivity 传递给 AppNavigation 的 NavController */
+object DeepLinkNavigator {
+    data class NavigateToDetail(
+        val type: String,
+        val traktId: Int,
+        val tmdbId: Int,
+        val title: String
+    )
+
+    private val _pendingNavigation = kotlinx.coroutines.flow.MutableStateFlow<NavigateToDetail?>(null)
+    val pendingNavigation: kotlinx.coroutines.flow.StateFlow<NavigateToDetail?> = _pendingNavigation
+
+    fun navigateToDetail(type: String, traktId: Int, tmdbId: Int, title: String) {
+        _pendingNavigation.value = NavigateToDetail(type, traktId, tmdbId, title)
+    }
+
+    fun consume() { _pendingNavigation.value = null }
+}
+
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
@@ -449,6 +468,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        // 处理 OAuth 回调
         intent?.data?.let { uri ->
             if (uri.scheme == "tracktosearch" && uri.host == "oauth") {
                 val error = uri.getQueryParameter("error")
@@ -460,6 +480,17 @@ class MainActivity : AppCompatActivity() {
                         OAuthCallback.setPendingCode(code)
                     }
                 }
+                return
+            }
+        }
+        // 处理通知深链路（上映/新季通知点击跳转详情页）
+        if (intent?.getStringExtra("navigate_to") == "detail") {
+            val type = intent.getStringExtra("type") ?: return
+            val traktId = intent.getIntExtra("traktId", 0)
+            val tmdbId = intent.getIntExtra("tmdbId", 0)
+            val title = intent.getStringExtra("title") ?: ""
+            if (traktId > 0) {
+                DeepLinkNavigator.navigateToDetail(type, traktId, tmdbId, title)
             }
         }
     }

@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.data.remote.weather.OpenMeteoApi
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.TimeUnit
@@ -58,7 +59,7 @@ class WeatherRepository @Inject constructor(
                     info
                 } else null
             } else null
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
             null
         }
     }

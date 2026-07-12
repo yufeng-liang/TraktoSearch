@@ -312,8 +312,10 @@ class DoubanItemDetailViewModel @Inject constructor(
                 )
                 result.first?.let { info ->
                     _uiState.value = _uiState.value.copy(detailInfo = info)
-                    // 仅实际爬取豆瓣时才推断媒体类型(缓存命中说明之前已推断过,无需重复)
-                    if (fromNetwork) {
+                    // 媒体类型为 null 时自动推断(缓存命中也可能 mediaType 为 null);
+                    // inferMediaTypeFromDetail 内部已判空,已标注的非强类型不会覆盖
+                    val shouldInfer = fromNetwork || failure.mediaType == null
+                    if (shouldInfer) {
                         val inferred = runCatching {
                             doubanRetryManager.inferMediaTypeFromDetail(failure.doubanId, info)
                         }.getOrDefault(false)
@@ -323,7 +325,9 @@ class DoubanItemDetailViewModel @Inject constructor(
                                 _uiState.value = _uiState.value.copy(failure = refreshed)
                             }
                         }
-                        // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
+                    }
+                    // 实际爬取豆瓣成功 → 弹乐观 Toast(上传全局池在 Repository 内异步执行)
+                    if (fromNetwork) {
                         _toastEvent.tryEmit(R.string.douban_detail_updated_and_synced)
                     }
                 }

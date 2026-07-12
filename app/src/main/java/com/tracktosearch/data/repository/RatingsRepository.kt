@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.remote.config.RemoteConfigProvider
 import com.tracktosearch.data.remote.omdb.OmdbApiService
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -59,7 +60,7 @@ class RatingsRepository @Inject constructor(
                 imdbId = imdbId
             )
             if (response.Response == "True") response else null
-        } catch (_: Exception) { null }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
 
         val result = MultiRatings(
             tmdbRating = tmdbRating,

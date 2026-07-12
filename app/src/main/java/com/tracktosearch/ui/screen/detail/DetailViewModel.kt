@@ -97,6 +97,7 @@ data class DetailUiState(
     val isMarkingWatchlist: Boolean = false,     // 是否正在处理添加/移除想看
     // 用户评分（null=未评分）
     val userRating: Int? = null,
+    val userComment: String? = null,             // 用户已提交的短评（用于回显到评分弹窗）
     val isRating: Boolean = false,               // 是否正在提交评分
     val isRatingLoading: Boolean = false,        // 是否正在加载已有评分
     val error: String? = null,
@@ -1016,7 +1017,7 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
         }
-        _uiState.value = current.copy(isRating = true)
+        _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
             // 1. Trakt 评分
             val traktRatingResult = traktRepository.addRating(currentTraktId, rating, currentMediaType)
@@ -1030,6 +1031,7 @@ class DetailViewModel @Inject constructor(
             if (traktRatingResult.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     userRating = rating,
+                    userComment = comment.ifBlank { null },
                     isRating = false,
                     pendingDoubanAction = null
                 )
@@ -1087,15 +1089,20 @@ class DetailViewModel @Inject constructor(
     fun removeRating() {
         val current = _uiState.value
         if (current.isRating) return
-        _uiState.value = current.copy(isRating = true)
+        _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
             traktRepository.removeRating(currentTraktId, currentMediaType)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(
                         userRating = null,
+                        userComment = null,
                         isRating = false
                     )
                     saveToCache()
+                    // 取消评分后,若有待处理的豆瓣 COLLECT 同步,仅同步看过(无评分无短评)
+                    if (current.pendingDoubanAction == DoubanSyncAction.COLLECT) {
+                        syncDoubanMark(DoubanSyncAction.COLLECT)
+                    }
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isRating = false)

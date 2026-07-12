@@ -206,6 +206,14 @@
     <string name="douban_resume_phase">미처리 리스트 재개 중</string>
     <string name="douban_resume_complete">재개 완료</string>
 
+    <!-- Douban sync rollback (after failed full rewrite) -->
+    <string name="douban_rollback_title">삭제된 표시 복원</string>
+    <string name="douban_rollback_subtitle">지난 전체 동기화가 완료되지 않았습니다. %1$d개 표시가 삭제되었으나 복원되지 않았습니다. 복원하시겠습니까?</string>
+    <string name="douban_rollback_restore">표시 복원</string>
+    <string name="douban_rollback_restore_desc">삭제된 표시를 Trakt에 다시 추가</string>
+    <string name="douban_rollback_discard">취소</string>
+    <string name="douban_rollback_discard_desc">표시가 영구적으로 손실됩니다</string>
+
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">로딩 중…</string>
     <string name="empty_default">데이터 없음</string>
@@ -594,12 +602,9 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">재동기화 모드 선택</string>
-    <string name="douban_sync_mode_a_title">증분만</string>
-    <string name="douban_sync_mode_a_desc">동기화된 항목을 건너뛰고 더우반의 새 관심/시청 표시만 가져옵니다. 상태 변화는 처리하지 않습니다.</string>
-    <string name="douban_sync_mode_a_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 건너뜁니다(Trakt는 관심으로 표시됨).</string>
-    <string name="douban_sync_mode_b_title">증분 + 상태 변화</string>
-    <string name="douban_sync_mode_b_desc">상태가 변하지 않은 동기화 항목을 건너뛰고 새 표시와 상태가 변한 항목만 동기화합니다. 삭제는 처리하지 않습니다.</string>
-    <string name="douban_sync_mode_b_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 Trakt의 관심을 제거하고 시청으로 표시합니다.</string>
+    <string name="douban_sync_mode_b_title">증분 동기화</string>
+    <string name="douban_sync_mode_b_desc">더우반의 새 관심/시청 표시를 동기화하고 동기화된 항목의 상태 변화를 감지합니다. 동기화 완료 후 자동으로 상태 일관성 검사를 실행하여 더우반과 Trakt 데이터 일치를 보장합니다.</string>
+    <string name="douban_sync_mode_b_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 Trakt를 시청으로 업데이트합니다. 동기화 후 상태 불일치가 있으면 자동으로 수정합니다.</string>
     <string name="douban_sync_mode_c_title">완전 재작성</string>
     <string name="douban_sync_mode_c_desc">모든 동기화 기록을 지우고 모든 더우반 표시를 처음부터 재동기화합니다. 이 앱이 Trakt에 추가한 표시는 제거되고 다시 작성됩니다.</string>
     <string name="douban_sync_mode_c_example">예: 이전에 %1$d개 항목 동기화됨, 모두 지워지고 재동기화됩니다. 데이터가 심하게 불일치할 때만 사용하세요.</string>
@@ -630,6 +635,16 @@
     <string name="consistency_check_sub_wish">보고싶어요 목록</string>
     <string name="consistency_check_sub_collect">봤어요 목록</string>
     <string name="consistency_check_sub_detail_ck">상세 페이지 ck 가져오는 중</string>
+    <!-- 상태 일관성 검사 확인 다이얼로그 -->
+    <string name="consistency_check_confirm_title">상태 일관성 검사</string>
+    <string name="consistency_check_confirm_last">이전 검사: %1$s</string>
+    <string name="consistency_check_confirm_never">검사한 적 없음</string>
+    <string name="consistency_check_confirm_desc">검사에는 더우반 리스트 크롤링이 필요하며 몇 분 소요됩니다. 계속하시겠습니까?</string>
+    <string name="consistency_check_confirm_button">검사 시작</string>
+    <string name="consistency_check_time_just_now">방금</string>
+    <string name="consistency_check_time_minutes_ago">%1$d분 전</string>
+    <string name="consistency_check_time_hours_ago">%1$d시간 전</string>
+    <string name="consistency_check_time_days_ago">%1$d일 전</string>
     <string name="settings_douban_import_failures">JSON에서 실패 항목 가져오기</string>
     <string name="settings_douban_import_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와서 여기서 보기</string>
     <string name="screen_douban_failures_title">동기화 실패 항목</string>

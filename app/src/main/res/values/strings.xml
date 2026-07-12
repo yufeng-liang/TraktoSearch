@@ -294,6 +294,14 @@
     <string name="douban_resume_phase">Resuming unprocessed list</string>
     <string name="douban_resume_complete">Resume complete</string>
 
+    <!-- Douban sync rollback (after failed full rewrite) -->
+    <string name="douban_rollback_title">Restore Deleted Marks</string>
+    <string name="douban_rollback_subtitle">Last full sync was incomplete. %1$d marks were deleted but not restored. Restore them?</string>
+    <string name="douban_rollback_restore">Restore Marks</string>
+    <string name="douban_rollback_restore_desc">Re-add deleted marks to Trakt</string>
+    <string name="douban_rollback_discard">Discard</string>
+    <string name="douban_rollback_discard_desc">Marks will be permanently lost</string>
+
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">Sign in to Trakt</string>
     <string name="login_prompt_desc">Sync your watchlist after login\nQuickly find resources for what you want to watch</string>
@@ -699,12 +707,9 @@ Config:
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">Choose Re-sync Mode</string>
-    <string name="douban_sync_mode_a_title">Incremental only</string>
-    <string name="douban_sync_mode_a_desc">Skip already synced items, only import new Douban wish/collect marks. Will not handle status changes.</string>
-    <string name="douban_sync_mode_a_example">Example: a movie already synced as wish, you marked it as watched on Douban, this mode will skip it (Trakt still shows wish).</string>
-    <string name="douban_sync_mode_b_title">Incremental + status changes</string>
-    <string name="douban_sync_mode_b_desc">Skip synced items with unchanged status, only sync new marks and items whose status changed. Will not handle deletions.</string>
-    <string name="douban_sync_mode_b_example">Example: a movie synced as wish, you changed it to watched on Douban, this mode will remove wish and mark as watched on Trakt.</string>
+    <string name="douban_sync_mode_b_title">Incremental sync</string>
+    <string name="douban_sync_mode_b_desc">Sync new Douban wish/collect marks and detect status changes of synced items. A status consistency check runs automatically after sync to ensure Douban and Trakt are aligned.</string>
+    <string name="douban_sync_mode_b_example">Example: a movie synced as wish, you changed it to watched on Douban, this mode will update Trakt to watched. A consistency check runs after sync to fix any mismatches.</string>
     <string name="douban_sync_mode_c_title">Full rewrite</string>
     <string name="douban_sync_mode_c_desc">Clear all synced records, re-sync all Douban marks from scratch. Existing Trakt marks added by this app will be removed and rewritten.</string>
     <string name="douban_sync_mode_c_example">Example: %1$d items previously synced, all will be cleared and re-synced. Use this only when data is severely inconsistent.</string>
@@ -735,6 +740,16 @@ Config:
     <string name="consistency_check_sub_wish">Wish list</string>
     <string name="consistency_check_sub_collect">Watched list</string>
     <string name="consistency_check_sub_detail_ck">Fetching ck</string>
+    <!-- Status consistency check confirmation dialog -->
+    <string name="consistency_check_confirm_title">Check status consistency</string>
+    <string name="consistency_check_confirm_last">Last check: %1$s</string>
+    <string name="consistency_check_confirm_never">Never checked</string>
+    <string name="consistency_check_confirm_desc">The check requires crawling Douban lists and may take several minutes. Continue?</string>
+    <string name="consistency_check_confirm_button">Start check</string>
+    <string name="consistency_check_time_just_now">just now</string>
+    <string name="consistency_check_time_minutes_ago">%1$d minutes ago</string>
+    <string name="consistency_check_time_hours_ago">%1$d hours ago</string>
+    <string name="consistency_check_time_days_ago">%1$d days ago</string>
     <string name="settings_douban_import_failures">Import failures from JSON</string>
     <string name="settings_douban_import_failures_desc">Import a failures JSON file exported from another device to view here</string>
     <string name="screen_douban_failures_title">Sync failures</string>

@@ -228,7 +228,7 @@ class CloudPersonalSyncManager @Inject constructor(
     /**
      * 上传本地全部个人数据到云端（同步完成或取消时调用）。
      *
-     * @param lastSyncMode 同步模式（"INCREMENTAL_ONLY" / "FULL_REWRITE" / "CANCELLED" 等）
+     * @param lastSyncMode 同步模式（"INCREMENTAL_WITH_CHANGES" / "FULL_REWRITE" / "CANCELLED" 等）
      * @param isFullComplete true=完整同步完成（更新 lastFullSyncAt）
      * @param uploadIdMappings 是否上传 IMDb→Trakt 映射（数据量较大，仅在完整同步完成时上传）
      * @return true=全部上传成功，false=部分或全部失败（失败不阻塞主流程）
@@ -437,55 +437,70 @@ class CloudPersonalSyncManager @Inject constructor(
         var mappingsCount = 0
         var metaApplied = false
 
-        // 1. 下载并合并 synced_items
+        // 1. 下载并合并 synced_items（按 syncedAt 比较，仅云端较新才覆盖）
         try {
             val jsonStr = downloadDecrypted(buildPath(userHash, FILE_SYNCED))
             if (jsonStr != null) {
                 val payload = json.decodeFromString(SyncedItemsPayload.serializer(), jsonStr)
                 if (payload.items.isNotEmpty()) {
-                    val entities = payload.items.map {
-                        DoubanSyncedItem(
-                            doubanId = it.doubanId,
-                            imdbId = it.imdbId,
-                            traktId = it.traktId,
-                            title = it.title,
-                            status = it.status,
-                            rating = it.rating,
-                            syncedAt = it.syncedAt,
-                            mediaType = it.mediaType
-                        )
+                    val localItems = doubanSyncedItemDao.getAllSyncedItems().associateBy { it.doubanId }
+                    val toInsert = payload.items.mapNotNull { dto ->
+                        val local = localItems[dto.doubanId]
+                        // 本地不存在 或 云端 syncedAt 更新 → 覆盖；本地较新或相等 → 保留本地
+                        if (local == null || dto.syncedAt > local.syncedAt) {
+                            DoubanSyncedItem(
+                                doubanId = dto.doubanId,
+                                imdbId = dto.imdbId,
+                                traktId = dto.traktId,
+                                title = dto.title,
+                                status = dto.status,
+                                rating = dto.rating,
+                                syncedAt = dto.syncedAt,
+                                mediaType = dto.mediaType
+                            )
+                        } else null
                     }
-                    doubanSyncedItemDao.insertAll(entities)  // REPLACE
-                    syncedCount = entities.size
-                    Log.d(TAG, "合并 synced_items: $syncedCount 条")
+                    if (toInsert.isNotEmpty()) {
+                        doubanSyncedItemDao.insertAll(toInsert)
+                        syncedCount = toInsert.size
+                        Log.d(TAG, "合并 synced_items: $syncedCount 条（云端较新），本地保留 ${localItems.size - toInsert.size} 条")
+                    } else {
+                        Log.d(TAG, "synced_items 本地均较新，跳过 ${payload.items.size} 条")
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "下载合并 synced_items 异常: ${e.message}")
         }
 
-        // 2. 下载并合并 pending_items
+        // 2. 下载并合并 pending_items（按 crawledAt 比较，仅云端较新才覆盖）
         try {
             val jsonStr = downloadDecrypted(buildPath(userHash, FILE_PENDING))
             if (jsonStr != null) {
                 val payload = json.decodeFromString(PendingItemsPayload.serializer(), jsonStr)
                 if (payload.items.isNotEmpty()) {
-                    val entities = payload.items.map {
-                        DoubanSyncPendingItemEntity(
-                            doubanId = it.doubanId,
-                            title = it.title,
-                            posterUrl = it.posterUrl,
-                            rating = it.rating,
-                            comment = it.comment,
-                            markedAt = it.markedAt,
-                            doubanUrl = it.doubanUrl,
-                            status = it.status,
-                            crawledAt = it.crawledAt
-                        )
+                    val localPending = doubanSyncPendingItemDao.getAll().associateBy { it.doubanId }
+                    val toInsert = payload.items.mapNotNull { dto ->
+                        val local = localPending[dto.doubanId]
+                        if (local == null || dto.crawledAt > local.crawledAt) {
+                            DoubanSyncPendingItemEntity(
+                                doubanId = dto.doubanId,
+                                title = dto.title,
+                                posterUrl = dto.posterUrl,
+                                rating = dto.rating,
+                                comment = dto.comment,
+                                markedAt = dto.markedAt,
+                                doubanUrl = dto.doubanUrl,
+                                status = dto.status,
+                                crawledAt = dto.crawledAt
+                            )
+                        } else null
                     }
-                    doubanSyncPendingItemDao.insertAll(entities)  // REPLACE
-                    pendingCount = entities.size
-                    Log.d(TAG, "合并 pending_items: $pendingCount 条")
+                    if (toInsert.isNotEmpty()) {
+                        doubanSyncPendingItemDao.insertAll(toInsert)
+                        pendingCount = toInsert.size
+                        Log.d(TAG, "合并 pending_items: $pendingCount 条（云端较新）")
+                    }
                 }
             }
         } catch (e: Exception) {

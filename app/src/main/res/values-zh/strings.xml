@@ -294,6 +294,14 @@
     <string name="douban_resume_phase">续传上次未处理完的列表</string>
     <string name="douban_resume_complete">续传完成</string>
 
+    <!-- Douban sync rollback (after failed full rewrite) -->
+    <string name="douban_rollback_title">恢复被删除的标记</string>
+    <string name="douban_rollback_subtitle">上次完整同步未完成，%1$d 个标记已被删除但未恢复。是否恢复？</string>
+    <string name="douban_rollback_restore">恢复标记</string>
+    <string name="douban_rollback_restore_desc">将被删除的标记重新添加到 Trakt</string>
+    <string name="douban_rollback_discard">不恢复</string>
+    <string name="douban_rollback_discard_desc">放弃恢复，标记将永久丢失</string>
+
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">登录 Trakt</string>
     <string name="login_prompt_desc">登录后可同步你的想看列表\n快速找到想看的影视资源</string>
@@ -699,12 +707,9 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">选择重新同步模式</string>
-    <string name="douban_sync_mode_a_title">仅增量同步</string>
-    <string name="douban_sync_mode_a_desc">跳过已同步的条目,只导入豆瓣新增的想看/看过标记。不处理状态变化。</string>
-    <string name="douban_sync_mode_a_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会跳过它(Trakt 仍显示为想看)。</string>
-    <string name="douban_sync_mode_b_title">增量 + 状态变化</string>
-    <string name="douban_sync_mode_b_desc">跳过状态一致的已同步条目,只同步新增标记和状态发生变化的条目。不处理删除。</string>
-    <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会移除 Trakt 上的想看并标记为看过。</string>
+    <string name="douban_sync_mode_b_title">增量同步</string>
+    <string name="douban_sync_mode_b_desc">同步豆瓣新增的想看/看过标记,并检测已同步条目的状态变化。同步完成后自动进行状态一致性检查,确保豆瓣与 Trakt 数据一致。</string>
+    <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会更新 Trakt 为已看。同步后还会自动检查并修复任何状态不一致。</string>
     <string name="douban_sync_mode_c_title">完全重写</string>
     <string name="douban_sync_mode_c_desc">清空所有已同步记录,从零开始重新同步所有豆瓣标记。本应用之前添加到 Trakt 的标记会被移除并重写。</string>
     <string name="douban_sync_mode_c_example">例如:之前已同步 %1$d 条,全部会被清除并重新同步。仅当数据严重不一致时使用。</string>
@@ -735,6 +740,16 @@
     <string name="consistency_check_sub_wish">想看列表</string>
     <string name="consistency_check_sub_collect">已看列表</string>
     <string name="consistency_check_sub_detail_ck">详情页拿ck</string>
+    <!-- 状态一致性检查二次确认弹窗 -->
+    <string name="consistency_check_confirm_title">检查状态一致性</string>
+    <string name="consistency_check_confirm_last">上次检查：%1$s</string>
+    <string name="consistency_check_confirm_never">从未检查过</string>
+    <string name="consistency_check_confirm_desc">检查需要爬取豆瓣列表，耗时数分钟。是否继续？</string>
+    <string name="consistency_check_confirm_button">开始检查</string>
+    <string name="consistency_check_time_just_now">刚刚</string>
+    <string name="consistency_check_time_minutes_ago">%1$d 分钟前</string>
+    <string name="consistency_check_time_hours_ago">%1$d 小时前</string>
+    <string name="consistency_check_time_days_ago">%1$d 天前</string>
     <string name="settings_douban_import_failures">从 JSON 导入失败项</string>
     <string name="settings_douban_import_failures_desc">导入从其他设备导出的失败项 JSON 文件,在此查看</string>
     <string name="screen_douban_failures_title">同步失败项</string>

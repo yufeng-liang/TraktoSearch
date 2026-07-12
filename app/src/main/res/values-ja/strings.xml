@@ -206,6 +206,14 @@
     <string name="douban_resume_phase">未処理リストを再開中</string>
     <string name="douban_resume_complete">レジューム完了</string>
 
+    <!-- Douban sync rollback (after failed full rewrite) -->
+    <string name="douban_rollback_title">削除されたマークを復元</string>
+    <string name="douban_rollback_subtitle">前回の完全同期が未完了です。%1$d 個のマークが削除されましたが復元されていません。復元しますか？</string>
+    <string name="douban_rollback_restore">マークを復元</string>
+    <string name="douban_rollback_restore_desc">削除されたマークを Trakt に再追加</string>
+    <string name="douban_rollback_discard">破棄</string>
+    <string name="douban_rollback_discard_desc">マークは永久に失われます</string>
+
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">読み込み中…</string>
     <string name="empty_default">データがありません</string>
@@ -594,12 +602,9 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">再同期モードを選択</string>
-    <string name="douban_sync_mode_a_title">増分のみ</string>
-    <string name="douban_sync_mode_a_desc">同期済み項目をスキップし、豆瓣の新規ウォッチ/視聴済みマークのみインポート。状態変化は処理しません。</string>
-    <string name="douban_sync_mode_a_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはスキップします(Traktはウォッチリストのまま)。</string>
-    <string name="douban_sync_mode_b_title">増分 + 状態変化</string>
-    <string name="douban_sync_mode_b_desc">状態が変わらない同期済み項目をスキップし、新規マークと状態が変化した項目のみ同期。削除は処理しません。</string>
-    <string name="douban_sync_mode_b_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはTraktのウォッチリストを削除し視聴済みにします。</string>
+    <string name="douban_sync_mode_b_title">増分同期</string>
+    <string name="douban_sync_mode_b_desc">豆瓣の新規ウォッチ/視聴済みマークを同期し、同期済み項目の状態変化を検出。同期完了後に自動で状態一致性チェックを行い、豆瓣とTraktのデータ一致を確保します。</string>
+    <string name="douban_sync_mode_b_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはTraktを視聴済みに更新します。同期後に状態不一致があれば自動修復します。</string>
     <string name="douban_sync_mode_c_title">完全上書き</string>
     <string name="douban_sync_mode_c_desc">全ての同期記録をクリアし、すべての豆瓣マークをゼロから再同期します。このアプリがTraktに追加したマークは削除され、再書き込みされます。</string>
     <string name="douban_sync_mode_c_example">例:以前に%1$d項目を同期済み、全てクリアされ再同期されます。データが著しく不整合な場合のみ使用してください。</string>
@@ -630,6 +635,16 @@
     <string name="consistency_check_sub_wish">見たいリスト</string>
     <string name="consistency_check_sub_collect">見たリスト</string>
     <string name="consistency_check_sub_detail_ck">詳細ページck取得</string>
+    <!-- 状態一致性チェック確認ダイアログ -->
+    <string name="consistency_check_confirm_title">状態一致性チェック</string>
+    <string name="consistency_check_confirm_last">前回チェック：%1$s</string>
+    <string name="consistency_check_confirm_never">未チェック</string>
+    <string name="consistency_check_confirm_desc">チェックには豆瓣リストのクロールが必要で、数分かかります。続行しますか？</string>
+    <string name="consistency_check_confirm_button">チェック開始</string>
+    <string name="consistency_check_time_just_now">たった今</string>
+    <string name="consistency_check_time_minutes_ago">%1$d 分前</string>
+    <string name="consistency_check_time_hours_ago">%1$d 時間前</string>
+    <string name="consistency_check_time_days_ago">%1$d 日前</string>
     <string name="settings_douban_import_failures">JSONから失敗項目をインポート</string>
     <string name="settings_douban_import_failures_desc">他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてここで表示</string>
     <string name="screen_douban_failures_title">同期失敗項目</string>
