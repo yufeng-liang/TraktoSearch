@@ -311,7 +311,7 @@ internal fun TraktAnticipatedSection(
                         }
                     }
                     itemsIndexed(anticipatedShows, key = { index, item -> "anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
-                        Box(modifier = Modifier.fadeSlideIn(index)) {
+                        Box(modifier = Modifier.fadeSlideIn(anticipatedMovies.size + index)) {
                             MovieCard(
                                 title = item.show.title,
                                 posterPath = item.show.posterPath,
