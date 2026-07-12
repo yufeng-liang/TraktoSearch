@@ -5,6 +5,7 @@ import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.ChangelogStorage
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
+import kotlinx.coroutines.CancellationException
 import java.text.SimpleDateFormat
 import java.util.Locale
 import javax.inject.Inject
@@ -86,7 +87,7 @@ class UpdateRepository @Inject constructor(
             val releases = gitHubApi.getAllReleases(GITHUB_OWNER, GITHUB_REPO)
             if (releases.isEmpty()) return null
             formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "GitHub fetch all releases failed", e)
             null
         }
@@ -97,7 +98,7 @@ class UpdateRepository @Inject constructor(
             val releases = giteeApi.getAllReleases(GITEE_OWNER, GITEE_REPO)
             if (releases.isEmpty()) return null
             formatAllChangelogs(releases.map { ReleaseInfo(it.tag_name, it.body, it.created_at) })
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "Gitee fetch all releases failed", e)
             null
         }
@@ -279,7 +280,7 @@ class UpdateRepository @Inject constructor(
                 .lastOrNull()
 
             apkAsset?.browser_download_url ?: ""
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch download URL from release repo", e)
             ""
         }
@@ -295,7 +296,7 @@ class UpdateRepository @Inject constructor(
                 fileSize = 0,
                 hasUpdate = false
             )
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "GitHub update check failed", e)
             null
         }
@@ -312,7 +313,7 @@ class UpdateRepository @Inject constructor(
                 fileSize = 0,
                 hasUpdate = false
             )
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "Gitee update check failed", e)
             null
         }

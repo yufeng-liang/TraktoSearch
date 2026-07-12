@@ -54,6 +54,7 @@ import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
+import com.tracktosearch.DeepLinkNavigator
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -163,6 +164,19 @@ fun AppNavigation(
     }
     val scope = rememberCoroutineScope()
 
+    // 监听通知深链路导航指令（上映/新季通知点击后跳转详情页）
+    // 直接读 StateFlow.value 避免 Compose 状态捕获问题
+    LaunchedEffect(Unit) {
+        DeepLinkNavigator.pendingNavigation.collect { target ->
+            if (target != null && authStateHolder.isLoggedIn.value) {
+                navController.navigate(
+                    Routes.detailRoute(target.type, target.traktId, target.tmdbId, target.title)
+                )
+                DeepLinkNavigator.consume()
+            }
+        }
+    }
+
     SharedTransitionLayout {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
@@ -235,10 +249,36 @@ fun AppNavigation(
                         }
 
                         // 豆瓣同步续传检测:App 启动时检测是否有未处理完的 pending items
-                        // 优先级:pending items 优先于 failures 重试
+                        // 优先级:rollback > pending items > failures 重试
+                        // - 有 rollback → 弹回滚恢复对话框(恢复标记/不恢复)
                         // - 有 pending items → 弹续传对话框(继续同步/完整同步)
                         // - 无 pending items 但有 failures → 弹失败重试对话框(由 SettingsScreen 处理)
                         val doubanSyncManager = hiltViewModel<DoubanSyncViewModel>().doubanSyncManager
+
+                        // 回滚检测(最高优先级:用户标记数据安全)
+                        var rollbackCount by rememberSaveable { mutableIntStateOf(0) }
+                        var rollbackChecked by rememberSaveable { mutableStateOf(false) }
+                        LaunchedEffect(Unit) {
+                            if (!rollbackChecked) {
+                                rollbackChecked = true
+                                rollbackCount = doubanSyncManager.getRollbackCount()
+                            }
+                        }
+                        if (rollbackCount > 0) {
+                            com.tracktosearch.ui.screen.douban.DoubanRollbackDialog(
+                                rollbackCount = rollbackCount,
+                                onDismiss = { rollbackCount = 0 },
+                                onRestore = {
+                                    rollbackCount = 0
+                                    scope.launch { doubanSyncManager.restoreRollback() }
+                                },
+                                onDiscard = {
+                                    rollbackCount = 0
+                                    scope.launch { doubanSyncManager.discardRollback() }
+                                }
+                            )
+                        }
+
                         var pendingCount by rememberSaveable { mutableIntStateOf(0) }
                         var pendingChecked by rememberSaveable { mutableStateOf(false) }
                         LaunchedEffect(Unit) {

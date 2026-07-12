@@ -60,7 +60,6 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -964,7 +963,7 @@ fun WatchlistScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(
-                                        imageVector = if (checkProgress.isRunning) Icons.Rounded.SyncAlt
+                                        imageVector = if (checkProgress.isRunning) Icons.Rounded.Sync
                                             else Icons.Rounded.CheckCircle,
                                         contentDescription = null,
                                         tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer

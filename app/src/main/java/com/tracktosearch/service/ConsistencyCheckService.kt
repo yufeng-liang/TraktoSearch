@@ -82,6 +82,8 @@ class ConsistencyCheckService : Service() {
                     } else {
                         startForeground(NOTIF_ID, notif)
                     }
+                    // WakeLock 由 DoubanTraktStatusConsistencyChecker 统一管理
+                    // (检查跑在 Checker 的 appScope,与 Service 生命周期独立)
                 } catch (e: Exception) {
                     stopSelf()
                     return START_NOT_STICKY

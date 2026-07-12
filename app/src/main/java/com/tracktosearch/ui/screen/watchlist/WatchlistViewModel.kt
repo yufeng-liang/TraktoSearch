@@ -619,11 +619,13 @@ class WatchlistViewModel @Inject constructor(
                 async { traktRepository.removeFromWatchlist(id, type) }
             }.awaitAll()
             val allSuccess = results.all { it.isSuccess }
-            // 从 UI 状态中移除已删除项
-            _uiState.value = if (isMovie) {
-                _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
-            } else {
-                _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
+            if (allSuccess) {
+                // 全部成功才更新 UI，避免部分失败时 UI 与服务端不一致
+                _uiState.value = if (isMovie) {
+                    _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
+                } else {
+                    _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
+                }
             }
         }
     }
@@ -636,10 +638,12 @@ class WatchlistViewModel @Inject constructor(
                 async { traktRepository.removeWatched(id, type) }
             }.awaitAll()
             val allSuccess = results.all { it.isSuccess }
-            _uiState.value = if (isMovie) {
-                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
-            } else {
-                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
+            if (allSuccess) {
+                _uiState.value = if (isMovie) {
+                    _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
+                } else {
+                    _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
+                }
             }
         }
     }

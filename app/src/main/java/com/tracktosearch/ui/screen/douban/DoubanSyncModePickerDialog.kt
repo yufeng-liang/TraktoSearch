@@ -38,10 +38,9 @@ import com.tracktosearch.data.repository.SyncMode
 /**
  * 豆瓣重新导入模式选择对话框(设置页「重新同步豆瓣」按钮触发)。
  *
- * 三种模式:
- * - A: 仅同步新增条目(跳过已同步的,不处理状态变化)
- * - B: 同步新增 + 检测状态变化(撤销旧操作应用新操作)
- * - C: 完全重写(清空已同步标记后重新应用,需二次确认)
+ * 两种模式:
+ * - A: 增量同步 + 状态变化检测,同步完成后自动进行状态一致性检查
+ * - B: 完全重写(清空已同步标记后重新应用,需二次确认)
  *
  * 每个选项附说明 + 示例,帮助用户理解后选择。
  *
@@ -54,7 +53,7 @@ fun DoubanSyncModePickerDialog(
     onDismiss: () -> Unit,
     onModeSelected: (SyncMode) -> Unit
 ) {
-    // 模式 C 二次确认状态
+    // 模式 B 二次确认状态
     var showFullRewriteConfirm by remember { mutableStateOf(false) }
 
     if (showFullRewriteConfirm) {
@@ -88,18 +87,6 @@ fun DoubanSyncModePickerDialog(
         text = {
             Column {
                 ModeOptionItem(
-                    icon = Icons.Rounded.AddCircle,
-                    title = stringResource(R.string.douban_sync_mode_a_title),
-                    desc = stringResource(R.string.douban_sync_mode_a_desc),
-                    example = stringResource(R.string.douban_sync_mode_a_example),
-                    onClick = {
-                        onDismiss()
-                        onModeSelected(SyncMode.INCREMENTAL_ONLY)
-                    },
-                    trailing = { CooldownBadge(cooldownStatus) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ModeOptionItem(
                     icon = Icons.Rounded.Refresh,
                     title = stringResource(R.string.douban_sync_mode_b_title),
                     desc = stringResource(R.string.douban_sync_mode_b_desc),
@@ -117,7 +104,7 @@ fun DoubanSyncModePickerDialog(
                     desc = stringResource(R.string.douban_sync_mode_c_desc),
                     example = stringResource(R.string.douban_sync_mode_c_example, syncedCount),
                     onClick = {
-                        // 模式 C 需二次确认
+                        // 模式 B 需二次确认
                         showFullRewriteConfirm = true
                     }
                 )

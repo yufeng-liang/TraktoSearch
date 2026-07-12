@@ -11,6 +11,7 @@ import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
 import javax.inject.Named
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -474,7 +475,7 @@ class ResourceRepository @Inject constructor(
                     source = sourceName
                 )
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }
@@ -520,7 +521,7 @@ class ResourceRepository @Inject constructor(
                     )
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             emptyList()
         }
     }

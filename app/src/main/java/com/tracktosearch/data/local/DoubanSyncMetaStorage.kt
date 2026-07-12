@@ -41,7 +41,7 @@ class DoubanSyncMetaStorage @Inject constructor(
     suspend fun getLastSyncAt(): Long =
         context.doubanSyncMetaStore.data.map { it[lastSyncAtKey] ?: 0L }.first()
 
-    /** 上次同步模式（"INCREMENTAL_ONLY" / "INCREMENTAL_WITH_CHANGES" / "FULL_REWRITE" / "RESUME" / "RETRY" / "CANCELLED"） */
+    /** 上次同步模式（"INCREMENTAL_WITH_CHANGES" / "FULL_REWRITE" / "RESUME" / "RETRY" / "CANCELLED"） */
     suspend fun getLastSyncMode(): String? =
         context.doubanSyncMetaStore.data.map { it[lastSyncModeKey] }.first()
 

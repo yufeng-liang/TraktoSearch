@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -75,11 +76,11 @@ class PersistentTtlCache<T>(
                         // 旧格式无 expireAt，降级为重置 TTL
                         super.put(cacheKey, item)
                     }
-                } catch (e: Exception) {
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     // 反序列化失败（数据格式变更），跳过该条目
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             // 磁盘读取失败不阻塞应用启动
         }
         loadedDeferred.complete(Unit)
@@ -102,7 +103,7 @@ class PersistentTtlCache<T>(
                     prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
                     prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
                 }
-            } catch (e: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // 磁盘写入失败静默处理，不影响内存缓存
             }
         }
@@ -121,7 +122,7 @@ class PersistentTtlCache<T>(
                 val keysToRemove = prefs.asMap().keys.filter { it.name.startsWith("$keyPrefix:") }
                 keysToRemove.forEach { prefs.remove(it) }
             }
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             // DataStore 删除失败静默处理
         }
     }
@@ -145,12 +146,12 @@ class PersistentTtlCache<T>(
                 val jsonStr = value as? String ?: return@forEach
                 try {
                     result[cacheKey] = json.decodeFromString(serializer, jsonStr)
-                } catch (_: Exception) {
+                } catch (e: CancellationException) { throw e } catch (_: Exception) {
                     // 反序列化失败跳过
                 }
             }
             result
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
             emptyMap()
         }
     }
@@ -187,7 +188,7 @@ class PersistentTtlCache<T>(
                     written++
                 }
             }
-        } catch (_: Exception) {
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
             // 磁盘写入失败静默
         }
         return written
@@ -209,7 +210,7 @@ class PersistentTtlCache<T>(
                 total += jsonStr.toByteArray(Charsets.UTF_8).size.toLong()
             }
             total
-        } catch (e: Exception) {
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
             0L
         }
     }

@@ -66,6 +66,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
+            android:alwaysRetainTaskState="true"
             android:theme="@style/Theme.App.Starting">
 
             <intent-filter>

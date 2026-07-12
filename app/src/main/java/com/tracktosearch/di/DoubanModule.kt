@@ -102,7 +102,7 @@ object DoubanModule {
             maxSize = 0,
             dataStore = dataStore,
             json = json,
-            keyPrefix = "douban_recommend",
+            keyPrefix = "douban_recommend_v1",
             scope = scope
         )
     }
@@ -129,7 +129,7 @@ object DoubanModule {
             maxSize = 5000,
             dataStore = dataStore,
             json = json,
-            keyPrefix = "douban_id_mapping",
+            keyPrefix = "douban_id_mapping_v1",
             scope = scope
         )
     }

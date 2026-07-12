@@ -7,6 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Query
+import androidx.room.Transaction
 
 /**
  * 豆瓣→Trakt 同步记录，用于「重新导入」时跳过已同步条目
@@ -53,6 +54,13 @@ interface DoubanSyncedItemDao {
     /** 状态统一检查后回写本地表 status（豆瓣侧标记成功后同步本地记录） */
     @Query("UPDATE douban_synced_items SET status = :status WHERE doubanId = :doubanId")
     suspend fun updateStatus(doubanId: String, status: String)
+
+    /** 替换全部同步记录（事务包装，避免 clearAll 后 insertAll 失败导致数据丢失） */
+    @Transaction
+    suspend fun replaceAll(items: List<DoubanSyncedItem>) {
+        clearAll()
+        insertAll(items)
+    }
 }
 
 /**
@@ -80,6 +88,7 @@ data class DoubanSyncFailureEntity(
     val status: String,             // "wish" / "collect"
     val failureReason: String,     // FailureReason.name
     val failedAt: Long,
+    val updatedAt: Long = 0L,       // mediaType/subtitle/status 等字段最近修改时间，用于云同步时间戳比较
     val attemptCount: Int = 0,
     val mediaType: String? = null,  // "movie" / "show" / null(未分类),用户手动标注
     val mediaTypeCleared: Boolean = false, // 用户主动清除标注(区分"从未标注"与"清除标注",防止全局池/自动推断重新填充)
@@ -114,13 +123,13 @@ interface DoubanSyncFailureDao {
     @Query("DELETE FROM douban_sync_failures")
     suspend fun clearAll()
 
-    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/未分类)。清除标注(null)时设 mediaTypeCleared=true 防止重新填充 */
-    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END) WHERE doubanId = :doubanId")
-    suspend fun updateMediaType(doubanId: String, mediaType: String?)
+    /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/未分类)。清除标注(null)时设 mediaTypeCleared=true 防止重新填充。同步刷新 updatedAt 用于云同步时间戳比较 */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END), updatedAt = :now WHERE doubanId = :doubanId")
+    suspend fun updateMediaType(doubanId: String, mediaType: String?, now: Long = System.currentTimeMillis())
 
-    /** 写回豆瓣成功后持久化新标记状态(wish/collect) */
-    @Query("UPDATE douban_sync_failures SET status = :status WHERE doubanId = :doubanId")
-    suspend fun updateStatus(doubanId: String, status: String)
+    /** 写回豆瓣成功后持久化新标记状态(wish/collect)。同步刷新 updatedAt */
+    @Query("UPDATE douban_sync_failures SET status = :status, updatedAt = :now WHERE doubanId = :doubanId")
+    suspend fun updateStatus(doubanId: String, status: String, now: Long = System.currentTimeMillis())
 
     /** 查询所有 mediaType 为 null 且未被用户主动清除的失败项 doubanId(用于同步后从全局池填充类型) */
     @Query("SELECT doubanId FROM douban_sync_failures WHERE mediaType IS NULL AND mediaTypeCleared = 0")
@@ -130,17 +139,31 @@ interface DoubanSyncFailureDao {
     @Query("UPDATE douban_sync_failures SET mediaType = :mediaType WHERE doubanId = :doubanId AND mediaType IS NULL")
     suspend fun updateMediaTypeIfNull(doubanId: String, mediaType: String)
 
-    /** 更新单条子标题(用于资源搜索) */
-    @Query("UPDATE douban_sync_failures SET subtitle = :subtitle WHERE doubanId = :doubanId")
-    suspend fun updateSubtitle(doubanId: String, subtitle: String?)
+    /** 更新单条子标题(用于资源搜索)。同步刷新 updatedAt */
+    @Query("UPDATE douban_sync_failures SET subtitle = :subtitle, updatedAt = :now WHERE doubanId = :doubanId")
+    suspend fun updateSubtitle(doubanId: String, subtitle: String?, now: Long = System.currentTimeMillis())
 
     /** 批量删除(多选模式删除用) */
     @Query("DELETE FROM douban_sync_failures WHERE doubanId IN (:ids)")
     suspend fun deleteByDoubanIds(ids: List<String>)
 
-    /** 批量更新媒体类型(多选模式标注用,覆盖更新)。清除标注(null)时设 mediaTypeCleared=true */
-    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END) WHERE doubanId IN (:ids)")
-    suspend fun updateMediaTypeBatch(ids: List<String>, mediaType: String?)
+    /** 批量更新媒体类型(多选模式标注用,覆盖更新)。清除标注(null)时设 mediaTypeCleared=true。同步刷新 updatedAt */
+    @Query("UPDATE douban_sync_failures SET mediaType = :mediaType, mediaTypeCleared = (CASE WHEN :mediaType IS NULL THEN 1 ELSE 0 END), updatedAt = :now WHERE doubanId IN (:ids)")
+    suspend fun updateMediaTypeBatch(ids: List<String>, mediaType: String?, now: Long = System.currentTimeMillis())
+
+    /** 替换全部失败项（事务包装，避免 clearAll 后 insertAll 失败导致数据丢失） */
+    @Transaction
+    suspend fun replaceAll(items: List<DoubanSyncFailureEntity>) {
+        clearAll()
+        insertAll(items)
+    }
+
+    /** 按 status 替换失败项（事务包装） */
+    @Transaction
+    suspend fun replaceByStatus(status: String, items: List<DoubanSyncFailureEntity>) {
+        deleteByStatus(status)
+        insertAll(items)
+    }
 }
 
 /**
@@ -190,4 +213,56 @@ interface DoubanSyncPendingItemDao {
     /** 用户选择「完整同步」时清空未处理数据 */
     @Query("DELETE FROM douban_sync_pending_items")
     suspend fun clearAll()
+
+    /** 替换全部 pending items（事务包装） */
+    @Transaction
+    suspend fun replaceAll(items: List<DoubanSyncPendingItemEntity>) {
+        clearAll()
+        insertAll(items)
+    }
+}
+
+/**
+ * 豆瓣全量重写同步的回滚记录。
+ *
+ * 用于:
+ * - 「完整重写」同步前,保存用户当前 Trakt 标记(watchlist/history)快照
+ * - 同步成功后清除;同步失败/取消时保留
+ * - 下次 App 启动时检测到该表有数据 → 提示用户「上次完整同步未完成,是否恢复被删除的标记?」
+ * - 恢复后重新批量添加到 Trakt watchlist/history,然后清除该表
+ */
+@Entity(
+    tableName = "douban_sync_rollback",
+    indices = [Index("status"), Index("mediaType")]
+)
+data class DoubanSyncRollbackEntity(
+    @PrimaryKey val doubanId: String,
+    val traktId: Int,
+    val title: String,
+    val status: String,         // "wish" | "collect"
+    val mediaType: String,      // "movie" | "show"
+    val rating: Int?,           // 1-5 (豆瓣评分,恢复时同步到 Trakt ratings)
+    val rollbackAt: Long        // 回滚记录创建时间戳
+)
+
+@Dao
+interface DoubanSyncRollbackDao {
+    @Query("SELECT * FROM douban_sync_rollback")
+    suspend fun getAll(): List<DoubanSyncRollbackEntity>
+
+    @Query("SELECT COUNT(*) FROM douban_sync_rollback")
+    suspend fun count(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<DoubanSyncRollbackEntity>)
+
+    @Query("DELETE FROM douban_sync_rollback")
+    suspend fun clearAll()
+
+    /** 替换全部回滚记录（事务包装，避免 clearAll 后 insertAll 失败导致回滚数据丢失） */
+    @Transaction
+    suspend fun replaceAll(items: List<DoubanSyncRollbackEntity>) {
+        clearAll()
+        insertAll(items)
+    }
 }
