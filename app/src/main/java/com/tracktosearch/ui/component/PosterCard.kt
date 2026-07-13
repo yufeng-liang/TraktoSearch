@@ -150,14 +150,15 @@ fun PosterCard(
                         .padding(6.dp)
                 )
             }
-            if (year != null) {
+            val showYear = !year.isNullOrBlank() && year != "0"
+            if (showYear) {
                 Text(
                     text = year,
                     color = Color.White,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.BottomEnd)
                         .padding(6.dp)
                         .background(
                             Color.Black.copy(alpha = 0.5f),

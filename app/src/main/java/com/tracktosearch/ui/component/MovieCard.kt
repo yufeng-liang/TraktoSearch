@@ -245,7 +245,7 @@ fun MovieCard(
                     }
                 }
                 // 年份角标（海报右下角）
-                if (year != null) {
+                if (year != null && year != 0) {
                     Text(
                         text = "$year",
                         style = MaterialTheme.typography.labelSmall.copy(
