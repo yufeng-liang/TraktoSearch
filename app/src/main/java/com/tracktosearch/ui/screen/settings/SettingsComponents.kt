@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -77,7 +78,9 @@ fun SettingsGroupCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
-        color = cardSurfaceColor()
+        color = cardSurfaceColor(),
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -183,7 +186,9 @@ internal fun SettingsItemCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
-        color = containerColor
+        color = containerColor,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -424,7 +429,9 @@ internal fun DataFlowCard(
     Surface(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        color = containerColor
+        color = containerColor,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -464,7 +471,9 @@ internal fun SettingsCard(
             .fillMaxWidth()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = containerColor
+        color = containerColor,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -539,7 +548,9 @@ internal fun SearchSourceCard(
     Surface(
         modifier = modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
-        color = containerColor
+        color = containerColor,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
@@ -597,7 +608,9 @@ internal fun SearchSourceAddCard(
             .fillMaxSize()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
-        color = containerColor
+        color = containerColor,
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -641,7 +654,9 @@ internal fun StatisticsCard(
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = cardSurfaceColor()
+        color = cardSurfaceColor(),
+        shadowElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
