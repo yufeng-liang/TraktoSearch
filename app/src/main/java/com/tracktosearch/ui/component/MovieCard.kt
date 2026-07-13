@@ -276,10 +276,9 @@ fun MovieCard(
                         color = Color.Black,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(4.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.White.copy(alpha = 0.9f))
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .padding(horizontal = 4.dp, vertical = 0.dp)
                     )
                 }
             }
@@ -290,7 +289,7 @@ fun MovieCard(
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 1.dp)
+                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 0.dp)
                 )
                 if (genres.isNotEmpty()) {
                     Text(

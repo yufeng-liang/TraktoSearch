@@ -254,13 +254,13 @@ fun DetailScreen(
                 Color.Transparent
             }
             val tabContentColor = when {
-                isPinned && tabContainerColor.luminance() <= 0.5f -> MaterialTheme.colorScheme.onPrimary
+                isPinned && tabContainerColor.luminance() <= 0.5f -> Color.White
                 !isPinned -> {
                     // 非吸顶时 tab 在渐变中段,用该位置混合色亮度判断文字颜色
                     val midColor = uiState.posterDominantColor?.let { c ->
                         lerp(c, MaterialTheme.colorScheme.background, 0.8f)
                     } ?: MaterialTheme.colorScheme.background
-                    if (midColor.luminance() <= 0.5f) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                    if (midColor.luminance() <= 0.5f) Color.White else MaterialTheme.colorScheme.onSurface
                 }
                 else -> MaterialTheme.colorScheme.onSurface
             }

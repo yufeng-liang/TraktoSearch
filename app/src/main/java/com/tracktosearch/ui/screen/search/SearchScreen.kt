@@ -287,8 +287,8 @@ fun SearchScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val titleAreaHeight = 110.dp
     val searchBoxHeight = 72.dp
-    val searchBoxCenterY = screenHeight / 2 - 90.dp
-    val cloudIconSize = 115.dp
+    val searchBoxCenterY = screenHeight / 2 - 148.dp
+    val cloudIconSize = 230.dp
     val contentTopOffset = searchBoxHeight + 25.dp
 
     val targetSearchBoxY by animateDpAsState(
@@ -324,7 +324,7 @@ fun SearchScreen(
             }
         }
 
-        // 白云图标（搜索框未激活时显示在搜索框上方 25dp）
+        // 白云图标（搜索框未激活时显示在搜索框上方 25dp，水平居中）
         CloudIconWithAnimation(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
@@ -332,7 +332,6 @@ fun SearchScreen(
                 .size(cloudIconSize)
                 .align(Alignment.TopCenter)
                 .offset(
-                    x = 110.dp,
                     y = targetSearchBoxY - cloudIconSize - 25.dp
                 )
         )
