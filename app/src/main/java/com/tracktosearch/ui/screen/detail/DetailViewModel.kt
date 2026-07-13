@@ -17,6 +17,8 @@ import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserReviewRepository
+import com.tracktosearch.data.local.db.UserReviewEntity
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.remote.tmdb.dto.TmdbReview
@@ -199,7 +201,9 @@ class DetailViewModel @Inject constructor(
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     // 海报主色调提取器(对 DetailHeaderContent 暴露,用于在海报加载成功后提取主色)
-    val posterColorExtractor: PosterColorExtractor
+    val posterColorExtractor: PosterColorExtractor,
+    // 本地评分+短评缓存(优先读取 Trakt 之外的本地值,提交/更新时写回)
+    private val userReviewRepository: UserReviewRepository
 ) : ViewModel() {
 
     companion object {
@@ -952,8 +956,20 @@ class DetailViewModel @Inject constructor(
     private fun fetchUserRating() {
         // 未登录跳过用户评分查询
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) return
+        // traktId 无效(未登录/无 traktId)时跳过,避免崩溃
+        if (currentTraktId <= 0) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isRatingLoading = true)
+            // 优先读取本地评分+短评缓存:命中且 rating/comment 非空则直接初始化 UI,不再走网络
+            val local = runCatching { userReviewRepository.getReview(currentTraktId.toLong()) }.getOrNull()
+            if (local != null && (local.rating != null || !local.comment.isNullOrBlank())) {
+                _uiState.value = _uiState.value.copy(
+                    userRating = local.rating?.toInt(),
+                    userComment = local.comment,
+                    isRatingLoading = false
+                )
+                return@launch
+            }
             try {
                 val rating = traktRepository.getUserRating(currentTraktId, currentMediaType)
                 _uiState.value = _uiState.value.copy(
@@ -989,6 +1005,7 @@ class DetailViewModel @Inject constructor(
                         isRating = false
                     )
                     saveToCache()
+                    saveUserReviewToLocal(rating, _uiState.value.userComment)
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(isRating = false)
@@ -1034,6 +1051,7 @@ class DetailViewModel @Inject constructor(
                     pendingDoubanAction = null
                 )
                 saveToCache()
+                saveUserReviewToLocal(rating, comment.ifBlank { null })
                 // 豆瓣同步:评分映射 Trakt 1-10 → 豆瓣 1-5
                 val doubanRating = Math.round(rating / 2.0).toInt()
                 syncDoubanMarkWithRating(doubanRating, comment, pending == DoubanSyncAction.COLLECT)
@@ -1097,6 +1115,7 @@ class DetailViewModel @Inject constructor(
                         isRating = false
                     )
                     saveToCache()
+                    deleteUserReviewFromLocal()
                     // 取消评分后,若有待处理的豆瓣 COLLECT 同步,仅同步看过(无评分无短评)
                     if (current.pendingDoubanAction == DoubanSyncAction.COLLECT) {
                         syncDoubanMark(DoubanSyncAction.COLLECT)
@@ -1798,6 +1817,44 @@ class DetailViewModel @Inject constructor(
             currentMediaType = currentMediaType,
             currentCollectionId = currentCollectionId
         ))
+    }
+
+    private fun currentMediaTypeStr(): String =
+        if (currentMediaType == MediaType.SHOW) "show" else "movie"
+
+    /**
+     * 将当前评分/短评写回本地缓存(优先层)。
+     * traktId 无效(未登录/无 traktId)时跳过,避免崩溃。
+     */
+    private fun saveUserReviewToLocal(rating: Int?, comment: String?) {
+        if (currentTraktId <= 0) return
+        viewModelScope.launch {
+            runCatching {
+                userReviewRepository.saveReview(
+                    UserReviewEntity(
+                        traktId = currentTraktId.toLong(),
+                        tmdbId = currentTmdbId.takeIf { it > 0 },
+                        imdbId = currentImdbId.takeIf { it.isNotBlank() },
+                        mediaType = currentMediaTypeStr(),
+                        title = currentTitle.takeIf { it.isNotBlank() },
+                        year = _uiState.value.year,
+                        rating = rating?.toFloat(),
+                        comment = comment?.takeIf { it.isNotBlank() },
+                        liked = null,
+                        createdAt = null,
+                        updatedAt = null
+                    )
+                )
+            }
+        }
+    }
+
+    /** 取消评分时删除本地缓存记录(优先层)。 */
+    private fun deleteUserReviewFromLocal() {
+        if (currentTraktId <= 0) return
+        viewModelScope.launch {
+            runCatching { userReviewRepository.deleteReview(currentTraktId.toLong()) }
+        }
     }
 }
 
