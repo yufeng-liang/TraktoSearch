@@ -73,8 +73,6 @@ import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.ui.component.AppBottomBar
-import com.tracktosearch.ui.component.BottomBarItem
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.OnboardingOverlay
@@ -236,6 +234,14 @@ fun MainScreen(
     // Haze 毛玻璃状态
     val hazeState = remember { HazeState() }
 
+    // Tab 数据
+    val tabs = listOf(
+        TabData(Icons.Rounded.Search, R.string.tab_search),
+        TabData(Icons.Rounded.Explore, R.string.tab_discover),
+        TabData(Icons.Rounded.Person, R.string.tab_me),
+        TabData(Icons.Rounded.Settings, R.string.tab_settings)
+    )
+
     Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { innerPadding ->
         Box(
             modifier = Modifier
@@ -356,38 +362,84 @@ fun MainScreen(
                 } // CompositionLocalProvider
             }
 
-            // 悬浮底部导航
+            // 悬浮底部导航（4 Tab 毛玻璃 + 选中背景高亮动效）
+            val navBarWidth = (screenWidthDp * 0.80).dp
+            val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+            val navBarShape = RoundedCornerShape(28.dp)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .padding(bottom = navBarHeight + 8.dp)
                     .offset(y = fabOffset)
+                    .width(navBarWidth)
+                    .height(64.dp)
+                    .shadow(elevation = 16.dp, shape = navBarShape)
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin()
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
+                        shape = navBarShape
+                    )
             ) {
-                AppBottomBar(
-                    items = listOf(
-                        BottomBarItem(Icons.Rounded.Search, stringResource(R.string.tab_search)),
-                        BottomBarItem(Icons.Rounded.Explore, stringResource(R.string.tab_discover)),
-                        BottomBarItem(
-                            Icons.Rounded.Person,
-                            stringResource(R.string.tab_me),
-                            avatarUrl = if (isLoggedIn) userAvatarUrl else null
-                        ),
-                        BottomBarItem(Icons.Rounded.Settings, stringResource(R.string.tab_settings))
-                    ),
-                    selectedIndex = pagerState.currentPage,
-                    onItemSelected = { index ->
-                        if (selectedTab != index) {
-                            view.performHaptic(HapticType.CLICK)
-                            scope.launch { pagerState.animateScrollToPage(index) }
-                        }
-                    },
-                    hazeState = hazeState,
-                    onTabPositioned = { index, rect ->
-                        val current = tabRects.value.toMutableList()
-                        while (current.size <= index) current.add(Rect.Zero)
-                        current[index] = rect
-                        tabRects.value = current
-                    }
+                // 滑动高亮指示器（药丸形背景，先绘制在底层）
+                val tabCount = tabs.size
+                val rowPadding = 8.dp
+                val tabWidth = (navBarWidth - rowPadding * 2) / tabCount
+                val indicatorOffsetX by animateDpAsState(
+                    targetValue = rowPadding + tabWidth * selectedTab,
+                    animationSpec = tween(durationMillis = 200),
+                    label = "indicatorOffset"
                 )
+                Box(
+                    modifier = Modifier
+                        .offset(x = indicatorOffsetX)
+                        .align(Alignment.CenterStart)
+                        .padding(vertical = 8.dp)
+                        .width(tabWidth)
+                        .height(48.dp)
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                )
+
+                // Tab 内容（绘制在指示器上方）
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    tabs.forEachIndexed { index, tab ->
+                        val isSelected = selectedTab == index
+                        // "我的"tab(index=2)登录后显示用户头像
+                        val avatarUrl = if (index == 2 && isLoggedIn) userAvatarUrl else null
+                        NavTabItem(
+                            icon = tab.icon,
+                            labelRes = tab.labelRes,
+                            selected = isSelected,
+                            weight = 1f,
+                            avatarUrl = avatarUrl,
+                            onClick = {
+                                if (selectedTab != index) {
+                                    view.performHaptic(HapticType.CLICK)
+                                    scope.launch { pagerState.scrollToPage(index) }
+                                }
+                            },
+                            onPositioned = { rect ->
+                                val current = tabRects.value.toMutableList()
+                                while (current.size <= index) current.add(Rect.Zero)
+                                current[index] = rect
+                                tabRects.value = current
+                            }
+                        )
+                    }
+                }
             }
 
             // 新手引导遮罩（4个Tab高亮 + 3个纯信息提示）
@@ -447,6 +499,80 @@ fun MainScreen(
                 )
             }
         }
+    }
+}
+
+private data class TabData(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val labelRes: Int
+)
+
+@Composable
+private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    selected: Boolean,
+    weight: Float,
+    onClick: () -> Unit,
+    avatarUrl: String? = null,
+    onPositioned: (Rect) -> Unit = {}
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val density = LocalDensity.current
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .weight(weight)
+            .fillMaxSize()
+            .onGloballyPositioned { coordinates ->
+                val bounds = coordinates.boundsInWindow()
+                onPositioned(bounds)
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        if (avatarUrl != null) {
+            // 登录后"我的"tab 显示用户头像（选中态加主色边框）
+            AsyncImage(
+                model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
+                contentDescription = stringResource(labelRes),
+                modifier = Modifier
+                    .size(24.dp)
+                    .offset(y = 3.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(
+                        if (selected) Modifier.border(
+                            width = 1.5.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(12.dp)
+                        ) else Modifier
+                    )
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = stringResource(labelRes),
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .size(24.dp)
+                    .offset(y = 3.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(0.dp))
+        Text(
+            text = stringResource(labelRes),
+            fontSize = 10.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            color = if (selected) MaterialTheme.colorScheme.primary
+                   else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1
+        )
     }
 }
 
