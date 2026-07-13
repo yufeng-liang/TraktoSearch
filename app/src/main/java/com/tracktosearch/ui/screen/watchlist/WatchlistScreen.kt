@@ -643,32 +643,12 @@ fun WatchlistScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // 测量切换条文字宽度，动态计算搜索框宽度
                                 val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
                                 val watchedLabel = stringResource(R.string.watchlist_mode_watched)
                                 val isWatchlist = selectedMode == 0
-                                val tabPadding = 12.dp
-                                val textMeasurer = rememberTextMeasurer()
-                                val watchlistTextWidthPx = remember(watchlistLabel) {
-                                    textMeasurer.measure(
-                                        text = watchlistLabel,
-                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                    ).size.width
-                                }
-                                val watchedTextWidthPx = remember(watchedLabel) {
-                                    textMeasurer.measure(
-                                        text = watchedLabel,
-                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                    ).size.width
-                                }
-                                val capsuleDensity = LocalDensity.current
-                                val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
-                                val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
-                                val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
-                                val filterButtonSize = 48.dp
-                                val rowPadding = 12.dp * 2
-                                val gaps = 8.dp * 2
-                                val searchBoxWidth = (screenWidth - capsuleWidth - filterButtonSize - rowPadding - gaps).coerceAtMost(screenWidth / 2)
+                                // 胶囊约占父容器 60% 宽度，整体右对齐
+                                val capsuleWidth = screenWidth * 0.6f
+                                val modeTabWidth = capsuleWidth / 2
     
                                 // 毛玻璃搜索栏
                                 GlassSearchBar(
@@ -679,7 +659,7 @@ fun WatchlistScreen(
                                         }
                                     } else stringResource(R.string.search_placeholder_watchlist),
                                     hazeState = hazeState,
-                                    modifier = Modifier.width(searchBoxWidth),
+                                    modifier = Modifier.weight(1f),
                                     value = searchQuery,
                                     onValueChange = { searchQuery = it },
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -720,34 +700,29 @@ fun WatchlistScreen(
                                 // 大胶囊切换条：想看 / 已看
                                 val tabHeight = 48.dp
                                 val indicatorOffset by animateDpAsState(
-                                    targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
+                                    targetValue = if (isWatchlist) 0.dp else modeTabWidth,
                                     animationSpec = tween(200),
                                     label = "modeIndicator"
-                                )
-                                val indicatorWidth by animateDpAsState(
-                                    targetValue = if (isWatchlist) watchlistTabWidthDp else watchedTabWidthDp,
-                                    animationSpec = tween(200),
-                                    label = "modeIndicatorWidth"
                                 )
                                 Box(
                                     modifier = Modifier
                                         .height(tabHeight)
                                         .width(capsuleWidth)
-                                        .clip(RoundedCornerShape(28.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .offset(x = indicatorOffset)
-                                            .width(indicatorWidth)
+                                            .width(modeTabWidth)
                                             .fillMaxHeight()
-                                            .clip(RoundedCornerShape(28.dp))
+                                            .clip(RoundedCornerShape(14.dp))
                                             .background(MaterialTheme.colorScheme.primary)
                                     )
                                     Row(modifier = Modifier.fillMaxSize()) {
                                         Box(
                                             modifier = Modifier
-                                                .width(watchlistTabWidthDp)
+                                                .width(modeTabWidth)
                                                 .fillMaxHeight()
                                                 .clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
@@ -769,7 +744,7 @@ fun WatchlistScreen(
                                         }
                                         Box(
                                             modifier = Modifier
-                                                .width(watchedTabWidthDp)
+                                                .width(modeTabWidth)
                                                 .fillMaxHeight()
                                                 .clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
