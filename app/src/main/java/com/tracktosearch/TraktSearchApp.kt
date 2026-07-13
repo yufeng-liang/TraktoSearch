@@ -41,6 +41,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var doubanDetailCache: PersistentTtlCache<com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry>
     @Inject @DoubanIdMapping lateinit var doubanIdMappingCache: PersistentTtlCache<String>
     @Inject lateinit var remoteConfigManager: RemoteConfigManager
+    @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
 
     // 缓存 Configuration，避免每次 get() 都新建实例
     override val workManagerConfiguration: Configuration by lazy {
@@ -70,6 +71,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 doubanHotCache.loadFromDisk()
                 doubanDetailCache.loadFromDisk()
                 doubanIdMappingCache.loadFromDisk()
+                // 海报主色调内存 warmup：消除冷启动 IO，命中即秒进
+                posterColorCache.warmUp()
             }
             // 独立协程预热开屏图标到 Coil 内存缓存：按显示尺寸(211dp)降采样解码，
             // 使 splash 的 AsyncImage 命中缓存秒显，避免异步加载时序冲突导致图标不显示

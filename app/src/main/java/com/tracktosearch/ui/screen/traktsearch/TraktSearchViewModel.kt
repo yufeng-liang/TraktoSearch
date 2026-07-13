@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.dto.ResourceType
@@ -42,7 +43,9 @@ data class TraktSearchUiItem(
     val traktRating: Double = 0.0,
     val knownForDepartment: String = "",
     // 人物流行度(TMDB 提供),用于人物搜索结果按流行度降序排序
-    val popularity: Double = 0.0
+    val popularity: Double = 0.0,
+    // 前一屏 SubcomposeAsyncImage 加载头像后提取的主色，直接透传给 PersonScreen 首帧沉浸
+    val avatarColor: Color? = null
 )
 
 @Immutable

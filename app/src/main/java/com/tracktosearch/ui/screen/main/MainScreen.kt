@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -118,7 +119,7 @@ fun MainScreen(
     onNavigateToLogin: () -> Unit,
     onStatisticsClick: () -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
-    onPersonClick: (tmdbId: Int, name: String, profileUrl: String) -> Unit = { _, _, _ -> },
+    onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onLogout: () -> Unit,
     onHelpClick: () -> Unit,
@@ -287,8 +288,8 @@ fun MainScreen(
                                                 else -> {}
                                             }
                                         },
-                                        onPersonClick = { tmdbId, name, profileUrl ->
-                                            onPersonClick(tmdbId, name, profileUrl)
+                                        onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
+                                            onPersonClick(tmdbId, name, profileUrl, avatarColor)
                                         },
                                         viewModel = viewModel,
                                         inlineMode = true

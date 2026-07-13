@@ -68,6 +68,7 @@ fun PersonScreen(
     personId: Int,
     personName: String,
     profileUrl: String? = null,
+    avatarColor: androidx.compose.ui.graphics.Color? = null,
     onBack: () -> Unit = {},
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit = { _, _, _, _, _ -> },
@@ -79,7 +80,7 @@ fun PersonScreen(
     BackHandler(enabled = true) { onBack() }
 
     LaunchedEffect(personId) {
-        viewModel.loadPerson(personId)
+        viewModel.loadPerson(personId, profileUrl, avatarColor)
     }
 
     ToastEffect(viewModel.toastEvent)

@@ -36,10 +36,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -61,6 +64,7 @@ import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.core.graphics.drawable.toBitmap
 
 // ==================== 演职员 ====================
@@ -70,11 +74,20 @@ internal fun CrewSection(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
     onShowAll: () -> Unit = {},
-    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
+
+    // 已提取的 avatarColor 缓存（personId -> Color），onSuccess 回调只触发一次
+    val avatarColors = remember { mutableMapOf<Int, Color>() }
+
+    fun onAvatarColorExtracted(personId: Int, color: Color) {
+        if (avatarColors[personId] != color) {
+            avatarColors[personId] = color
+        }
+    }
 
     Column {
         // 标题行
@@ -112,7 +125,8 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_director_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
-                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                    onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
+                    onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
             }
             // 演员
@@ -123,7 +137,8 @@ internal fun CrewSection(
                     role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else stringResource(R.string.detail_actor),
                     profileUrl = profileUrl,
                     personId = person.id,
-                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                    onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
+                    onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
             }
             // 编剧
@@ -134,7 +149,8 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_writer_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
-                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                    onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
+                    onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
             }
             // 制片人
@@ -145,7 +161,8 @@ internal fun CrewSection(
                     role = stringResource(R.string.detail_producer_tag),
                     profileUrl = profileUrl,
                     personId = person.id,
-                    onClick = { onPersonClick(person.id, person.name, profileUrl) }
+                    onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
+                    onAvatarColorExtracted = { color: Color -> onAvatarColorExtracted(person.id, color) }
                 )
             }
         }
@@ -154,7 +171,14 @@ internal fun CrewSection(
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-internal fun CastCard(name: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
+internal fun CastCard(
+    name: String,
+    role: String,
+    profileUrl: String?,
+    personId: Int,
+    onClick: () -> Unit = {},
+    onAvatarColorExtracted: ((Color) -> Unit)? = null
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sharedTransitionScope = LocalSharedTransitionScope.current
@@ -171,6 +195,8 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
             PosterColorExtractorProvider::class.java
         ).posterColorExtractor()
     }
+    // 已提取的主色缓存，避免重复写
+    var extractedColor by remember { mutableStateOf<Color?>(null) }
     Column(
         modifier = Modifier
             .width(68.dp)
@@ -213,6 +239,14 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
                                     val bitmap = result.drawable.toBitmap()
                                     scope.launch {
                                         posterColorExtractor.extractDominantColor(profileUrl, bitmap)
+                                            .takeIf { it != 0L }
+                                            ?.let { argb ->
+                                                val color = Color(argb)
+                                                if (extractedColor != color) {
+                                                    extractedColor = color
+                                                    onAvatarColorExtracted?.invoke(color)
+                                                }
+                                            }
                                     }
                                 }
                             )
@@ -278,11 +312,13 @@ internal fun FullCastCrewSheet(
     cast: List<TmdbCast>,
     crew: List<TmdbCrew>,
     onDismiss: () -> Unit,
-    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> }
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> }
 ) {
     val directors = crew.filter { it.job == "Director" }
     val writers = crew.filter { it.job == "Writer" || it.job == "Screenplay" }
     val producers = crew.filter { it.job == "Producer" }
+
+    val avatarColors = remember { mutableMapOf<Int, Color>() }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -325,7 +361,8 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
                 }
@@ -340,7 +377,8 @@ internal fun FullCastCrewSheet(
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
                 }
@@ -355,7 +393,8 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
                 }
@@ -370,7 +409,8 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl); onDismiss() }
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
                 }
@@ -391,8 +431,24 @@ internal fun SectionHeader(title: String) {
 }
 
 @Composable
-internal fun FullCastItem(name: String, originalName: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
+internal fun FullCastItem(
+    name: String,
+    originalName: String,
+    role: String,
+    profileUrl: String?,
+    personId: Int,
+    onClick: () -> Unit = {},
+    onAvatarColorExtracted: ((Color) -> Unit)? = null
+) {
     val context = LocalContext.current
+    var extractedColor by remember { mutableStateOf<Color?>(null) }
+    val scope = rememberCoroutineScope()
+    val posterColorExtractor = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            PosterColorExtractorProvider::class.java
+        ).posterColorExtractor()
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -411,6 +467,22 @@ internal fun FullCastItem(name: String, originalName: String, role: String, prof
                             .data(profileUrl)
                             .size(200)
                             .crossfade(false)
+                            .listener(
+                                onSuccess = { _, result ->
+                                    val bitmap = result.drawable.toBitmap()
+                                    scope.launch {
+                                        posterColorExtractor.extractDominantColor(profileUrl, bitmap)
+                                            .takeIf { it != 0L }
+                                            ?.let { argb ->
+                                                val color = Color(argb)
+                                                if (extractedColor != color) {
+                                                    extractedColor = color
+                                                    onAvatarColorExtracted?.invoke(color)
+                                                }
+                                            }
+                                    }
+                                }
+                            )
                             .build()
                     },
                     contentDescription = name,

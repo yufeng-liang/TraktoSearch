@@ -103,6 +103,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.dto.DiskType
@@ -117,6 +118,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
@@ -124,6 +126,8 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import dagger.hilt.android.EntryPointAccessors
+import androidx.core.graphics.drawable.toBitmap
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -147,7 +151,7 @@ fun TraktSearchScreen(
     type: MediaType,
     onBack: () -> Unit,
     onItemClick: (type: MediaType, traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
-    onPersonClick: (tmdbId: Int, name: String, profileUrl: String) -> Unit = { _, _, _ -> },
+    onPersonClick: (tmdbId: Int, name: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     inlineMode: Boolean = false,
     viewModel: TraktSearchViewModel = hiltViewModel()
 ) {
@@ -365,7 +369,7 @@ fun TraktSearchScreen(
                                     personId = item.tmdbId,
                                     onClick = {
                                         if (item.tmdbId > 0) {
-                                            onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "")
+                                            onPersonClick(item.tmdbId, item.title, item.posterUrl ?: "", item.avatarColor)
                                         }
                                     }
                                 )
@@ -865,8 +869,18 @@ private fun PersonSearchCard(
     profileUrl: String?,
     knownForDepartment: String,
     personId: Int,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onAvatarColorExtracted: ((Color?) -> Unit)? = null
 ) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var extractedColor by remember { mutableStateOf<Color?>(null) }
+    val posterColorExtractor = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            PosterColorExtractorProvider::class.java
+        ).posterColorExtractor()
+    }
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     Card(
@@ -900,16 +914,44 @@ private fun PersonSearchCard(
                     } else {
                         Modifier.fillMaxSize()
                     }
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(profileUrl)
-                            .size(200)
-                            .crossfade(false)
-                            .build(),
+                    SubcomposeAsyncImage(
+                        model = remember(profileUrl) {
+                            ImageRequest.Builder(context)
+                                .data(profileUrl)
+                                .size(200)
+                                .crossfade(false)
+                                .listener(
+                                    onSuccess = { _, result ->
+                                        val bitmap = result.drawable.toBitmap()
+                                        scope.launch {
+                                            posterColorExtractor.extractDominantColor(profileUrl, bitmap)
+                                                .takeIf { it != 0L }
+                                                ?.let { argb ->
+                                                    val color = Color(argb)
+                                                    if (extractedColor != color) {
+                                                        extractedColor = color
+                                                        onAvatarColorExtracted?.invoke(color)
+                                                    }
+                                                }
+                                        }
+                                    }
+                                )
+                                .build()
+                        },
                         contentDescription = name,
                         modifier = imageModifier
                             .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Crop,
+                        loading = {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            }
+                        },
+                        error = {
+                            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                Text(text = name.take(1), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     )
                 } else {
                     Surface(

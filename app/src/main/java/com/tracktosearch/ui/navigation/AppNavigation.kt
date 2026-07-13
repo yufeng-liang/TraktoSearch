@@ -337,8 +337,8 @@ fun AppNavigation(
                             onTraktSearch = { type, query ->
                                 navController.navigate(Routes.traktSearchRoute(type, query))
                             },
-                            onPersonClick = { tmdbId, name, profileUrl ->
-                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
+                            onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
+                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
                             },
                             onListClick = { listId, listName ->
                                 navController.navigate(Routes.listDetailRoute(listId, listName))
@@ -425,7 +425,7 @@ fun AppNavigation(
                             initialInWatchlist = inWatchlist,
                             initialIsWatched = isWatched,
                             onBack = { wlChanged, wChanged -> goBack(wlChanged, wChanged) },
-                            onPersonClick = { personId, personName, profileUrl ->
+                            onPersonClick = { personId, personName, profileUrl, avatarColor ->
                                 navController.navigate(Routes.personRoute(personId, personName, profileUrl ?: ""))
                             },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
@@ -484,6 +484,7 @@ fun AppNavigation(
                             personId = personId,
                             personName = personName,
                             profileUrl = profileUrl,
+                            avatarColor = null,
                             onBack = { navController.popBackStack() },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
@@ -560,8 +561,8 @@ fun AppNavigation(
                                 }
                                 navController.navigate(Routes.detailRoute(routeType, traktId, tmdbId, title, imdbId, traktRating))
                             },
-                            onPersonClick = { tmdbId, name, profileUrl ->
-                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl))
+                            onPersonClick = { tmdbId, name, profileUrl, avatarColor ->
+                                navController.navigate(Routes.personRoute(tmdbId, name, profileUrl ?: ""))
                             }
                         )
                     }

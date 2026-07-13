@@ -88,14 +88,26 @@ class PersonViewModel @Inject constructor(
     private var movieCreditsPage: Int = 1
     private var tvCreditsPage: Int = 1
 
-    fun loadPerson(personId: Int) {
+    fun loadPerson(personId: Int, profilePath: String? = null, avatarColor: Color? = null) {
         if (currentPersonId == personId && loaded) return
         currentPersonId = personId
         loaded = false
         movieCreditsPage = 1
         tvCreditsPage = 1
 
-        _uiState.value = PersonUiState(isLoading = true, isLoadingMovies = true, isLoadingTvShows = true, isLoadingPersonImages = true)
+        // 首帧直接带入前一屏已算好的主色，避免 surface 闪烁
+        _uiState.value = PersonUiState(
+            isLoading = true,
+            isLoadingMovies = true,
+            isLoadingTvShows = true,
+            isLoadingPersonImages = true,
+            avatarDominantColor = avatarColor
+        )
+
+        // 路由已带 profilePath（前一屏算好的头像 URL），不等 TMDB API 直接调色
+        if (!profilePath.isNullOrBlank()) {
+            prefetchAvatarColor(profilePath)
+        }
 
         viewModelScope.launch {
             try {
@@ -157,7 +169,7 @@ class PersonViewModel @Inject constructor(
     private fun prefetchAvatarColor(profilePath: String?) {
         if (profilePath.isNullOrBlank()) return
         val avatarUrl = TmdbImageUrls.build(profilePath)
-        // 已有主色或缓存命中则直接生效
+        // 已有主色则跳过（首帧带入场景）
         if (_uiState.value.avatarDominantColor != null) return
         viewModelScope.launch {
             posterColorExtractor.getCachedColor(avatarUrl)?.let { argb ->

@@ -92,7 +92,7 @@ internal fun DetailHeaderContent(
     onDismissRatingDialog: () -> Unit = {},
     onRatingSelected: (Int?) -> Unit,
     onPosterClick: () -> Unit = {},
-    onPersonClick: (personId: Int, personName: String, profileUrl: String?) -> Unit = { _, _, _ -> },
+    onPersonClick: (personId: Int, personName: String, profileUrl: String?, avatarColor: Color?) -> Unit = { _, _, _, _ -> },
     onToggleSeason: (Int) -> Unit = {},
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit = { _, _, _ -> },
     onVideoClick: (TmdbVideo) -> Unit = {},

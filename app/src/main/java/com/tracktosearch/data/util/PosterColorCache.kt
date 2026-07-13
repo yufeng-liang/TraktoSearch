@@ -27,6 +27,17 @@ class PosterColorCache @Inject constructor(
 ) {
     private val memoryCache = mutableMapOf<String, Long>()
 
+    /**
+     * 启动时一次性全量加载 DataStore 到内存，消除冷启动 IO。
+     * 在 Application.onCreate 调用，挂起直到完成。
+     */
+    suspend fun warmUp() = withContext(Dispatchers.IO) {
+        val ds = context.posterColorDataStore.data.first()
+        ds.asMap().forEach { (key, value) ->
+            if (value is Long) memoryCache[key.name] = value
+        }
+    }
+
     suspend fun getColor(posterUrl: String): Long? = withContext(Dispatchers.IO) {
         memoryCache[posterUrl] ?: run {
             val ds = context.posterColorDataStore.data.first()
