@@ -77,7 +77,7 @@ import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
 import com.tracktosearch.ui.screen.settings.SettingsViewModel
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
-import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -112,11 +112,7 @@ fun DiscoverScreen(
     // 每次点击递增的 token,用于精确匹配被点击的卡片实例(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by rememberSaveable { mutableStateOf(0) }
 
-    LaunchedEffect(Unit) {
-        viewModel.toastEvent.collect { resId ->
-            context.showToast(context.getString(resId))
-        }
-    }
+    ToastEffect(viewModel.toastEvent)
     // 延迟加载 Trakt 栏目，避免与首屏豆瓣/TMDB 竞争网络带宽
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(800)
@@ -568,15 +564,7 @@ fun DiscoverScreen(
                                                     }
                                                 }
                                             }
-                                            if (uiState.trendingLists.isNotEmpty()) {
-                                                TextButton(
-                                                    onClick = { showTrendingListsAll = true },
-                                                    modifier = Modifier.align(Alignment.End)
-                                                ) {
-                                                    Text(stringResource(R.string.common_view_all))
-                                                    Icon(Icons.AutoMirrored.Rounded.ArrowForwardIos, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                }
-                                            }
+
                                         }
                                     }
                                 }
