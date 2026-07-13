@@ -16,7 +16,7 @@
     <string name="discover_recommended">Recommended Movies</string>
 
     <!-- Search Screen -->
-    <string name="search_title">Search Resources</string>
+    <string name="search_title">Search</string>
     <string name="search_subtitle">Discover your next watch</string>
     <string name="hot_search">Hot Searches</string>
     <string name="search_back">Back</string>
@@ -94,8 +94,8 @@
     <string name="watchlist_mode_watchlist">Watchlist</string>
     <string name="watchlist_mode_watched">Watched</string>
     <string name="watchlist_tab_history">History</string>
-    <string name="watchlist_search_watchlist">Search my watchlist</string>
-    <string name="watchlist_search_history">Search my history</string>
+    <string name="watchlist_search_watchlist">Search watchlist</string>
+    <string name="watchlist_search_history">Search watched</string>
     <string name="history_empty_movies">No watched movies yet</string>
     <string name="history_empty_shows">No watched TV shows yet</string>
     <string name="watchlist_search_on_trakt">Search on Trakt</string>
@@ -418,7 +418,7 @@
     <string name="person_movie_credits">Movie Credits</string>
     <string name="person_tv_credits">TV Credits</string>
     <string name="person_all">All ></string>
-    <string name="person_all_count">All (%d) ></string>
+    <string name="person_all_count">All (%d)</string>
     <string name="person_images">Photos</string>
     <string name="poster_already_saved">Already saved</string>
     <string name="person_load_more">Load more</string>
@@ -491,7 +491,7 @@
     <string name="help_tips">More Tips</string>
     <string name="help_search_b1">Enter a movie or show name to search for cloud drive resources</string>
     <string name="help_search_b2">Supports Quark, Baidu, Aliyun, Xunlei, UC, 115 cloud drives and magnet links</string>
-    <string name="help_search_b3">Tap the cloud drive icon to open in the corresponding app</string>
+    <string name="help_search_b3">Tap the cloud drive icon to open in the corresponding app; magnet links are copied to clipboard when no app is available, and Zreso sources open in the browser</string>
     <string name="help_search_b4">Tap search history for quick search, tap the close button to delete</string>
     <string name="help_person_search">Person Search: A new \"People\" tab on the search page supports searching for actors/directors and other people. Tap to view person details, filmography, and images</string>
     <string name="help_watchlist_b1">Tap the want-to-watch / watched button on the detail page</string>
@@ -519,7 +519,7 @@
     <string name="help_data_douban_b2">In Settings → Data Management, tap \"Re-sync Douban\" to re-sync Douban marks.</string>
     <string name="help_data_douban_b3">Conflict strategy: Douban \"watched\" overrides Trakt \"watchlist\"; Douban \"wish\" does NOT override Trakt \"watched\"; ratings follow Douban (5-star → 10-point).</string>
     <string name="help_data_douban_b4">Failed items are saved locally. In Settings → Data Management, tap \"View Sync Failures\" to review them, mark movie/show type, edit subtitle, search resources, retry sync, or delete.</string>
-    <string name="help_data_douban_b5">Cross-device: In Settings → Data Management, tap \"Import failures from JSON\" to import a failures JSON file exported from another device and view them locally.</string>
+    <string name="help_data_douban_b5">Cross-device: In Settings → Data Management, use the \"Retry failures\" dialog or the \"View Sync Failures\" page and choose \"Import failures from JSON\" to import a failures JSON file exported from another device and view them locally.</string>
     <string name="help_data_table_title">Data Import/Export Overview</string>
     <string name="help_dc_export_t">Export Marks</string>
     <string name="help_dc_export_entry">Settings → Data Management</string>
@@ -569,28 +569,36 @@
     <string name="help_cs_param_diskTypePath">JSONPath: disk type field path (optional)</string>
     <string name="help_cs_param_datePath">JSONPath: date field path (optional)</string>
     <string name="help_custom_source_parse_title">Parse Mode Reference</string>
-    <string name="help_custom_source_parse_b1">pansou_template: compatible with PanSou API response format. This format places the resource list under the data field, with each resource containing title, url, type, etc.</string>
-    <string name="help_custom_source_parse_b2">zreso_template: compatible with ZReso API response format. This format places the resource list under the data.list field, with possibly different field names.</string>
+    <string name="help_custom_source_parse_b1">pansou_template: compatible with the PanSou API response format. The resource list is under the data.merged_by_type field, a map keyed by disk type (quark/baidu/aliyun/xunlei/uc/115/magnet) with an array of links as the value; each link has note (name, may be empty), url and datetime fields.</string>
+    <string name="help_custom_source_parse_b2">zreso_template: compatible with the ZReso API response format. The resource list is under the data.results field, an array; each element has title (name), datetime/date and links (an array, the first link\'s url and type are used).</string>
     <string name="help_custom_source_parse_b3">custom: custom mode, requires JSONPath expressions (e.g. $.data.results) to parse JSON response yourself.</string>
     <string name="help_custom_source_parse_pansou_example">pansou_template format example:
 {
-  "data": [
-    {
-      "title": "Movie Name",
-      "url": "https://pan.quark.cn/xxx",
-      "type": "quark",
-      "datetime": "2024-01-01"
+  "data": {
+    "merged_by_type": {
+      "quark": [
+        {
+          "note": "Movie Name",
+          "url": "https://pan.quark.cn/xxx",
+          "datetime": "2024-01-01"
+        }
+      ]
     }
-  ]
+  }
 }</string>
     <string name="help_custom_source_parse_zreso_example">zreso_template format example:
 {
   "data": {
-    "list": [
+    "results": [
       {
-        "name": "Movie Name",
-        "url": "https://pan.baidu.cn/xxx",
-        "cloud_type": "baidu"
+        "title": "Movie Name",
+        "datetime": "2024-01-01",
+        "links": [
+          {
+            "url": "https://pan.baidu.cn/xxx",
+            "type": "baidu"
+          }
+        ]
       }
     ]
   }
@@ -629,7 +637,7 @@ Config:
     <!-- Douban mark bidirectional write-back help -->
     <string name="help_douban_writeback">Douban Mark Write-back</string>
     <string name="help_douban_writeback_b1">On the Douban sync-failure item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
-    <string name="help_douban_writeback_b2">Trakt is the primary source; Douban is a mirror. On conflict, Douban wins (writes directly to Douban).</string>
+    <string name="help_douban_writeback_b2">You can write \"watchlist / watched / remove\" directly back to Douban from a failed item\'s detail page, keeping Douban consistent with your choice (Trakt is the primary source).</string>
     <string name="help_douban_writeback_b3">Switching Wish/Collected persists the new status to the failure list. Removing the mark deletes the failure item (with a second confirmation).</string>
     <string name="settings_restart_onboarding">Tutorial</string>
     <string name="settings_restart_onboarding_desc">Re-run the app feature tour</string>

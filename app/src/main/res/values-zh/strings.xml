@@ -16,7 +16,7 @@
     <string name="discover_recommended">为你推荐电影</string>
 
     <!-- Search Screen -->
-    <string name="search_title">搜索资源</string>
+    <string name="search_title">搜索</string>
     <string name="search_subtitle">发现你的下一部观影</string>
     <string name="hot_search">热门搜索</string>
     <string name="search_back">返回</string>
@@ -94,8 +94,8 @@
     <string name="watchlist_mode_watchlist">想看</string>
     <string name="watchlist_mode_watched">已看</string>
     <string name="watchlist_tab_history">已看历史</string>
-    <string name="watchlist_search_watchlist">搜索我的想看</string>
-    <string name="watchlist_search_history">搜索我的已看历史</string>
+    <string name="watchlist_search_watchlist">搜索想看</string>
+    <string name="watchlist_search_history">搜索已看</string>
     <string name="history_empty_movies">还没有已看的电影</string>
     <string name="history_empty_shows">还没有已看的电视剧</string>
     <string name="watchlist_search_on_trakt">在 Trakt 上搜索</string>
@@ -418,7 +418,7 @@
     <string name="person_movie_credits">参演电影</string>
     <string name="person_tv_credits">参演电视剧</string>
     <string name="person_all">全部 ></string>
-    <string name="person_all_count">全部(%d) ></string>
+    <string name="person_all_count">全部(%d)</string>
     <string name="person_images">图片</string>
     <string name="poster_already_saved">已保存</string>
     <string name="person_load_more">加载更多</string>
@@ -491,7 +491,7 @@
     <string name="help_tips">更多技巧</string>
     <string name="help_search_b1">输入影视名称关键词即可搜索网盘资源</string>
     <string name="help_search_b2">支持夸克、百度、阿里云盘、迅雷、UC、115等网盘及磁力链接</string>
-    <string name="help_search_b3">点击网盘图标可直接跳转对应App打开资源</string>
+    <string name="help_search_b3">点击网盘图标可直接跳转对应App打开资源；磁力链接无对应App时复制到剪贴板，Zreso 来源在浏览器打开</string>
     <string name="help_search_b4">点击搜索历史可快速搜索，点击右侧按钮可删除记录</string>
     <string name="help_person_search">人物搜索：搜索页新增「人物」Tab，支持搜索演员/导演等人物信息，点击可查看人物详情、参演作品和图片</string>
     <string name="help_watchlist_b1">在详情页点击想看/已看按钮进行标记</string>
@@ -519,7 +519,7 @@
     <string name="help_data_douban_b2">在设置 → 数据管理点击「重新同步豆瓣」可重新同步豆瓣标记</string>
     <string name="help_data_douban_b3">冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
     <string name="help_data_douban_b4">同步失败的条目会保存在本地。在设置 → 数据管理点击「查看同步失败项」可查看失败项,支持手动标注电影/电视剧类型、编辑子标题、搜索资源、重试同步或删除</string>
-    <string name="help_data_douban_b5">跨设备查看:在设置 → 数据管理点击「从 JSON 导入失败项」,可导入从其他设备导出的失败项 JSON 文件,在本地查看</string>
+    <string name="help_data_douban_b5">跨设备查看:在设置 → 数据管理通过「重试失败项」弹窗或「失败查看页」选择「从 JSON 导入失败项」,可导入从其他设备导出的失败项 JSON 文件,在本地查看</string>
     <string name="help_data_table_title">数据导入导出总览</string>
     <string name="help_dc_export_t">导出标记数据</string>
     <string name="help_dc_export_entry">设置页 → 数据管理</string>
@@ -569,28 +569,36 @@
     <string name="help_cs_param_diskTypePath">JSONPath：网盘类型字段路径（可选）</string>
     <string name="help_cs_param_datePath">JSONPath：日期字段路径（可选）</string>
     <string name="help_custom_source_parse_title">解析模式说明</string>
-    <string name="help_custom_source_parse_b1">pansou_template：兼容盘搜搜 API 的返回格式。该格式将资源列表放在 data 字段下，每个资源包含 title、url、type 等字段。</string>
-    <string name="help_custom_source_parse_b2">zreso_template：兼容 ZReso API 的返回格式。该格式将资源列表放在 data.list 字段下，字段命名可能不同。</string>
+    <string name="help_custom_source_parse_b1">pansou_template：兼容盘搜搜 API 的返回格式。资源列表放在 data.merged_by_type 字段下，它是一个以网盘类型（quark/baidu/aliyun/xunlei/uc/115/magnet）为 key、链接数组为 value 的 map；每个链接含 note（名称，可空）、url、datetime 字段。</string>
+    <string name="help_custom_source_parse_b2">zreso_template：兼容 ZReso API 的返回格式。资源列表放在 data.results 字段下，是一个数组；每个元素含 title（名称）、datetime/date（日期）、links（链接数组，取首个链接的 url 与 type）。</string>
     <string name="help_custom_source_parse_b3">custom：自定义模式，需填写 JSONPath 表达式（如 $.data.results）自行解析 JSON 响应。</string>
     <string name="help_custom_source_parse_pansou_example">pansou_template 格式示例：
 {
-  "data": [
-    {
-      "title": "电影名称",
-      "url": "https://pan.quark.cn/xxx",
-      "type": "quark",
-      "datetime": "2024-01-01"
+  "data": {
+    "merged_by_type": {
+      "quark": [
+        {
+          "note": "电影名称",
+          "url": "https://pan.quark.cn/xxx",
+          "datetime": "2024-01-01"
+        }
+      ]
     }
-  ]
+  }
 }</string>
     <string name="help_custom_source_parse_zreso_example">zreso_template 格式示例：
 {
   "data": {
-    "list": [
+    "results": [
       {
-        "name": "电影名称",
-        "url": "https://pan.baidu.cn/xxx",
-        "cloud_type": "baidu"
+        "title": "电影名称",
+        "datetime": "2024-01-01",
+        "links": [
+          {
+            "url": "https://pan.baidu.cn/xxx",
+            "type": "baidu"
+          }
+        ]
       }
     ]
   }
@@ -629,7 +637,7 @@
     <!-- 豆瓣标记双向写回帮助 -->
     <string name="help_douban_writeback">豆瓣标记双向写回</string>
     <string name="help_douban_writeback_b1">在豆瓣同步失败条目详情页,可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
-    <string name="help_douban_writeback_b2">Trakt 为主源,豆瓣为镜像。冲突以豆瓣为准(直接写回豆瓣)。</string>
+    <string name="help_douban_writeback_b2">可在失败条目详情页把「想看/已看/取消标记」直接写回豆瓣,使豆瓣与你的选择保持一致(Trakt 为主源)。</string>
     <string name="help_douban_writeback_b3">想看↔已看切换后新状态持久化到失败列表;取消标记会删除该失败条目(需二次确认)。</string>
     <string name="settings_restart_onboarding">新手引导</string>
     <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>

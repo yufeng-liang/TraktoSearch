@@ -16,7 +16,7 @@
     <string name="discover_recommended">추천</string>
 
     <!-- Search Screen -->
-    <string name="search_title">리소스 검색</string>
+    <string name="search_title">검색</string>
     <string name="search_subtitle">다음 시청작을 찾아보세요</string>
     <string name="hot_search">인기 검색</string>
     <string name="search_back">뒤로</string>
@@ -342,7 +342,7 @@
     <string name="watchlist_search_no_shows">일치하는 TV 프로그램이 없습니다</string>
     <string name="watchlist_logout">로그아웃</string>
     <string name="watchlist_search_watchlist">관심목록 검색</string>
-    <string name="watchlist_search_history">기록 검색</string>
+    <string name="watchlist_search_history">시청 기록 검색</string>
     <string name="history_empty_movies">시청한 영화가 아직 없습니다</string>
     <string name="history_empty_shows">시청한 TV 프로그램이 아직 없습니다</string>
     <string name="watchlist_search_on_trakt">Trakt에서 검색</string>
@@ -540,7 +540,7 @@
     <string name="person_movie_credits">영화 출연</string>
     <string name="person_tv_credits">TV 출연</string>
     <string name="person_all">전체 ></string>
-    <string name="person_all_count">전체(%d) &gt;</string>
+    <string name="person_all_count">전체(%d)</string>
     <string name="person_images">사진</string>
     <string name="poster_already_saved">이미 저장됨</string>
     <string name="person_load_more">더 불러오기</string>
@@ -571,7 +571,7 @@
     <string name="help_tips">추가 팁</string>
     <string name="help_search_b1">영화나 TV 프로그램 제목을 입력하여 클라우드 리소스 검색</string>
     <string name="help_search_b2">Quark, Baidu, Aliyun, Xunlei, UC, 115 등 클라우드 드라이브 및 마그넷 링크 지원</string>
-    <string name="help_search_b3">클라우드 아이콘을 탭하면 해당 앱에서 리소스가 열립니다</string>
+    <string name="help_search_b3">클라우드 아이콘을 탭하면 해당 앱에서 리소스가 열립니다. 해당 앱이 없으면 마그넷 링크는 클립보드에 복사되고, Zreso는 브라우저에서 열립니다</string>
     <string name="help_search_b4">검색 기록을 탭하여 빠르게 검색, 오른쪽 버튼으로 기록 삭제</string>
     <string name="help_person_search">인물 검색: 검색 페이지에 「인물」 탭 추가, 배우/감독 등 인물 정보 검색 지원, 탭하여 인물 상세, 출연작 및 사진 보기</string>
     <string name="help_watchlist_b1">상세 페이지에서 관심목록/시청 버튼을 탭하여 표시</string>
@@ -871,7 +871,7 @@
     <!-- 더우반 마크 양방향 쓰기 도움말 -->
     <string name="help_douban_writeback">더우반 마크 쓰기</string>
     <string name="help_douban_writeback_b1">더우반 동기화 실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있습니다.</string>
-    <string name="help_douban_writeback_b2">Trakt가 주 원본, 더우반이 미러. 충돌 시 더우반 우선(직접 쓰기).</string>
+    <string name="help_douban_writeback_b2">실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있어 더우반을 선택과 일치시킬 수 있습니다(Trakt가 주 원본).</string>
     <string name="help_douban_writeback_b3">보고 싶음↔봄 전환은 실패 목록에 저장. 마크 해제는 실패 항목을 삭제합니다(확인 대화상자 포함).</string>
     <string name="settings_restart_onboarding">튜토리얼</string>
     <string name="settings_restart_onboarding_desc">앱 기능 가이드 다시 보기</string>
@@ -1155,7 +1155,7 @@
     <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 다시 동기화\"를 탭하여 재동기화할 수 있습니다.</string>
     <string name="help_data_douban_b3">동기화 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
     <string name="help_data_douban_b4">동기화 실패한 항목은 로컬에 저장됩니다. 설정 → 데이터 관리에서 \"동기화 실패 항목 보기\"를 탭하여 확인할 수 있습니다. 미디어 타입 표시, 부제목 편집, 리소스 검색, 재동기화, 삭제를 지원합니다.</string>
-    <string name="help_data_douban_b5">크로스 디바이스: 설정 → 데이터 관리에서 \"JSON에서 실패 항목 가져오기\"를 탭하여 다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와 로컬에서 볼 수 있습니다.</string>
+    <string name="help_data_douban_b5">크로스 디바이스: 설정 → 데이터 관리의 \"실패 항목 다시 시도\" 대화상자 또는 \"동기화 실패 항목 보기\" 페이지에서 \"JSON에서 실패 항목 가져오기\"를 선택하여 다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와 로컬에서 볼 수 있습니다.</string>
     <string name="help_data_table_title">데이터 가져오기/내보내기 개요</string>
     <string name="help_dc_export_t">표시 데이터 내보내기</string>
     <string name="help_dc_export_entry">설정 → 데이터 관리</string>
@@ -1205,28 +1205,36 @@
     <string name="help_cs_param_diskTypePath">JSONPath: 클라우드 유형 필드 경로 (선택)</string>
     <string name="help_cs_param_datePath">JSONPath: 날짜 필드 경로 (선택)</string>
     <string name="help_custom_source_parse_title">파싱 모드 설명</string>
-    <string name="help_custom_source_parse_b1">pansou_template: PanSou API 응답 형식 호환. 리소스 목록은 data 필드 아래에 있으며, 각 리소스에는 title, url, type 등의 필드가 포함됩니다.</string>
-    <string name="help_custom_source_parse_b2">zreso_template: ZReso API 응답 형식 호환. 리소스 목록은 data.list 필드 아래에 있으며, 필드명이 다를 수 있습니다.</string>
+    <string name="help_custom_source_parse_b1">pansou_template: PanSou API 응답 형식 호환. 리소스 목록은 data.merged_by_type 필드에 있으며, 키가 클라우드 종류(quark/baidu/aliyun/xunlei/uc/115/magnet)이고 값이 링크 배열인 map입니다. 각 링크는 note(이름, 비어 있을 수 있음), url, datetime 필드를 가집니다.</string>
+    <string name="help_custom_source_parse_b2">zreso_template: ZReso API 응답 형식 호환. 리소스 목록은 data.results 필드에 있으며 배열입니다. 각 요소는 title(이름), datetime/date(날짜), links(배열, 첫 번째 링크의 url과 type 사용)를 가집니다.</string>
     <string name="help_custom_source_parse_b3">custom: 사용자 정의 모드, JSONPath 표현식(예: $.data.results)을 입력하여 JSON 응답을 직접 파싱.</string>
     <string name="help_custom_source_parse_pansou_example">pansou_template 형식 예시:
 {
-  "data": [
-    {
-      "title": "영화명",
-      "url": "https://pan.quark.cn/xxx",
-      "type": "quark",
-      "datetime": "2024-01-01"
+  "data": {
+    "merged_by_type": {
+      "quark": [
+        {
+          "note": "영화명",
+          "url": "https://pan.quark.cn/xxx",
+          "datetime": "2024-01-01"
+        }
+      ]
     }
-  ]
+  }
 }</string>
     <string name="help_custom_source_parse_zreso_example">zreso_template 형식 예시:
 {
   "data": {
-    "list": [
+    "results": [
       {
-        "name": "영화명",
-        "url": "https://pan.baidu.cn/xxx",
-        "cloud_type": "baidu"
+        "title": "영화명",
+        "datetime": "2024-01-01",
+        "links": [
+          {
+            "url": "https://pan.baidu.cn/xxx",
+            "type": "baidu"
+          }
+        ]
       }
     ]
   }

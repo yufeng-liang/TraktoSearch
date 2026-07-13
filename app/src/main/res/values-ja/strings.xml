@@ -16,7 +16,7 @@
     <string name="discover_recommended">おすすめ</string>
 
     <!-- Search Screen -->
-    <string name="search_title">リソース検索</string>
+    <string name="search_title">検索</string>
     <string name="search_subtitle">次の視聴作品を見つけよう</string>
     <string name="hot_search">人気の検索</string>
     <string name="search_back">戻る</string>
@@ -341,8 +341,8 @@
     <string name="watchlist_search_no_movies">一致する映画がありません</string>
     <string name="watchlist_search_no_shows">一致するテレビ番組がありません</string>
     <string name="watchlist_logout">ログアウト</string>
-    <string name="watchlist_search_watchlist">ウォッチリストを検索</string>
-    <string name="watchlist_search_history">履歴を検索</string>
+    <string name="watchlist_search_watchlist">ウォッチリスト検索</string>
+    <string name="watchlist_search_history">視聴履歴検索</string>
     <string name="history_empty_movies">視聴した映画はまだありません</string>
     <string name="history_empty_shows">視聴したテレビ番組はまだありません</string>
     <string name="watchlist_search_on_trakt">Traktで検索</string>
@@ -540,7 +540,7 @@
     <string name="person_movie_credits">映画出演</string>
     <string name="person_tv_credits">テレビ出演</string>
     <string name="person_all">すべて ></string>
-    <string name="person_all_count">すべて(%d) &gt;</string>
+    <string name="person_all_count">すべて(%d)</string>
     <string name="person_images">写真</string>
     <string name="poster_already_saved">保存済み</string>
     <string name="person_load_more">さらに読み込む</string>
@@ -571,7 +571,7 @@
     <string name="help_tips">その他のヒント</string>
     <string name="help_search_b1">映画やテレビ番組のタイトルを入力してクラウドリソースを検索</string>
     <string name="help_search_b2">Quark、Baidu、Aliyun、Xunlei、UC、115などのクラウドドライブとマグネットリンクに対応</string>
-    <string name="help_search_b3">クラウドアイコンをタップすると対応アプリでリソースを開きます</string>
+    <string name="help_search_b3">クラウドアイコンをタップすると対応アプリでリソースを開きます。マグネットリンクは該当アプリがない場合クリップボードにコピー、Zreso はブラウザで開きます</string>
     <string name="help_search_b4">検索履歴をタップして素早く検索、右のボタンで履歴を削除</string>
     <string name="help_person_search">人物検索：検索ページに「人物」タブを追加、俳優/監督などの人物情報を検索でき、タップして人物詳細、出演作品や写真を表示</string>
     <string name="help_watchlist_b1">詳細ページで見たい/視聴済みボタンをタップしてマーク</string>
@@ -871,7 +871,7 @@
     <!-- 豆瓣マーク双方向書き戻しヘルプ -->
     <string name="help_douban_writeback">豆瓣マーク書き戻し</string>
     <string name="help_douban_writeback_b1">豆瓣同期失敗アイテム詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
-    <string name="help_douban_writeback_b2">Traktが主源、豆瓣がミラー。競合時は豆瓣優先(直接書き戻し)。</string>
+    <string name="help_douban_writeback_b2">失敗アイテム詳細ページから「見たい/見た/マーク解除」を直接豆瓣に書き戻し、豆瓣をあなたの選択に一致させられます（Traktが主源）。</string>
     <string name="help_douban_writeback_b3">見たい↔見たの切り替えは失敗リストに保存。マーク解除は失敗アイテムを削除します(確認ダイアログ付き)。</string>
     <string name="settings_restart_onboarding">チュートリアル</string>
     <string name="settings_restart_onboarding_desc">アプリの機能ガイドを再表示</string>
@@ -1155,7 +1155,7 @@
     <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を再同期」をタップすると再同期できます。</string>
     <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
     <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
-    <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理で「JSONから失敗項目をインポート」をタップして、他のデバイスからエクスポートした失敗項目JSONファイルをインポートし、ローカルで表示できます。</string>
+    <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理の「失敗項目を再試行」ダイアログまたは「同期失敗項目を表示」ページから「JSONから失敗項目をインポート」を選び、他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてローカルで表示できます。</string>
     <string name="help_data_table_title">データインポート/エクスポート概览</string>
     <string name="help_dc_export_t">マークデータをエクスポート</string>
     <string name="help_dc_export_entry">設定 → データ管理</string>
@@ -1205,28 +1205,36 @@
     <string name="help_cs_param_diskTypePath">JSONPath：クラウドタイプフィールドのパス（任意）</string>
     <string name="help_cs_param_datePath">JSONPath：日付フィールドのパス（任意）</string>
     <string name="help_custom_source_parse_title">解析モードの説明</string>
-    <string name="help_custom_source_parse_b1">pansou_template：PanSou APIの応答形式に対応。リソースリストは data フィールドの下にあり、各リソースには title、url、type などのフィールドが含まれます。</string>
-    <string name="help_custom_source_parse_b2">zreso_template：ZReso APIの応答形式に対応。リソースリストは data.list フィールドの下にあり、フィールド名が異なる場合があります。</string>
+    <string name="help_custom_source_parse_b1">pansou_template：PanSou APIの応答形式に対応。リソースリストは data.merged_by_type フィールドにあり、キーがクラウド種別（quark/baidu/aliyun/xunlei/uc/115/magnet）、値がリンク配列の map です。各リンクは note（名称、空可）、url、datetime フィールドを持ちます。</string>
+    <string name="help_custom_source_parse_b2">zreso_template：ZReso APIの応答形式に対応。リソースリストは data.results フィールドにあり、配列です。各要素は title（名称）、datetime/date（日付）、links（配列、最初のリンクの url と type を使用）を持ちます。</string>
     <string name="help_custom_source_parse_b3">custom：カスタムモード、JSONPath式（例：$.data.results）を入力してJSON応答を独自に解析。</string>
     <string name="help_custom_source_parse_pansou_example">pansou_template 形式の例:
 {
-  "data": [
-    {
-      "title": "映画名",
-      "url": "https://pan.quark.cn/xxx",
-      "type": "quark",
-      "datetime": "2024-01-01"
+  "data": {
+    "merged_by_type": {
+      "quark": [
+        {
+          "note": "映画名",
+          "url": "https://pan.quark.cn/xxx",
+          "datetime": "2024-01-01"
+        }
+      ]
     }
-  ]
+  }
 }</string>
     <string name="help_custom_source_parse_zreso_example">zreso_template 形式の例:
 {
   "data": {
-    "list": [
+    "results": [
       {
-        "name": "映画名",
-        "url": "https://pan.baidu.cn/xxx",
-        "cloud_type": "baidu"
+        "title": "映画名",
+        "datetime": "2024-01-01",
+        "links": [
+          {
+            "url": "https://pan.baidu.cn/xxx",
+            "type": "baidu"
+          }
+        ]
       }
     ]
   }
