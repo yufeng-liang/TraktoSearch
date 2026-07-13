@@ -156,7 +156,7 @@ private fun computeLayout(
 
     val placed = mutableListOf<PlacedWord>()
     val padding = maxFontPx * 0.4f
-    val areaSize = max(canvasWidthPx, maxFontPx * 4f)
+    val areaSize = canvasWidthPx.coerceAtLeast(maxFontPx * 4f)
     val center = Offset(areaSize / 2f, areaSize / 2f)
 
     // 3. 逐个螺旋放置，最大词先放中心
@@ -260,7 +260,9 @@ private fun spiralPlace(
  */
 private fun overlaps(placed: List<PlacedWord>, rect: Rect): Boolean {
     for (p in placed) {
-        if (Rect.overlaps(rect, p.rect)) return true
+        if (rect.left < p.rect.right && rect.right > p.rect.left &&
+            rect.top < p.rect.bottom && rect.bottom > p.rect.top
+        ) return true
     }
     return false
 }

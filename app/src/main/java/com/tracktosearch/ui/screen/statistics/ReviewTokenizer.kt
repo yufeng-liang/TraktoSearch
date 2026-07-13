@@ -2,7 +2,7 @@ package com.tracktosearch.ui.screen.statistics
 
 import androidx.annotation.WorkerThread
 import com.huaban.analysis.jieba.JiebaSegmenter
-import com.huaban.analysis.jieba.SegMode
+import com.huaban.analysis.jieba.JiebaSegmenter.SegMode
 
 /**
  * 基于 jieba-analysis 的影评分词器，用于统计页词云。
@@ -52,8 +52,8 @@ object ReviewTokenizer {
         val counter = mutableMapOf<String, Int>()
         for (review in reviews) {
             val tokens = segmenter.process(review, SegMode.SEARCH)
-            for ((word, _) in tokens) {
-                val token = word.lowercase().trim()
+            for (segToken in tokens) {
+                val token = segToken.word.lowercase().trim()
                 if (token.isEmpty()) continue
                 if (stopWords.contains(token)) continue
                 if (token.length < 2) continue
