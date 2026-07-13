@@ -18,6 +18,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -128,6 +129,7 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.GlassSearchBar
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -290,8 +292,8 @@ fun SearchScreen(
                 .fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 顶部留空给搜索框覆盖层（云朵 182dp + 间距 16dp + 搜索框 56dp + 缓冲）
-            Spacer(modifier = Modifier.height(260.dp))
+            // 顶部留空给搜索框覆盖层（标题 + 间距 + 搜索框 + 缓冲）
+            Spacer(modifier = Modifier.height(180.dp))
 
             // Content below search box
             Column(
@@ -357,27 +359,34 @@ fun SearchScreen(
                 .fillMaxWidth()
                 .heightIn(max = 300.dp)
         ) {
-            // 标题区
-            Column(
+            // 标题区 + 云朵小彩蛋
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 20.dp, vertical = 12.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.search_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(R.string.search_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column(modifier = Modifier.align(Alignment.CenterStart)) {
+                    Text(
+                        text = stringResource(R.string.search_title),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(R.string.search_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                // 云朵图标 — 缩小为右上角小彩蛋，不再遮挡内容
+                CloudIconWithAnimation(
+                    cloudThemeManager = cloudThemeManager,
+                    isActive = isActive,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(72.dp)
                 )
             }
-
-            // 云朵图标 — 带显隐动画
-            CloudIconWithAnimation(cloudThemeManager, isActive)
 
             // 权限提示弹窗
             if (showPermissionDialog) {
@@ -476,11 +485,16 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth(animatedWidthFraction.value)
                         .clip(RoundedCornerShape(28.dp))
+                        .border(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(28.dp)
+                        )
                         .hazeEffect(
                             state = hazeState,
                             style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
                         )
-                        .background(Color.White.copy(alpha = 0.08f))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                         .padding(horizontal = 4.dp, vertical = 4.dp)
                 ) {
                     SearchBarTop(
@@ -634,7 +648,7 @@ private fun SearchBarTop(
                                     onClick = {
                                         showTypeDropdown = false
                                         if (type != searchSourceType) {
-                                            onSearchSourceTypeChange?.invoke(type)
+                                            onSearchSourceTypeChange.invoke(type)
                                         }
                                     }
                                 )
@@ -1300,40 +1314,35 @@ private fun getLastKnownLocation(context: android.content.Context): Location? {
 }
 
 @Composable
-private fun CloudIconWithAnimation(cloudThemeManager: CloudThemeManager, isActive: Boolean) {
+private fun CloudIconWithAnimation(
+    cloudThemeManager: CloudThemeManager,
+    isActive: Boolean,
+    modifier: Modifier = Modifier
+) {
     val hasPermission by cloudThemeManager.hasLocationPermission.collectAsStateWithLifecycle()
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = if (isActive) 0.dp else 182.dp),
-        contentAlignment = Alignment.Center
+    AnimatedVisibility(
+        visible = !isActive,
+        enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
+        exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200)),
+        modifier = modifier
     ) {
-        AnimatedVisibility(
-            visible = !isActive,
-            enter = fadeIn(animationSpec = tween(300)) + expandVertically(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
-        ) {
-            if (hasPermission) {
-                CloudEasterEgg(
-                    themeManager = cloudThemeManager,
-                    modifier = Modifier
-                        .size(182.dp)
-                        .padding(top = 16.dp)
-                )
-            } else {
-                Image(
-                    painter = painterResource(R.drawable.ic_search_cloud),
-                    contentDescription = null,
-                    modifier = Modifier
-                        .size(182.dp)
-                        .padding(top = 16.dp)
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null,
-                            onClick = { cloudThemeManager.onCloudClicked() }
-                        )
-                )
-            }
+        if (hasPermission) {
+            CloudEasterEgg(
+                themeManager = cloudThemeManager,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Image(
+                painter = painterResource(R.drawable.ic_search_cloud),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        indication = null,
+                        onClick = { cloudThemeManager.onCloudClicked() }
+                    )
+            )
         }
     }
 }
