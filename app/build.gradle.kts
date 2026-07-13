@@ -187,6 +187,12 @@ dependencies {
 
     // 极光推送
     implementation(libs.jpush)
+
+    // 中文分词
+    implementation(libs.jieba.analysis)
+
+    // 单元测试
+    testImplementation(libs.junit)
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
