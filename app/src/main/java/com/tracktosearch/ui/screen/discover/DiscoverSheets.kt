@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -23,10 +24,14 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -42,7 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
+import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
@@ -61,6 +68,8 @@ internal fun TmdbAllSheet(
     hasMore: Boolean,
     currentPage: Int,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
+    selectedTimeWindow: String = "day",
+    onTimeWindowChange: ((String) -> Unit)? = null,
     onItemClick: (TmdbSearchResult) -> Unit,
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
@@ -100,8 +109,28 @@ internal fun TmdbAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (onTimeWindowChange != null) {
+                        CapsuleTabSelector(
+                            tabs = listOf(
+                                stringResource(R.string.discover_trending_day),
+                                stringResource(R.string.discover_trending_week)
+                            ),
+                            selectedIndex = if (selectedTimeWindow == "day") 0 else 1,
+                            onTabSelected = { index ->
+                                onTimeWindowChange(if (index == 0) "day" else "week")
+                            }
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = stringResource(R.string.common_close)
+                        )
+                    }
                 }
             }
             LazyVerticalGrid(
@@ -114,14 +143,10 @@ internal fun TmdbAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, movie -> "all_tmdb_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                    MovieCard(
+                    PosterCard(
+                        imageUrl = movie.poster_path?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
-                        posterPath = movie.poster_path,
                         year = movie.release_date.take(4),
-                        rating = null,
-                        isResolving = false,
-                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(null, movie.id, MediaType.MOVIE) == true,
-                        isWatched = watchlistWatchedIds?.isWatched(null, movie.id, MediaType.MOVIE) == true,
                         onClick = { onItemClick(movie) }
                     )
                 }
@@ -190,8 +215,11 @@ internal fun TraktMovieAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_close)
+                    )
                 }
             }
             LazyVerticalGrid(
@@ -204,15 +232,11 @@ internal fun TraktMovieAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, movie -> "all_trakt_${index}_${movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                    MovieCard(
+                    PosterCard(
+                        imageUrl = movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
-                        posterPath = movie.posterPath,
                         year = if (movie.year > 0) movie.year.toString() else "",
-                        rating = if (movie.rating > 0)
-                            String.format("%.1f", movie.rating) else null,
-                        isResolving = false,
-                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
-                        isWatched = watchlistWatchedIds?.isWatched(movie.ids.trakt, movie.ids.tmdb, MediaType.MOVIE) == true,
+                        rating = if (movie.rating > 0) movie.rating else null,
                         onClick = { onItemClick(movie) }
                     )
                 }
@@ -265,8 +289,11 @@ internal fun TraktShowAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_close)
+                    )
                 }
             }
             LazyVerticalGrid(
@@ -279,15 +306,11 @@ internal fun TraktShowAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, show -> "all_trakt_show_${index}_${show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, show ->
-                    MovieCard(
+                    PosterCard(
+                        imageUrl = show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = show.title,
-                        posterPath = show.posterPath,
                         year = if (show.year > 0) show.year.toString() else "",
-                        rating = if (show.rating > 0)
-                            String.format("%.1f", show.rating) else null,
-                        isResolving = false,
-                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(show.ids.trakt, show.ids.tmdb, MediaType.SHOW) == true,
-                        isWatched = watchlistWatchedIds?.isWatched(show.ids.trakt, show.ids.tmdb, MediaType.SHOW) == true,
+                        rating = if (show.rating > 0) show.rating else null,
                         onClick = { onItemClick(show) }
                     )
                 }
@@ -329,8 +352,11 @@ internal fun TraktAnticipatedAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_close)
+                    )
                 }
             }
             LazyVerticalGrid(
@@ -344,28 +370,20 @@ internal fun TraktAnticipatedAllSheet(
             ) {
                 // 先展示电影，再展示剧集
                 itemsIndexed(anticipatedMovies, key = { index, item -> "all_anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                    MovieCard(
+                    PosterCard(
+                        imageUrl = item.movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.movie.title,
-                        posterPath = item.movie.posterPath,
                         year = if (item.movie.year > 0) item.movie.year.toString() else "",
-                        rating = if (item.movie.rating > 0) String.format("%.1f", item.movie.rating) else null,
-                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
-                        isResolving = false,
-                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
-                        isWatched = watchlistWatchedIds?.isWatched(item.movie.ids.trakt, item.movie.ids.tmdb, MediaType.MOVIE) == true,
+                        rating = if (item.movie.rating > 0) item.movie.rating else null,
                         onClick = { onMovieClick(item.movie) }
                     )
                 }
                 itemsIndexed(anticipatedShows, key = { index, item -> "all_anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                    MovieCard(
+                    PosterCard(
+                        imageUrl = item.show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.show.title,
-                        posterPath = item.show.posterPath,
                         year = if (item.show.year > 0) item.show.year.toString() else "",
-                        rating = if (item.show.rating > 0) String.format("%.1f", item.show.rating) else null,
-                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
-                        isResolving = false,
-                        isInWatchlist = watchlistWatchedIds?.isInWatchlist(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
-                        isWatched = watchlistWatchedIds?.isWatched(item.show.ids.trakt, item.show.ids.tmdb, MediaType.SHOW) == true,
+                        rating = if (item.show.rating > 0) item.show.rating else null,
                         onClick = { onShowClick(item.show) }
                     )
                 }
@@ -400,8 +418,11 @@ internal fun TrendingListsAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_close)
+                    )
                 }
             }
             LazyColumn(

@@ -96,6 +96,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
@@ -133,6 +134,7 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
@@ -800,6 +802,8 @@ fun DoubanItemDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val openDoubanToast = stringResource(R.string.screen_douban_item_detail_open_douban)
+    val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
     val view = LocalView.current
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
@@ -840,11 +844,7 @@ fun DoubanItemDetailScreen(
     }
 
     // 收集一次性 Toast 事件(爬取成功/标注成功/失败提示)
-    LaunchedEffect(Unit) {
-        viewModel.toastEvent.collect { resId ->
-            context.showToast(context.getString(resId))
-        }
-    }
+    ToastEffect(viewModel.toastEvent)
 
     // 加载完成后若 failure == null(条目已被删除/不存在),自动返回
     LaunchedEffect(uiState.failure, uiState.isLoading) {
@@ -860,10 +860,11 @@ fun DoubanItemDetailScreen(
         }
     }
 
+    val retryInProgressToast = stringResource(R.string.screen_douban_item_detail_retry_in_progress)
     // 重试启动失败 Toast 提示
     LaunchedEffect(uiState.retryStartFailed) {
         if (uiState.retryStartFailed) {
-            context.showToast(context.getString(R.string.screen_douban_item_detail_retry_in_progress))
+            context.showToast(retryInProgressToast)
             viewModel.consumeRetryStartFailed()
         }
     }
@@ -1102,9 +1103,7 @@ fun DoubanItemDetailScreen(
                                             try {
                                                 context.startActivity(intent)
                                             } catch (_: ActivityNotFoundException) {
-                                                context.showToast(
-                                                    context.getString(R.string.screen_douban_item_detail_open_douban)
-                                                )
+                                                context.showToast(openDoubanToast)
                                             }
                                         },
                                         onRetry = { viewModel.retrySingle() },
@@ -1316,6 +1315,7 @@ fun DoubanItemDetailScreen(
                 }
                 // 分享按钮(分享影视标题、评分、豆瓣链接)
                 val shareContext = LocalContext.current
+                val shareDoubanRatingLabel = stringResource(R.string.share_douban_rating)
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -1347,7 +1347,7 @@ fun DoubanItemDetailScreen(
                                 if (f != null) {
                                     val shareText = buildString {
                                         append(f.title)
-                                        f.rating?.let { append(" - ${shareContext.getString(R.string.share_douban_rating)}: $it") }
+                                        f.rating?.let { append(" - ${shareDoubanRatingLabel}: $it") }
                                         if (f.doubanUrl.isNotBlank()) {
                                             append("\n")
                                             append(f.doubanUrl)
@@ -1813,7 +1813,7 @@ private fun DoubanRatingRow(rating: Double, ratingCount: Int?, textColor: Color)
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
-            text = String.format(Locale.getDefault(), "%.1f", rating),
+            text = String.format(LocalLocale.current.platformLocale, "%.1f", rating),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
             color = Color(0xFFFFC107)
@@ -2594,6 +2594,7 @@ private fun DoubanDetailInfoTab(
 @Composable
 private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
     val context = LocalContext.current
+    val copiedToast = stringResource(R.string.screen_douban_item_detail_copied)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -2601,7 +2602,7 @@ private fun MetaRow(label: String, value: String, copyable: Boolean = false) {
                 if (copyable) Modifier.clickable {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
-                    context.showToast(context.getString(R.string.screen_douban_item_detail_copied))
+                    context.showToast(copiedToast)
                 } else Modifier
             ),
         verticalAlignment = Alignment.Top

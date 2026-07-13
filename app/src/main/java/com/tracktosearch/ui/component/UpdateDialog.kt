@@ -324,6 +324,7 @@ fun UpdateDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val downloadFailedMsg = stringResource(R.string.update_download_failed)
     val scope = rememberCoroutineScope()
     var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
@@ -355,7 +356,7 @@ fun UpdateDialog(
                         .heightIn(max = 320.dp)
                 ) {
                     StickyHeaderChangelogContent(
-                        text = updateInfo.changelog.ifBlank { context.getString(R.string.update_version_suffix) + " v${updateInfo.latestVersion}" }
+                        text = updateInfo.changelog.ifBlank { stringResource(R.string.update_version_suffix) + " v${updateInfo.latestVersion}" }
                     )
                 }
 
@@ -433,7 +434,7 @@ fun UpdateDialog(
                                         )
                                         downloadState = DownloadState.Completed(file)
                                     } catch (e: Exception) {
-                                        downloadState = DownloadState.Error(e.message ?: context.getString(R.string.update_download_failed))
+                                        downloadState = DownloadState.Error(e.message ?: downloadFailedMsg)
                                     }
                                 }
                             }, modifier = Modifier.fillMaxWidth()) {

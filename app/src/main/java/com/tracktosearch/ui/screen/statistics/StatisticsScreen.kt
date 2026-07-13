@@ -70,6 +70,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -799,7 +800,7 @@ private fun HeatmapChart(heatmapData: Map<String, Int>, isVisible: Boolean = tru
     val endCal = (startCal.clone() as Calendar).apply { add(Calendar.DAY_OF_YEAR, 13 * 7 - 1) }
 
     val dateKeyFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    val appLocale = context.resources.configuration.locales.get(0)
+    val appLocale = LocalLocale.current.platformLocale
     val locale = when (appLocale.language) {
         "en" -> Locale.ENGLISH
         "ja" -> Locale.JAPANESE

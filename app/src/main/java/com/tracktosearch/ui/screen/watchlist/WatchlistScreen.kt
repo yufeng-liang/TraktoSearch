@@ -667,12 +667,6 @@ fun WatchlistScreen(
                                             else -> stringResource(R.string.watchlist_search_history)
                                         }
                                     } else stringResource(R.string.search_placeholder_watchlist),
-                                    typeLabel = if (selectedTab == 0) stringResource(R.string.watchlist_tab_movies) else stringResource(R.string.watchlist_tab_shows),
-                                    onClick = { },
-                                    onTypeClick = {
-                                        view.performHaptic(HapticType.CLICK)
-                                        selectedTab = if (selectedTab == 0) 1 else 0
-                                    },
                                     hazeState = hazeState,
                                     modifier = Modifier.width(searchBoxWidth),
                                     value = searchQuery,
@@ -699,8 +693,6 @@ fun WatchlistScreen(
                                                     modifier = Modifier.size(19.dp)
                                                 )
                                             }
-                                        } else {
-                                            Icon(Icons.Rounded.Search, contentDescription = stringResource(R.string.watchlist_search), modifier = Modifier.size(19.dp))
                                         }
                                     }
                                 )

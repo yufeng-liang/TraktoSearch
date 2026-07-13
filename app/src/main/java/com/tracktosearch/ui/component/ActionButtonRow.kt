@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,13 +60,21 @@ fun ActionButtonRow(
                 targetValue = if (isPressed) 0.96f else 1f,
                 label = "action_button_scale"
             )
+            val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
             val bg = if (action.selected) {
                 MaterialTheme.colorScheme.primary
+            } else if (isLight) {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             } else {
                 Color.White.copy(alpha = 0.08f)
             }
+            val contentColor = if (action.selected) {
+                MaterialTheme.colorScheme.onPrimary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
             val shadow = if (action.selected) 8.dp else 0.dp
-            val hazeStyle = if (action.selected) {
+            val hazeStyle = if (action.selected || isLight) {
                 null
             } else {
                 HazeMaterials.thin(MaterialTheme.colorScheme.background)
@@ -100,19 +109,19 @@ fun ActionButtonRow(
                 if (action.isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
-                        color = Color.White,
+                        color = contentColor,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         imageVector = action.icon,
                         contentDescription = action.label,
-                        tint = Color.White
+                        tint = contentColor
                     )
                 }
                 Text(
                     text = action.label,
-                    color = Color.White,
+                    color = contentColor,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,

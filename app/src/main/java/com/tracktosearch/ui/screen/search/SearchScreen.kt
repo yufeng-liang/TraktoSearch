@@ -1136,8 +1136,11 @@ fun DoubanHotAllSheet(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.common_close))
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.common_close)
+                    )
                 }
             }
 

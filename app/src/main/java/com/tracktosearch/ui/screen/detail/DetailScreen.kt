@@ -88,7 +88,7 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -134,12 +134,7 @@ fun DetailScreen(
     }
 
     // 豆瓣同步 Toast 提示（成功/失败/ID未就绪）
-    val toastContext = LocalContext.current
-    LaunchedEffect(Unit) {
-        viewModel.toastEvent.collect { resId ->
-            toastContext.showToast(toastContext.getString(resId))
-        }
-    }
+    ToastEffect(viewModel.toastEvent)
 
     val listState = rememberLazyListState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
@@ -229,22 +224,21 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-        ) {
-            // 沉浸式顶部渐变背景：固定 260dp 高度，海报主色 → 透明，无海报色时回退 surface → 透明
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(260.dp)
-                    .align(Alignment.TopCenter)
-                    .background(
+            // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
+            // alpha 0.70:增强沉浸效果,让海报主色调更明显
+            .then(
+                uiState.posterDominantColor?.let { c ->
+                    Modifier.background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                uiState.posterDominantColor ?: MaterialTheme.colorScheme.surface,
-                                Color.Transparent
+                                c.copy(alpha = 0.70f),
+                                MaterialTheme.colorScheme.background
                             )
                         )
                     )
+                } ?: Modifier
             )
+        ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
             // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
@@ -750,6 +744,7 @@ fun DetailScreen(
 
             // 分享按钮 + 豆瓣同步重试按钮（半透明背景 + Haze 模糊增强）
             val context = LocalContext.current
+            val shareLinksLabel = stringResource(R.string.detail_share_links)
             Row(
                 modifier = Modifier
                     .statusBarsPadding()
@@ -838,7 +833,6 @@ fun DetailScreen(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = {
-                                val shareLinksLabel = context.getString(R.string.detail_share_links)
                                 val shareText = buildString {
                                     append(uiState.title)
                                     if (uiState.year != null) append(" (${uiState.year})")

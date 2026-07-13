@@ -51,10 +51,10 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 @Composable
 fun GlassSearchBar(
     placeholder: String,
-    typeLabel: String,
-    onClick: () -> Unit,
-    onTypeClick: () -> Unit,
-    hazeState: HazeState,
+    typeLabel: String? = null,
+    onClick: () -> Unit = {},
+    onTypeClick: () -> Unit = {},
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier,
     value: String = "",
     onValueChange: ((String) -> Unit)? = null,
@@ -66,16 +66,24 @@ fun GlassSearchBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isEditable = onValueChange != null
 
+    val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val contentColor = MaterialTheme.colorScheme.onSurface
+    val hintColor = contentColor.copy(alpha = 0.55f)
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .hazeEffect(
-                state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+            .then(
+                if (hazeState != null) {
+                    Modifier.hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                    )
+                } else Modifier
             )
-            .background(Color.White.copy(alpha = 0.08f))
+            .background(containerColor)
             .then(
                 if (isEditable) {
                     Modifier
@@ -88,7 +96,7 @@ fun GlassSearchBar(
         Icon(
             imageVector = Icons.Rounded.Search,
             contentDescription = null,
-            tint = Color.White.copy(alpha = 0.7f)
+            tint = contentColor.copy(alpha = 0.7f)
         )
         if (isEditable) {
             val textFieldModifier = if (focusRequester != null) {
@@ -107,7 +115,7 @@ fun GlassSearchBar(
                 modifier = textFieldModifier,
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = Color.White.copy(alpha = 0.9f),
+                    color = contentColor,
                     fontSize = 14.sp
                 ),
                 keyboardOptions = keyboardOptions,
@@ -118,7 +126,7 @@ fun GlassSearchBar(
                 if (value.isEmpty()) {
                     Text(
                         text = placeholder,
-                        color = Color.White.copy(alpha = 0.5f),
+                        color = hintColor,
                         fontSize = 14.sp
                     )
                 }
@@ -127,7 +135,7 @@ fun GlassSearchBar(
         } else {
             Text(
                 text = placeholder,
-                color = Color.White.copy(alpha = 0.5f),
+                color = hintColor,
                 fontSize = 14.sp,
                 modifier = Modifier
                     .weight(1f)
@@ -137,15 +145,17 @@ fun GlassSearchBar(
         if (trailingIcon != null) {
             trailingIcon()
         }
-        Text(
-            text = "$typeLabel ▾",
-            color = Color.White.copy(alpha = 0.4f),
-            fontSize = 12.sp,
-            modifier = Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color.White.copy(alpha = 0.06f))
-                .clickable(onClick = onTypeClick)
-                .padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+        if (!typeLabel.isNullOrBlank()) {
+            Text(
+                text = "$typeLabel ▾",
+                color = contentColor.copy(alpha = 0.6f),
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(contentColor.copy(alpha = 0.08f))
+                    .clickable(onClick = onTypeClick)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
     }
 }

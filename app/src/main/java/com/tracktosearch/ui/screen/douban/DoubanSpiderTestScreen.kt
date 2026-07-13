@@ -762,6 +762,7 @@ fun DoubanSpiderTestScreen(
                         // 结果(多候选端点对照)
                         uiState.markResult?.let { res ->
                             val copyCtx = LocalContext.current
+                            val copiedToast = stringResource(R.string.douban_spider_test_mark_copied)
                             val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
@@ -784,7 +785,7 @@ fun DoubanSpiderTestScreen(
                                             }
                                         }
                                         clipboard.setPrimaryClip(ClipData.newPlainText("result", sb))
-                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                        copyCtx.showToast(copiedToast)
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
@@ -931,6 +932,7 @@ fun DoubanSpiderTestScreen(
                         // 结果
                         uiState.ratingResult?.let { res ->
                             val copyCtx = LocalContext.current
+                            val copiedToast = stringResource(R.string.douban_spider_test_mark_copied)
                             val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
@@ -949,7 +951,7 @@ fun DoubanSpiderTestScreen(
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("rating", res.body))
-                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                        copyCtx.showToast(copiedToast)
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
@@ -1049,6 +1051,7 @@ fun DoubanSpiderTestScreen(
                         // 结果
                         uiState.recommendResult?.let { res ->
                             val copyCtx = LocalContext.current
+                            val copiedToast = stringResource(R.string.douban_spider_test_mark_copied)
                             val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
@@ -1066,7 +1069,7 @@ fun DoubanSpiderTestScreen(
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("recommend", res.body))
-                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                        copyCtx.showToast(copiedToast)
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
@@ -1180,6 +1183,7 @@ fun DoubanSpiderTestScreen(
                         // 结果
                         uiState.searchResult?.let { res ->
                             val copyCtx = LocalContext.current
+                            val copiedToast = stringResource(R.string.douban_spider_test_mark_copied)
                             val clipboard = copyCtx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             Spacer(modifier = Modifier.height(10.dp))
                             Row(
@@ -1197,7 +1201,7 @@ fun DoubanSpiderTestScreen(
                                     onClick = {
                                         view.performHaptic(HapticType.CLICK)
                                         clipboard.setPrimaryClip(ClipData.newPlainText("html", res.html))
-                                        copyCtx.showToast(copyCtx.getString(R.string.douban_spider_test_mark_copied))
+                                        copyCtx.showToast(copiedToast)
                                     },
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {

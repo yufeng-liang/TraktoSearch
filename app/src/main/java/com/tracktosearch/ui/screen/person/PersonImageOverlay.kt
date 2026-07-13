@@ -77,6 +77,7 @@ internal fun PersonImagePagerOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val alreadySavedToast = stringResource(R.string.poster_already_saved)
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { images.size })
     // 追踪每张图片的保存状态
@@ -198,7 +199,7 @@ internal fun PersonImagePagerOverlay(
             IconButton(
                 onClick = {
                     if (isSaved) {
-                        context.showToast(context.getString(R.string.poster_already_saved))
+                        context.showToast(alreadySavedToast)
                         return@IconButton
                     }
                     val currentUrl = images[currentIndex]

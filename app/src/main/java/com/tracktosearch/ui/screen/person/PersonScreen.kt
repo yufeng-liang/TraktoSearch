@@ -57,7 +57,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
-import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
@@ -82,11 +82,7 @@ fun PersonScreen(
         viewModel.loadPerson(personId)
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.toastEvent.collect { resId ->
-            context.showToast(context.getString(resId))
-        }
-    }
+    ToastEffect(viewModel.toastEvent)
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }

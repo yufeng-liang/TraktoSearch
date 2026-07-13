@@ -1134,7 +1134,7 @@ Config:
     <string name="discover_trending_day">Today</string>
     <string name="discover_trending_week">This Week</string>
     <string name="discover_trending_lists">Community Lists</string>
-    <string name="discover_list_meta">%d items · @%s · ❤%d</string>
+    <string name="discover_list_meta">%1$d items · @%2$s · ❤%3$d</string>
     <string name="discover_list_empty">No community lists yet, check back later~</string>
     <string name="common_view_all">View all</string>
 

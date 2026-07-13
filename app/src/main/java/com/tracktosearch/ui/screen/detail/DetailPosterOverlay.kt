@@ -64,6 +64,7 @@ internal fun PosterFullscreenOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val savedToAlbumToast = stringResource(R.string.gallery_saved_to_album)
     val scope = rememberCoroutineScope()
     var isSaved by remember { mutableStateOf<Boolean?>(null) } // null=未检查, true=已保存, false=未保存
 
@@ -186,7 +187,7 @@ internal fun PosterFullscreenOverlay(
             // 保存按钮（已保存时显示勾选图标）
             IconButton(onClick = {
                 if (isSaved == true) {
-                    context.showToast(context.getString(R.string.gallery_saved_to_album))
+                    context.showToast(savedToAlbumToast)
                 } else {
                     savePosterToGallery(context, scope, posterUrl, title) {
                         isSaved = true

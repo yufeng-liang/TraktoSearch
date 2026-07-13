@@ -1,12 +1,17 @@
 package com.tracktosearch.ui.util
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.os.Build
 import android.view.Gravity
 import android.view.WindowInsets
 import android.widget.Toast
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.Flow
 
 /**
  * 显示 Toast，抬高位置到悬浮导航栏之上，避免被遮挡。
@@ -35,4 +40,19 @@ private fun Context.getNavigationBarHeight(): Int {
 
 private fun Int.dpToPx(): Int {
     return (this * android.content.res.Resources.getSystem().displayMetrics.density).toInt()
+}
+
+/**
+ * 在 Composable 中订阅 Int 资源 ID 的 Flow 并显示 Toast。
+ * 使用 SuppressLint 允许在副作用中根据运行时资源 ID 解析字符串（Toast 事件模式）。
+ */
+@SuppressLint("LocalContextGetResourceValueCall")
+@Composable
+fun ToastEffect(toastEvent: Flow<Int>) {
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        toastEvent.collect { resId ->
+            context.showToast(context.getString(resId))
+        }
+    }
 }

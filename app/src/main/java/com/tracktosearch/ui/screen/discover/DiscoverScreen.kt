@@ -713,15 +713,19 @@ fun DiscoverScreen(
         }
     }
 
-    // 热门电影全部弹窗
+    // 趋势电影全部弹窗
     if (showPopularAll) {
         TmdbAllSheet(
-            title = stringResource(R.string.discover_popular),
+            title = stringResource(R.string.discover_trending),
             items = uiState.popularAllItems,
             isLoading = uiState.isLoadingPopularAll,
             hasMore = uiState.popularAllHasMore,
             currentPage = uiState.popularAllPage,
             watchlistWatchedIds = watchlistWatchedIds,
+            selectedTimeWindow = uiState.trendingTimeWindow,
+            onTimeWindowChange = { timeWindow ->
+                viewModel.switchTrendingTimeWindow(timeWindow)
+            },
             onItemClick = { movie ->
                 viewModel.resolveTmdbAndNavigate(movie.id, movie.title) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                     showPopularAll = false

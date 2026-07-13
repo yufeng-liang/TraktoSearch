@@ -643,6 +643,7 @@ internal fun BackdropPagerOverlay(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val alreadySavedToast = stringResource(R.string.poster_already_saved)
     val scope = rememberCoroutineScope()
     val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { backdrops.size })
     // 追踪每张截图的保存状态
@@ -764,7 +765,7 @@ internal fun BackdropPagerOverlay(
             val isSaved = currentIndex in savedBackdrops.value
             IconButton(onClick = {
                 if (isSaved) {
-                    context.showToast(context.getString(R.string.poster_already_saved))
+                    context.showToast(alreadySavedToast)
                     return@IconButton
                 }
                 val currentUrl = backdrops[currentIndex].replace("/w780/", "/original/")

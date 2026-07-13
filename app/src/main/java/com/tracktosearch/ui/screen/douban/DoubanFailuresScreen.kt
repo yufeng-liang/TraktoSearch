@@ -459,6 +459,10 @@ fun DoubanFailuresScreen(
         viewModel.loadFailures()
     }
 
+    val importDoneTemplate = stringResource(R.string.snackbar_import_done_json)
+    val invalidFormatMsg = stringResource(R.string.error_invalid_json_format)
+    val emptyMsg = stringResource(R.string.error_empty_csv)
+    val parseFailedTemplate = stringResource(R.string.error_parse_failed)
     // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 重新加载
     val importFailuresLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -468,18 +472,18 @@ fun DoubanFailuresScreen(
                 when (val result = viewModel.importFailuresFromJson(context, uri)) {
                     is ImportResult.Success -> {
                         snackbarHostState.showSnackbar(
-                            context.getString(R.string.snackbar_import_done_json, result.count)
+                            importDoneTemplate.format(result.count)
                         )
                     }
                     is ImportResult.InvalidFormat -> {
-                        snackbarHostState.showSnackbar(context.getString(R.string.error_invalid_json_format))
+                        snackbarHostState.showSnackbar(invalidFormatMsg)
                     }
                     is ImportResult.Empty -> {
-                        snackbarHostState.showSnackbar(context.getString(R.string.error_empty_csv))
+                        snackbarHostState.showSnackbar(emptyMsg)
                     }
                     is ImportResult.Error -> {
                         snackbarHostState.showSnackbar(
-                            context.getString(R.string.error_parse_failed, result.message)
+                            parseFailedTemplate.format(result.message)
                         )
                     }
                 }

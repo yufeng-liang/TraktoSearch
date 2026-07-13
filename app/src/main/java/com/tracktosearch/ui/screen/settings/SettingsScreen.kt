@@ -135,7 +135,11 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.debounce
@@ -199,6 +203,10 @@ fun SettingsScreen(
     // snackbarHostState 在 importFailuresLauncher 之前声明,供 launcher 回调内使用
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val importDoneTemplate = stringResource(R.string.snackbar_import_done_json)
+    val invalidFormatMsg = stringResource(R.string.error_invalid_json_format)
+    val emptyMsg = stringResource(R.string.error_empty_csv)
+    val parseFailedTemplate = stringResource(R.string.error_parse_failed)
     // 豆瓣失败项 JSON 导入 launcher:选文件 → importToRoom → 跳转查看页
     // 用于跨设备查看:A 导出失败数据 → B 导入后在查看页显示
     val importFailuresLauncher = rememberLauncherForActivityResult(
@@ -211,19 +219,19 @@ fun SettingsScreen(
                     is ImportResult.Success -> {
                         doubanRetryViewModel.refreshRetryState()
                         snackbarHostState.showSnackbar(
-                            context.getString(R.string.snackbar_import_done_json, result.count)
+                            importDoneTemplate.format(result.count)
                         )
                         onDoubanFailures()
                     }
                     is ImportResult.InvalidFormat -> {
-                        snackbarHostState.showSnackbar(context.getString(R.string.error_invalid_json_format))
+                        snackbarHostState.showSnackbar(invalidFormatMsg)
                     }
                     is ImportResult.Empty -> {
-                        snackbarHostState.showSnackbar(context.getString(R.string.error_empty_csv))
+                        snackbarHostState.showSnackbar(emptyMsg)
                     }
                     is ImportResult.Error -> {
                         snackbarHostState.showSnackbar(
-                            context.getString(R.string.error_parse_failed, result.message)
+                            parseFailedTemplate.format(result.message)
                         )
                     }
                 }
@@ -294,6 +302,13 @@ fun SettingsScreen(
     // DownloadSuccess 改为弹窗提示(提供跳转失败页按钮)
     var showDownloadSuccessDialog by remember { mutableStateOf(false) }
     var downloadedCount by remember { mutableStateOf(0) }
+    val cloudSyncNoLogin = stringResource(R.string.cloud_sync_no_login)
+    val cloudSyncNoLocalFailures = stringResource(R.string.cloud_sync_no_local_failures)
+    val cloudSyncUploadSuccess = stringResource(R.string.cloud_sync_upload_success)
+    val cloudSyncUploadFailed = stringResource(R.string.cloud_sync_upload_failed)
+    val cloudSyncDownloadEmpty = stringResource(R.string.cloud_sync_download_empty)
+    val cloudSyncDownloadLocalNewer = stringResource(R.string.cloud_sync_download_local_newer)
+    val cloudSyncDownloadFailed = stringResource(R.string.cloud_sync_download_failed)
     LaunchedEffect(cloudSyncEvent) {
         val event = cloudSyncEvent ?: return@LaunchedEffect
         when (event) {
@@ -303,13 +318,13 @@ fun SettingsScreen(
             }
             else -> {
                 val msg = when (event) {
-                    is CloudSyncEvent.NotLoggedIn -> context.getString(R.string.cloud_sync_no_login)
-                    is CloudSyncEvent.NoLocalFailures -> context.getString(R.string.cloud_sync_no_local_failures)
-                    is CloudSyncEvent.UploadSuccess -> context.getString(R.string.cloud_sync_upload_success)
-                    is CloudSyncEvent.UploadFailed -> context.getString(R.string.cloud_sync_upload_failed)
-                    is CloudSyncEvent.CloudEmpty -> context.getString(R.string.cloud_sync_download_empty)
-                    is CloudSyncEvent.LocalNewer -> context.getString(R.string.cloud_sync_download_local_newer)
-                    is CloudSyncEvent.DownloadFailed -> context.getString(R.string.cloud_sync_download_failed)
+                    is CloudSyncEvent.NotLoggedIn -> cloudSyncNoLogin
+                    is CloudSyncEvent.NoLocalFailures -> cloudSyncNoLocalFailures
+                    is CloudSyncEvent.UploadSuccess -> cloudSyncUploadSuccess
+                    is CloudSyncEvent.UploadFailed -> cloudSyncUploadFailed
+                    is CloudSyncEvent.CloudEmpty -> cloudSyncDownloadEmpty
+                    is CloudSyncEvent.LocalNewer -> cloudSyncDownloadLocalNewer
+                    is CloudSyncEvent.DownloadFailed -> cloudSyncDownloadFailed
                     is CloudSyncEvent.DownloadSuccess -> "" // 已上面处理
                 }
                 snackbarHostState.showSnackbar(msg)
@@ -366,6 +381,7 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
+    val settingsHazeState = remember { HazeState() }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val settingsCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -397,7 +413,8 @@ fun SettingsScreen(
             LazyColumn(
                 state = settingsListState,
                 modifier = modifier
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .hazeSource(state = settingsHazeState),
                 contentPadding = PaddingValues(
                     top = 65.dp + statusBarHeight,
                     bottom = 80.dp
@@ -854,11 +871,15 @@ fun SettingsScreen(
                 }
             }
         }
-            // 普通标题栏（含状态栏）
+            // Haze 模糊标题栏（含状态栏）
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
+                    .hazeEffect(
+                        state = settingsHazeState,
+                        style = HazeMaterials.thin()
+                    )
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -951,20 +972,22 @@ fun SettingsScreen(
             title = { Text(stringResource(R.string.settings_account_douban)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
-                    showDoubanLogoutDialog = false
-                    viewModel.clearDoubanCredentials()
-                    scope.launch {
-                        val result = snackbarHostState.showSnackbar(
-                            message = context.getString(R.string.settings_douban_logout_done),
-                            actionLabel = context.getString(R.string.douban_sync_relogin),
-                            duration = androidx.compose.material3.SnackbarDuration.Long
-                        )
-                        if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
-                            onNavigateToDoubanLogin()
+                    val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
+                    val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
+                    TextButton(onClick = {
+                        showDoubanLogoutDialog = false
+                        viewModel.clearDoubanCredentials()
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = doubanLogoutDone,
+                                actionLabel = doubanSyncRelogin,
+                                duration = androidx.compose.material3.SnackbarDuration.Long
+                            )
+                            if (result == androidx.compose.material3.SnackbarResult.ActionPerformed) {
+                                onNavigateToDoubanLogin()
+                            }
                         }
-                    }
-                }) {
+                    }) {
                     Text(stringResource(R.string.settings_logout_button))
                 }
             },

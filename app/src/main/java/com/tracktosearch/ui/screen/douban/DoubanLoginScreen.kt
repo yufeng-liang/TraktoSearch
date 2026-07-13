@@ -160,6 +160,7 @@ fun DoubanLoginScreen(
     viewModel: DoubanLoginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val cloudDownloadedMsg = stringResource(R.string.cloud_failures_downloaded)
     val isLoggedIn by viewModel.doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -213,7 +214,7 @@ fun DoubanLoginScreen(
                         viewModel.downloadCloudFailures()
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                message = context.getString(R.string.cloud_failures_downloaded),
+                                message = cloudDownloadedMsg,
                                 duration = androidx.compose.material3.SnackbarDuration.Short
                             )
                         }
