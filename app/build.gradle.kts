@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val localProps = rootProject.file("local.properties")
@@ -24,8 +24,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 55
-        versionName = "3.0.0(beta)"
+        versionCode = 56
+        versionName = "3.0.1(beta)"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
