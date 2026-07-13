@@ -2,9 +2,12 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -157,14 +161,31 @@ fun MovieCard(
         }
     }
 
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "movie_card_scale"
+    )
+
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .scale(scale)
             .then(
                 if (onLongClick != null) {
-                    Modifier.combinedClickable(onClick = wrappedOnClick, onLongClick = onLongClick)
+                    Modifier.combinedClickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = wrappedOnClick,
+                        onLongClick = onLongClick
+                    )
                 } else {
-                    Modifier.clickable(onClick = wrappedOnClick)
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        onClick = wrappedOnClick
+                    )
                 }
             ),
         shape = RoundedCornerShape(12.dp),

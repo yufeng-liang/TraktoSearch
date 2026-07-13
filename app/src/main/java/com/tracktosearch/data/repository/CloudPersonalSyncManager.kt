@@ -56,7 +56,7 @@ class CloudPersonalSyncManager @Inject constructor(
     companion object {
         private const val TAG = "CloudPersonalSync"
         private const val OWNER = "yufeng-liang"
-        private const val REPO = "TrackToSearch"
+        private const val REPO = "meta-data"
         private const val PATH_PREFIX = "personal/"
         private const val FILE_SYNCED = "synced_items.json"
         private const val FILE_PENDING = "pending_items.json"

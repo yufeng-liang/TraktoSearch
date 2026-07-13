@@ -8,6 +8,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,7 +46,8 @@ data class DiscoverFilterUiState(
 class DiscoverFilterViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DiscoverFilterUiState())

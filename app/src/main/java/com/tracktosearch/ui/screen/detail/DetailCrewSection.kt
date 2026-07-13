@@ -2,7 +2,10 @@ package com.tracktosearch.ui.screen.detail
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +35,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -48,9 +53,15 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
+import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.PosterColorExtractorProvider
+import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.core.graphics.drawable.toBitmap
 
 // ==================== 演职员 ====================
 
@@ -145,12 +156,30 @@ internal fun CrewSection(
 @Composable
 internal fun CastCard(name: String, role: String, profileUrl: String?, personId: Int, onClick: () -> Unit = {}) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "cast_card_scale"
+    )
+    val posterColorExtractor = remember {
+        EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            PosterColorExtractorProvider::class.java
+        ).posterColorExtractor()
+    }
     Column(
         modifier = Modifier
             .width(68.dp)
-            .clickable(onClick = onClick),
+            .scale(scale)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
@@ -179,6 +208,14 @@ internal fun CastCard(name: String, role: String, profileUrl: String?, personId:
                             .data(profileUrl)
                             .size(200)
                             .crossfade(false)
+                            .listener(
+                                onSuccess = { _, result ->
+                                    val bitmap = result.drawable.toBitmap()
+                                    scope.launch {
+                                        posterColorExtractor.extractDominantColor(profileUrl, bitmap)
+                                    }
+                                }
+                            )
                             .build()
                     },
                     contentDescription = name,

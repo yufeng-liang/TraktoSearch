@@ -69,7 +69,7 @@ fun PosterCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) 0.96f else 1f,
         label = "poster_scale"
     )
     val model = remember(imageUrl, imageSize, onImageSuccess) {

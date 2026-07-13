@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,12 +47,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.ArrowDropDown
@@ -280,248 +283,235 @@ fun SearchScreen(
         }
     }
 
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val titleAreaHeight = 110.dp
+    val searchBoxHeight = 72.dp
+    val contentTopY = titleAreaHeight + searchBoxHeight + 16.dp
+    val searchBoxCenterY = screenHeight / 2 - 30.dp
+
+    val targetSearchBoxY by animateDpAsState(
+        targetValue = if (isSearchFocused || searchQuery.isNotEmpty()) titleAreaHeight else searchBoxCenterY,
+        label = "search_box_y"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
             .hazeSource(state = hazeState)
     ) {
-        // Main content area
-        Column(
+        // 标题区 + 云朵小彩蛋（固定顶部，不随搜索框移动）
+        Box(
             modifier = Modifier
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
-            // 顶部留空给搜索框覆盖层（标题 + 间距 + 搜索框 + 缓冲）
-            Spacer(modifier = Modifier.height(180.dp))
-
-            // Content below search box
-            Column(
+            Column(modifier = Modifier.align(Alignment.CenterStart)) {
+                Text(
+                    text = stringResource(R.string.search_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.search_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            CloudIconWithAnimation(
+                cloudThemeManager = cloudThemeManager,
+                isActive = isActive,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 16.dp)
+                    .align(Alignment.CenterEnd)
+                    .size(72.dp)
+            )
+        }
+
+        // 搜索框（带动画垂直位置）
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(y = targetSearchBoxY)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(animatedWidthFraction.value)
+                    .clip(RoundedCornerShape(28.dp))
+                    .border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(28.dp)
+                    )
+                    .hazeEffect(
+                        state = hazeState,
+                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                    )
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
-                when {
-                    else -> {
-                        if (searchQuery.isNotEmpty()) {
-                            val suggestions = remember(searchQuery, uiState.searchHistory) {
-                                viewModel.getSuggestions(searchQuery)
-                            }
-                            if (suggestions.isNotEmpty()) {
-                                SearchSuggestionsInline(
-                                    suggestions = suggestions,
-                                    onSuggestionClick = { item ->
-                                        searchQuery = item.keyword
-                                        onTraktSearch?.invoke(searchSourceType, item.keyword)
-                                        focusManager.clearFocus()
-                                    }
-                                )
-                            }
+                SearchBarTop(
+                    searchQuery = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    onSearch = {
+                        if (searchQuery.trim() == "13638719007") {
+                            onSpiderTest?.invoke()
                         } else {
-                            if (uiState.searchHistory.isNotEmpty()) {
-                                SearchHistoryInline(
-                                    history = uiState.searchHistory,
-                                    onHistoryClick = { item ->
-                                        searchQuery = item.keyword
-                                        val st = when (item.type) {
-                                            "movie" -> SearchSourceType.MOVIE
-                                            "show" -> SearchSourceType.SHOW
-                                            "person" -> SearchSourceType.PERSON
-                                            else -> SearchSourceType.DISK
-                                        }
-                                        onTraktSearch?.invoke(st, item.keyword)
-                                        focusManager.clearFocus()
-                                    },
-                                    onHistoryDelete = { viewModel.removeHistory(it.keyword) },
-                                    onClearAll = { viewModel.clearHistory() }
+                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                            onTraktSearch?.invoke(searchSourceType, searchQuery)
+                        }
+                        focusManager.clearFocus()
+                    },
+                    onClear = { searchQuery = "" },
+                    onBack = if (isActive) onBack else null,
+                    focusRequester = focusRequester,
+                    onFocusChanged = { isSearchFocused = it },
+                    searchSourceType = searchSourceType,
+                    onSearchSourceTypeChange = onSearchSourceTypeChange
+                )
+            }
+        }
+
+        // 权限提示弹窗
+        if (showPermissionDialog) {
+            ModalBottomSheet(
+                onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                dragHandle = null
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.28f)
+                        .graphicsLayer { clip = false }
+                ) {
+                    val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
+                    LottieAnimation(
+                        composition = composition,
+                        iterations = LottieConstants.IterateForever,
+                        modifier = Modifier
+                            .size(160.dp)
+                            .offset(x = (-20).dp, y = (-23).dp)
+                            .graphicsLayer { clip = false }
+                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.permission_cloud_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 36.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.permission_cloud_message),
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 42.dp)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = {
+                                    cloudThemeManager.onPermissionDismissed()
+                                    scope.launch(Dispatchers.IO) {
+                                        cloudPermissionStorage.setDismissed(true)
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.permission_cancel),
+                                    style = MaterialTheme.typography.labelLarge
                                 )
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            PopularSearchesSection(
-                                popularSearches = hotSearches,
-                                onPopularClick = { keyword ->
-                                    searchQuery = keyword
-                                    // 热门搜索默认用网盘tab页搜索
-                                    onTraktSearch?.invoke(SearchSourceType.DISK, keyword)
-                                    focusManager.clearFocus()
-                                }
-                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Button(
+                                onClick = {
+                                    cloudThemeManager.onPermissionDismissed()
+                                    locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.permission_authorize),
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        // 搜索框覆盖层
-        Column(
+        // 内容区：搜索历史/热门搜索/建议（搜索框获得焦点或有查询时显示）
+        AnimatedVisibility(
+            visible = isSearchFocused || searchQuery.isNotEmpty(),
             modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 300.dp)
+                .fillMaxSize()
+                .padding(top = contentTopY),
+            enter = fadeIn(animationSpec = tween(250)) + expandVertically(animationSpec = tween(250)),
+            exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
         ) {
-            // 标题区 + 云朵小彩蛋
-            Box(
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
             ) {
-                Column(modifier = Modifier.align(Alignment.CenterStart)) {
-                    Text(
-                        text = stringResource(R.string.search_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = stringResource(R.string.search_subtitle),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                // 云朵图标 — 缩小为右上角小彩蛋，不再遮挡内容
-                CloudIconWithAnimation(
-                    cloudThemeManager = cloudThemeManager,
-                    isActive = isActive,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(72.dp)
-                )
-            }
-
-            // 权限提示弹窗
-            if (showPermissionDialog) {
-                ModalBottomSheet(
-                    onDismissRequest = { cloudThemeManager.onPermissionDismissed() },
-                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    dragHandle = null
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(0.28f)
-                            .graphicsLayer { clip = false }
-                    ) {
-                        // 猫咪坐在弹窗上边框左上角，部分溢出
-                        val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
-                        LottieAnimation(
-                            composition = composition,
-                            iterations = LottieConstants.IterateForever,
-                            modifier = Modifier
-                                .size(160.dp)
-                                .offset(x = (-20).dp, y = (-23).dp)
-                                .graphicsLayer { clip = false }
-                        )
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 20.dp, start = 27.dp, end = 27.dp, bottom = 20.dp)
-                        ) {
-                            // 标题（水平居中）
-                            Text(
-                                text = stringResource(R.string.permission_cloud_title),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth().padding(top = 36.dp, bottom = 36.dp)
-                            )
-
-                            // 文案
-                            Text(
-                                text = stringResource(R.string.permission_cloud_message),
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(bottom = 42.dp)
-                            )
-
-                            // 按钮行
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                TextButton(
-                                    onClick = {
-                                        cloudThemeManager.onPermissionDismissed()
-                                        scope.launch(Dispatchers.IO) {
-                                            cloudPermissionStorage.setDismissed(true)
-                                        }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.permission_cancel),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Button(
-                                    onClick = {
-                                        cloudThemeManager.onPermissionDismissed()
-                                        locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_COARSE_LOCATION)
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.permission_authorize),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                }
-                            }
-                        }
+                if (searchQuery.isNotEmpty()) {
+                    val suggestions = remember(searchQuery, uiState.searchHistory) {
+                        viewModel.getSuggestions(searchQuery)
                     }
-                }
-            }
-
-            // Spacer between icon and search box
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Search box - glass container
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(animatedWidthFraction.value)
-                        .clip(RoundedCornerShape(28.dp))
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(28.dp)
-                        )
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
-                        )
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .padding(horizontal = 4.dp, vertical = 4.dp)
-                ) {
-                    SearchBarTop(
-                        searchQuery = searchQuery,
-                        onQueryChange = { searchQuery = it },
-                        onSearch = {
-                            // 调试入口:输入特定数字串进入豆瓣爬取测试页
-                            if (searchQuery.trim() == "13638719007") {
-                                onSpiderTest?.invoke()
-                            } else {
-                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                                onTraktSearch?.invoke(searchSourceType, searchQuery)
+                    if (suggestions.isNotEmpty()) {
+                        SearchSuggestionsInline(
+                            suggestions = suggestions,
+                            onSuggestionClick = { item ->
+                                searchQuery = item.keyword
+                                onTraktSearch?.invoke(searchSourceType, item.keyword)
+                                focusManager.clearFocus()
                             }
+                        )
+                    }
+                } else {
+                    if (uiState.searchHistory.isNotEmpty()) {
+                        SearchHistoryInline(
+                            history = uiState.searchHistory,
+                            onHistoryClick = { item ->
+                                searchQuery = item.keyword
+                                val st = when (item.type) {
+                                    "movie" -> SearchSourceType.MOVIE
+                                    "show" -> SearchSourceType.SHOW
+                                    "person" -> SearchSourceType.PERSON
+                                    else -> SearchSourceType.DISK
+                                }
+                                onTraktSearch?.invoke(st, item.keyword)
+                                focusManager.clearFocus()
+                            },
+                            onHistoryDelete = { viewModel.removeHistory(it.keyword) },
+                            onClearAll = { viewModel.clearHistory() }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    PopularSearchesSection(
+                        popularSearches = hotSearches,
+                        onPopularClick = { keyword ->
+                            searchQuery = keyword
+                            onTraktSearch?.invoke(SearchSourceType.DISK, keyword)
                             focusManager.clearFocus()
-                        },
-                        onClear = { searchQuery = "" },
-                        onBack = if (isActive) onBack else null,
-                        focusRequester = focusRequester,
-                        onFocusChanged = { isSearchFocused = it },
-                        searchSourceType = searchSourceType,
-                        onSearchSourceTypeChange = onSearchSourceTypeChange
+                        }
                     )
                 }
+                Spacer(modifier = Modifier.height(24.dp))
             }
-
-            // Spacer between search box and content
-            Spacer(modifier = Modifier.height(24.dp))
         }
 
         // 全屏彩蛋 Overlay
@@ -734,98 +724,87 @@ private fun SearchHistoryInline(
         "person" to stringResource(R.string.search_type_person)
     )
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 4.dp),
+                .padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = stringResource(R.string.search_history_title),
                 style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = MaterialTheme.colorScheme.onSurface
             )
             TextButton(onClick = onClearAll, contentPadding = PaddingValues(0.dp)) {
                 Text(
                     text = stringResource(R.string.search_history_clear_all),
-                    style = MaterialTheme.typography.labelSmall
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 280.dp)
-                .verticalScroll(rememberScrollState())
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            history.chunked(2).forEach { rowItems ->
-                Row(
+            items(history, key = { "${it.type}_${it.keyword}" }) { item ->
+                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.96f else 1f,
+                    label = "history_chip_scale"
+                )
+                Surface(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        .scale(scale)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onHistoryClick(item) }
+                        ),
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 ) {
-                    rowItems.forEach { item ->
-                        val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
-                        Surface(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable { onHistoryClick(item) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            tonalElevation = 0.dp
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = typeNameMap[item.type] ?: item.type,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = tagColor,
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = item.keyword,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        IconButton(
+                            onClick = { onHistoryDelete(item) },
+                            modifier = Modifier.size(18.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = tagColor.copy(alpha = 0.15f)
-                                ) {
-                                    Text(
-                                        text = typeNameMap[item.type] ?: item.type,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                        color = tagColor,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                        maxLines = 1
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = item.keyword,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                IconButton(
-                                    onClick = { onHistoryDelete(item) },
-                                    modifier = Modifier.size(22.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Close,
-                                        contentDescription = stringResource(R.string.search_history_delete),
-                                        modifier = Modifier.size(12.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.search_history_delete),
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    }
-                    if (rowItems.size < 2) {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -881,13 +860,12 @@ private fun PopularSearchesSection(
     onPopularClick: (String) -> Unit
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = Modifier.fillMaxWidth()
     ) {
         Text(
             text = stringResource(R.string.hot_search),
             style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.padding(bottom = 8.dp)
         )
         FlowRow(
@@ -895,18 +873,41 @@ private fun PopularSearchesSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             popularSearches.forEach { keyword ->
+                val interactionSource = remember { MutableInteractionSource() }
+                val isPressed by interactionSource.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    targetValue = if (isPressed) 0.96f else 1f,
+                    label = "popular_chip_scale"
+                )
                 Surface(
-                    modifier = Modifier.clickable { onPopularClick(keyword) },
+                    modifier = Modifier
+                        .scale(scale)
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = null,
+                            onClick = { onPopularClick(keyword) }
+                        ),
                     shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
                 ) {
-                    Text(
-                        text = keyword,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = keyword,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }

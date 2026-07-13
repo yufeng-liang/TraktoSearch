@@ -2,8 +2,11 @@ package com.tracktosearch.ui.screen.discoverfilter
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -52,12 +55,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -69,11 +76,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
+import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
@@ -88,6 +97,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -198,6 +208,7 @@ fun DiscoverFilterScreen(
                         DiscoverFilterListItem(
                             item = item,
                             isMovie = uiState.type == TmdbRepository.DiscoverType.MOVIE,
+                            posterColorExtractor = viewModel.posterColorExtractor,
                             onClick = {
                                 val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
                                 if (uiState.type == TmdbRepository.DiscoverType.MOVIE) {
@@ -570,15 +581,18 @@ fun DiscoverFilterScreen(
 
 /**
  * 列表项：海报 + 标题 + 评分 + 年份 + 类型 + 地区
+ * 背景使用海报主色沉浸渐变。
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun DiscoverFilterListItem(
     item: TmdbSearchResult,
     isMovie: Boolean,
+    posterColorExtractor: PosterColorExtractor,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     val title = if (item.title.isNotBlank()) item.title else (item.name ?: "")
@@ -590,6 +604,16 @@ private fun DiscoverFilterListItem(
     val posterUrl = if (!item.poster_path.isNullOrBlank()) {
         TmdbImageUrls.build(item.poster_path, TmdbImageUrls.W200)
     } else null
+
+    var dominantColor by remember { mutableStateOf<Color?>(null) }
+
+    // 根据主色亮度自适应文字颜色
+    val onGradientColor = dominantColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+    } ?: MaterialTheme.colorScheme.onSurface
+    val onGradientVariantColor = dominantColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.78f)
+    } ?: MaterialTheme.colorScheme.onSurfaceVariant
 
     // 海报 modifier：当两个 scope 可用时加 sharedElement（与详情页海报配对）
     val posterModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
@@ -610,19 +634,63 @@ private fun DiscoverFilterListItem(
             .clip(RoundedCornerShape(8.dp))
     }
 
+    val backgroundBrush: Brush? = dominantColor?.let { color ->
+        Brush.horizontalGradient(
+            colors = listOf(
+                color.copy(alpha = 0.65f),
+                MaterialTheme.colorScheme.surface
+            )
+        )
+    }
+
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "filter_list_item_scale"
+    )
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .scale(scale)
             .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .clickable(onClick = onClick)
+            .then(
+                if (backgroundBrush != null) {
+                    Modifier.background(backgroundBrush)
+                } else {
+                    Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                }
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // 海报（80×120）
         if (posterUrl != null) {
             AsyncImage(
-                model = ImageRequest.Builder(context).data(posterUrl).size(150).build(),
+                model = remember(posterUrl) {
+                    ImageRequest.Builder(context)
+                        .data(posterUrl)
+                        .size(150)
+                        .crossfade(false)
+                        .listener(
+                            onSuccess = { _, result ->
+                                val bitmap = result.drawable.toBitmap()
+                                scope.launch {
+                                    val argb = posterColorExtractor.extractDominantColor(posterUrl, bitmap)
+                                    if (argb != 0L) {
+                                        dominantColor = Color(argb)
+                                    }
+                                }
+                            }
+                        )
+                        .build()
+                },
                 contentDescription = title,
                 modifier = posterModifier,
                 contentScale = ContentScale.Crop
@@ -648,7 +716,7 @@ private fun DiscoverFilterListItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = onGradientColor,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
@@ -664,7 +732,7 @@ private fun DiscoverFilterListItem(
                 Text(
                     text = regionText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = onGradientVariantColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -673,7 +741,7 @@ private fun DiscoverFilterListItem(
                 Text(
                     text = year,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = onGradientVariantColor
                 )
             }
             // 评分
@@ -688,7 +756,7 @@ private fun DiscoverFilterListItem(
                 Text(
                     text = "%.1f".format(item.vote_average),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = onGradientColor
                 )
             }
             // 类型
@@ -699,7 +767,7 @@ private fun DiscoverFilterListItem(
                 Text(
                     text = genreNames.joinToString(" / "),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = onGradientVariantColor,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -865,12 +933,12 @@ private fun MultiSelectDialog(
 }
 
 /**
- * 毛玻璃筛选标签
+ * 筛选标签
  *
- * 未选中时使用半透明毛玻璃背景，选中时使用主题色填充。
- * 当 [hazeState] 为 null 时退化为普通半透明背景（用于弹窗等无 hazeSource 的场景）。
+ * 未选中时使用 surfaceVariant 半透明背景，选中时使用主题色填充。
+ * 文字色与背景保持高对比度，避免浅色模式下看不清。
+ * [hazeState] 参数已废弃，chip 自身不需要毛玻璃效果。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun GlassFilterChip(
     selected: Boolean,
@@ -879,29 +947,28 @@ private fun GlassFilterChip(
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
-    val baseModifier = modifier
-        .clip(RoundedCornerShape(16.dp))
-        .background(
-            if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
-        )
-        .clickable(onClick = onClick)
-        .padding(horizontal = 12.dp, vertical = 6.dp)
+    val background = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+    }
+    val contentColor = if (selected) {
+        MaterialTheme.colorScheme.onPrimary
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
 
     Box(
-        modifier = if (hazeState != null) {
-            baseModifier.hazeEffect(
-                state = hazeState,
-                style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
-            )
-        } else {
-            baseModifier
-        },
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(background)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+            color = contentColor,
             style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

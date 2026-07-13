@@ -43,7 +43,7 @@ class CloudFailureSyncManager @Inject constructor(
     companion object {
         private const val TAG = "CloudFailureSync"
         private const val OWNER = "yufeng-liang"
-        private const val REPO = "TrackToSearch"
+        private const val REPO = "meta-data"
         private const val PATH_PREFIX = "failures/"
         private const val FILE_SUFFIX = ".json"
     }

@@ -43,7 +43,7 @@ class CloudDetailsPoolManager @Inject constructor(
     companion object {
         private const val TAG = "CloudDetailsPool"
         private const val OWNER = "yufeng-liang"
-        private const val REPO = "TrackToSearch"
+        private const val REPO = "meta-data"
         private const val PATH_PREFIX = "details_pool/"
         private const val FILE_SUFFIX = ".json"
         private const val SHARD_HASH_LENGTH = 3  // SHA-256 前 3 个十六进制字符 = 4096 分片
