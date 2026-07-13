@@ -39,10 +39,12 @@ class ApiKeyInterceptor @Inject constructor(
             response.close()
             apiKeyProvider.markAndRotate(currentKey, response.code)
             val nextKey = apiKeyProvider.pickKey()
-            // 有其他 key 可换才重试,否则用当前 key 返回让上层处理
-            val retryKey = if (nextKey != currentKey) nextKey else currentKey
+            // 有其他 key 可换才重试，避免用同一失效 key 再发一次必然 403 的请求
+            if (nextKey == currentKey) {
+                return response
+            }
             val retryRequest = chain.request().newBuilder()
-                .header(headerName, headerValueTemplate(retryKey))
+                .header(headerName, headerValueTemplate(nextKey))
                 .build()
             return chain.proceed(retryRequest)
         }

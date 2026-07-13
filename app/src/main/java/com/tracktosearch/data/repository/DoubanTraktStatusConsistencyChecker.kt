@@ -486,16 +486,20 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         val showWatchlist = traktNeedWatchlist.filter { it.second == MediaType.SHOW }.map { it.first }
 
         if (movieWatched.isNotEmpty() || showWatched.isNotEmpty()) {
-            runCatching {
-                traktRepository.batchMarkAsWatched(movieWatched, showWatched)
+            val watchedResult = traktRepository.batchMarkAsWatched(movieWatched, showWatched)
+            if (watchedResult.isSuccess) {
                 traktUpdated += movieWatched.size + showWatched.size
-            }.onFailure { Log.e(TAG, "Trakt 批量标记已看失败", it) }
+            } else {
+                Log.e(TAG, "Trakt 批量标记已看失败", watchedResult.exceptionOrNull())
+            }
         }
         if (movieWatchlist.isNotEmpty() || showWatchlist.isNotEmpty()) {
-            runCatching {
-                traktRepository.batchAddToWatchlist(movieWatchlist, showWatchlist)
+            val watchlistResult = traktRepository.batchAddToWatchlist(movieWatchlist, showWatchlist)
+            if (watchlistResult.isSuccess) {
                 traktUpdated += movieWatchlist.size + showWatchlist.size
-            }.onFailure { Log.e(TAG, "Trakt 批量标记想看失败", it) }
+            } else {
+                Log.e(TAG, "Trakt 批量标记想看失败", watchlistResult.exceptionOrNull())
+            }
         }
         return traktUpdated
     }

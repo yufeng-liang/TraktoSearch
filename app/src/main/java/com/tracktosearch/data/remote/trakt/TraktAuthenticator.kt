@@ -1,5 +1,6 @@
 package com.tracktosearch.data.remote.trakt
 
+import android.util.Log
 import com.tracktosearch.data.local.TokenStorage
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
@@ -38,6 +39,13 @@ class TraktAuthenticator @Inject constructor(
             return rebuildRequest(failedRequest, currentToken)
         }
 
+        // 已是最新 token 仍 401 → 说明 token 本身有问题，交给上层处理，不再无谓刷新
+        //（避免 refresh_token 仍有效时服务端持续 401 导致无限循环）
+        if (!failedToken.isNullOrEmpty() && failedToken == currentToken) {
+            Log.w(TAG, "Token 已是最新仍 401，放弃刷新避免无限循环")
+            return null
+        }
+
         // 否则触发一次刷新（single-flight）
         val newToken = runBlocking {
             refreshMutex.withLock {
@@ -58,5 +66,9 @@ class TraktAuthenticator @Inject constructor(
         return original.newBuilder()
             .header("Authorization", "Bearer $token")
             .build()
+    }
+
+    companion object {
+        private const val TAG = "TraktAuth"
     }
 }

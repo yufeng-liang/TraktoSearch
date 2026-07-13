@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.selects.select
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -98,6 +100,10 @@ class ResourceRepository @Inject constructor(
     // 搜索关键词结果缓存，LRU 限制 50 条防内存增长
     private val cache = android.util.LruCache<String, KeywordCache>(50)
 
+    // LruCache 非线程安全，多协程并发 get/put/remove 会触发 ConcurrentModificationException
+    // 或 get 进入死循环（LinkedHashMap 结构破坏），用 Mutex 串行化所有 cache 访问
+    private val cacheMutex = Mutex()
+
     /**
      * 搜索接口：
      * 1) 第一次调用（按 keyword）：用全 sources + 全 disk_types 调 API，结果缓存
@@ -115,7 +121,7 @@ class ResourceRepository @Inject constructor(
         val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
 
         val now = System.currentTimeMillis()
-        val cached = cache[keyword]
+        val cached = cacheMutex.withLock { cache[keyword] }
         val allItems = if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
             cached.items
         } else {
@@ -123,7 +129,7 @@ class ResourceRepository @Inject constructor(
             val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow)
             // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
             if (fetched.isNotEmpty()) {
-                cache.put(keyword, KeywordCache(fetched, now))
+                cacheMutex.withLock { cache.put(keyword, KeywordCache(fetched, now)) }
             }
             fetched
         }
@@ -141,7 +147,7 @@ class ResourceRepository @Inject constructor(
         isShow: Boolean = false
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
-        cache.remove(keyword)
+        cacheMutex.withLock { cache.remove(keyword) }
         return searchResources(keyword, enabledSources, enabledDiskTypes, isShow)
     }
 
@@ -165,7 +171,7 @@ class ResourceRepository @Inject constructor(
         val effectiveSources = enabledSources.intersect(storageEnabledSourcesFlow().first())
 
         val now = System.currentTimeMillis()
-        val cached = cache[keyword]
+        val cached = cacheMutex.withLock { cache[keyword] }
         if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
             send(filterItems(cached.items, effectiveSources, enabledDiskTypes))
             // 缓存命中：所有源视为已完成
@@ -205,7 +211,7 @@ class ResourceRepository @Inject constructor(
         if (sourceList.size == 1) {
             val (source, deferred) = sourceList.first()
             val items = deferred.await()
-            if (items.isNotEmpty()) cache.put(keyword, KeywordCache(items, now))
+            if (items.isNotEmpty()) cacheMutex.withLock { cache.put(keyword, KeywordCache(items, now)) }
             onSourceComplete?.invoke(source)
             send(items)
             return@channelFlow
@@ -232,10 +238,12 @@ class ResourceRepository @Inject constructor(
 
         // 缓存最终合并结果
         if (accumulated.isNotEmpty()) {
-            cache.put(keyword, KeywordCache(
-                accumulated.distinctBy { it.url }.sortedWith(resourceComparator(isShow)),
-                System.currentTimeMillis()
-            ))
+            cacheMutex.withLock {
+                cache.put(keyword, KeywordCache(
+                    accumulated.distinctBy { it.url }.sortedWith(resourceComparator(isShow)),
+                    System.currentTimeMillis()
+                ))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -384,12 +392,12 @@ class ResourceRepository @Inject constructor(
     /**
      * 合并外部传入的资源列表并写入缓存（用于中英文搜索结果合并）
      */
-    fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
+    suspend fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
         val merged = items
             .distinctBy { it.url }
             .sortedWith(resourceComparator(isShow))
         if (merged.isNotEmpty()) {
-            cache.put(keyword, KeywordCache(merged, System.currentTimeMillis()))
+            cacheMutex.withLock { cache.put(keyword, KeywordCache(merged, System.currentTimeMillis())) }
         }
         return merged
     }
@@ -408,9 +416,9 @@ class ResourceRepository @Inject constructor(
      * 直接从缓存拿全量（不调 API，不按 filter 过滤）。
      * 如果缓存不存在返回空。
      */
-    fun getCachedAllResources(keyword: String): List<ResourceItem> {
+    suspend fun getCachedAllResources(keyword: String): List<ResourceItem> {
         if (keyword.isBlank()) return emptyList()
-        val cached = cache[keyword] ?: return emptyList()
+        val cached = cacheMutex.withLock { cache[keyword] } ?: return emptyList()
         val now = System.currentTimeMillis()
         return if (now - cached.timestamp < CACHE_TTL_MS) {
             cached.items

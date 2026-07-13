@@ -10,6 +10,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -46,6 +48,9 @@ class PersistentTtlCache<T>(
 
     /** 是否已从磁盘加载完毕的 Deferred，供 awaitLoaded() 挂起等待，避免竞态导致缓存未命中 */
     private val loadedDeferred = CompletableDeferred<Unit>()
+
+    /** putAll 批量写入互斥：避免并发 putAll 同一 key 双写（#30） */
+    private val putAllMutex = Mutex()
 
     /**
      * 从磁盘加载所有条目到内存缓存。
@@ -131,19 +136,26 @@ class PersistentTtlCache<T>(
      * 从磁盘 DataStore 导出本缓存所有条目（用于云端同步上传）。
      *
      * 直接读 DataStore 而非内存 cache，确保拿到磁盘上所有条目
-     * （内存 cache 可能因 LRU 淘汰丢失部分条目，但磁盘是完整的）。
+     * （内存 cache 可能因 LruCache 淘汰丢失部分条目，但磁盘是完整的）。
+     *
+     * 过滤掉已过期条目，避免把过期数据同步到其他设备（#29）。
      *
      * @return key → value 映射；磁盘读取失败返回空 Map
      */
     suspend fun snapshotFromDisk(): Map<String, T> {
         return try {
             val prefs = dataStore.data.first()
+            val now = System.currentTimeMillis()
             val result = mutableMapOf<String, T>()
             prefs.asMap().forEach { (key, value) ->
                 val keyStr = key.name
                 if (!keyStr.startsWith("$keyPrefix:")) return@forEach
+                if (keyStr.endsWith(":exp")) return@forEach
                 val cacheKey = keyStr.removePrefix("$keyPrefix:")
                 val jsonStr = value as? String ?: return@forEach
+                // 检查持久化的 expireAt；已过期条目不导出，避免同步过期数据到其他设备（#29）
+                val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
+                if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) return@forEach
                 try {
                     result[cacheKey] = json.decodeFromString(serializer, jsonStr)
                 } catch (e: CancellationException) { throw e } catch (_: Exception) {
@@ -166,32 +178,35 @@ class PersistentTtlCache<T>(
      */
     suspend fun putAll(entries: Map<String, T>, overwrite: Boolean = false): Int {
         if (entries.isEmpty()) return 0
-        var written = 0
-        // 先写入内存缓存（获取 expireAt），再批量写入 DataStore
-        val toWrite = mutableListOf<Pair<String, T>>()
-        entries.forEach { (key, value) ->
-            if (overwrite || get(key) == null) {
-                super.put(key, value)
-                toWrite.add(key to value)
-            }
-        }
-        // 批量写入 DataStore（一次事务）
-        try {
-            dataStore.edit { prefs ->
-                toWrite.forEach { (key, value) ->
-                    val jsonStr = json.encodeToString(serializer, value)
-                    prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
-                    val expireAt = getExpireAt(key)
-                    if (expireAt != null) {
-                        prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
-                    }
-                    written++
+        // putAll 整次加锁，避免并发 putAll 同 key 双写且 written 计数虚高（#30）
+        return putAllMutex.withLock {
+            var written = 0
+            // 先写入内存缓存（获取 expireAt），再批量写入 DataStore
+            val toWrite = mutableListOf<Pair<String, T>>()
+            entries.forEach { (key, value) ->
+                if (overwrite || get(key) == null) {
+                    super.put(key, value)
+                    toWrite.add(key to value)
                 }
             }
-        } catch (e: CancellationException) { throw e } catch (_: Exception) {
-            // 磁盘写入失败静默
+            // 批量写入 DataStore（一次事务）
+            try {
+                dataStore.edit { prefs ->
+                    toWrite.forEach { (key, value) ->
+                        val jsonStr = json.encodeToString(serializer, value)
+                        prefs[stringPreferencesKey("$keyPrefix:$key")] = jsonStr
+                        val expireAt = getExpireAt(key)
+                        if (expireAt != null) {
+                            prefs[longPreferencesKey("$keyPrefix:$key:exp")] = expireAt
+                        }
+                        written++
+                    }
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                // 磁盘写入失败静默
+            }
+            written
         }
-        return written
     }
 
     /**

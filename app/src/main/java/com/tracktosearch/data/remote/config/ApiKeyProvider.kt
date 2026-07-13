@@ -70,7 +70,9 @@ class ApiKeyProvider @Inject constructor(
             return firstCoolingExpired.key
         }
 
-        // 3. 全失效 → 返回第一个 key(宁可重试也不要无 key)
+        // 3. 全失效 → 返回第一个 key 作为兜底（调用方需自行判断是否重试）
+        // 注意：单 key 被标 INVALID 后仍会返回该 key，由 ApiKeyInterceptor 在 nextKey==currentKey 时
+        // 直接返回 403 避免无限循环。resetAll() 由 RemoteConfig 刷新触发恢复。
         return current.firstOrNull()?.key ?: fallbackKey
     }
 

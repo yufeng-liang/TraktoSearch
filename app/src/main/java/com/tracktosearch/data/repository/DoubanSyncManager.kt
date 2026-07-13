@@ -1124,8 +1124,9 @@ class DoubanSyncManager @Inject constructor(
             )
 
             // 区分重试结果:成功 vs 仍然失败
-            val successDoubanIds = items.map { it.doubanId }.toSet() - result.failed.map { it.doubanId }.toSet()
-            allRetrySuccess.addAll(successDoubanIds)
+            // 使用 BatchSyncResult.successDoubanIds(阶段 4 实际写入 Trakt 的项)做精确计数,
+            // 避免 items - result.failed 推算时把阶段 4 写入失败的项误判为成功。
+            allRetrySuccess.addAll(result.successDoubanIds)
             allStillFailed.addAll(result.failed)
             totalSuccess += result.success
             totalCacheHit += result.cacheHit
@@ -1140,6 +1141,9 @@ class DoubanSyncManager @Inject constructor(
         // (重试模式:不删除未重试的失败项)
         persistFailures(allStillFailed, isRetry = true)
 
+        // 先前用 items - result.failed 推算 allRetrySuccess,但 failed 仅含各阶段显式捕获的失败,
+        // 阶段 4 写入失败的项会被错误计入 success → 误删仍有失败的记录。
+        // 改用 BatchSyncResult.successDoubanIds(阶段 4 实际写入 Trakt 的项)做精确删除。
         val finalProgress = DoubanSyncProgress(
             isRunning = false,
             isComplete = true,
@@ -1286,17 +1290,15 @@ class DoubanSyncManager @Inject constructor(
     /**
      * 豆瓣标记时间(yyyy-MM-dd) → Trakt watched_at/rated_at 用的 ISO 8601 UTC 字符串。
      *
-     * 补本地 12:00:00 再转 UTC:正负 12 小时时区偏移下日期也不会跨日,热力图聚合最稳定。
+     * 直接输出当日 UTC 00:00:00,避免本地→UTC 转时区时 UTC+13/+14 跨日前一日。
      * 解析失败或空串返回 null(Trakt 会用服务端当前时间兜底)。
      */
     private fun markedAtToIso(markedAt: String): String? {
         if (markedAt.isBlank()) return null
         return runCatching {
-            val inputFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-            inputFormat.timeZone = TimeZone.getDefault()
-            val date = inputFormat.parse("$markedAt 12:00:00") ?: return null
             val outputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
             outputFormat.timeZone = TimeZone.getTimeZone("UTC")
+            val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(markedAt) ?: return null
             outputFormat.format(date)
         }.getOrNull()
     }
@@ -1353,7 +1355,9 @@ class DoubanSyncManager @Inject constructor(
         val success: Int,
         val failed: List<DoubanSyncFailure>,
         val skipped: Int = 0,
-        val cacheHit: Int = 0
+        val cacheHit: Int = 0,
+        // 明确成功的 doubanId 集合(仅含阶段 4 实际写入 Trakt 的项,避免从 items-failed 推断时遗漏阶段 1~3 的失败)
+        val successDoubanIds: Set<String> = emptySet()
     )
 
     /**
@@ -1513,6 +1517,8 @@ class DoubanSyncManager @Inject constructor(
         val movieRatings = mutableListOf<Triple<Int, Int, String?>>()
         val showRatings = mutableListOf<Triple<Int, Int, String?>>()
         val batchToInsert = mutableListOf<DoubanSyncedItem>()
+        // 记录成功写入 Trakt 的 doubanId(初始为全部 withTraktId,阶段 4 失败时移除)
+        val successDoubanIds = withTraktId.map { it.item.doubanId }.toMutableSet()
 
         for (r in withTraktId) {
             val isInWatchlist = watchlistWatchedIds?.isInWatchlist(r.traktId, null, r.mediaType) == true
@@ -1600,18 +1606,20 @@ class DoubanSyncManager @Inject constructor(
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_TIMEOUT, existingMap)
             }
             synchronized(failed) { failed.addAll(timeoutFailures) }
+            successDoubanIds.clear()
         } catch (e: Exception) {
             writeFailedCount = withTraktId.size
             val writeFailures = withTraktId.map { r ->
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
             }
             synchronized(failed) { failed.addAll(writeFailures) }
+            successDoubanIds.clear()
         }
 
         // successCount = 成功写入 Trakt 的数量 = 有 Trakt ID 的数量 - 写入失败的数量
         // (failed 列表包含阶段1详情页失败项,不能直接用 withTraktId.size - failed.size)
         val successCount = withTraktId.size - writeFailedCount
-        return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit)
+        return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit, successDoubanIds = successDoubanIds.toSet())
     }
 
     /**

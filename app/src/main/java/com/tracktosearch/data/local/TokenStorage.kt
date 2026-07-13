@@ -68,7 +68,9 @@ class TokenStorage @Inject constructor(
             cachedAccessToken = token
             cachedExpiresAt = expiresAt
             cacheLoaded = true
-            if (!token.isNullOrEmpty()) {
+            // access_token 非空且未过期才算已登录，避免过期 token 仍显示已登录
+            val nowSec = System.currentTimeMillis() / 1000
+            if (!token.isNullOrEmpty() && expiresAt > nowSec) {
                 _accessTokenFlow.value = token
                 _isLoggedInState.value = true
             }

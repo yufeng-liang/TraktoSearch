@@ -303,6 +303,14 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
+                // 预填充占位列表到完整大小，避免多个 async 协程并发 add/resize 导致 IndexOutOfBounds
+                val placeholderList = List(items.size) { index ->
+                    val p = items[index].movie
+                    createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[index].listed_at)
+                }
+                if (!silent) {
+                    _uiState.update { it.copy(movies = placeholderList) }
+                }
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
                         val uiItem = enrichMediaItem(
@@ -312,12 +320,9 @@ class WatchlistViewModel @Inject constructor(
                             listedAt = item.listed_at, isMovie = true
                         )
                         if (!silent) {
+                            // 直接按索引赋值占位符，不调用 add 避免并发 resize
                             _uiState.update { state ->
                                 val current = state.movies.toMutableList()
-                                while (current.size <= index) {
-                                    val p = items[current.size].movie
-                                    current.add(createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[current.size].listed_at))
-                                }
                                 current[index] = uiItem
                                 state.copy(movies = current)
                             }
@@ -326,6 +331,11 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
+                // 写入离线缓存（仅首页）：在 moviePage 递增前判断，确保首页加载必缓存
+                if (_uiState.value.moviePage == 1) {
+                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
+                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, entities)
+                }
                 _uiState.value = _uiState.value.copy(
                     movies = uiItems,
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
@@ -333,11 +343,6 @@ class WatchlistViewModel @Inject constructor(
                     hasMoreMovies = _uiState.value.moviePage < totalPages,
                     moviePage = _uiState.value.moviePage + 1
                 )
-                // 写入离线缓存（仅首页）
-                if (_uiState.value.moviePage == 2) {
-                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
-                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, entities)
-                }
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
@@ -380,6 +385,15 @@ class WatchlistViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(shows = emptyList())
                     }
                 }
+                // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
+                // 预填充占位列表到完整大小，避免多个 async 协程并发 add/resize 导致 IndexOutOfBounds
+                val placeholderList = List(items.size) { index ->
+                    val s = items[index].show
+                    createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[index].listed_at)
+                }
+                if (!silent) {
+                    _uiState.update { it.copy(shows = placeholderList) }
+                }
                 val deferredItems = items.mapIndexed { index, item ->
                     async {
                         val uiItem = enrichMediaItem(
@@ -389,12 +403,9 @@ class WatchlistViewModel @Inject constructor(
                             listedAt = item.listed_at, isMovie = false
                         )
                         if (!silent) {
+                            // 直接按索引赋值占位符，不调用 add 避免并发 resize
                             _uiState.update { state ->
                                 val current = state.shows.toMutableList()
-                                while (current.size <= index) {
-                                    val s = items[current.size].show
-                                    current.add(createPlaceholder(s.ids.trakt, s.ids.tmdb, s.title, s.year, s.ids.imdb, s.rating, items[current.size].listed_at))
-                                }
                                 current[index] = uiItem
                                 state.copy(shows = current)
                             }
@@ -403,6 +414,11 @@ class WatchlistViewModel @Inject constructor(
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
+                // 写入离线缓存（仅首页）：在 showPage 递增前判断，确保首页加载必缓存
+                if (_uiState.value.showPage == 1) {
+                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
+                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW, entities)
+                }
                 _uiState.value = _uiState.value.copy(
                     shows = uiItems,
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
@@ -410,11 +426,6 @@ class WatchlistViewModel @Inject constructor(
                     hasMoreShows = _uiState.value.showPage < totalPages,
                     showPage = _uiState.value.showPage + 1
                 )
-                // 写入离线缓存（仅首页）
-                if (_uiState.value.showPage == 2) {
-                    val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
-                    offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW, entities)
-                }
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW)

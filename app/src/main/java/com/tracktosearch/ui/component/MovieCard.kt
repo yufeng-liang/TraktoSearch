@@ -76,7 +76,8 @@ fun MovieCard(
     // 当前活跃点击 token,每次点击递增;只有 token 匹配的卡片实例才启用 sharedElement
     val activeClickToken = LocalActivePosterClickToken.current
     // 记录"我自己被点击时"获得的 token
-    var myClickToken by rememberSaveable { mutableStateOf(0) }
+    // 改用 remember(无 Saveable)：横竖屏配置变化后全部重新生成保持一致，避免旧 token 与 activeClickToken 不匹配导致共享元素转场飘错
+    var myClickToken by remember { mutableStateOf(0) }
     // 只有"当前可见 tab"且"被用户点击激活"的海报才启用 sharedElement
     // isCurrentTab 避免 HorizontalPager 常驻的非当前 tab 同 tmdbId 海报参与匹配
     // clickToken 匹配避免同页面不同栏目下同 tmdbId 海报参与匹配(转场飘错根因)

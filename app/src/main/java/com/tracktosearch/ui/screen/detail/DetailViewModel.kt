@@ -38,6 +38,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,8 +49,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -214,7 +217,7 @@ class DetailViewModel @Inject constructor(
             }
         }
 
-        private fun cacheGet(key: Int): CachedDetailData? {
+        private suspend fun cacheGet(key: Int): CachedDetailData? {
             synchronized(detailCache) {
                 return detailCache[key]
             }
@@ -310,7 +313,7 @@ class DetailViewModel @Inject constructor(
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
 
-    fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false) {
+    suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false) {
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
         if (currentTraktId == traktId && detailLoaded) return
 
@@ -332,6 +335,9 @@ class DetailViewModel @Inject constructor(
                 isMarkedWatchlist = inWatchlist,
                 isMarkedWatched = isWatched
             )
+            // 从存储拉取最新 viewedUrls 覆盖缓存旧值，避免跨页面返回后丢失状态
+            val latestViewed = withContext(Dispatchers.IO) { viewedItemStorage.getViewedUrls() }
+            _uiState.value = _uiState.value.copy(viewedUrls = latestViewed)
             // 上次缓存时若未提取到海报主色(用户中途返回),尽早从持久化缓存补查
             prefetchPosterColor(cached.uiState.posterUrl)
             // 上次缓存时搜索未完成(用户中途返回),重启搜索避免卡在搜索中状态
@@ -638,10 +644,9 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val translated = commentTranslator.translateSingleComment(comment)
-                val currentTranslated = _uiState.value.translatedComments.toMutableList()
-                currentTranslated.add(translated)
+                val updated = _uiState.value.translatedComments.toMutableList().apply { add(translated) }.toList()
                 _uiState.value = _uiState.value.copy(
-                    translatedComments = currentTranslated,
+                    translatedComments = updated,
                     translatingCommentId = null
                 )
             } catch (e: Exception) {
@@ -1310,10 +1315,14 @@ class DetailViewModel @Inject constructor(
         }
 
         val state = _uiState.value
-        val filtered = resourceRepository.filterItems(
-            allResources, state.enabledSources, state.enabledDiskTypes
-        )
-        val viewedUrls = viewedItemStorage.getViewedUrls()
+        val filtered = withContext(Dispatchers.Default) {
+            resourceRepository.filterItems(
+                allResources, state.enabledSources, state.enabledDiskTypes
+            )
+        }
+        val viewedUrls = withContext(Dispatchers.IO) {
+            viewedItemStorage.getViewedUrls()
+        }
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
             resources = filtered,
@@ -1711,11 +1720,21 @@ class DetailViewModel @Inject constructor(
     }
 
     fun markResourceViewed(url: String) {
-        val current = _uiState.value.viewedUrls
-        if (url in current) return
         viewModelScope.launch {
-            viewedItemStorage.markViewed(url)
-            _uiState.value = _uiState.value.copy(viewedUrls = current + url)
+            // 用 synchronized 包读-改-写，避免快速多次点击丢状态（#12）
+            // markViewed 在锁外调用（suspend 函数不可在 synchronized 内），DAO 串行化保障 IO 原子
+            val alreadyViewed = synchronized(viewedUrlsLock) {
+                val current = _uiState.value.viewedUrls
+                if (url in current) {
+                    true
+                } else {
+                    _uiState.value = _uiState.value.copy(viewedUrls = current + url)
+                    false
+                }
+            }
+            if (!alreadyViewed) {
+                viewedItemStorage.markViewed(url)
+            }
         }
     }
 
@@ -1741,6 +1760,15 @@ class DetailViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(collectionInfo = collection)
             }
         }
+    }
+
+    // 用 synchronized 包 markResourceViewed 读-改-写，避免快速多次点击丢状态（#12）
+    private val viewedUrlsLock = Any()
+
+    override fun onCleared() {
+        super.onCleared()
+        // 清理静态缓存对应条目，避免 VM 销毁后仍持有完整 UiState 导致内存泄漏
+        if (currentTraktId > 0) cacheRemove(currentTraktId)
     }
 
     /** 使用 TMDB 季详情 API 获取本地化集标题，替换 Trakt 的英文标题 */

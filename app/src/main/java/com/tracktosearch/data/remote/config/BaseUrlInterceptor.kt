@@ -31,7 +31,8 @@ class BaseUrlInterceptor @Inject constructor(
             return chain.proceed(original)
         }
 
-        val newUrl = originalUrl.replace(fallbackUrl, dynamicUrl)
+        // 仅替换前缀处一次，避免 query/path 内重复片段被错误改写
+        val newUrl = dynamicUrl + originalUrl.removePrefix(fallbackUrl)
         val newRequest = original.newBuilder()
             .url(newUrl)
             .build()

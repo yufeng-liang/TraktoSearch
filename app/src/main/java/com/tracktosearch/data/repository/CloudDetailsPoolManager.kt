@@ -249,6 +249,12 @@ class CloudDetailsPoolManager @Inject constructor(
     }
 
     private suspend fun downloadShard(shard: String): Map<String, DoubanDetailCacheEntry>? {
+        // 持分片锁,避免与 uploadShardWithRetry 并发导致乐观锁 409 放大
+        val lock = getShardLock(shard)
+        return lock.withLock { downloadShardUnlocked(shard) }
+    }
+
+    private suspend fun downloadShardUnlocked(shard: String): Map<String, DoubanDetailCacheEntry>? {
         val path = buildPath(shard)
         return try {
             val resp = giteeContentsApi.getFileContent(OWNER, REPO, path)
@@ -290,7 +296,7 @@ class CloudDetailsPoolManager @Inject constructor(
         val lock = getShardLock(shard)
         lock.withLock {
             // 构造仅含 isTvShow + mediaType 的条目；其他字段尝试保留池中原值
-            val existing = downloadShard(shard) ?: emptyMap()
+            val existing = downloadShardUnlocked(shard) ?: emptyMap()
             val existingEntry = existing[doubanId]
             // 清除标注(null)时保留池中原 isTvShow;标注非null时按 mediaType 推导;池中无条目且清除时默认 false
             val isTvShow = when {
@@ -330,7 +336,7 @@ class CloudDetailsPoolManager @Inject constructor(
         val shard = shardPrefix(doubanId)
         val lock = getShardLock(shard)
         lock.withLock {
-            val existing = downloadShard(shard) ?: emptyMap()
+            val existing = downloadShardUnlocked(shard) ?: emptyMap()
             val existingEntry = existing[doubanId]
             val mergedEntry = if (existingEntry != null) {
                 // 字段级合并：非 null 字段覆盖，null 字段保留池中原值
@@ -361,13 +367,25 @@ class CloudDetailsPoolManager @Inject constructor(
             } else {
                 entry
             }
-            // 若合并后与池中完全一致则跳过上传
-            if (existingEntry == mergedEntry) {
+            // 若合并后与池中完全一致则跳过上传（比较关键字段，避免 List 引用差异导致恒假）
+            if (existingEntry != null && existingEntry.isSameContent(mergedEntry)) {
                 Log.d(TAG, "详情 $doubanId 与池中一致,跳过上传")
                 return@withLock true
             }
             uploadShardWithRetry(shard, mapOf(doubanId to mergedEntry))
         }
+    }
+
+    /** 内容级等价比较：跳过 List 引用/顺序等物理差异，仅比较业务字段 */
+    private fun DoubanDetailCacheEntry.isSameContent(other: DoubanDetailCacheEntry): Boolean {
+        return imdbId == other.imdbId && isTvShow == other.isTvShow && title == other.title &&
+            posterUrl == other.posterUrl && genres == other.genres && year == other.year &&
+            countries == other.countries && directors == other.directors && mediaType == other.mediaType &&
+            doubanRating == other.doubanRating && ratingCount == other.ratingCount && summary == other.summary &&
+            episodeCount == other.episodeCount && episodeDuration == other.episodeDuration && aka == other.aka &&
+            runtime == other.runtime && writers == other.writers && cast == other.cast &&
+            languages == other.languages && initialReleaseDates == other.initialReleaseDates &&
+            ratingDistribution == other.ratingDistribution && celebrities == other.celebrities
     }
 
     /**

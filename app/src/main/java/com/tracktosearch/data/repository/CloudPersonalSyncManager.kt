@@ -65,11 +65,14 @@ class CloudPersonalSyncManager @Inject constructor(
         // 节流窗口:5 秒内的重复 refreshMetaOnly 调用只发一次网络请求
         // (设置页 LaunchedEffect(Unit) 和 LaunchedEffect(doubanLoggedIn) 首次会并发触发两次)
         private const val META_REFRESH_THROTTLE_MS = 5_000L
+        // 失败后短节流窗口:允许快速重试(1 秒),避免失败被长节流掩盖
+        private const val META_REFRESH_RETRY_THROTTLE_MS = 1_000L
     }
 
-    // 节流锁 + 上次成功刷新时间戳,避免并发/短时重复请求 gitee
+    // 节流锁 + 上次刷新时间戳(分成功/失败),避免并发/短时重复请求 gitee
     private val metaRefreshMutex = Mutex()
-    @Volatile private var lastMetaRefreshAt: Long = 0L
+    @Volatile private var lastMetaRefreshSuccessAt = 0L
+    @Volatile private var lastMetaRefreshFailedAt = 0L
 
     // ===== 数据模型 =====
 
@@ -386,20 +389,28 @@ class CloudPersonalSyncManager @Inject constructor(
         }
     }
 
+    // 节流状态由 companion object 内的 lastMetaRefreshSuccessAt/lastMetaRefreshFailedAt 记录（避免重复声明）
+
     /**
      * 轻量刷新:仅拉取云端 sync_meta 并合并到本地,不下载 synced/pending/mappings。
      * 供设置页显示「冷却期」状态前调用,确保跨设备 lastFullSyncAt 准确。
      *
-     * 节流:5 秒内的重复调用只发一次网络请求(设置页两个 LaunchedEffect 首次会并发触发)。
+     * 节流:上次成功刷新后 5 秒内重复调用直接返回 true;
+     * 上次失败时仅 1 秒内节流(允许快速重试,避免失败被长节流掩盖)。
      * @return true=云端 meta 拉取并合并成功;false=未登录/云端无数据/失败
      */
     suspend fun refreshMetaOnly(): Boolean = metaRefreshMutex.withLock {
-        // 节流:窗口内直接返回 true(上次已成功刷新,冷却期数据不会在 5 秒内变化)
-        if (System.currentTimeMillis() - lastMetaRefreshAt < META_REFRESH_THROTTLE_MS) {
+        val now = System.currentTimeMillis()
+        // 节流:上次成功窗口内快速返回 true;上次失败时短节流让快速重试能通过
+        if (lastMetaRefreshSuccessAt > lastMetaRefreshFailedAt) {
+            if (now - lastMetaRefreshSuccessAt < META_REFRESH_THROTTLE_MS) {
+                return@withLock true
+            }
+        } else if (now - lastMetaRefreshFailedAt < META_REFRESH_RETRY_THROTTLE_MS) {
             return@withLock true
         }
         val success = doRefreshMetaOnly()
-        if (success) lastMetaRefreshAt = System.currentTimeMillis()
+        if (success) lastMetaRefreshSuccessAt = now else lastMetaRefreshFailedAt = now
         success
     }
 

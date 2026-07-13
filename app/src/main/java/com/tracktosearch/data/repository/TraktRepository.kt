@@ -139,8 +139,9 @@ class TraktRepository @Inject constructor(
                     ids
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                // 网络失败时不写入缓存(避免缓存空对象掩盖真实状态),向上抛出让调用方决定重试或提示
                 Log.w("TraktRepo", "loadWatchlistWatchedIds failed: ${e.message}")
-                WatchlistWatchedIds()
+                throw e
             }
         }
     }
@@ -1005,7 +1006,7 @@ class TraktRepository @Inject constructor(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -1172,7 +1173,7 @@ class TraktRepository @Inject constructor(
             }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }

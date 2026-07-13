@@ -147,9 +147,10 @@ object DoubanSpider {
             ?.takeIf { it.isNotEmpty() }
             ?: doc.selectFirst("#mainpic img")?.absUrl("src")?.takeIf { it.isNotEmpty() }
 
-        // IMDb ID 在 <span class="pl">IMDb:</span> 后面的文本节点
+        // IMDb ID 在 <span class="pl">IMDb:</span> 后面的文本节点（可能含附属文本如"tt39528392（主）"，用正则精确提取）
         val imdbId = doc.select("span.pl").firstOrNull { it.text().contains("IMDb") }
-            ?.nextSibling()?.toString()?.trim()?.takeIf { it.startsWith("tt") }
+            ?.nextSibling()?.toString()?.trim()
+            ?.let { Regex("tt\\d+").find(it)?.value }
 
         // 上映年份：优先 <span class="year">(2023)</span>，其次 h1 标题里的 (YYYY)
         val year = doc.selectFirst("span.year")?.text()

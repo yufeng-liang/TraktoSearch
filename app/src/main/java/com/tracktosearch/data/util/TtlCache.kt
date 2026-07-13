@@ -36,8 +36,12 @@ open class TtlCache<T>(
             cache.remove(key)
             return null
         }
-        // 更新访问时间（LRU）
-        cache[key] = entry.copy(accessSeq = accessCounter.incrementAndGet())
+        // 更新访问时间（LRU）—— 用 compute 保护 read-modify-write 原子，
+        // 避免并发读同 key 时 accessSeq 更新丢失导致 LRU 序错乱（#28）
+        val seq = accessCounter.incrementAndGet()
+        cache.compute(key) { _, existing ->
+            if (existing == null) null else existing.copy(accessSeq = seq)
+        }
         return entry.value
     }
 
@@ -78,6 +82,8 @@ open class TtlCache<T>(
         }
         // 尝试注册为飞行中请求的发起者
         val deferred = CompletableDeferred<T>()
+        // fetch lambda 被 cancel 时（即使永远不抛异常也不返回）也能清理 inFlight 槽位（#37）
+        deferred.invokeOnCompletion { inFlightRequests.remove(key, deferred) }
         val existing = inFlightRequests.putIfAbsent(key, deferred)
         if (existing != null) {
             // 已有飞行中请求，等待其结果
@@ -97,6 +103,7 @@ open class TtlCache<T>(
             deferred.completeExceptionally(e)
             throw e
         } finally {
+            // invokeOnCompletion 已处理清理；此处冗余调用安全（remove(key, deferred) 仅在值匹配时删除）
             inFlightRequests.remove(key, deferred)
         }
     }
