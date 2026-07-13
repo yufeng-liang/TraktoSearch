@@ -25,6 +25,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -66,12 +69,16 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
             // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                tmdbRepository.persistentCaches.forEach { it.loadFromDisk() }
-                traktRepository.persistentCaches.forEach { it.loadFromDisk() }
-                doubanHotCache.loadFromDisk()
-                doubanDetailCache.loadFromDisk()
-                doubanIdMappingCache.loadFromDisk()
-                // 海报主色调内存 warmup：消除冷启动 IO，命中即秒进
+                coroutineScope {
+                    val jobs = buildList {
+                        tmdbRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
+                        traktRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
+                        add(async { doubanHotCache.loadFromDisk() })
+                        add(async { doubanDetailCache.loadFromDisk() })
+                        add(async { doubanIdMappingCache.loadFromDisk() })
+                    }
+                    jobs.awaitAll()
+                }
                 posterColorCache.warmUp()
             }
             // 独立协程预热开屏图标到 Coil 内存缓存：按显示尺寸(211dp)降采样解码，

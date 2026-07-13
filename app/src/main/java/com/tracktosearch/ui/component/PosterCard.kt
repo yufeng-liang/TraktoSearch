@@ -18,6 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,7 +74,10 @@ fun PosterCard(
         targetValue = if (isPressed) 0.96f else 1f,
         label = "poster_scale"
     )
-    val model = remember(imageUrl, imageSize, onImageSuccess) {
+    // 用 holder 持有最新 onImageSuccess，避免 lambda 引用变化导致 remember 失效、ImageRequest 重复创建
+    var onImageSuccessRef by remember { mutableStateOf(onImageSuccess) }
+    onImageSuccessRef = onImageSuccess
+    val model = remember(imageUrl, imageSize) {
         if (imageSize != null || onImageSuccess != null) {
             ImageRequest.Builder(context)
                 .data(imageUrl)
@@ -80,7 +85,7 @@ fun PosterCard(
                 .crossfade(false)
                 .listener(
                     onSuccess = { _, result ->
-                        onImageSuccess?.invoke(result.drawable.toBitmap())
+                        onImageSuccessRef?.invoke(result.drawable.toBitmap())
                     }
                 )
                 .build()

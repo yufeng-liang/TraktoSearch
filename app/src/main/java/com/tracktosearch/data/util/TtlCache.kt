@@ -26,6 +26,9 @@ open class TtlCache<T>(
     private val cache = ConcurrentHashMap<String, Entry<T>>()
     private val accessCounter = AtomicLong(0L)
 
+    /** 自上次 trim 后的新增计数，达到阈值才触发排序淘汰，避免每次 put 都全量排序 */
+    private val trimCounter = AtomicLong(0L)
+
     /** 飞行中请求追踪：同一 key 的并发调用共享同一个 CompletableDeferred */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableDeferred<T>>()
 
@@ -55,7 +58,7 @@ open class TtlCache<T>(
     /** 子类专用：用指定 expireAt 写入（如 PersistentTtlCache 从磁盘恢复时保留原始过期时间） */
     protected fun putInternal(key: String, value: T, expireAt: Long) {
         cache[key] = Entry(value, expireAt, accessCounter.incrementAndGet())
-        trimToSize()
+        trimCounter.incrementAndGet()
     }
 
     /** 子类专用：获取 key 的当前 expireAt（用于持久化时保存原始过期时间） */
@@ -119,9 +122,14 @@ open class TtlCache<T>(
         if (maxSize <= 0) return
         val size = cache.size
         if (size <= maxSize) return
-        // 淘汰 accessSeq 最小的条目（最久未访问）
-        val sorted = cache.entries.sortedBy { it.value.accessSeq }
-        val toRemove = sorted.dropLast(maxSize)
+        // 批量化：仅当累积新增达到阈值时才排序淘汰，均摊排序开销
+        val counter = trimCounter.get()
+        val threshold = (maxSize / 4).coerceAtLeast(4)
+        if (counter < threshold && size <= maxSize + threshold) return
+        trimCounter.set(0)
+        val toRemoveCount = (size - maxSize).coerceAtLeast(0)
+        if (toRemoveCount <= 0) return
+        val toRemove = cache.entries.sortedBy { it.value.accessSeq }.take(toRemoveCount)
         toRemove.forEach { cache.remove(it.key) }
     }
 }

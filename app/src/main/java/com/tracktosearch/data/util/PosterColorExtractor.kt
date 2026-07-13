@@ -1,4 +1,4 @@
-package com.tracktosearch.data.util
+﻿package com.tracktosearch.data.util
 
 import android.graphics.Bitmap
 import androidx.palette.graphics.Palette
@@ -24,7 +24,8 @@ class PosterColorExtractor @Inject constructor(
         } else {
             bitmap
         }
-        val palette = Palette.from(safeBitmap).generate()
+        // 降采样：Palette 只统计颜色分布,缩小到 30x30 面积即可,减少 95%+ 像素计算量
+        val palette = Palette.Builder(safeBitmap).resizeBitmapArea(900).generate()
         val argb = palette.getDominantColor(0).toLong()
 
         if (argb != 0L) {

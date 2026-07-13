@@ -4,6 +4,9 @@ import android.util.Log
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
@@ -34,31 +37,14 @@ class CommentTranslator @Inject constructor() {
         val targetLang = getTargetLangCode()
         if (targetLang == "en") return comment
 
-        // 命中缓存则直接返回
         translationCache[comment.id]?.let { cached ->
             return comment.copy(comment = cached)
         }
 
         return withContext(Dispatchers.IO) {
-            try {
-                withTimeoutOrNull(10000) {
-                    var result = translateWithBaiduAI(comment.comment, targetLang)
-                    val isLongText = comment.comment.length > 6000
-                    if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
-
-                    if (!result.isNullOrEmpty() && result != comment.comment) {
-                        translationCache.put(comment.id, result)
-                        comment.copy(comment = result)
-                    } else {
-                        comment
-                    }
-                } ?: run { comment }
-            } catch (e: Exception) {
-                Log.e("CommentTranslator", "Single translation error", e)
-                comment
-            }
-        }
+        translateOneComment(comment, targetLang)
     }
+}
 
     /**
      * 翻译评论列表为目标语言（设备语言）
@@ -70,33 +56,51 @@ class CommentTranslator @Inject constructor() {
         val targetLang = getTargetLangCode()
         if (targetLang == "en") return comments
 
-        return withContext(Dispatchers.IO) {
-            comments.map { comment ->
-                // 命中缓存则直接返回
-                translationCache[comment.id]?.let { cached ->
-                    return@map comment.copy(comment = cached)
-                }
-                try {
-                    withTimeoutOrNull(10000) {
-                        var result = translateWithBaiduAI(comment.comment, targetLang)
-                        val isLongText = comment.comment.length > 6000
-                        if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
+        // 先分离已缓存和未缓存的评论，避免重复翻译
+        val results = arrayOfNulls<TraktComment>(comments.size)
+        val pending = comments.mapIndexedNotNull { index, comment ->
+            val cached = translationCache[comment.id]
+            if (cached != null) {
+                results[index] = comment.copy(comment = cached)
+                null
+            } else index to comment
+        }
+        if (pending.isEmpty()) return results.filterNotNull()
 
-                        if (!result.isNullOrEmpty() && result != comment.comment) {
-                            translationCache.put(comment.id, result)
-                            comment.copy(comment = result)
-                        } else {
-                            comment
-                        }
-                    } ?: run {
-                        comment
+        // 并发翻译未缓存评论：10 条评论从串行 ~100s 降到并发 ~10s
+        return withContext(Dispatchers.IO) {
+            coroutineScope {
+                val deferredList = pending.map { (originIndex, comment) ->
+                    async {
+                        originIndex to translateOneComment(comment, targetLang)
                     }
-                } catch (e: Exception) {
-                    Log.e("CommentTranslator", "Translation error: ${e.message}", e)
-                    comment
+                }
+                deferredList.awaitAll().forEach { (originIndex, translated) ->
+                    results[originIndex] = translated
                 }
             }
+            results.filterNotNull()
         }
+    }
+
+    /** 翻译单条评论（内部复用，供并发调用） */
+    private suspend fun translateOneComment(comment: TraktComment, targetLang: String): TraktComment {
+        return try {
+            withTimeoutOrNull(5000) {
+                var result = translateWithBaiduAI(comment.comment, targetLang)
+                val isLongText = comment.comment.length > 6000
+                if (result.isNullOrEmpty() && !isLongText) result = translateWithBaidu(comment.comment, targetLang)
+
+                if (!result.isNullOrEmpty() && result != comment.comment) {
+                    translationCache.put(comment.id, result)
+                    comment.copy(comment = result)
+                } else comment
+            } ?: comment
+        } catch (e: Exception) {
+            Log.e("CommentTranslator", "Translation error: ${e.message}", e)
+            comment
+        }
+
     }
 
     /** 百度大模型文本翻译 API（AI） */

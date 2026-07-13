@@ -208,29 +208,23 @@ class DetailViewModel @Inject constructor(
 
     companion object {
         private const val CACHE_MAX_SIZE = 3
-        @Volatile
-        private var detailCache = LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true)
+        @Suppress("UNCHECKED_CAST")
+        private val detailCache: MutableMap<Int, CachedDetailData> = java.util.Collections.synchronizedMap(
+            object : java.util.LinkedHashMap<Int, CachedDetailData>(CACHE_MAX_SIZE, 0.75f, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, CachedDetailData>?): Boolean = size > CACHE_MAX_SIZE
+            }
+        )
 
         private fun cachePut(key: Int, value: CachedDetailData) {
-            synchronized(detailCache) {
-                detailCache[key] = value
-                while (detailCache.size > CACHE_MAX_SIZE) {
-                    val eldest = detailCache.keys.first()
-                    detailCache.remove(eldest)
-                }
-            }
+            detailCache[key] = value  // removeEldestEntry auto-evict
         }
 
-        private suspend fun cacheGet(key: Int): CachedDetailData? {
-            synchronized(detailCache) {
-                return detailCache[key]
-            }
+        private fun cacheGet(key: Int): CachedDetailData? {
+            return detailCache[key]
         }
 
         private fun cacheRemove(key: Int) {
-            synchronized(detailCache) {
-                detailCache.remove(key)
-            }
+            detailCache.remove(key)
         }
 
         data class CachedDetailData(
