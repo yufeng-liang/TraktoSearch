@@ -1,6 +1,6 @@
 package com.tracktosearch.ui.screen.statistics
 
-import android.os.WorkerThread
+import androidx.annotation.WorkerThread
 import com.huaban.analysis.jieba.JiebaSegmenter
 import com.huaban.analysis.jieba.SegMode
 
@@ -25,7 +25,7 @@ object ReviewTokenizer {
                 "从", "到", "上", "下", "中", "个", "之", "其", "此", "等", "要", "会",
                 "能", "可以", "没有", "不是", "还是", "但是", "因为", "所以", "如果", "虽然",
                 "这个", "那个", "一个", "一些", "我们", "你们", "他们", "自己", "什么", "怎么",
-                "这样", "那样", "已经", "这个",                 "现在", "时候", "觉得", "看", "觉得"
+                "这样", "那样", "已经", "现在", "时候", "觉得", "看"
             )
         )
         // 英文常见停用词

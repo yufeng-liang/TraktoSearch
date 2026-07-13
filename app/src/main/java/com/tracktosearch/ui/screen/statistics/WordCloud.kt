@@ -103,7 +103,6 @@ fun WordCloud(
                     text = placed.word,
                     topLeft = Offset(placed.rect.left, placed.rect.top),
                     style = placed.style,
-                    color = placed.color,
                     softWrap = false,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Visible
                 )
