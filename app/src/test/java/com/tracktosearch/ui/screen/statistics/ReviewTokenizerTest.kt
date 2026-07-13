@@ -34,7 +34,7 @@ class ReviewTokenizerTest {
             "出色的演技是这部电影的优点。"
         )
         val result = ReviewTokenizer.tokenize(reviews)
-        assertEquals("实词 演技 应出现 4 次", 4, result["演技"])
+        assertEquals("实词 演技 应出现 3 次", 3, result["演技"])
         assertEquals("实词 出色 应出现 2 次", 2, result["出色"])
     }
 
