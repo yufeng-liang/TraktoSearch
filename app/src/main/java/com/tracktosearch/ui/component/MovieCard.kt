@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -61,7 +61,8 @@ fun MovieCard(
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
     isInWatchlist: Boolean = false,
-    isWatched: Boolean = false
+    isWatched: Boolean = false,
+    showStatusText: Boolean = true
 ) {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -219,15 +220,10 @@ fun MovieCard(
                     ) {
                         if (isWatched) {
                             Icon(
-                                imageVector = Icons.Rounded.CheckCircle,
+                                imageVector = Icons.Rounded.Visibility,
                                 contentDescription = null,
                                 modifier = Modifier.size(12.dp),
                                 tint = Color.White
-                            )
-                            Text(
-                                text = stringResource(R.string.cd_watched_badge),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                                color = Color.White
                             )
                         } else {
                             Icon(
@@ -236,8 +232,12 @@ fun MovieCard(
                                 modifier = Modifier.size(10.dp),
                                 tint = Color.White
                             )
+                        }
+                        if (showStatusText) {
                             Text(
-                                text = stringResource(R.string.cd_watchlist_badge),
+                                text = stringResource(
+                                    if (isWatched) R.string.cd_watched_badge else R.string.cd_watchlist_badge
+                                ),
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                                 color = Color.White
                             )

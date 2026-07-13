@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
@@ -348,7 +348,7 @@ internal fun DetailHeaderContent(
                             }
                         ),
                         ActionItem(
-                            icon = if (isMarkedWatched) Icons.Rounded.Check else Icons.Rounded.Visibility,
+                            icon = if (isMarkedWatched) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
                             label = stringResource(if (isMarkedWatched) R.string.detail_marked_watched else R.string.detail_mark_watched),
                             selected = isMarkedWatched,
                             enabled = !isMarkingWatched,

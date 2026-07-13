@@ -1134,7 +1134,7 @@
     <string name="discover_trending_day">今日</string>
     <string name="discover_trending_week">本周</string>
     <string name="discover_trending_lists">社区热门列表</string>
-    <string name="discover_list_meta">%d部 · @%s · ❤%d</string>
+    <string name="discover_list_meta">%1$d部 · @%2$s · ❤%3$d</string>
     <string name="discover_list_empty">暂无社区热门列表，稍后再来看看吧~</string>
     <string name="common_view_all">查看全部</string>
 
@@ -1210,8 +1210,8 @@
     <string name="genre_other">其他</string>
 
     <!-- Content Descriptions (Badge) -->
-    <string name="cd_watched_badge">已看过</string>
-    <string name="cd_watchlist_badge">已想看</string>
+    <string name="cd_watched_badge">已看</string>
+    <string name="cd_watchlist_badge">想看</string>
 
     <!-- 影视状态 -->
     <string name="status_released">已上映</string>

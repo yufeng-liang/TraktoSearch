@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
-import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.AlertDialog
@@ -197,27 +197,17 @@ internal fun MovieCard(
                 ) {
                     if (isWatched) {
                         Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
-                            contentDescription = null,
+                            imageVector = Icons.Rounded.Visibility,
+                            contentDescription = stringResource(R.string.cd_watched_badge),
                             modifier = Modifier.size(12.dp),
                             tint = Color.White
-                        )
-                        Text(
-                            text = stringResource(R.string.cd_watched_badge),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                            color = Color.White
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.Bookmark,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.cd_watchlist_badge),
                             modifier = Modifier.size(10.dp),
                             tint = Color.White
-                        )
-                        Text(
-                            text = stringResource(R.string.cd_watchlist_badge),
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                            color = Color.White
                         )
                     }
                 }
