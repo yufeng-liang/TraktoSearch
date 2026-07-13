@@ -224,6 +224,7 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            .hazeSource(state = detailHazeState)
             // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
             // alpha 0.70:增强沉浸效果,让海报主色调更明显
             .then(
