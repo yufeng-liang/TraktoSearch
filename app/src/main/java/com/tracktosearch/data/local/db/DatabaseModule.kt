@@ -156,6 +156,31 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v9 → v10: 新增 user_review 表（本地评分+短评缓存，供详情页优先读取与短评词云复用）
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS user_review (
+                    traktId INTEGER NOT NULL PRIMARY KEY,
+                    tmdbId INTEGER,
+                    imdbId TEXT,
+                    mediaType TEXT NOT NULL,
+                    title TEXT,
+                    year INTEGER,
+                    rating REAL,
+                    comment TEXT,
+                    liked INTEGER,
+                    createdAt INTEGER,
+                    updatedAt INTEGER,
+                    syncedAt INTEGER NOT NULL DEFAULT 0
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_mediaType ON user_review(mediaType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_tmdbId ON user_review(tmdbId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_user_review_imdbId ON user_review(imdbId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -164,7 +189,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tracktosearch.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
             .build()
     }
 
@@ -195,4 +220,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDoubanSyncRollbackDao(db: AppDatabase): DoubanSyncRollbackDao = db.doubanSyncRollbackDao()
+
+    @Provides
+    @Singleton
+    fun provideUserReviewDao(db: AppDatabase): UserReviewDao = db.userReviewDao()
 }
