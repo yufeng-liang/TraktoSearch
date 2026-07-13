@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -229,6 +230,37 @@ fun StatisticsScreen(
                     }
                     SectionCard(title = stringResource(R.string.statistics_heatmap)) {
                         HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
+                    }
+                }
+
+                // 短评词云
+                item(key = "wordcloud") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "wordcloud" }
+                        }
+                    }
+                    SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
+                        if (uiState.wordCloud.isNotEmpty()) {
+                            WordCloud(
+                                words = uiState.wordCloud,
+                                modifier = Modifier.fillMaxWidth().height(220.dp)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.statistics_wordcloud_empty),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -475,7 +507,9 @@ private fun SectionCard(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
             modifier = Modifier

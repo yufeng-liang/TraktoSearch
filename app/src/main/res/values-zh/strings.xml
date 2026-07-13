@@ -1057,6 +1057,8 @@
     <string name="statistics_item_count">%1$s: %2$d 部 (%3$s)</string>
     <string name="statistics_date_count_watched">%1$s · 观看 %2$d 部</string>
     <string name="statistics_date_no_data">%1$s · 无观看记录</string>
+    <string name="statistics_wordcloud">短评词云</string>
+    <string name="statistics_wordcloud_empty">还没有短评，去给喜欢的影视写一句吧</string>
 
     <!-- Content Descriptions -->
     <string name="cd_watched">已看</string>

@@ -1056,6 +1056,8 @@ Config:
     <string name="statistics_item_count">%1$s: %2$d items (%3$s)</string>
     <string name="statistics_date_count_watched">%1$s · Watched %2$d</string>
     <string name="statistics_date_no_data">%1$s · No data</string>
+    <string name="statistics_wordcloud">Review Word Cloud</string>
+    <string name="statistics_wordcloud_empty">No reviews yet — write one for a show you love</string>
     <string name="error_no_data">No data</string>
 
     <!-- Content Descriptions -->

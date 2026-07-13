@@ -949,6 +949,8 @@
     <string name="statistics_item_count">%1$s: %2$d 作品 (%3$s)</string>
     <string name="statistics_date_count_watched">%1$s · %2$d 作品視聴</string>
     <string name="statistics_date_no_data">%1$s · 視聴記録なし</string>
+    <string name="statistics_wordcloud">レビュー単語クラウド</string>
+    <string name="statistics_wordcloud_empty">まだレビューがありません。お気に入りの作品に一言書いてみましょう</string>
 
     <!-- Content Descriptions -->
     <string name="cd_watched">視聴済み</string>

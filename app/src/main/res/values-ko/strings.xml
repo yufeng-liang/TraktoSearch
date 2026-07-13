@@ -949,6 +949,8 @@
     <string name="statistics_item_count">%1$s: %2$d개 (%3$s)</string>
     <string name="statistics_date_count_watched">%1$s · %2$d개 시청</string>
     <string name="statistics_date_no_data">%1$s · 시청 기록 없음</string>
+    <string name="statistics_wordcloud">리뷰 워드 클라우드</string>
+    <string name="statistics_wordcloud_empty">아직 리뷰가 없습니다. 좋아하는 작품에 한 줄을 남겨보세요</string>
 
     <!-- Content Descriptions -->
     <string name="cd_watched">시청함</string>

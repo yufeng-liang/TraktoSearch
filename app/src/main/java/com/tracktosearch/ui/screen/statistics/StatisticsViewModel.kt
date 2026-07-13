@@ -6,11 +6,13 @@ import androidx.compose.runtime.Immutable
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.repository.UserReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.tracktosearch.R
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,6 +38,7 @@ data class StatisticsUiState(
     val totalRatings: Int = 0,
     val averageRating: Double = 0.0,
     val ratingDistribution: Map<Int, Int> = emptyMap(),
+    val wordCloud: List<WordCloudItem> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
@@ -43,6 +46,7 @@ data class StatisticsUiState(
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
+    private val userReviewRepository: UserReviewRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -77,6 +81,21 @@ class StatisticsViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoading = true, error = null)
         loadJob = viewModelScope.launch {
             try {
+                // 短评词云：本地数据，独立于 Trakt 主流程，失败不影响统计主流程
+                viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        val reviews = userReviewRepository.getAllReviews()
+                        val comments = reviews.mapNotNull { it.comment?.takeIf { c -> c.isNotBlank() } }
+                        val freq = ReviewTokenizer.tokenize(comments)
+                        val words = freq.entries
+                            .sortedByDescending { it.value }
+                            .map { WordCloudItem(it.key, it.value) }
+                        _uiState.value = _uiState.value.copy(wordCloud = words)
+                    } catch (_: Exception) {
+                        // 词云加载失败忽略，保持空
+                    }
+                }
+
                 // 5 个 API 并行请求，耗时取决于最慢的那个
                 // 优化点：
                 // 1. getUserStats 替代本地时长/集数求和（服务端已汇总）
@@ -222,6 +241,7 @@ class StatisticsViewModel @Inject constructor(
                     totalRatings = totalRatings,
                     averageRating = averageRating,
                     ratingDistribution = ratingDistribution,
+                    wordCloud = _uiState.value.wordCloud,
                     isLoading = false,
                     error = null
                 )
