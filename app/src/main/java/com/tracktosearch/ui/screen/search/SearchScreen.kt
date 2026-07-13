@@ -459,9 +459,9 @@ fun SearchScreen(
             }
         }
 
-        // 内容区：搜索历史/热门搜索/建议（搜索框获得焦点或有查询时显示）
+        // 内容区：搜索历史/热门搜索/建议（初始位置/获得焦点/有查询时显示）
         AnimatedVisibility(
-            visible = isSearchFocused || searchQuery.isNotEmpty(),
+            visible = isSearchFocused || searchQuery.isNotEmpty() || uiState.searchHistory.isNotEmpty() || hotSearches.isNotEmpty(),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = targetSearchBoxY + contentTopOffset),

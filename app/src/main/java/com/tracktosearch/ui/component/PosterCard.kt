@@ -159,12 +159,11 @@ fun PosterCard(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(6.dp)
                         .background(
                             Color.Black.copy(alpha = 0.5f),
                             RoundedCornerShape(8.dp)
                         )
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .padding(horizontal = 4.dp, vertical = 0.dp)
                 )
             }
         }
