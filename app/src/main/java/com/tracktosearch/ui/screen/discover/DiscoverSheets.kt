@@ -46,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
@@ -57,6 +58,46 @@ import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.MediaType
+
+/** Sheet 内影视卡片：海报 + 下方标题/副标题 */
+@Composable
+private fun SheetMediaCard(
+    imageUrl: String?,
+    title: String,
+    subtitle: String? = null,
+    year: String? = null,
+    rating: Double? = null,
+    onClick: () -> Unit
+) {
+    Column(modifier = Modifier.clickable(onClick = onClick)) {
+        PosterCard(
+            imageUrl = imageUrl,
+            title = title,
+            year = year,
+            rating = rating,
+            onClick = null
+        )
+        Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
 
 /** TMDB 电影全部弹窗（分页加载） */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -143,7 +184,7 @@ internal fun TmdbAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, movie -> "all_tmdb_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                    PosterCard(
+                    SheetMediaCard(
                         imageUrl = movie.poster_path?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
                         year = movie.release_date.take(4),
@@ -232,7 +273,7 @@ internal fun TraktMovieAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, movie -> "all_trakt_${index}_${movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
-                    PosterCard(
+                    SheetMediaCard(
                         imageUrl = movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
                         year = if (movie.year > 0) movie.year.toString() else "",
@@ -306,7 +347,7 @@ internal fun TraktShowAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(items, key = { index, show -> "all_trakt_show_${index}_${show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, show ->
-                    PosterCard(
+                    SheetMediaCard(
                         imageUrl = show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = show.title,
                         year = if (show.year > 0) show.year.toString() else "",
@@ -370,18 +411,20 @@ internal fun TraktAnticipatedAllSheet(
             ) {
                 // 先展示电影，再展示剧集
                 itemsIndexed(anticipatedMovies, key = { index, item -> "all_anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                    PosterCard(
+                    SheetMediaCard(
                         imageUrl = item.movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.movie.title,
+                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
                         year = if (item.movie.year > 0) item.movie.year.toString() else "",
                         rating = if (item.movie.rating > 0) item.movie.rating else null,
                         onClick = { onMovieClick(item.movie) }
                     )
                 }
                 itemsIndexed(anticipatedShows, key = { index, item -> "all_anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
-                    PosterCard(
+                    SheetMediaCard(
                         imageUrl = item.show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.show.title,
+                        subtitle = stringResource(R.string.discover_list_count, item.list_count),
                         year = if (item.show.year > 0) item.show.year.toString() else "",
                         rating = if (item.show.rating > 0) item.show.rating else null,
                         onClick = { onShowClick(item.show) }

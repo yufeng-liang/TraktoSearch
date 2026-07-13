@@ -187,7 +187,6 @@ fun SettingsScreen(
     val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
-    val statisticsCount by viewModel.statisticsCount.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
     // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
     var showConsistencyConfirm by remember { mutableStateOf(false) }
@@ -433,7 +432,6 @@ fun SettingsScreen(
                 } else { Modifier }
                 StatisticsCard(
                     modifier = statisticsEntryModifier,
-                    count = statisticsCount,
                     onClick = onStatisticsClick
                 )
             }

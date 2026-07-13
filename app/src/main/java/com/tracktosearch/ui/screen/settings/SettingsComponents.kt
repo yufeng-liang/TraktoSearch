@@ -614,15 +614,12 @@ internal fun SearchSourceAddCard(
 }
 
 /**
- * 观看统计大卡片：左侧图标放在主题色浅色背景方块中，右侧显示统计数字与描述。
+ * 观看统计大卡片：左侧图标放在主题色浅色背景方块中，右侧显示描述。
  * 作为设置页第一位置，无类目 Header。
- *
- * @param count 已看影片/剧集数量，用于入口数字展示。
  */
 @Composable
 internal fun StatisticsCard(
     modifier: Modifier = Modifier,
-    count: Int,
     onClick: () -> Unit
 ) {
     val view = LocalView.current
@@ -667,15 +664,6 @@ internal fun StatisticsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = count.toString(),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,

@@ -157,7 +157,6 @@
     <string name="detail_searching_info">%1$d/%2$d sources completed</string>
     <string name="detail_no_resources">No cloud resources found</string>
     <string name="detail_retry">Retry</string>
-    <string name="detail_found_resources">Found %1$d resources</string>
     <string name="detail_load_more">Load more (%1$d/%2$d)</string>
     <string name="detail_all_loaded">All %1$d shown</string>
     <string name="detail_disk_type_quark">Quark</string>

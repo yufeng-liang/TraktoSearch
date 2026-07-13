@@ -190,7 +190,6 @@ object DiscoverFilterConstants {
     fun decadeOptions(currentYear: Int): List<DecadeOption> {
         val list = mutableListOf<DecadeOption>()
         list.add(DecadeOption(0, 0, specialLabelRes = R.string.discover_filter_decade_all))
-        list.add(DecadeOption(2020, 2029))
         // 2026、2025、2024、2023、2022、2021、2020、2019
         for (y in currentYear downTo 2019) {
             list.add(DecadeOption(y, y))

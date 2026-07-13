@@ -3,6 +3,7 @@ package com.tracktosearch.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -123,14 +124,19 @@ fun GlassSearchBar(
                 interactionSource = interactionSource,
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary)
             ) { innerTextField ->
-                if (value.isEmpty()) {
-                    Text(
-                        text = placeholder,
-                        color = hintColor,
-                        fontSize = 14.sp
-                    )
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = hintColor,
+                            fontSize = 14.sp
+                        )
+                    }
+                    innerTextField()
                 }
-                innerTextField()
             }
         } else {
             Text(

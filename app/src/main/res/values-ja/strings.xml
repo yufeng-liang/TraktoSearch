@@ -390,7 +390,6 @@
     <string name="detail_searching">クラウドリソースを検索中…</string>
     <string name="detail_searching_info">%1$d/%2$d ソース完了</string>
     <string name="detail_no_resources">クラウドリソースが見つかりません</string>
-    <string name="detail_found_resources">%1$d 個のリソースが見つかりました</string>
     <string name="detail_load_more">さらに読み込む (%1$d/%2$d)</string>
     <string name="detail_all_loaded">全 %1$d 件表示中</string>
     <string name="detail_disk_type_quark">Quark</string>

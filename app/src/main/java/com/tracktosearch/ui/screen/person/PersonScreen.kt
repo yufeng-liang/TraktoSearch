@@ -96,6 +96,15 @@ fun PersonScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        uiState.avatarDominantColor?.copy(alpha = 0.70f)
+                            ?: MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.background
+                    )
+                )
+            )
         ) {
             when {
                 uiState.isLoading && profileUrl.isNullOrBlank() -> {
@@ -113,22 +122,6 @@ fun PersonScreen(
                     }
                 }
                 else -> {
-                    // 顶部渐变背景（从头像主色过渡到透明）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(220.dp)
-                            .align(Alignment.TopCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        uiState.avatarDominantColor ?: MaterialTheme.colorScheme.surface,
-                                        Color.Transparent
-                                    )
-                                )
-                            )
-                    )
-
                     LazyColumn(
                         state = listState,
                         modifier = Modifier

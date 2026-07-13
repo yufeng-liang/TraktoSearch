@@ -63,6 +63,7 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -1300,7 +1301,7 @@ private fun WatchlistPosterCard(
                 ) {
                     if (isWatched) {
                         Icon(
-                            imageVector = Icons.Rounded.CheckCircle,
+                            imageVector = Icons.Rounded.Visibility,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
                             tint = Color.White
@@ -1391,17 +1392,16 @@ private fun WatchlistPosterCard(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 1.dp)
         )
         if (item.genres.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = item.genres,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 4.dp)
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
             )
         }
     }

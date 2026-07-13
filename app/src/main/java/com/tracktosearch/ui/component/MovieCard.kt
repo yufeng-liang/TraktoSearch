@@ -262,24 +262,23 @@ fun MovieCard(
                     )
                 }
             }
-            Column(
-                modifier = Modifier.padding(6.dp)
-            ) {
+            Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 1.dp)
                 )
                 if (genres.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = genres,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp)
                     )
                 }
             }

@@ -265,20 +265,12 @@ fun DetailScreen(
                 else -> MaterialTheme.colorScheme.onSurface
             }
 
-            // 吸顶时状态栏区域使用毛玻璃背景,非吸顶透明(透出渐变)
+            // 吸顶时状态栏区域背景与 tabContainerColor 一致,非吸顶透明(透出渐变)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .windowInsetsTopHeight(WindowInsets.statusBars)
-                    .then(
-                        if (isPinned) {
-                            Modifier.hazeEffect(
-                                state = detailHazeState,
-                                style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
-                            )
-                        } else Modifier
-                    )
-                    .background(Color.Transparent)
+                    .background(tabContainerColor)
                     .align(Alignment.TopCenter)
             )
 
@@ -349,26 +341,13 @@ fun DetailScreen(
                 if (effectiveTab != selectedTab) selectedTab = effectiveTab
                 stickyHeader(key = "tab_row") {
                     // isPinned / tabContainerColor / tabContentColor 在 LazyColumn 外已计算
-                    // 吸顶时 Tab 栏使用毛玻璃背景，indicator 保持主题色
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .then(
-                                if (isPinned) {
-                                    Modifier.hazeEffect(
-                                        state = detailHazeState,
-                                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
-                                    )
-                                } else Modifier
-                            )
-                            .background(Color.Transparent)
+                    // 吸顶时 Tab 栏使用实色背景,indicator 保持主题色
+                    PrimaryTabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = tabContainerColor,
+                        contentColor = tabContentColor,
+                        modifier = Modifier.alpha(contentAlpha)
                     ) {
-                        PrimaryTabRow(
-                            selectedTabIndex = selectedTab,
-                            containerColor = Color.Transparent,
-                            contentColor = tabContentColor,
-                            modifier = Modifier.alpha(contentAlpha)
-                        ) {
                             Tab(
                                 selected = selectedTab == 0,
                                 onClick = { view.performHaptic(HapticType.CLICK); selectedTab = 0 },
@@ -391,7 +370,6 @@ fun DetailScreen(
                             }
                         }
                     }
-                }
 
                 // ===== 资源 Tab 内容 =====
                 if (selectedTab == 0) {
@@ -433,14 +411,6 @@ fun DetailScreen(
                             }
                         }
                         else -> {
-                            item(key = "resource_count") {
-                                Text(
-                                    text = stringResource(R.string.detail_found_resources, items.size),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = androidx.compose.material3.LocalContentColor.current,
-                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
-                                )
-                            }
                             itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }, contentType = { _, _ -> "resource" }) { index, item ->
                                 ResourceItemCard(
                                     item = item,

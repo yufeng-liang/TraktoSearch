@@ -42,6 +42,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.OpenInBrowser
@@ -50,6 +53,8 @@ import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -127,6 +132,8 @@ import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.ui.component.ActionButtonRow
+import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
@@ -964,6 +971,7 @@ fun DoubanItemDetailScreen(
                             DoubanWritebackActions(
                                 failure = failure,
                                 marking = uiState.marking,
+                                hazeState = hazeState,
                                 onWish = { viewModel.markWish() },
                                 onCollect = { viewModel.markCollect() },
                                 onRemove = { showRemoveConfirm = true }
@@ -1007,7 +1015,7 @@ fun DoubanItemDetailScreen(
                                 },
                                 text = {
                                     Text(
-                                        stringResource(R.string.screen_douban_item_detail_tab_resources),
+                                        "${stringResource(R.string.screen_douban_item_detail_tab_resources)}(${uiState.searchResults.size})",
                                         maxLines = 1
                                     )
                                 }
@@ -1052,21 +1060,6 @@ fun DoubanItemDetailScreen(
                                     }
                                 }
                                 else -> {
-                                    item(key = "resource_count") {
-                                        Text(
-                                            text = stringResource(
-                                                R.string.detail_found_resources,
-                                                uiState.searchResults.size
-                                            ),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(
-                                                start = 16.dp,
-                                                end = 16.dp,
-                                                bottom = 4.dp
-                                            )
-                                        )
-                                    }
                                     itemsIndexed(
                                         items = uiState.searchResults,
                                         key = { _, item -> item.url },
@@ -1517,11 +1510,14 @@ fun DoubanItemDetailScreen(
  * 提供「想看 / 已看 / 取消」三个动作;电影无「在看」故不显示。
  * 当前已标记状态:对应按钮显示"已想看"/"已看过"(选中态),点击不触发操作;
  * 取消标记按钮使用红色警示态。
+ * 样式与详情页 ActionButtonRow 统一。
  */
+@OptIn(dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun DoubanWritebackActions(
     failure: DoubanSyncFailure,
     marking: Boolean,
+    hazeState: dev.chrisbanes.haze.HazeState,
     onWish: () -> Unit,
     onCollect: () -> Unit,
     onRemove: () -> Unit
@@ -1529,58 +1525,44 @@ private fun DoubanWritebackActions(
     val status = failure.status
     val isWish = status == DoubanMarkStatus.WISH
     val isCollect = status == DoubanMarkStatus.COLLECT
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            text = stringResource(R.string.douban_writeback_title),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
         )
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = stringResource(R.string.douban_writeback_title),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilterChip(
+        ActionButtonRow(
+            actions = listOf(
+                ActionItem(
+                    icon = if (isWish) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                    label = stringResource(if (isWish) R.string.douban_writeback_wished else R.string.douban_writeback_wish),
                     selected = isWish,
-                    onClick = { if (!isWish) onWish() },
                     enabled = !marking,
-                    label = { Text(stringResource(if (isWish) R.string.douban_writeback_wished else R.string.douban_writeback_wish)) },
-                    leadingIcon = if (isWish) {
-                        { Icon(Icons.Rounded.Star, contentDescription = null, modifier = Modifier.size(16.dp)) }
-                    } else null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                FilterChip(
+                    isLoading = marking && isWish,
+                    onClick = { if (!isWish) onWish() }
+                ),
+                ActionItem(
+                    icon = if (isCollect) Icons.Rounded.Visibility else Icons.Rounded.VisibilityOff,
+                    label = stringResource(if (isCollect) R.string.douban_writeback_collected else R.string.douban_writeback_collect),
                     selected = isCollect,
-                    onClick = { if (!isCollect) onCollect() },
                     enabled = !marking,
-                    label = { Text(stringResource(if (isCollect) R.string.douban_writeback_collected else R.string.douban_writeback_collect)) }
+                    isLoading = marking && isCollect,
+                    onClick = { if (!isCollect) onCollect() }
+                ),
+                ActionItem(
+                    icon = Icons.Rounded.Delete,
+                    label = stringResource(R.string.douban_writeback_remove),
+                    enabled = !marking,
+                    isLoading = marking && !isWish && !isCollect,
+                    isDestructive = true,
+                    onClick = onRemove
                 )
-                Spacer(modifier = Modifier.weight(1f))
-                OutlinedButton(
-                    onClick = onRemove,
-                    enabled = !marking,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    ),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
-                ) {
-                    if (marking) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(stringResource(R.string.douban_writeback_remove))
-                    }
-                }
-            }
-        }
+            ),
+            hazeState = hazeState,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 

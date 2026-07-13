@@ -881,7 +881,10 @@ private fun GlassFilterChip(
 ) {
     val baseModifier = modifier
         .clip(RoundedCornerShape(16.dp))
-        .background(if (selected) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = 0.08f))
+        .background(
+            if (selected) MaterialTheme.colorScheme.primary
+            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+        )
         .clickable(onClick = onClick)
         .padding(horizontal = 12.dp, vertical = 6.dp)
 
@@ -898,7 +901,7 @@ private fun GlassFilterChip(
     ) {
         Text(
             text = text,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.9f),
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
             style = MaterialTheme.typography.labelLarge,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

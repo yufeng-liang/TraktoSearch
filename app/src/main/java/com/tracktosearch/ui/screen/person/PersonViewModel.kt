@@ -24,7 +24,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -176,7 +175,6 @@ class PersonViewModel @Inject constructor(
                 onSuccess = { _, result ->
                     val bitmap = result.drawable.toBitmap()
                     viewModelScope.launch {
-                        delay(1500)
                         val argb = posterColorExtractor.extractDominantColor(avatarUrl, bitmap)
                         if (argb != 0L) {
                             _uiState.value = _uiState.value.copy(avatarDominantColor = Color(argb))

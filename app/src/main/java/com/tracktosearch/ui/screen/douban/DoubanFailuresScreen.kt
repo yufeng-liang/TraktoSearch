@@ -66,7 +66,9 @@ import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SelectAll
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Tv
@@ -149,6 +151,7 @@ import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.ImportResult
+import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -1421,8 +1424,17 @@ private fun FailureCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    Card(
+    // 处理 title 中包含 / 的中英文名分隔(如 "盗梦空间/Inception")
+    // 主标题取 / 前面;子标题优先用已有 subtitle,为空时取 / 后面
+    val titleContainsSlash = failure.title.contains("/")
+    val displayTitle = if (titleContainsSlash) failure.title.substringBefore("/") else failure.title
+    val displaySubtitle = when {
+        !failure.subtitle.isNullOrBlank() -> failure.subtitle
+        titleContainsSlash -> failure.title.substringAfter("/", "").takeIf { it.isNotEmpty() }
+        else -> null
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
@@ -1430,149 +1442,114 @@ private fun FailureCard(
                 indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick
-            ),
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            )
     ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
-            ) {
-                val posterUrl = failure.posterUrl
-                if (!posterUrl.isNullOrBlank()) {
-                    val imageRequest = remember(posterUrl) {
-                        ImageRequest.Builder(context)
-                            .data(posterUrl)
-                            .size(264)
-                            .crossfade(false)
-                            .build()
-                    }
-                    AsyncImage(
-                        model = imageRequest,
-                        contentDescription = failure.title,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    // 无海报时显示标题首两字符占位
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = failure.title.take(2),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                // 用户评分角标(左上角):5 分制转★显示
-                failure.rating?.let { rating ->
-                    val stars = buildString {
-                        repeat(5) { i ->
-                            append(if (i < rating) "★" else "☆")
-                        }
-                    }
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xCC000000)
-                    ) {
-                        Text(
-                            text = stars,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color(0xFFFFC107),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                // 豆瓣评分角标(右上角):10 分制数字
-                doubanRating?.let { rating ->
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xCC000000)
-                    ) {
-                        Text(
-                            text = String.format("%.1f", rating),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color(0xFFFFC107),
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                // 豆瓣标记时间(左下角)
-                if (failure.markedAt.isNotBlank()) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xCC000000)
-                    ) {
-                        Text(
-                            text = failure.markedAt,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-            }
-
-            // 标题区
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 5.dp, vertical = 4.dp)
-            ) {
-                // 处理 title 中包含 / 的中英文名分隔(如 "盗梦空间/Inception")
-                // 主标题取 / 前面;子标题优先用已有 subtitle,为空时取 / 后面
-                val titleContainsSlash = failure.title.contains("/")
-                val displayTitle = if (titleContainsSlash) failure.title.substringBefore("/") else failure.title
-                val displaySubtitle = when {
-                    !failure.subtitle.isNullOrBlank() -> failure.subtitle
-                    titleContainsSlash -> failure.title.substringAfter("/", "").takeIf { it.isNotEmpty() }
-                    else -> null
-                }
-                Text(
-                    text = displayTitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        Box(modifier = Modifier.fillMaxWidth()) {
+            if (!failure.posterUrl.isNullOrBlank()) {
+                PosterCard(
+                    imageUrl = failure.posterUrl,
+                    title = displayTitle,
+                    year = null,
+                    rating = null,
+                    onClick = null,
+                    onLongClick = null,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                if (!displaySubtitle.isNullOrBlank()) {
+            } else {
+                // 无海报时显示标题首两字符占位
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = displaySubtitle,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = displayTitle.take(2),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 }
             }
+
+            // 用户评分角标(左上角)
+            failure.rating?.let { rating ->
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xCC000000))
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(11.dp),
+                        tint = Color(0xFFFFC107)
+                    )
+                    Text(
+                        text = "$rating",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = Color(0xFFFFC107)
+                    )
+                }
+            }
+
+            // 豆瓣评分角标(右上角)
+            doubanRating?.let { rating ->
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xCC000000))
+                        .padding(horizontal = 5.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Star,
+                        contentDescription = null,
+                        modifier = Modifier.size(11.dp),
+                        tint = Color(0xFFFFC107)
+                    )
+                    Text(
+                        text = String.format("%.1f", rating),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = Color(0xFFFFC107)
+                    )
+                }
+            }
+        }
+
+        // 标题区(与 Watchlist/MovieCard 统一,间距收紧)
+        Text(
+            text = displayTitle,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 1.dp)
+        )
+        if (!displaySubtitle.isNullOrBlank()) {
+            Text(
+                text = displaySubtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp)
+            )
         }
     }
 }

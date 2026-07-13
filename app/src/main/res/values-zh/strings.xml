@@ -138,7 +138,7 @@
     <string name="detail_douban_sync_id_not_ready">豆瓣ID未就绪，可重试</string>
     <string name="detail_douban_sync_retry">重试豆瓣同步</string>
     <string name="detail_marked_watched">已看过</string>
-    <string name="detail_mark_watched">标记已看</string>
+    <string name="detail_mark_watched">已看</string>
     <string name="detail_mark_watched_title">选择要标记已看的集</string>
     <string name="detail_loading_episodes">加载剧集中…</string>
     <string name="detail_mark_watchlist">想看</string>
@@ -157,7 +157,6 @@
     <string name="detail_searching_info">%1$d/%2$d 源已完成</string>
     <string name="detail_no_resources">未找到网盘资源</string>
     <string name="detail_retry">重试</string>
-    <string name="detail_found_resources">找到 %1$d 个资源</string>
     <string name="detail_load_more">继续滑动加载更多 (%1$d/%2$d)</string>
     <string name="detail_all_loaded">已显示全部 %1$d 个</string>
     <string name="detail_disk_type_quark">夸克</string>

@@ -61,19 +61,23 @@ fun ActionButtonRow(
                 label = "action_button_scale"
             )
             val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
-            val bg = if (action.selected) {
+            val bg = if (action.isDestructive) {
+                MaterialTheme.colorScheme.errorContainer
+            } else if (action.selected) {
                 MaterialTheme.colorScheme.primary
             } else if (isLight) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
             } else {
                 Color.White.copy(alpha = 0.08f)
             }
-            val contentColor = if (action.selected) {
+            val contentColor = if (action.isDestructive) {
+                MaterialTheme.colorScheme.error
+            } else if (action.selected) {
                 MaterialTheme.colorScheme.onPrimary
             } else {
                 MaterialTheme.colorScheme.onSurface
             }
-            val shadow = if (action.selected) 8.dp else 0.dp
+            val shadow = if (action.selected && !action.isDestructive) 8.dp else 0.dp
             val hazeStyle = if (action.selected || isLight) {
                 null
             } else {
@@ -141,5 +145,6 @@ data class ActionItem(
     val selected: Boolean = false,
     val enabled: Boolean = true,
     val isLoading: Boolean = false,
+    val isDestructive: Boolean = false,
     val onClick: () -> Unit
 )
