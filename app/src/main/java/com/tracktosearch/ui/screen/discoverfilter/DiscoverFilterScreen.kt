@@ -638,7 +638,7 @@ private fun DiscoverFilterListItem(
         Brush.horizontalGradient(
             colors = listOf(
                 color.copy(alpha = 0.65f),
-                MaterialTheme.colorScheme.surface
+                MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }

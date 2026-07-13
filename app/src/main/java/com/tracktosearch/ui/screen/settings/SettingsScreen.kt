@@ -884,7 +884,7 @@ fun SettingsScreen(
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                     Text(
                         text = stringResource(R.string.settings_title),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )

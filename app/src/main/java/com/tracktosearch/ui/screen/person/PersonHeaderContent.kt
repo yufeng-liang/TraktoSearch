@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -72,13 +73,23 @@ internal fun PersonHeaderContent(
     wikipediaUrl: String? = null,
     originalName: String? = null,
     traktPerson: Any? = null,
-    isLoadingTrakt: Boolean = true
+    isLoadingTrakt: Boolean = true,
+    avatarDominantColor: androidx.compose.ui.graphics.Color? = null
 ) {
     val skeletonColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
     val context = LocalContext.current
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
     var showFullBio by remember { mutableStateOf(false) }
+
+    // 根据头像主色调亮度自适应文字颜色，增强沉浸背景下的可读性
+    // 亮色主色 → 深色文字；暗色主色 → 浅色文字；无主色 → 回退主题色
+    val onImmersiveColor = avatarDominantColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+    } ?: MaterialTheme.colorScheme.onSurface
+    val onImmersiveVariantColor = avatarDominantColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.72f)
+    } ?: MaterialTheme.colorScheme.onSurfaceVariant
 
     // 计算年龄数值
     val ageInfo = remember(birthday, deathday) {
@@ -243,7 +254,7 @@ internal fun PersonHeaderContent(
                 text = name,
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = onImmersiveColor,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -265,7 +276,7 @@ internal fun PersonHeaderContent(
             Text(
                 text = originalName,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = onImmersiveVariantColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -302,7 +313,7 @@ internal fun PersonHeaderContent(
             Text(
                 text = metaItems.joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = onImmersiveVariantColor,
                 textAlign = TextAlign.Center,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,

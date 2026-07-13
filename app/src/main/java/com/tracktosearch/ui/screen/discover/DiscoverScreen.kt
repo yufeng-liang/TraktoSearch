@@ -651,7 +651,7 @@ fun DiscoverScreen(
                 ) {
                     Text(
                         text = stringResource(R.string.discover_title),
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )

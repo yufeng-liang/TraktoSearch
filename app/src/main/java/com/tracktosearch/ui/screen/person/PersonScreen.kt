@@ -152,7 +152,8 @@ fun PersonScreen(
                                 wikipediaUrl = uiState.traktPerson?.social_ids?.wikipedia,
                                 originalName = uiState.originalName,
                                 traktPerson = uiState.traktPerson,
-                                isLoadingTrakt = uiState.isLoadingTrakt
+                                isLoadingTrakt = uiState.isLoadingTrakt,
+                                avatarDominantColor = uiState.avatarDominantColor
                             )
                         }
 

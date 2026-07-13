@@ -647,7 +647,7 @@ fun WatchlistScreen(
                                 val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
                                 val watchedLabel = stringResource(R.string.watchlist_mode_watched)
                                 val isWatchlist = selectedMode == 0
-                                val tabPadding = 20.dp
+                                val tabPadding = 12.dp
                                 val textMeasurer = rememberTextMeasurer()
                                 val watchlistTextWidthPx = remember(watchlistLabel) {
                                     textMeasurer.measure(

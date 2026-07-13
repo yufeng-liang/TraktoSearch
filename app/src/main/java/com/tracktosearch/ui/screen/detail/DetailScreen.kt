@@ -243,14 +243,14 @@ fun DetailScreen(
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
             // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
-            //   alpha 0.85:微微半透明,让下方 Haze source 内容透出,使返回/分享按钮的 Haze 模糊生效
+            //   不透明:tab 吸顶后使用实色底色,不与下方内容透叠
             val isPinned by remember {
                 derivedStateOf { listState.firstVisibleItemIndex >= 1 }
             }
             val tabContainerColor = if (isPinned) {
                 uiState.posterDominantColor?.let { c ->
-                    lerp(MaterialTheme.colorScheme.background, c, 0.635f).copy(alpha = 0.85f)
-                } ?: MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                    lerp(MaterialTheme.colorScheme.background, c, 0.635f)
+                } ?: MaterialTheme.colorScheme.surface
             } else {
                 Color.Transparent
             }
