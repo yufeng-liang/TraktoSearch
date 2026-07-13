@@ -50,7 +50,8 @@ data class ConsistencyCheckResult(
     val delayInfo: DelayInfo? = null,  // 豆瓣反爬延迟信息
     val cookieExpired: Boolean = false,
     val isComplete: Boolean = false,
-    val startTimeMs: Long = 0
+    val startTimeMs: Long = 0,
+    val isCancelling: Boolean = false  // true=用户已点击取消,正在停止中的中间态
 )
 
 /**
@@ -119,6 +120,13 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     fun cancel() {
         cancelled = true
         checkJob?.cancel()
+        // 同步更新 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
+        _checkProgress.value = _checkProgress.value.copy(
+            isCancelling = true,
+            phase = "正在取消...",
+            subPhase = "",
+            delayInfo = null
+        )
     }
 
     /** 重置进度状态（完成后调用，避免 StateFlow 旧值 isComplete=true 导致重复弹窗） */

@@ -227,6 +227,7 @@
     <string name="douban_login_notification_rationale">后台同步需要通知权限以显示进度，请授予</string>
     <string name="douban_sync_title">豆瓣标记同步</string>
     <string name="douban_sync_complete">同步完成</string>
+    <string name="douban_sync_cancelling">正在取消...</string>
     <string name="douban_sync_cancel">取消</string>
     <string name="douban_sync_background">转后台</string>
     <string name="douban_sync_relogin">重新登录</string>
@@ -733,6 +734,7 @@
     <string name="settings_douban_status_consistency_done">发现冲突 %1$d 项，Trakt 更新 %2$d 项，豆瓣更新 %3$d 项</string>
     <string name="consistency_check_title">状态一致性检查</string>
     <string name="consistency_check_background">转后台</string>
+    <string name="consistency_check_cancelling">正在取消...</string>
     <string name="consistency_check_cancel">取消</string>
     <string name="consistency_check_complete_banner">检查完成</string>
     <string name="consistency_check_phase_crawl">爬取豆瓣列表</string>

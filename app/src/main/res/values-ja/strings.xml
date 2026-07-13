@@ -138,6 +138,7 @@
     <string name="douban_login_notification_rationale">バックグラウンド同期に通知権限が必要です。付与してください</string>
     <string name="douban_sync_title">豆瓣マーク同期</string>
     <string name="douban_sync_complete">同期完了</string>
+    <string name="douban_sync_cancelling">キャンセル中...</string>
     <string name="douban_sync_cancel">キャンセル</string>
     <string name="douban_sync_background">バックグラウンド</string>
     <string name="douban_sync_relogin">再ログイン</string>
@@ -628,6 +629,7 @@
     <string name="settings_douban_status_consistency_done">衝突 %1$d件、Trakt更新 %2$d件、豆瓣更新 %3$d件</string>
     <string name="consistency_check_title">状態一貫性チェック</string>
     <string name="consistency_check_background">バックグラウンド</string>
+    <string name="consistency_check_cancelling">キャンセル中...</string>
     <string name="consistency_check_cancel">キャンセル</string>
     <string name="consistency_check_complete_banner">チェック完了</string>
     <string name="consistency_check_phase_crawl">豆瓣リスト取得中</string>

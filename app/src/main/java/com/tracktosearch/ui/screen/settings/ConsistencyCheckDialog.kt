@@ -172,17 +172,30 @@ fun ConsistencyCheckDialog(
             when {
                 p.isRunning -> {
                     Row {
-                        TextButton(onClick = {
-                            ConsistencyCheckService.start(context)
-                            onBackground()
-                        }) {
+                        TextButton(
+                            // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
+                            enabled = !p.isCancelling,
+                            onClick = {
+                                ConsistencyCheckService.start(context)
+                                onBackground()
+                            }
+                        ) {
                             Text(stringResource(R.string.consistency_check_background))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = {
-                            viewModel.cancelConsistencyCheck()
-                        }) {
-                            Text(stringResource(R.string.consistency_check_cancel))
+                        TextButton(
+                            // 正在取消时禁用取消按钮避免重复调用 + 改文案为"正在取消..."
+                            enabled = !p.isCancelling,
+                            onClick = {
+                                viewModel.cancelConsistencyCheck()
+                            }
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (p.isCancelling) R.string.consistency_check_cancelling
+                                    else R.string.consistency_check_cancel
+                                )
+                            )
                         }
                     }
                 }

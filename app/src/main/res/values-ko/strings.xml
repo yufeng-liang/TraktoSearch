@@ -138,6 +138,7 @@
     <string name="douban_login_notification_rationale">백그라운드 동기화에 알림 권한이 필요합니다. 부여해 주세요</string>
     <string name="douban_sync_title">더우반 마크 동기화</string>
     <string name="douban_sync_complete">동기화 완료</string>
+    <string name="douban_sync_cancelling">취소 중...</string>
     <string name="douban_sync_cancel">취소</string>
     <string name="douban_sync_background">백그라운드</string>
     <string name="douban_sync_relogin">재로그인</string>
@@ -627,7 +628,8 @@
     <string name="settings_douban_status_consistency_checking">확인 중…</string>
     <string name="settings_douban_status_consistency_done">충돌 %1$d건, Trakt 업데이트 %2$d건, 더우반 업데이트 %3$d건</string>
     <string name="consistency_check_title">상태 일관성 확인</string>
-    <string name="consistency_check_background">백그라운드</string>
+    <string name="consistency_check_background">백그라운ด</string>
+    <string name="consistency_check_cancelling">취소 중...</string>
     <string name="consistency_check_cancel">취소</string>
     <string name="consistency_check_complete_banner">확인 완료</string>
     <string name="consistency_check_phase_crawl">더우반 목록 가져오는 중</string>

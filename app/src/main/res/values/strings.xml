@@ -227,6 +227,7 @@
     <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
     <string name="douban_sync_title">Douban Marks Sync</string>
     <string name="douban_sync_complete">Sync Complete</string>
+    <string name="douban_sync_cancelling">Cancelling...</string>
     <string name="douban_sync_cancel">Cancel</string>
     <string name="douban_sync_background">Background</string>
     <string name="douban_sync_relogin">Re-login</string>
@@ -733,6 +734,7 @@ Config:
     <string name="settings_douban_status_consistency_done">Conflicts: %1$d, Trakt updated: %2$d, Douban updated: %3$d</string>
     <string name="consistency_check_title">Status Consistency Check</string>
     <string name="consistency_check_background">Background</string>
+    <string name="consistency_check_cancelling">Cancelling...</string>
     <string name="consistency_check_cancel">Cancel</string>
     <string name="consistency_check_complete_banner">Check complete</string>
     <string name="consistency_check_phase_crawl">Crawling Douban lists</string>

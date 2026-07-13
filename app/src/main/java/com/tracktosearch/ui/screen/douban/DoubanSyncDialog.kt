@@ -423,12 +423,27 @@ fun DoubanSyncDialog(
                 }
                 p.isRunning -> {
                     Row {
-                        TextButton(onClick = {
-                            DoubanSyncService.start(context)
-                            onBackground()
-                        }) { Text(stringResource(R.string.douban_sync_background)) }
+                        TextButton(
+                            // 正在取消时禁用"转后台":避免用户在取消过程中触发前台服务启动导致状态混乱
+                            enabled = !p.isCancelling,
+                            onClick = {
+                                DoubanSyncService.start(context)
+                                onBackground()
+                            }
+                        ) { Text(stringResource(R.string.douban_sync_background)) }
                         Spacer(modifier = Modifier.width(8.dp))
-                        TextButton(onClick = { viewModel.cancel() }) { Text(stringResource(R.string.douban_sync_cancel)) }
+                        TextButton(
+                            // 正在取消时禁用取消按钮避免重复调用 + 改文案为"正在取消..."
+                            enabled = !p.isCancelling,
+                            onClick = { viewModel.cancel() }
+                        ) {
+                            Text(
+                                stringResource(
+                                    if (p.isCancelling) R.string.douban_sync_cancelling
+                                    else R.string.douban_sync_cancel
+                                )
+                            )
+                        }
                     }
                 }
             }

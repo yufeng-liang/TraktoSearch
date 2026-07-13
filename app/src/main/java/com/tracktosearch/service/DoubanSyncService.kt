@@ -79,6 +79,15 @@ class DoubanSyncService : Service() {
         when (intent?.action) {
             ACTION_CANCEL -> {
                 doubanSyncManager.cancel()
+                // 更新通知为"正在取消..."状态(若通知构建失败则直接 stopSelf)
+                try {
+                    val cancellingNotif = buildNotification(
+                        doubanSyncManager.progress.value.current,
+                        doubanSyncManager.progress.value.total,
+                        "正在取消..."
+                    )
+                    getSystemService(NotificationManager::class.java).notify(NOTIF_ID, cancellingNotif)
+                } catch (_: Exception) {}
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -107,7 +116,7 @@ class DoubanSyncService : Service() {
                             stopSelf()
                             return@collectLatest
                         }
-                        if (p.isRunning) {
+                        if (p.isRunning || p.isCancelling) {
                             val notif = buildNotification(p.current, p.total, p.phase)
                             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notif)
                         }
@@ -115,7 +124,8 @@ class DoubanSyncService : Service() {
                 }
             }
         }
-        return START_NOT_STICKY
+        // START_STICKY:系统杀进程后可重启 Service 恢复通知(同步仍在 Application scope 继续运行)
+        return START_STICKY
     }
 
     /** 构建进度通知 */

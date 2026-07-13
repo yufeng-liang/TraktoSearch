@@ -1,5 +1,8 @@
 package com.tracktosearch.data.repository
 
+import android.content.Context
+import android.os.PowerManager
+import android.util.Log
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.TokenStorage
@@ -18,6 +21,7 @@ import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.util.PersistentTtlCache
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,7 +70,8 @@ data class DoubanSyncProgress(
     val currentTitle: String? = null,    // 当前正在处理的条目标题
     val recentFailures: List<DoubanSyncFailure> = emptyList(), // 最近 5 条失败(滚动展示)
     val isRetry: Boolean = false,   // true=重试模式(从失败项数据走,不爬列表)
-    val delayInfo: DelayInfo? = null  // 当前延时信息(豆瓣反爬/重试等待,UI 做倒计时展示)
+    val delayInfo: DelayInfo? = null,  // 当前延时信息(豆瓣反爬/重试等待,UI 做倒计时展示)
+    val isCancelling: Boolean = false  // true=用户已点击取消,正在停止中的中间态
 )
 
 /**
@@ -104,10 +109,14 @@ class DoubanSyncManager @Inject constructor(
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
     private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val tokenStorage: TokenStorage,
-    private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
+    private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
+    @ApplicationContext private val appContext: Context
 ) {
     private val _progress = MutableStateFlow(DoubanSyncProgress())
     val progress: StateFlow<DoubanSyncProgress> = _progress.asStateFlow()
+
+    /** WakeLock:同步期间保持 CPU 唤醒,避免息屏 Doze 模式下网络请求 timeout */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     /** Application scope：同步协程在此运行，Activity/Service 销毁不影响 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -138,12 +147,22 @@ class DoubanSyncManager @Inject constructor(
     /**
      * 取消正在进行的同步。
      *
-     * 取消后异步上传当前进度到云端（pending items + synced items + sync_meta + dirty 详情池），
-     * 这样 B 手机登录同账号选择增量同步时可接续进度，避免全量爬取豆瓣。
-     * 上传失败不阻塞取消流程。
+     * 流程:
+     * 1. 立即更新 progress 为 isCancelling=true + phase="正在取消...",UI 即时响应
+     * 2. 设置 cancelled=true,同步循环在下一个 checkpoint 退出
+     * 3. 异步上传当前进度到云端(pending/synced/sync_meta/dirty 详情池),失败不阻塞取消
+     *
+     * 用户从 UI 点击取消后立即看到"正在取消..."不可再点,同步作业在后台自然退出。
      */
     fun cancel() {
         cancelled = true
+        // 同步状态更新到 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
+        _progress.value = _progress.value.copy(
+            isCancelling = true,
+            phase = "正在取消...",
+            subPhase = "",
+            delayInfo = null
+        )
         // 异步上传当前进度（不阻塞取消，失败只记日志）
         appScope.launch {
             // 等待同步作业退出后再上传，避免 dirtyDetailIds toList/clear 竞态导致数据丢失
@@ -166,6 +185,29 @@ class DoubanSyncManager @Inject constructor(
     fun resetProgress() {
         if (isRunning()) return  // 运行中不重置
         _progress.value = DoubanSyncProgress()
+    }
+
+    /** 同步取消是否已进入正在停止的中间态（UI 用于禁用取消按钮并显示"正在取消..."） */
+    fun isCancelling(): Boolean = _progress.value.isCancelling
+
+    /**
+     * 获取 WakeLock,保持 CPU 唤醒避免息屏 Doze 模式下网络请求 timeout。
+     *
+     * 同步生命周期内(爬列表→详情页→Trakt 写入→一致性检查→云端上传)全程持有,
+     * 比仅 syncBatchToTrakt 阶段持有更可靠：Doze 下任何阶段网络都可能挂死。
+     */
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        val pm = appContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "TrackToSearch:DoubanSync")
+        // 60 分钟超时,避免异常情况下 WakeLock 泄漏(完整同步通常在 10-30 分钟)
+        wakeLock?.acquire(60 * 60 * 1000L)
+    }
+
+    /** 释放 WakeLock */
+    private fun releaseWakeLock() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
     }
 
     /**
@@ -198,6 +240,8 @@ class DoubanSyncManager @Inject constructor(
         if (isRunning()) return false
         cancelled = false
         dirtyDetailIds.clear()
+        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
+        acquireWakeLock()
         syncJob = appScope.launch {
             try {
                 if (!checkTraktAvailable()) return@launch
@@ -206,6 +250,8 @@ class DoubanSyncManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            } finally {
+                releaseWakeLock()
             }
         }
         return true
@@ -222,6 +268,8 @@ class DoubanSyncManager @Inject constructor(
         if (isRunning()) return false
         cancelled = false
         dirtyDetailIds.clear()
+        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
+        acquireWakeLock()
         syncJob = appScope.launch {
             try {
                 if (!checkTraktAvailable()) return@launch
@@ -230,6 +278,8 @@ class DoubanSyncManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            } finally {
+                releaseWakeLock()
             }
         }
         return true
@@ -251,6 +301,8 @@ class DoubanSyncManager @Inject constructor(
         if (isRunning()) return false
         cancelled = false
         dirtyDetailIds.clear()
+        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
+        acquireWakeLock()
         syncJob = appScope.launch {
             try {
                 if (!checkTraktAvailable()) return@launch
@@ -259,6 +311,8 @@ class DoubanSyncManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            } finally {
+                releaseWakeLock()
             }
         }
         return true
@@ -384,6 +438,8 @@ class DoubanSyncManager @Inject constructor(
         if (isRunning()) return false
         cancelled = false
         dirtyDetailIds.clear()
+        // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
+        acquireWakeLock()
         syncJob = appScope.launch {
             try {
                 if (!checkTraktAvailable()) return@launch
@@ -392,6 +448,8 @@ class DoubanSyncManager @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 _progress.value = _progress.value.copy(isRunning = false, isComplete = true, phase = "同步异常: ${e.message}")
+            } finally {
+                releaseWakeLock()
             }
         }
         return true
@@ -565,7 +623,8 @@ class DoubanSyncManager @Inject constructor(
             startTimeMs = startTime,
             etaSeconds = 0,
             recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false
+            isRetry = false,
+            isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -759,7 +818,8 @@ class DoubanSyncManager @Inject constructor(
             startTimeMs = startTime,
             etaSeconds = 0,
             recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false
+            isRetry = false,
+            isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -1039,7 +1099,8 @@ class DoubanSyncManager @Inject constructor(
             startTimeMs = startTime,
             etaSeconds = 0,
             recentFailures = recentFailuresBuffer.toList(),
-            isRetry = false
+            isRetry = false,
+            isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
@@ -1158,7 +1219,8 @@ class DoubanSyncManager @Inject constructor(
             startTimeMs = startTime,
             etaSeconds = 0,
             recentFailures = recentFailuresBuffer.toList(),
-            isRetry = true
+            isRetry = true,
+            isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
