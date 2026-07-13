@@ -405,27 +405,20 @@ class DetailViewModel @Inject constructor(
                         MediaType.MOVIE -> {
                             val e = tmdbRepository.enrichMovie(tmdbId, title, year)
                             tmdbRating = e.rating
-                            // 检测是否属于系列
-                            val movieDetail = tmdbRepository.getMovieDetail(tmdbId)
-                            collectionId = movieDetail?.belongs_to_collection?.id ?: 0
+                            // enrichMovie 已返回 collectionId 和 imdbId，无需第二次 getMovieDetail
+                            collectionId = e.collectionId ?: 0
                             currentCollectionId = collectionId
-                            // imdbId 为空时从 TMDB 详情补全（用于 IMDb 评分查询）
                             if (currentImdbId.isBlank()) {
-                                movieDetail?.imdb_id?.takeIf { it.isNotBlank() }?.let {
-                                    currentImdbId = it
-                                }
+                                e.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
                             }
                             EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.runtime, e.releaseDate, e.country, e.status)
                         }
                         MediaType.SHOW -> {
                             val e = tmdbRepository.enrichTv(tmdbId, title, year)
                             tmdbRating = e.rating
-                            // imdbId 为空时从 TMDB 详情补全
+                            // enrichTv 已返回 imdbId，无需第二次 getTvDetail
                             if (currentImdbId.isBlank()) {
-                                val tvDetail = tmdbRepository.getTvDetail(tmdbId)
-                                tvDetail?.imdb_id?.takeIf { it.isNotBlank() }?.let {
-                                    currentImdbId = it
-                                }
+                                e.imdbId?.takeIf { it.isNotBlank() }?.let { currentImdbId = it }
                             }
                             EnrichmentData(e.chineseTitle, e.originalTitle, e.overview, e.genres, e.posterUrl, e.year, e.rating, e.episodeRunTime, e.releaseDate, e.country, e.status)
                         }

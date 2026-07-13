@@ -84,16 +84,16 @@ class TmdbRepository @Inject constructor(
     // 缓存 key 已含语言后缀（如 "12345_zh-CN"），不同语言的海报/标题分别存储
     // maxSize 放大到 1000:覆盖超大 watchlist(>1000 条)+ 已看历史,
     // loadFromDisk 调 super.put 触发 LRU 淘汰,若 maxSize 小于磁盘条目数会导致第二次启动仍走网络
-    private val movieDetailCache = persistentTtlCache<TmdbMovieDetail>(
+    private val movieDetailCache = persistentTtlCache<TmdbMovieDetail?>(
         TTL_DETAIL, 1000, persistentDataStore, json, "movie_detail_v1", persistentScope
     )
-    private val tvDetailCache = persistentTtlCache<TmdbTvDetail>(
+    private val tvDetailCache = persistentTtlCache<TmdbTvDetail?>(
         TTL_DETAIL, 1000, persistentDataStore, json, "tv_detail_v1", persistentScope
     )
-    private val creditsCache = persistentTtlCache<TmdbCreditsResponse>(
+    private val creditsCache = persistentTtlCache<TmdbCreditsResponse?>(
         TTL_CREDITS, 500, persistentDataStore, json, "credits_v1", persistentScope
     )
-    private val personDetailCache = persistentTtlCache<TmdbPerson>(
+    private val personDetailCache = persistentTtlCache<TmdbPerson?>(
         TTL_PERSON, 500, persistentDataStore, json, "person_detail_v1", persistentScope
     )
     // 别名（alternative_titles）持久化缓存：中文译名等不变字段，跨 App 重启复用，
@@ -122,14 +122,17 @@ class TmdbRepository @Inject constructor(
     // 内存缓存（短期，App 进程内有效）
     private val movieTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
     private val tvTitleCache = TtlCache<String>(TTL_DETAIL, maxSize = 100)
-    private val searchMovieCache = TtlCache<TmdbSearchResult>(TTL_SEARCH, maxSize = 100)
+    private val searchMovieCache = TtlCache<TmdbSearchResult?>(TTL_SEARCH, maxSize = 100)
     // 人物作品缓存：TMDB 一次性返回全部作品，这里缓存按 vote_average 降序排列后的完整列表，按 personId 分页切片
     private val personMovieCreditsCache = TtlCache<List<TmdbPersonMovieCredit>>(TTL_PERSON, maxSize = 30)
     private val personTvCreditsCache = TtlCache<List<TmdbPersonTvCredit>>(TTL_PERSON, maxSize = 30)
     // 人物图片缓存：避免二次进入人物详情页时重复请求图片 URL 列表
     private val personImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
     private val personTaggedImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
-    private val reviewsCache = TtlCache<TmdbReviewsResponse>(TTL_REVIEWS, maxSize = 50)
+    private val reviewsCache = TtlCache<TmdbReviewsResponse?>(TTL_REVIEWS, maxSize = 50)
+    // 搜索人物/多类型搜索结果缓存（10 分钟），避免重复搜索同关键词时重复请求
+    private val searchPersonCache = TtlCache<List<TmdbPersonSearchResult>>(TTL_SEARCH, maxSize = 50)
+    private val searchMultiCache = TtlCache<TmdbMultiSearchResponse?>(TTL_SEARCH, maxSize = 50)
 
     /** 持久化缓存列表，供 Application 启动时批量加载 */
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
@@ -156,7 +159,9 @@ class TmdbRepository @Inject constructor(
         val runtime: Int? = null,
         val releaseDate: String = "",
         val country: String = "",
-        val status: String = ""
+        val status: String = "",
+        val collectionId: Int? = null,
+        val imdbId: String? = null
     )
 
     data class TvEnrichment(
@@ -170,7 +175,8 @@ class TmdbRepository @Inject constructor(
         val episodeRunTime: Int? = null,
         val releaseDate: String = "",
         val country: String = "",
-        val status: String = ""
+        val status: String = "",
+        val imdbId: String? = null
     )
 
     suspend fun enrichMovie(tmdbId: Int, originalTitle: String, year: Int?): MovieEnrichment {
@@ -192,7 +198,9 @@ class TmdbRepository @Inject constructor(
                 runtime = cached.runtime,
                 releaseDate = cached.release_date ?: "",
                 country = cached.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                status = cached.status
+                status = cached.status,
+                collectionId = cached.belongs_to_collection?.id,
+                imdbId = cached.imdb_id
             )
         }
         // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
@@ -213,7 +221,9 @@ class TmdbRepository @Inject constructor(
                 runtime = cachedAfterLoad.runtime,
                 releaseDate = cachedAfterLoad.release_date ?: "",
                 country = cachedAfterLoad.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                status = cachedAfterLoad.status
+                status = cachedAfterLoad.status,
+                collectionId = cachedAfterLoad.belongs_to_collection?.id,
+                imdbId = cachedAfterLoad.imdb_id
             )
         }
 
@@ -235,7 +245,9 @@ class TmdbRepository @Inject constructor(
                     runtime = detail.runtime,
                     releaseDate = detail.release_date ?: "",
                     country = detail.production_countries.map { codeToCountryName(it.iso_3166_1, tmdbLang) }.joinToString(" · "),
-                    status = detail.status
+                    status = detail.status,
+                    collectionId = detail.belongs_to_collection?.id,
+                    imdbId = detail.imdb_id
                 )
             } else {
                 fallbackMovie(originalTitle, year)
@@ -265,7 +277,8 @@ class TmdbRepository @Inject constructor(
                 episodeRunTime = cached.episode_run_time?.firstOrNull(),
                 releaseDate = cached.first_air_date ?: "",
                 country = cached.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                status = cached.status
+                status = cached.status,
+                imdbId = cached.imdb_id
             )
         }
         // 内存未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
@@ -286,7 +299,8 @@ class TmdbRepository @Inject constructor(
                 episodeRunTime = cachedAfterLoad.episode_run_time?.firstOrNull(),
                 releaseDate = cachedAfterLoad.first_air_date ?: "",
                 country = cachedAfterLoad.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                status = cachedAfterLoad.status
+                status = cachedAfterLoad.status,
+                imdbId = cachedAfterLoad.imdb_id
             )
         }
 
@@ -308,7 +322,8 @@ class TmdbRepository @Inject constructor(
                     episodeRunTime = detail.episode_run_time?.firstOrNull(),
                     releaseDate = detail.first_air_date ?: "",
                     country = detail.origin_country.map { codeToCountryName(it, tmdbLang) }.joinToString(" · "),
-                    status = detail.status
+                    status = detail.status,
+                    imdbId = detail.imdb_id
                 )
             } else {
                 fallbackTv(originalName, year)
@@ -404,50 +419,53 @@ class TmdbRepository @Inject constructor(
 
     suspend fun getCredits(tmdbId: Int, mediaType: MediaType): TmdbCreditsResponse? {
         val key = langKey(tmdbId)
-        creditsCache.get(key)?.let { return it }
-        return try {
-            val response = when (mediaType) {
-                MediaType.MOVIE -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage())
-                MediaType.SHOW -> tmdbApiService.getCredits(tmdbId, language = getTmdbLanguage())
-                MediaType.PERSON -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage()) // fallback
-                MediaType.DISK -> return null
+        return creditsCache.getOrAwait(key) {
+            try {
+                val response = when (mediaType) {
+                    MediaType.MOVIE -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage())
+                    MediaType.SHOW -> tmdbApiService.getCredits(tmdbId, language = getTmdbLanguage())
+                    MediaType.PERSON -> tmdbApiService.getMovieCredits(tmdbId, language = getTmdbLanguage()) // fallback
+                    MediaType.DISK -> return@getOrAwait null
+                }
+                if (response.isSuccessful) {
+                    response.body()?.also { creditsCache.put(key, it) }
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
             }
-            if (response.isSuccessful) {
-                response.body()?.also { creditsCache.put(key, it) }
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
         }
     }
 
     suspend fun getReviews(tmdbId: Int, mediaType: MediaType, page: Int = 1): TmdbReviewsResponse? {
         val key = langKey("${tmdbId}_${mediaType.name}_$page")
-        reviewsCache.get(key)?.let { return it }
-        return try {
-            val response = when (mediaType) {
-                MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
-                MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
-                MediaType.PERSON -> tmdbApiService.getMovieReviews(tmdbId, page) // fallback
-                MediaType.DISK -> return null
+        return reviewsCache.getOrAwait(key) {
+            try {
+                val response = when (mediaType) {
+                    MediaType.MOVIE -> tmdbApiService.getMovieReviews(tmdbId, page)
+                    MediaType.SHOW -> tmdbApiService.getTvReviews(tmdbId, page)
+                    MediaType.PERSON -> tmdbApiService.getMovieReviews(tmdbId, page) // fallback
+                    MediaType.DISK -> return@getOrAwait null
+                }
+                if (response.isSuccessful) {
+                    response.body()?.also { reviewsCache.put(key, it) }
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
             }
-            if (response.isSuccessful) {
-                response.body()?.also { reviewsCache.put(key, it) }
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
         }
     }
 
     suspend fun getPersonDetail(personId: Int): TmdbPerson? {
         val key = langKey(personId)
-        personDetailCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getPersonDetail(personId, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                response.body()?.also { personDetailCache.put(key, it) }
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
+        return personDetailCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getPersonDetail(personId, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    response.body()?.also { personDetailCache.put(key, it) }
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
         }
     }
 
@@ -512,57 +530,63 @@ class TmdbRepository @Inject constructor(
     // 通过标题搜索电影，返回第一个匹配结果
     suspend fun searchMovie(query: String): TmdbSearchResult? {
         val key = langKey(query.trim())
-        searchMovieCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.searchMovie(query = query, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                response.body()?.results?.firstOrNull()?.also {
-                    searchMovieCache.put(key, it)
-                }
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
+        return searchMovieCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.searchMovie(query = query, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    response.body()?.results?.firstOrNull()?.also { searchMovieCache.put(key, it) }
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
         }
     }
 
     /** 搜索人物（TMDB，支持中文名搜索） */
     suspend fun searchPerson(query: String): List<TmdbPersonSearchResult> {
-        return try {
-            val response = tmdbApiService.searchPerson(query = query, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                response.body()?.results ?: emptyList()
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        val key = langKey(query.trim())
+        return searchPersonCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.searchPerson(query = query, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    response.body()?.results ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
     /** 多类型搜索（TMDB，同时搜索电影和剧集，支持中文名） */
     suspend fun searchMulti(query: String): TmdbMultiSearchResponse? {
-        return try {
-            val response = tmdbApiService.searchMulti(query = query, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body() else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
+        val key = langKey(query.trim())
+        return searchMultiCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.searchMulti(query = query, language = getTmdbLanguage())
+                if (response.isSuccessful) response.body() else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
         }
     }
 
     /** 趋势电影（今日/本周） */
     suspend fun getTrendingMovies(timeWindow: String = "day"): List<TmdbSearchResult> {
         val key = langKey(timeWindow)
-        trendingMoviesCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getTrendingMovies(
-                timeWindow = timeWindow,
-                language = getTmdbLanguage()
-            )
-            if (response.isSuccessful) {
-                val results = response.body()?.results ?: emptyList()
-                trendingMoviesCache.put(key, results)
-                results
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        return trendingMoviesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getTrendingMovies(
+                    timeWindow = timeWindow,
+                    language = getTmdbLanguage()
+                )
+                if (response.isSuccessful) {
+                    val results = response.body()?.results ?: emptyList()
+                    trendingMoviesCache.put(key, results)
+                    results
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -585,16 +609,17 @@ class TmdbRepository @Inject constructor(
     /** 热门电影 */
     suspend fun getPopularMovies(): List<TmdbSearchResult> {
         val key = langKey("default")
-        popularMoviesCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getPopularMovies(language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val results = response.body()?.results ?: emptyList()
-                popularMoviesCache.put(key, results)
-                results
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        return popularMoviesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getPopularMovies(language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    val results = response.body()?.results ?: emptyList()
+                    popularMoviesCache.put(key, results)
+                    results
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -613,16 +638,17 @@ class TmdbRepository @Inject constructor(
     /** 即将上映 */
     suspend fun getUpcomingMovies(): List<TmdbSearchResult> {
         val key = langKey("default")
-        upcomingMoviesCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getUpcomingMovies(language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val results = response.body()?.results ?: emptyList()
-                upcomingMoviesCache.put(key, results)
-                results
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        return upcomingMoviesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getUpcomingMovies(language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    val results = response.body()?.results ?: emptyList()
+                    upcomingMoviesCache.put(key, results)
+                    results
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -641,16 +667,17 @@ class TmdbRepository @Inject constructor(
     /** 高分电影（未登录时的推荐降级） */
     suspend fun getTopRatedMovies(): List<TmdbSearchResult> {
         val key = langKey("default")
-        topRatedMoviesCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getTopRatedMovies(language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val results = response.body()?.results ?: emptyList()
-                topRatedMoviesCache.put(key, results)
-                results
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            emptyList()
+        return topRatedMoviesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getTopRatedMovies(language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    val results = response.body()?.results ?: emptyList()
+                    topRatedMoviesCache.put(key, results)
+                    results
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                emptyList()
+            }
         }
     }
 
@@ -669,36 +696,40 @@ class TmdbRepository @Inject constructor(
     /** 获取电影详情（含海报路径），优先读缓存 */
     suspend fun getMovieDetail(movieId: Int): TmdbMovieDetail? {
         val key = langKey(movieId)
-        movieDetailCache.get(key)?.let { return it }
-        movieDetailCache.awaitLoaded()
-        movieDetailCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getMovieDetail(movieId, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val detail = response.body()
-                detail?.let { movieDetailCache.put(key, it) }
-                detail
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
+        return movieDetailCache.getOrAwait(key) {
+            // 飞行中未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
+            movieDetailCache.awaitLoaded()
+            movieDetailCache.get(key)?.let { return@getOrAwait it }
+            try {
+                val response = tmdbApiService.getMovieDetail(movieId, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    val detail = response.body()
+                    detail?.let { movieDetailCache.put(key, it) }
+                    detail
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
         }
     }
 
     /** 获取电视剧详情（用于补全 imdb_id 等），优先读缓存 */
     suspend fun getTvDetail(tvId: Int): TmdbTvDetail? {
         val key = langKey(tvId)
-        tvDetailCache.get(key)?.let { return it }
-        tvDetailCache.awaitLoaded()
-        tvDetailCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getTvDetail(tvId, language = getTmdbLanguage())
-            if (response.isSuccessful) {
-                val detail = response.body()
-                detail?.let { tvDetailCache.put(key, it) }
-                detail
-            } else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            null
+        return tvDetailCache.getOrAwait(key) {
+            // 飞行中未命中：等待磁盘加载完成后再查一次，避免 loadFromDisk 未完成时误判为缓存未命中
+            tvDetailCache.awaitLoaded()
+            tvDetailCache.get(key)?.let { return@getOrAwait it }
+            try {
+                val response = tmdbApiService.getTvDetail(tvId, language = getTmdbLanguage())
+                if (response.isSuccessful) {
+                    val detail = response.body()
+                    detail?.let { tvDetailCache.put(key, it) }
+                    detail
+                } else null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                null
+            }
         }
     }
 

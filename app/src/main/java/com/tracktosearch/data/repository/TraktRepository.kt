@@ -45,6 +45,7 @@ class TraktRepository @Inject constructor(
         private const val TTL_STATS = 5 * 60 * 1000L         // 统计数据 5 分钟
         private const val TTL_TRENDING = 6 * 60 * 60 * 1000L  // 趋势/最受期待/社区列表 6 小时（榜单更新不频繁）
         private const val TTL_WATCHLIST_IDS = 6 * 60 * 60 * 1000L // 想看/已看 ID 集合 6 小时（避免每次启动全量拉取）
+        private const val TTL_SEARCH_PERSON = 10 * 60 * 1000L    // 人物搜索/详情缓存 10 分钟（避免重复请求）
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
@@ -310,6 +311,11 @@ class TraktRepository @Inject constructor(
         TTL_TRENDING, 5, persistentDataStore, json, "trending_lists_v1", persistentScope
     )
 
+    // 短期内存缓存：人物详情和演字号搜索，App 进程内有效（10 分钟）
+    private val personSummaryCache = TtlCache<Result<TraktPersonDetail>>(TTL_SEARCH_PERSON, maxSize = 50)
+    private val personMovieCreditsCache = TtlCache<Result<TraktPersonCreditsResponse>>(TTL_SEARCH_PERSON, maxSize = 30)
+    private val personShowCreditsCache = TtlCache<Result<TraktPersonCreditsResponse>>(TTL_SEARCH_PERSON, maxSize = 30)
+
     /** 持久化缓存列表，供 Application 启动时批量加载 */
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
         searchByTmdbCache, searchByImdbCache, watchlistWatchedIdsCache, recommendationsCache,
@@ -414,21 +420,21 @@ class TraktRepository @Inject constructor(
                 searchByTmdbCache.put(key, body)
                 // 如果无有效结果，记入负缓存
                 val hasValid = body.any { r ->
-                    val id = when (type) {
-                        MediaType.MOVIE -> r.movie?.ids?.trakt
-                        MediaType.SHOW -> r.show?.ids?.trakt
-                        else -> null
+                        val id = when (type) {
+                            MediaType.MOVIE -> r.movie?.ids?.trakt
+                            MediaType.SHOW -> r.show?.ids?.trakt
+                            else -> null
+                        }
+                        id != null && id > 0
                     }
-                    id != null && id > 0
+                    if (!hasValid) notFoundTmdbIds.add(key)
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
                 }
-                if (!hasValid) notFoundTmdbIds.add(key)
-                Result.success(body)
-            } else {
-                Result.failure(Exception("Failed to search by tmdb: ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Result.failure(e)
-        }
     }
 
     /** 通过 imdbId 反查 Trakt 条目（用于豆瓣→Trakt 同步）。仅支持 movie/show */
@@ -1210,15 +1216,17 @@ class TraktRepository @Inject constructor(
 
     /** 获取人物详情（通过 slug 或 id） */
     suspend fun getPersonSummary(personSlug: String): Result<TraktPersonDetail> {
-        return try {
-            val response = traktApiService.getPersonSummary(personSlug)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: TraktPersonDetail())
-            } else {
-                Result.failure(Exception("HTTP ${response.code()}"))
+        return personSummaryCache.getOrAwait(personSlug) {
+            try {
+                val response = traktApiService.getPersonSummary(personSlug)
+                if (response.isSuccessful) {
+                    response.body()?.let { Result.success(it) } ?: Result.failure(Exception("Empty body"))
+                } else {
+                    Result.failure(Exception("HTTP ${response.code()}"))
+                }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
@@ -1340,22 +1348,26 @@ class TraktRepository @Inject constructor(
 
     /** 获取人物电影参演 */
     suspend fun getPersonMovieCredits(personSlug: String): Result<TraktPersonCreditsResponse> {
-        return try {
-            val response = traktApiService.getPersonMovieCredits(personSlug)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: TraktPersonCreditsResponse())
-            } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        return personMovieCreditsCache.getOrAwait(personSlug) {
+            try {
+                val response = traktApiService.getPersonMovieCredits(personSlug)
+                if (response.isSuccessful) {
+                    Result.success(response.body() ?: TraktPersonCreditsResponse())
+                } else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     /** 获取人物电视剧参演 */
     suspend fun getPersonShowCredits(personSlug: String): Result<TraktPersonCreditsResponse> {
-        return try {
-            val response = traktApiService.getPersonShowCredits(personSlug)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: TraktPersonCreditsResponse())
-            } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        return personShowCreditsCache.getOrAwait(personSlug) {
+            try {
+                val response = traktApiService.getPersonShowCredits(personSlug)
+                if (response.isSuccessful) {
+                    Result.success(response.body() ?: TraktPersonCreditsResponse())
+                } else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     /** 获取人物别名 */
