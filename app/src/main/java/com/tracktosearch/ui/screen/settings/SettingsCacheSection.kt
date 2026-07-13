@@ -18,6 +18,8 @@ import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Storage
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -121,14 +123,20 @@ fun CacheManagementItem(
                         sizeBytes = breakdown.httpBytes,
                         onClear = { onClearCategory(SettingsViewModel.CacheCategory.HTTP) }
                     )
-                    // 全部清除按钮
+                    // 全部清除按钮（红色警示样式）
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.End
                     ) {
-                        OutlinedButton(onClick = onClearAll) {
+                        Button(
+                            onClick = onClearAll,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError
+                            )
+                        ) {
                             Text(stringResource(R.string.settings_cache_clear_all))
                         }
                     }

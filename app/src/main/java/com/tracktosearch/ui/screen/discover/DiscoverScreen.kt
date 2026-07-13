@@ -318,6 +318,10 @@ fun DiscoverScreen(
                         // 趋势电影（原热门电影，含今日/本周切换）
                         "tmdb-popular" -> {
                             item(key = "tmdb_popular") {
+                                // 今日/本周各自独立的滚动状态，互不影响
+                                val trendingDayListState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                val trendingWeekListState = androidx.compose.foundation.lazy.rememberLazyListState()
+                                val trendingListState = if (uiState.trendingTimeWindow == "day") trendingDayListState else trendingWeekListState
                                 Column {
                                     Row(
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -369,7 +373,8 @@ fun DiscoverScreen(
                                             }
                                         },
                                         onRetry = { viewModel.loadTmdbPopular() },
-                                        onViewAll = { showPopularAll = true }
+                                        onViewAll = { showPopularAll = true },
+                                        lazyListState = trendingListState
                                     )
                                 }
                             }

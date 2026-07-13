@@ -1681,10 +1681,7 @@ private fun AccountItem(
                 isVip = userProfile?.vip == true,
                 onLogout = onTraktLogout
             )
-            HorizontalDivider(
-                color = MaterialTheme.colorScheme.outlineVariant,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            )
+            GroupDivider()
             val doubanCreds = doubanProfile
             if (doubanLoggedIn) {
                 AccountRow(

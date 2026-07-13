@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -61,7 +63,8 @@ internal fun TmdbMovieSection(
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TmdbSearchResult) -> Unit,
     onRetry: () -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    lazyListState: LazyListState? = null
 ) {
     Column {
         if (title.isNotEmpty()) {
@@ -84,7 +87,9 @@ internal fun TmdbMovieSection(
                 EmptyRow()
             }
             else -> {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val internalState = rememberLazyListState()
+                val effectiveState = lazyListState ?: internalState
+                LazyRow(state = effectiveState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
@@ -464,7 +469,11 @@ internal fun DoubanRecommendSection(
                 if (items.isEmpty()) {
                     EmptyRow()
                 } else {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // 电影/电视剧各自独立的滚动状态，互不影响
+                    val movieListState = rememberLazyListState()
+                    val tvListState = rememberLazyListState()
+                    val listState = if (state.currentTab == RecommendTab.MOVIE) movieListState else tvListState
+                    LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         itemsIndexed(
                             items,
                             key = { index, item -> "douban_rec_${state.currentTab.name.lowercase()}_${index}_${item.id}" },

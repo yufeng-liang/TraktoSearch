@@ -1246,6 +1246,7 @@
     <!-- 空列表引导 -->
     <string name="watchlist_empty_title">在Trakt平台上还没有标记想看的影视</string>
     <string name="watched_empty_title">还没有标记已看过的影视</string>
+    <string name="watchlist_search_no_result">未找到包含 \"%1$s\" 的影视</string>
     <string name="watchlist_empty_hint_prefix">你可以尝试：去</string>
     <string name="watchlist_empty_go_trakt">Trakt</string>
     <string name="watchlist_empty_hint_middle">标记想看的影视，去</string>

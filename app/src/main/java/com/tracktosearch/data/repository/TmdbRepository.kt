@@ -566,6 +566,22 @@ class TmdbRepository @Inject constructor(
         }
     }
 
+    /** 趋势电影（今日/本周，分页）—— 用于"查看全部"Sheet，绕过缓存 */
+    suspend fun getTrendingMovies(timeWindow: String = "day", page: Int): List<TmdbSearchResult> {
+        return try {
+            val response = tmdbApiService.getTrendingMovies(
+                timeWindow = timeWindow,
+                language = getTmdbLanguage(),
+                page = page
+            )
+            if (response.isSuccessful) {
+                response.body()?.results ?: emptyList()
+            } else emptyList()
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     /** 热门电影 */
     suspend fun getPopularMovies(): List<TmdbSearchResult> {
         val key = langKey("default")

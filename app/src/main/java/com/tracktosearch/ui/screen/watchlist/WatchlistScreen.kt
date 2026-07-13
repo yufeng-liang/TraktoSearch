@@ -474,57 +474,67 @@ fun WatchlistScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = if (selectedMode == 0)
-                                    stringResource(R.string.watchlist_empty_title)
-                                else
-                                    stringResource(R.string.watched_empty_title),
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                buildAnnotatedString {
-                                    append(if (selectedMode == 0)
-                                        stringResource(R.string.watchlist_empty_hint_prefix)
+                            if (searchQuery.isNotEmpty()) {
+                                // 搜索无结果：只显示贴切文案，不显示引导链接
+                                Text(
+                                    text = stringResource(R.string.watchlist_search_no_result, searchQuery),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = if (selectedMode == 0)
+                                        stringResource(R.string.watchlist_empty_title)
                                     else
-                                        stringResource(R.string.watched_empty_hint_prefix)
-                                    )
-                                    withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
-                                    }) {
-                                        append(stringResource(R.string.watchlist_empty_go_trakt))
-                                    }
-                                    append(stringResource(R.string.watchlist_empty_hint_middle))
-                                    withLink(LinkAnnotation.Clickable(
-                                        tag = "discover",
-                                        linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                    )) {
-                                        append(stringResource(R.string.watchlist_empty_go_discover))
-                                    }
-                                    append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                    // 「，或从豆瓣导入标记」超链接
-                                    append(stringResource(R.string.watchlist_empty_douban_import_prefix))
-                                    withLink(LinkAnnotation.Clickable(
-                                        tag = "douban_import",
-                                        linkInteractionListener = LinkInteractionListener {
-                                            // 已登录豆瓣 → 弹同步弹窗；未登录 → 跳转豆瓣登录页
-                                            val hasDouban = viewModel.isDoubanLoggedIn()
-                                            if (hasDouban) {
-                                                showSyncDialog = true
-                                            } else {
-                                                onNavigateToDoubanLogin()
-                                            }
+                                        stringResource(R.string.watched_empty_title),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    buildAnnotatedString {
+                                        append(if (selectedMode == 0)
+                                            stringResource(R.string.watchlist_empty_hint_prefix)
+                                        else
+                                            stringResource(R.string.watched_empty_hint_prefix)
+                                        )
+                                        withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
+                                        }) {
+                                            append(stringResource(R.string.watchlist_empty_go_trakt))
                                         }
-                                    )) {
-                                        append(stringResource(R.string.watchlist_empty_douban_import_link))
-                                    }
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
+                                        append(stringResource(R.string.watchlist_empty_hint_middle))
+                                        withLink(LinkAnnotation.Clickable(
+                                            tag = "discover",
+                                            linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                        )) {
+                                            append(stringResource(R.string.watchlist_empty_go_discover))
+                                        }
+                                        append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                        // 「，或从豆瓣导入标记」超链接
+                                        append(stringResource(R.string.watchlist_empty_douban_import_prefix))
+                                        withLink(LinkAnnotation.Clickable(
+                                            tag = "douban_import",
+                                            linkInteractionListener = LinkInteractionListener {
+                                                // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
+                                                val hasDouban = viewModel.isDoubanLoggedIn()
+                                                if (hasDouban) {
+                                                    showSyncModePicker = true
+                                                } else {
+                                                    onNavigateToDoubanLogin()
+                                                }
+                                            }
+                                        )) {
+                                            append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                        }
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 } else {
@@ -1157,6 +1167,8 @@ fun WatchlistScreen(
                     onModeSelected = { mode ->
                         showSyncModePicker = false
                         viewModel.startDoubanSync(mode)
+                        // 立即显示进度弹窗，让用户看到同步过程
+                        showSyncDialog = true
                     }
                 )
             }

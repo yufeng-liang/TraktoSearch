@@ -1246,6 +1246,7 @@ Config:
     <!-- Empty List Guide -->
     <string name="watchlist_empty_title">No watchlisted movies or shows yet</string>
     <string name="watched_empty_title">No watched movies or shows yet</string>
+    <string name="watchlist_search_no_result">No movies or shows found for \"%1$s\"</string>
     <string name="watchlist_empty_hint_prefix">You can try: go to </string>
     <string name="watchlist_empty_go_trakt">Trakt</string>
     <string name="watchlist_empty_hint_middle"> to add to watchlist, </string>

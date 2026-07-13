@@ -608,6 +608,10 @@ class DiscoverViewModel @Inject constructor(
         if (_uiState.value.trendingTimeWindow == timeWindow) return
         _uiState.value = _uiState.value.copy(trendingTimeWindow = timeWindow)
         loadTmdbPopular()
+        // 如果"查看全部"Sheet 已打开（popularAllItems 有数据），重新加载 Sheet 数据
+        if (_uiState.value.popularAllItems.isNotEmpty()) {
+            loadPopularAll(page = 1, forceReload = true)
+        }
     }
 
     fun loadTmdbUpcoming() {
@@ -1226,11 +1230,19 @@ class DiscoverViewModel @Inject constructor(
         }
     }
 
-    /** 加载热门电影全部（分页） */
-    fun loadPopularAll(page: Int = 1) {
+    /** 加载趋势电影全部（分页） */
+    fun loadPopularAll(page: Int = 1, forceReload: Boolean = false) {
         if (_uiState.value.isLoadingPopularAll) return
-        // page 1 时，如果已有横向卡片数据，先预填充避免空白转圈
-        if (page == 1 && _uiState.value.popularAllItems.isEmpty() && _uiState.value.tmdbPopularMovies.isNotEmpty()) {
+        // forceReload 时清空已有数据（用于切换 timeWindow 后重新加载）
+        if (forceReload) {
+            _uiState.value = _uiState.value.copy(
+                popularAllItems = emptyList(),
+                popularAllPage = 1,
+                popularAllHasMore = true
+            )
+        }
+        // page 1 且非 forceReload 时，如果已有横向卡片数据，先预填充避免空白转圈
+        if (!forceReload && page == 1 && _uiState.value.popularAllItems.isEmpty() && _uiState.value.tmdbPopularMovies.isNotEmpty()) {
             _uiState.value = _uiState.value.copy(
                 popularAllItems = _uiState.value.tmdbPopularMovies,
                 popularAllPage = 1,
@@ -1241,8 +1253,9 @@ class DiscoverViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(isLoadingPopularAll = true)
         viewModelScope.launch {
             try {
-                val movies = tmdbRepository.getPopularMovies(page = page)
-                val existing = if (page == 1) _uiState.value.tmdbPopularMovies else _uiState.value.popularAllItems
+                val timeWindow = _uiState.value.trendingTimeWindow
+                val movies = tmdbRepository.getTrendingMovies(timeWindow = timeWindow, page = page)
+                val existing = if (page == 1) emptyList() else _uiState.value.popularAllItems
                 val newItems = movies.filter { newItem ->
                     existing.none { it.id == newItem.id }
                 }

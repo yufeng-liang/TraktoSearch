@@ -1136,6 +1136,7 @@
     <!-- 空リストガイド -->
     <string name="watchlist_empty_title">Traktプラットフォームでまだウォッチリストに追加していません</string>
     <string name="watched_empty_title">まだ視聴済みとしてマークしていません</string>
+    <string name="watchlist_search_no_result">\"%1$s\" を含む作品が見つかりません</string>
     <string name="watchlist_empty_hint_prefix">こちらを試す：</string>
     <string name="watchlist_empty_go_trakt">Trakt</string>
     <string name="watchlist_empty_hint_middle">でウォッチリストに追加、</string>
