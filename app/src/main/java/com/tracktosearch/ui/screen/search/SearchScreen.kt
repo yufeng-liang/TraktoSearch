@@ -287,8 +287,9 @@ fun SearchScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val titleAreaHeight = 110.dp
     val searchBoxHeight = 72.dp
-    val contentTopY = titleAreaHeight + searchBoxHeight + 16.dp
-    val searchBoxCenterY = screenHeight / 2 - 30.dp
+    val searchBoxCenterY = screenHeight / 2 - 90.dp
+    val cloudIconSize = 115.dp
+    val contentTopOffset = searchBoxHeight + 25.dp
 
     val targetSearchBoxY by animateDpAsState(
         targetValue = if (isSearchFocused || searchQuery.isNotEmpty()) titleAreaHeight else searchBoxCenterY,
@@ -301,10 +302,11 @@ fun SearchScreen(
             .windowInsetsPadding(WindowInsets.statusBars)
             .hazeSource(state = hazeState)
     ) {
-        // 标题区 + 云朵小彩蛋（固定顶部，不随搜索框移动）
+        // 标题区（固定顶部，不随搜索框移动）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .align(Alignment.TopCenter)
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
             Column(modifier = Modifier.align(Alignment.CenterStart)) {
@@ -320,14 +322,20 @@ fun SearchScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            CloudIconWithAnimation(
-                cloudThemeManager = cloudThemeManager,
-                isActive = isActive,
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .size(72.dp)
-            )
         }
+
+        // 白云图标（搜索框未激活时显示在搜索框上方 25dp）
+        CloudIconWithAnimation(
+            cloudThemeManager = cloudThemeManager,
+            isActive = isActive,
+            modifier = Modifier
+                .size(cloudIconSize)
+                .align(Alignment.TopCenter)
+                .offset(
+                    x = 110.dp,
+                    y = targetSearchBoxY - cloudIconSize - 25.dp
+                )
+        )
 
         // 搜索框（带动画垂直位置）
         Box(
@@ -457,7 +465,7 @@ fun SearchScreen(
             visible = isSearchFocused || searchQuery.isNotEmpty(),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = contentTopY),
+                .padding(top = targetSearchBoxY + contentTopOffset),
             enter = fadeIn(animationSpec = tween(250)) + expandVertically(animationSpec = tween(250)),
             exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(animationSpec = tween(200))
         ) {

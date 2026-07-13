@@ -69,6 +69,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -82,6 +83,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -838,7 +840,9 @@ fun DoubanItemDetailScreen(
             contentReady = true
         }
     }
-    val contentAlpha = if (contentReady) 1f else 0f
+    val contentAlpha by remember(contentReady) {
+        derivedStateOf { if (contentReady) 1f else 0f }
+    }
 
     // 拦截系统返回手势
     BackHandler(enabled = true) {
@@ -941,6 +945,10 @@ fun DoubanItemDetailScreen(
                     CircularProgressIndicator()
                 }
             } else if (failure != null) {
+                // 通过 LocalContentColor 把 tabContentColor 传下去,内部搜索源/网盘类型等文字可自适应
+                CompositionLocalProvider(
+                    LocalContentColor provides tabContentColor
+                ) {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier
@@ -1111,6 +1119,7 @@ fun DoubanItemDetailScreen(
                             }
                         }
                     }
+                }
                 }
             } else if (uiState.error != null) {
                 // 加载错误
@@ -1886,7 +1895,7 @@ private fun DoubanSearchKeywordBar(
             else
                 failure.title,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = LocalContentColor.current,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -1901,7 +1910,7 @@ private fun DoubanSearchKeywordBar(
                 Text(
                     text = stringResource(R.string.screen_douban_item_detail_search_with_subtitle),
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = LocalContentColor.current,
                     modifier = Modifier.weight(1f)
                 )
                 Switch(
@@ -1938,7 +1947,7 @@ private fun DoubanFilterSection(
             Text(
                 text = stringResource(R.string.detail_filter_sources),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = LocalContentColor.current,
                 modifier = Modifier.width(labelWidth)
             )
             androidx.compose.foundation.lazy.LazyRow(
@@ -1986,7 +1995,7 @@ private fun DoubanFilterSection(
             Text(
                 text = stringResource(R.string.detail_filter_disk_types),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = LocalContentColor.current,
                 modifier = Modifier.width(labelWidth)
             )
             androidx.compose.foundation.lazy.LazyRow(

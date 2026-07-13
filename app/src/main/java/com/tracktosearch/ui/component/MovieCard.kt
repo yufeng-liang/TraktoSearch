@@ -279,7 +279,7 @@ fun MovieCard(
                             .padding(4.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(Color.White.copy(alpha = 0.9f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
             }
