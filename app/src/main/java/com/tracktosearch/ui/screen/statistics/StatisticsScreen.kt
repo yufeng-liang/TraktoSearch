@@ -131,7 +131,7 @@ fun StatisticsScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (uiState.isLoading) {
+            if (uiState.initialLoading) {
                 StatisticsSkeleton()
             } else if (uiState.error != null) {
                 Column(
@@ -195,7 +195,11 @@ fun StatisticsScreen(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
-                        OverviewCards(uiState, isVisible)
+                        if (uiState.overviewReady) {
+                            OverviewCards(uiState, isVisible)
+                        } else {
+                            SectionShimmer(height = 120.dp)
+                        }
                     }
                 }
 
@@ -207,7 +211,11 @@ fun StatisticsScreen(
                         }
                     }
                     SectionCard(title = stringResource(R.string.statistics_total_watch_time)) {
-                        WatchTimeCard(uiState = uiState, isVisible = isVisible)
+                        if (uiState.watchTimeReady) {
+                            WatchTimeCard(uiState = uiState, isVisible = isVisible)
+                        } else {
+                            SectionShimmer(height = 80.dp)
+                        }
                     }
                 }
 
@@ -219,7 +227,11 @@ fun StatisticsScreen(
                         }
                     }
                     SectionCard(title = stringResource(R.string.statistics_heatmap)) {
-                        HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
+                        if (uiState.heatmapReady) {
+                            HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
+                        } else {
+                            SectionShimmer(height = 180.dp)
+                        }
                     }
                 }
 
@@ -231,7 +243,11 @@ fun StatisticsScreen(
                         }
                     }
                     SectionCard(title = stringResource(R.string.statistics_ratings)) {
-                        RatingStatsCard(uiState = uiState, isVisible = isVisible)
+                        if (uiState.ratingsReady) {
+                            RatingStatsCard(uiState = uiState, isVisible = isVisible)
+                        } else {
+                            SectionShimmer(height = 260.dp)
+                        }
                     }
                 }
 
@@ -243,7 +259,9 @@ fun StatisticsScreen(
                         }
                     }
                     SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
-                        if (uiState.wordCloud.isNotEmpty()) {
+                        if (!uiState.wordCloudReady) {
+                            SectionShimmer(height = 220.dp)
+                        } else if (uiState.wordCloud.isNotEmpty()) {
                             WordCloud(
                                 words = uiState.wordCloud,
                                 modifier = Modifier.fillMaxWidth().height(220.dp)
@@ -267,29 +285,37 @@ fun StatisticsScreen(
                 }
 
                 // 类型分布（饼图，展开动画）
-                if (uiState.genreDistribution.isNotEmpty()) {
-                    item(key = "pie") {
-                        val isVisible by remember {
-                            derivedStateOf {
-                                listState.layoutInfo.visibleItemsInfo.any { it.key == "pie" }
-                            }
+                item(key = "pie") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "pie" }
                         }
+                    }
+                    if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
                         SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
                             GenrePieChart(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
+                        }
+                    } else if (!uiState.genreReady) {
+                        SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
+                            SectionShimmer(height = 280.dp)
                         }
                     }
                 }
 
                 // 最常看的类型排行（柱形增长动画 + emoji奖牌）
-                if (uiState.genreDistribution.isNotEmpty()) {
-                    item(key = "ranking") {
-                        val isVisible by remember {
-                            derivedStateOf {
-                                listState.layoutInfo.visibleItemsInfo.any { it.key == "ranking" }
-                            }
+                item(key = "ranking") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ranking" }
                         }
+                    }
+                    if (uiState.genreReady && uiState.genreDistribution.isNotEmpty()) {
                         SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
                             GenreRanking(genreDistribution = uiState.genreDistribution, isVisible = isVisible)
+                        }
+                    } else if (!uiState.genreReady) {
+                        SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
+                            SectionShimmer(height = 280.dp)
                         }
                     }
                 }
@@ -1194,6 +1220,22 @@ private fun heatmapColor(count: Int, primary: Color, emptyColor: Color): Color {
         count <= 9 -> primary.copy(alpha = 0.75f)
         else -> primary
     }
+}
+
+/** 区块级骨架：某区块数据未就绪时，在对应卡片内显示闪烁占位 */
+@Composable
+private fun SectionShimmer(
+    modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = 120.dp
+) {
+    val brush = rememberShimmerBrush()
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(RoundedCornerShape(8.dp))
+            .background(brush)
+    )
 }
 
 /** 骨架屏：加载中的占位界面，颜色风格与发现页一致 */
