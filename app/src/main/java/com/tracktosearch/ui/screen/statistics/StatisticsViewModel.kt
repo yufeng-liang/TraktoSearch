@@ -1,16 +1,14 @@
 package com.tracktosearch.ui.screen.statistics
 
+import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.compose.runtime.Immutable
-import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
-import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
+import com.tracktosearch.R
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.tracktosearch.R
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

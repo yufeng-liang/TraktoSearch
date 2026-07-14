@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -27,10 +26,10 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -55,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tracktosearch.R
-import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionPart
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason

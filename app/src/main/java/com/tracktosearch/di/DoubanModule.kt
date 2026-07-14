@@ -9,8 +9,6 @@ import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.repository.CloudDetailsPoolManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
-import com.tracktosearch.data.repository.DoubanRetryManager
-import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.persistentTtlCache
 import dagger.Module

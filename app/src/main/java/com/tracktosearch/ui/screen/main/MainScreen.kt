@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -61,8 +63,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -75,13 +75,12 @@ import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
+import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
-import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel

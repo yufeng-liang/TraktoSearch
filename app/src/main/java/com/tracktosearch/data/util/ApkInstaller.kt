@@ -3,7 +3,6 @@ package com.tracktosearch.data.util
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
-import android.os.Build
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileInputStream
@@ -11,13 +10,11 @@ import java.io.FileInputStream
 object ApkInstaller {
     fun installApk(context: Context, apkFile: File) {
         // 优先使用 PackageInstaller API（无需系统安装器 UI 解析 FileProvider URI）
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            try {
-                installViaPackageInstaller(context, apkFile)
-                return
-            } catch (_: Exception) {
-                // 失败时 fallback 到 Intent
-            }
+        try {
+            installViaPackageInstaller(context, apkFile)
+            return
+        } catch (_: Exception) {
+            // 失败时 fallback 到 Intent
         }
         installViaIntent(context, apkFile)
     }

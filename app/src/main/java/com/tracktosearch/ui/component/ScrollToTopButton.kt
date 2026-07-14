@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,8 +53,8 @@ fun ScrollToTopButton(
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
-    var previousIndex by remember { mutableStateOf(0) }
-    var previousOffset by remember { mutableStateOf(0) }
+    var previousIndex by remember { mutableIntStateOf(0) }
+    var previousOffset by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(listState) {
         snapshotFlow {
@@ -96,8 +97,8 @@ fun ScrollToTopButton(
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
-    var previousIndex by remember { mutableStateOf(0) }
-    var previousOffset by remember { mutableStateOf(0) }
+    var previousIndex by remember { mutableIntStateOf(0) }
+    var previousOffset by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(gridState) {
         snapshotFlow {

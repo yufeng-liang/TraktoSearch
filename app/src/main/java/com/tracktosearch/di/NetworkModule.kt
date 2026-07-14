@@ -6,13 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.local.TokenStorage
-import com.tracktosearch.data.remote.douban.DoubanHotApiService
-import com.tracktosearch.data.remote.douban.dto.DoubanHotData
-import com.tracktosearch.data.util.PersistentTtlCache
-import com.tracktosearch.data.util.TtlCache
-import com.tracktosearch.data.util.persistentTtlCache
 import com.tracktosearch.data.remote.config.ApiKeyInterceptor
 import com.tracktosearch.data.remote.config.BaseUrlInterceptor
+import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
@@ -23,6 +19,8 @@ import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import com.tracktosearch.data.remote.weather.OpenMeteoApi
 import com.tracktosearch.data.remote.zreso.ZresoApiService
+import com.tracktosearch.data.util.PersistentTtlCache
+import com.tracktosearch.data.util.persistentTtlCache
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -32,6 +30,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
+import okhttp3.Cache
 import okhttp3.ConnectionPool
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -39,7 +38,6 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import okhttp3.Cache
 import java.net.Inet4Address
 import java.util.concurrent.TimeUnit
 import javax.inject.Named

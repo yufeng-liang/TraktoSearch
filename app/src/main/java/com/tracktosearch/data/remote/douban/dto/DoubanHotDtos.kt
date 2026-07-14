@@ -1,7 +1,6 @@
 package com.tracktosearch.data.remote.douban.dto
 
 import androidx.compose.runtime.Immutable
-import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable

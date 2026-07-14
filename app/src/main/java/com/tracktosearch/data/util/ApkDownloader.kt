@@ -3,7 +3,6 @@ package com.tracktosearch.data.util
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -82,7 +81,7 @@ object ApkDownloader {
         }
     }
 
-    private suspend fun tryDownload(
+    private fun tryDownload(
         client: OkHttpClient,
         url: String,
         context: Context,
@@ -140,18 +139,16 @@ object ApkDownloader {
     }
 
     private fun createDownloadChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                context.getString(R.string.notification_channel_apk_download),
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = context.getString(R.string.notification_channel_apk_download_desc)
-                setShowBadge(false)
-            }
-            val manager = context.getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            context.getString(R.string.notification_channel_apk_download),
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = context.getString(R.string.notification_channel_apk_download_desc)
+            setShowBadge(false)
         }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
     }
 
     private fun showDownloadNotification(context: Context, progress: Float, indeterminate: Boolean) {

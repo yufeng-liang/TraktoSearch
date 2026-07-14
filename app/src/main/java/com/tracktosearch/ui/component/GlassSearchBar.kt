@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -67,7 +68,7 @@ fun GlassSearchBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isEditable = onValueChange != null
 
-    val containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val containerColor = Color.LightGray.copy(alpha = 0.25f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val hintColor = contentColor.copy(alpha = 0.55f)
 
@@ -76,6 +77,7 @@ fun GlassSearchBar(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
             .then(
                 if (hazeState != null) {
                     Modifier.hazeEffect(

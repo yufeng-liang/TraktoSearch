@@ -10,10 +10,9 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.zreso.ZresoApiService
-import javax.inject.Named
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -24,8 +23,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
@@ -390,7 +389,7 @@ class ResourceRepository @Inject constructor(
     /**
      * 合并外部传入的资源列表并写入缓存（用于中英文搜索结果合并）
      */
-    suspend fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
+    fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
         val merged = items
             .distinctBy { it.url }
             .sortedWith(resourceComparator(isShow))
@@ -414,7 +413,7 @@ class ResourceRepository @Inject constructor(
      * 直接从缓存拿全量（不调 API，不按 filter 过滤）。
      * 如果缓存不存在返回空。
      */
-    suspend fun getCachedAllResources(keyword: String): List<ResourceItem> {
+    fun getCachedAllResources(keyword: String): List<ResourceItem> {
         if (keyword.isBlank()) return emptyList()
         val cached = cache[keyword] ?: return emptyList()
         val now = System.currentTimeMillis()

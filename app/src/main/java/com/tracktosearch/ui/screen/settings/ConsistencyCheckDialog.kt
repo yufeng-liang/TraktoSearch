@@ -109,7 +109,7 @@ fun ConsistencyCheckDialog(
                 if (p.isRunning && !p.currentTitle.isNullOrEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = p.currentTitle!!,
+                        text = p.currentTitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
@@ -134,7 +134,7 @@ fun ConsistencyCheckDialog(
                 if (p.isRunning && p.delayInfo != null && delayRemainingSeconds > 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${p.delayInfo!!.type.displayKey} ${delayRemainingSeconds}s",
+                        text = "${p.delayInfo.type.displayKey} ${delayRemainingSeconds}s",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )

@@ -64,6 +64,7 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Sync
@@ -723,7 +724,8 @@ fun WatchlistScreen(
                                         .height(tabHeight)
                                         .width(capsuleWidth)
                                         .clip(RoundedCornerShape(25.dp))
-                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(25.dp))
+                                        .background(Color.Transparent)
                                 ) {
                                     Box(
                                         modifier = Modifier
@@ -964,7 +966,88 @@ fun WatchlistScreen(
                                     }
                                 }
                             }
-    
+
+                            // 豆瓣标记批量移除进度横幅（移除进行中或刚完成 5 秒内显示）
+                            val removalProgress = uiState.batchRemovalProgress
+                            if (removalProgress != null) {
+                                val removalSpinTransition = rememberInfiniteTransition(label = "removal_spin")
+                                val removalSpinRotation by removalSpinTransition.animateFloat(
+                                    initialValue = 0f,
+                                    targetValue = 360f,
+                                    animationSpec = infiniteRepeatable(
+                                        animation = tween(durationMillis = 1000, easing = LinearEasing)
+                                    ),
+                                    label = "removal_rotation"
+                                )
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            // 完成态点击无操作（横幅 5 秒后自动消失）
+                                            if (removalProgress.isRunning && !removalProgress.isCancelling) {
+                                                viewModel.cancelBatchRemoval()
+                                            }
+                                        },
+                                    color = if (removalProgress.isCancelling) MaterialTheme.colorScheme.outlineVariant
+                                        else MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = if (removalProgress.isRunning) Icons.Rounded.Delete
+                                            else Icons.Rounded.CheckCircle,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier
+                                                .size(18.dp)
+                                                .then(
+                                                    if (removalProgress.isRunning) Modifier.graphicsLayer { rotationZ = removalSpinRotation }
+                                                    else Modifier
+                                                )
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = if (removalProgress.isComplete) {
+                                                    stringResource(
+                                                        R.string.douban_batch_removal_complete,
+                                                        removalProgress.successCount,
+                                                        removalProgress.failCount + removalProgress.skipCount
+                                                    )
+                                                } else if (removalProgress.isCancelling) {
+                                                    stringResource(R.string.douban_batch_removal_cancelling)
+                                                } else if (removalProgress.total > 0) {
+                                                    "${removalProgress.phase} (${removalProgress.current}/${removalProgress.total})"
+                                                } else {
+                                                    removalProgress.phase
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                            if (removalProgress.isRunning && removalProgress.total > 0) {
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                LinearProgressIndicator(
+                                                    progress = { (removalProgress.current.toFloat() / removalProgress.total).coerceIn(0f, 1f) },
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                        if (removalProgress.isRunning && !removalProgress.isCancelling) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = stringResource(R.string.douban_batch_removal_cancel),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
                             // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
                             if (tmdbUnavailable && !posterErrorDismissed) {
                                 Surface(
@@ -1047,6 +1130,10 @@ fun WatchlistScreen(
                                                     viewModel.batchRemoveFromWatchlist(ids, type)
                                                 } else {
                                                     viewModel.batchRemoveFromHistory(ids, type)
+                                                }
+                                                // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
+                                                if (viewModel.isBatchRemovalRunning()) {
+                                                    com.tracktosearch.service.DoubanBatchRemovalService.start(context)
                                                 }
                                                 // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
                                                 isMultiSelectMode = false
@@ -1252,7 +1339,7 @@ private fun WatchlistPosterCard(
 
     LaunchedEffect(posterLoaded, item.posterUrl) {
         if (posterLoaded && !colorExtracted && item.posterUrl != null) {
-            delay(1500L)
+            delay(500L)
             if (posterLoaded && !colorExtracted) {
                 val bitmap = posterLoadedBitmap
                 if (bitmap != null) {

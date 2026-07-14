@@ -388,7 +388,7 @@ class DoubanRepository(
             initialReleaseDates = initialReleaseDates,
             ratingDistribution = ratingDistribution,
             celebrities = celebrities.map {
-                com.tracktosearch.data.remote.douban.DoubanCelebrity(
+                DoubanCelebrity(
                     name = it.name,
                     doubanPersonageUrl = it.doubanPersonageUrl,
                     avatarUrl = it.avatarUrl,
@@ -656,7 +656,7 @@ class DoubanRepository(
     /**
      * 写入 traktId→doubanId 映射到永久缓存(供豆瓣导入成功后调用)。
      */
-    suspend fun putDoubanIdMapping(traktId: Int, mediaType: String, doubanId: String) {
+    fun putDoubanIdMapping(traktId: Int, mediaType: String, doubanId: String) {
         idMappingCache?.put("${traktId}_$mediaType", doubanId)
     }
 

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,8 +16,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -35,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,14 +48,13 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
-import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedShowResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.component.PosterCard
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
 @Composable

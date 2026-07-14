@@ -71,30 +71,33 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.imageLoader
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -171,6 +174,30 @@ fun DetailScreen(
     }
     val contentAlpha by remember(contentReady) {
         derivedStateOf { if (contentReady) 1f else 0f }
+    }
+
+    // Coil 内存缓存兜底：PosterColorCache miss 时从 Coil 内存缓存取 bitmap 提取主色
+    // 列表页 MovieCard 已用 size(264) 加载海报，详情页进入时 Coil 内存缓存大概率命中 → 秒提取
+    // 只查内存缓存，network/disk 均 disable 避免重复网络请求
+    val coilContext = LocalContext.current
+    LaunchedEffect(uiState.posterUrl, uiState.posterDominantColor) {
+        val url = uiState.posterUrl ?: return@LaunchedEffect
+        // 已有主色就不做兜底（ViewModel 的 prefetchPosterColor 或缓存命中已设置）
+        if (uiState.posterDominantColor != null) return@LaunchedEffect
+        val request = ImageRequest.Builder(coilContext)
+            .data(url)
+            .size(264)
+            .networkCachePolicy(CachePolicy.DISABLED)
+            .diskCachePolicy(CachePolicy.DISABLED)
+            .build()
+        val result = coilContext.imageLoader.execute(request)
+        if (result is SuccessResult) {
+            val bitmap = result.drawable.toBitmap()
+            val argb = viewModel.posterColorExtractor.extractDominantColor(url, bitmap)
+            if (argb != 0L) {
+                viewModel.updatePosterColor(Color(argb))
+            }
+        }
     }
 
     // 评论翻译映射

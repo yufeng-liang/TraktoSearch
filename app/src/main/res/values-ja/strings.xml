@@ -633,6 +633,10 @@
     <string name="consistency_check_cancelling">キャンセル中...</string>
     <string name="consistency_check_cancel">キャンセル</string>
     <string name="consistency_check_complete_banner">チェック完了</string>
+    <string name="douban_batch_removal_title">豆瓣マーク削除</string>
+    <string name="douban_batch_removal_cancel">キャンセル</string>
+    <string name="douban_batch_removal_cancelling">キャンセル中...</string>
+    <string name="douban_batch_removal_complete">豆瓣マーク削除完了、成功 %1$d 件、失敗/スキップ %2$d 件</string>
     <string name="consistency_check_phase_crawl">豆瓣リスト取得中</string>
     <string name="consistency_check_phase_compare">状態比較中</string>
     <string name="consistency_check_phase_update_trakt">Trakt更新中</string>
@@ -872,8 +876,21 @@
     <!-- 豆瓣マーク双方向書き戻しヘルプ -->
     <string name="help_douban_writeback">豆瓣マーク書き戻し</string>
     <string name="help_douban_writeback_b1">豆瓣同期失敗アイテム詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
-    <string name="help_douban_writeback_b2">失敗アイテム詳細ページから「見たい/見た/マーク解除」を直接豆瓣に書き戻し、豆瓣をあなたの選択に一致させられます（Traktが主源）。</string>
     <string name="help_douban_writeback_b3">見たい↔見たの切り替えは失敗リストに保存。マーク解除は失敗アイテムを削除します(確認ダイアログ付き)。</string>
+    <string name="help_consistency_check">状態整合性チェック</string>
+    <string name="help_consistency_intro">豆瓣とTraktの状態が不一致になることがあります。チェックは「見た方を見たいより優先」の原則で両方を統一します。見た状態が見たいを上書きし、見た側をもう片方に書き戻すため、マークが失われることはありません。以下の表はすべての不一致の処理方法です。</string>
+    <string name="help_consistency_col_douban">豆瓣</string>
+    <string name="help_consistency_col_trakt">Trakt</string>
+    <string name="help_consistency_col_result">統一後</string>
+    <string name="help_consistency_col_action">処理</string>
+    <string name="help_status_unmarked">未マーク</string>
+    <string name="help_no_action">操作なし</string>
+    <string name="help_consistency_act_trakt_watched_remove_wish">Traktで見たをマーク（見たいを削除）</string>
+    <string name="help_consistency_act_douban_watched_upgrade">豆瓣で見たをマーク（格上げ）</string>
+    <string name="help_consistency_act_trakt_watched">Traktで見たをマーク</string>
+    <string name="help_consistency_act_trakt_wish">Traktで見たいをマーク</string>
+    <string name="help_consistency_act_douban_watched">豆瓣で見たをマーク</string>
+    <string name="help_consistency_act_douban_wish">豆瓣で見たいをマーク</string>
     <string name="settings_restart_onboarding">チュートリアル</string>
     <string name="settings_restart_onboarding_desc">アプリの機能ガイドを再表示</string>
     <string name="onboarding_skip">スキップ</string>

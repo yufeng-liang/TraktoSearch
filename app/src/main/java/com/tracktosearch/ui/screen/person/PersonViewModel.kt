@@ -1,11 +1,11 @@
 package com.tracktosearch.ui.screen.person
 
 import android.content.Context
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.drawable.toBitmap
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.tracktosearch.R
@@ -13,7 +13,6 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPerson
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonMovieCredit
 import com.tracktosearch.data.remote.tmdb.dto.TmdbPersonTvCredit
-import com.tracktosearch.data.remote.trakt.dto.TraktImages
 import com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
@@ -23,8 +22,6 @@ import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -7,20 +7,18 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
-import com.tracktosearch.data.remote.douban.DoubanMarkItem
+import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
-import com.tracktosearch.data.remote.douban.DelayInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -362,20 +360,20 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     conflicts++
                     traktNeedWatched.add(traktId to mediaType)
                 }
-                doubanIsCollect && !traktIsWatched && !traktIsInWatchlist -> {
+                doubanIsCollect && !traktIsInWatchlist -> {
                     traktNeedWatched.add(traktId to mediaType)
                 }
                 doubanIsWish && traktIsWatched -> {
                     conflicts++
                     doubanNeedUpdate.add(DoubanStatusUpdate(doubanId, "collect", doubanId, title))
                 }
-                doubanIsWish && !traktIsWatched && !traktIsInWatchlist -> {
+                doubanIsWish -> {
                     traktNeedWatchlist.add(traktId to mediaType)
                 }
-                !doubanIsCollect && !doubanIsWish && traktIsWatched -> {
+                !doubanIsWish && traktIsWatched -> {
                     doubanNeedUpdate.add(DoubanStatusUpdate(doubanId, "collect", doubanId, title))
                 }
-                !doubanIsCollect && !doubanIsWish && traktIsInWatchlist -> {
+                !doubanIsWish && traktIsInWatchlist -> {
                     doubanNeedUpdate.add(DoubanStatusUpdate(doubanId, "wish", doubanId, title))
                 }
             }
@@ -433,9 +431,9 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     /**
      * 分类冲突项（抽取公共逻辑，供 checkAndUnify 和 checkAndUnifyWithCrawl 复用）
      */
-    private suspend fun classifyConflicts(
+    private fun classifyConflicts(
         allItems: List<DoubanSyncedItem>,
-        watchedIds: com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds?
+        watchedIds: TraktRepository.WatchlistWatchedIds?
     ): ClassifyResult {
         val traktNeedWatched = mutableListOf<Pair<Int, MediaType>>()
         val traktNeedWatchlist = mutableListOf<Pair<Int, MediaType>>()
@@ -461,20 +459,20 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     conflicts++
                     traktNeedWatched.add(traktId to mediaType)
                 }
-                doubanIsCollect && !traktIsWatched && !traktIsInWatchlist -> {
+                doubanIsCollect -> {
                     traktNeedWatched.add(traktId to mediaType)
                 }
                 doubanIsWish && traktIsWatched -> {
                     conflicts++
                     doubanNeedUpdate.add(DoubanStatusUpdate(item.doubanId, "collect", item.doubanId, item.title))
                 }
-                doubanIsWish && !traktIsWatched && !traktIsInWatchlist -> {
+                doubanIsWish -> {
                     traktNeedWatchlist.add(traktId to mediaType)
                 }
-                !doubanIsCollect && !doubanIsWish && traktIsWatched -> {
+                traktIsWatched -> {
                     doubanNeedUpdate.add(DoubanStatusUpdate(item.doubanId, "collect", item.doubanId, item.title))
                 }
-                !doubanIsCollect && !doubanIsWish && traktIsInWatchlist -> {
+                traktIsInWatchlist -> {
                     doubanNeedUpdate.add(DoubanStatusUpdate(item.doubanId, "wish", item.doubanId, item.title))
                 }
             }

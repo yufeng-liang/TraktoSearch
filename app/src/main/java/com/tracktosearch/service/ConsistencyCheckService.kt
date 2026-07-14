@@ -54,11 +54,7 @@ class ConsistencyCheckService : Service() {
                 if (!granted) return
             }
             val intent = Intent(context, ConsistencyCheckService::class.java).setAction(ACTION_START)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
     }
 
@@ -137,12 +133,10 @@ class ConsistencyCheckService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID, getString(com.tracktosearch.R.string.consistency_check_title), NotificationManager.IMPORTANCE_LOW
-            ).apply { description = "Status consistency check progress" }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
-        }
+        val channel = NotificationChannel(
+            CHANNEL_ID, getString(com.tracktosearch.R.string.consistency_check_title), NotificationManager.IMPORTANCE_LOW
+        ).apply { description = "Status consistency check progress" }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     override fun onDestroy() {

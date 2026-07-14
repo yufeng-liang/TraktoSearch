@@ -25,7 +25,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material3.Card
@@ -37,8 +36,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,23 +53,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -253,7 +250,7 @@ fun DiscoverScreen(
                         )
                     )
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(9.dp),
                         contentPadding = PaddingValues(horizontal = 0.dp)
                     ) {
                         itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->

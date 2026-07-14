@@ -638,8 +638,21 @@
     <!-- 豆瓣标记双向写回帮助 -->
     <string name="help_douban_writeback">豆瓣标记双向写回</string>
     <string name="help_douban_writeback_b1">在豆瓣同步失败条目详情页,可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
-    <string name="help_douban_writeback_b2">可在失败条目详情页把「想看/已看/取消标记」直接写回豆瓣,使豆瓣与你的选择保持一致(Trakt 为主源)。</string>
     <string name="help_douban_writeback_b3">想看↔已看切换后新状态持久化到失败列表;取消标记会删除该失败条目(需二次确认)。</string>
+    <string name="help_consistency_check">状态一致性检查</string>
+    <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边:已看状态覆盖想看状态,并以已看方为准回写另一方,标记永不丢失。下表列出所有不一致情况的处理方式。</string>
+    <string name="help_consistency_col_douban">豆瓣状态</string>
+    <string name="help_consistency_col_trakt">Trakt 状态</string>
+    <string name="help_consistency_col_result">统一后</string>
+    <string name="help_consistency_col_action">处理方式</string>
+    <string name="help_status_unmarked">未标记</string>
+    <string name="help_no_action">无操作</string>
+    <string name="help_consistency_act_trakt_watched_remove_wish">Trakt 标记已看(移除想看)</string>
+    <string name="help_consistency_act_douban_watched_upgrade">豆瓣标记已看(升级)</string>
+    <string name="help_consistency_act_trakt_watched">Trakt 标记已看</string>
+    <string name="help_consistency_act_trakt_wish">Trakt 标记想看</string>
+    <string name="help_consistency_act_douban_watched">豆瓣标记已看</string>
+    <string name="help_consistency_act_douban_wish">豆瓣标记想看</string>
     <string name="settings_restart_onboarding">新手引导</string>
     <string name="settings_restart_onboarding_desc">重新查看App功能引导</string>
     <string name="onboarding_skip">跳过</string>
@@ -746,6 +759,10 @@
     <string name="consistency_check_cancelling">正在取消...</string>
     <string name="consistency_check_cancel">取消</string>
     <string name="consistency_check_complete_banner">检查完成</string>
+    <string name="douban_batch_removal_title">移除豆瓣标记</string>
+    <string name="douban_batch_removal_cancel">取消</string>
+    <string name="douban_batch_removal_cancelling">正在取消...</string>
+    <string name="douban_batch_removal_complete">豆瓣标记移除完成，成功 %1$d 项，失败/跳过 %2$d 项</string>
     <string name="consistency_check_phase_crawl">爬取豆瓣列表</string>
     <string name="consistency_check_phase_compare">对比状态</string>
     <string name="consistency_check_phase_update_trakt">更新 Trakt</string>

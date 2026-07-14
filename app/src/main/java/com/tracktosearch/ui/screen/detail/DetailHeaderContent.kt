@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,11 +25,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -59,20 +58,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
+import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.data.util.PosterColorExtractor
 import dev.chrisbanes.haze.HazeState
-import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.launch
 
 // ==================== 头部内容 ====================
@@ -168,7 +167,7 @@ internal fun DetailHeaderContent(
                                     .listener(
                                         onSuccess = { _, result ->
                                             // 图片加载成功后提取主色调,用于沉浸式背景渐变
-                                            uiState.posterUrl?.let { url ->
+                                            uiState.posterUrl.let { url ->
                                                 val bitmap = result.drawable.toBitmap()
                                                 scope.launch {
                                                     val argb = posterColorExtractor.extractDominantColor(url, bitmap)

@@ -456,7 +456,6 @@ class TraktRepository @Inject constructor(
                     val id = when (type) {
                         MediaType.MOVIE -> r.movie?.ids?.trakt
                         MediaType.SHOW -> r.show?.ids?.trakt
-                        else -> null
                     }
                     id != null && id > 0
                 }

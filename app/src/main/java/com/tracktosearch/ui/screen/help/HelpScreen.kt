@@ -324,8 +324,20 @@ fun HelpScreen(
                         onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 }
                     ) {
                         HelpBullet(stringResource(R.string.help_douban_writeback_b1))
-                        HelpBullet(stringResource(R.string.help_douban_writeback_b2))
                         HelpBullet(stringResource(R.string.help_douban_writeback_b3))
+                    }
+                }
+
+                // 状态一致性检查
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.help_consistency_check),
+                        isExpanded = expandedIndex == 11,
+                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 }
+                    ) {
+                        HelpBullet(stringResource(R.string.help_consistency_intro))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        ConsistencyCheckTable()
                     }
                 }
             }
@@ -615,3 +627,96 @@ private fun CustomSourceParamsTable() {
         }
     }
 }
+
+@Composable
+private fun ConsistencyCheckTable() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(8.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                text = stringResource(R.string.help_consistency_col_douban),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(0.22f)
+            )
+            Text(
+                text = stringResource(R.string.help_consistency_col_trakt),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(0.22f)
+            )
+            Text(
+                text = stringResource(R.string.help_consistency_col_result),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(0.16f)
+            )
+            Text(
+                text = stringResource(R.string.help_consistency_col_action),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.weight(0.40f)
+            )
+        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+        val rows = listOf(
+            ConsistencyRow(
+                R.string.watchlist_mode_watched, R.string.watchlist_mode_watchlist,
+                R.string.watchlist_mode_watched, R.string.help_consistency_act_trakt_watched_remove_wish
+            ),
+            ConsistencyRow(
+                R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watched,
+                R.string.watchlist_mode_watched, R.string.help_consistency_act_douban_watched_upgrade
+            ),
+            ConsistencyRow(
+                R.string.watchlist_mode_watched, R.string.help_status_unmarked,
+                R.string.watchlist_mode_watched, R.string.help_consistency_act_trakt_watched
+            ),
+            ConsistencyRow(
+                R.string.watchlist_mode_watchlist, R.string.help_status_unmarked,
+                R.string.watchlist_mode_watchlist, R.string.help_consistency_act_trakt_wish
+            ),
+            ConsistencyRow(
+                R.string.help_status_unmarked, R.string.watchlist_mode_watched,
+                R.string.watchlist_mode_watched, R.string.help_consistency_act_douban_watched
+            ),
+            ConsistencyRow(
+                R.string.help_status_unmarked, R.string.watchlist_mode_watchlist,
+                R.string.watchlist_mode_watchlist, R.string.help_consistency_act_douban_wish
+            ),
+            ConsistencyRow(
+                R.string.watchlist_mode_watched, R.string.watchlist_mode_watched,
+                R.string.watchlist_mode_watched, R.string.help_no_action
+            ),
+            ConsistencyRow(
+                R.string.watchlist_mode_watchlist, R.string.watchlist_mode_watchlist,
+                R.string.watchlist_mode_watchlist, R.string.help_no_action
+            )
+        )
+        rows.forEach { (douban, trakt, result, action) ->
+            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Text(stringResource(douban), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.22f))
+                Text(stringResource(trakt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.22f))
+                Text(stringResource(result), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.16f))
+                Text(stringResource(action), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 14.sp, modifier = Modifier.weight(0.40f))
+            }
+        }
+    }
+}
+
+private data class ConsistencyRow(
+    val douban: Int,
+    val trakt: Int,
+    val result: Int,
+    val action: Int
+)

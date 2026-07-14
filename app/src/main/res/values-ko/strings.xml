@@ -633,6 +633,10 @@
     <string name="consistency_check_cancelling">취소 중...</string>
     <string name="consistency_check_cancel">취소</string>
     <string name="consistency_check_complete_banner">확인 완료</string>
+    <string name="douban_batch_removal_title">더우반 표시 제거</string>
+    <string name="douban_batch_removal_cancel">취소</string>
+    <string name="douban_batch_removal_cancelling">취소 중...</string>
+    <string name="douban_batch_removal_complete">더우반 표시 제거 완료, 성공 %1$d건, 실패/건너뜀 %2$d건</string>
     <string name="consistency_check_phase_crawl">더우반 목록 가져오는 중</string>
     <string name="consistency_check_phase_compare">상태 비교 중</string>
     <string name="consistency_check_phase_update_trakt">Trakt 업데이트 중</string>
@@ -872,8 +876,21 @@
     <!-- 더우반 마크 양방향 쓰기 도움말 -->
     <string name="help_douban_writeback">더우반 마크 쓰기</string>
     <string name="help_douban_writeback_b1">더우반 동기화 실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있습니다.</string>
-    <string name="help_douban_writeback_b2">실패 항목 상세 페이지에서「보고 싶음 / 봄 / 마크 해제」를 더우반에 직접 쓸 수 있어 더우반을 선택과 일치시킬 수 있습니다(Trakt가 주 원본).</string>
     <string name="help_douban_writeback_b3">보고 싶음↔봄 전환은 실패 목록에 저장. 마크 해제는 실패 항목을 삭제합니다(확인 대화상자 포함).</string>
+    <string name="help_consistency_check">상태 정합성 검사</string>
+    <string name="help_consistency_intro">더우반과 Trakt 상태가 일치하지 않을 수 있습니다. 검사는「본 것이 보고 싶은 것보다 우선」원칙으로 양쪽을 통일합니다. 본 상태가 보고 싶음을 덮어쓰고, 본 쪽을 반대쪽에 다시 쓰므로 마크가 유실되지 않습니다. 아래 표는 모든 불일치 처리 방법입니다.</string>
+    <string name="help_consistency_col_douban">더우반</string>
+    <string name="help_consistency_col_trakt">Trakt</string>
+    <string name="help_consistency_col_result">통일 후</string>
+    <string name="help_consistency_col_action">처리</string>
+    <string name="help_status_unmarked">미표시</string>
+    <string name="help_no_action">동작 없음</string>
+    <string name="help_consistency_act_trakt_watched_remove_wish">Trakt에서 본 표시(보고 싶음 제거)</string>
+    <string name="help_consistency_act_douban_watched_upgrade">더우반에서 본 표시(격상)</string>
+    <string name="help_consistency_act_trakt_watched">Trakt에서 본 표시</string>
+    <string name="help_consistency_act_trakt_wish">Trakt에서 보고 싶음 표시</string>
+    <string name="help_consistency_act_douban_watched">더우반에서 본 표시</string>
+    <string name="help_consistency_act_douban_wish">더우반에서 보고 싶음 표시</string>
     <string name="settings_restart_onboarding">튜토리얼</string>
     <string name="settings_restart_onboarding_desc">앱 기능 가이드 다시 보기</string>
     <string name="onboarding_skip">건너뛰기</string>

@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.listdetail
 
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
@@ -16,7 +15,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -41,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -49,19 +48,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.LocalActivePosterTmdbIdSetter
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
-import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
-import androidx.compose.runtime.snapshotFlow
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource

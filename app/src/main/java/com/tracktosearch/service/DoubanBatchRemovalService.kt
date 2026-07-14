@@ -14,8 +14,8 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.tracktosearch.MainActivity
-import com.tracktosearch.data.repository.DoubanSyncManager
-import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.BatchRemovalProgress
+import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,43 +26,36 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * 豆瓣标记同步通知服务：
- * - 只负责显示通知栏进度，不启动同步（同步在 DoubanSyncManager 内部的 Application scope 跑）
- * - 同步完成或取消后自动 stopSelf
- * - 通知带「取消」Action，用户可中断同步
+ * 豆瓣标记批量移除通知服务：
+ * - 只负责显示通知栏进度，不启动移除（移除在 [DoubanBatchRemovalManager] 的 Application scope 跑）
+ * - 移除完成或取消后自动 stopSelf
+ * - 通知带「取消」Action，用户可中断移除
  *
- * 注意：Android 14+ 要求 dataSync 类型前台服务声明 FOREGROUND_SERVICE_DATA_SYNC 权限，
- * 且后台启动前台服务受限。本 Service 仅在用户主动点击「转后台」时（App 在前台）启动。
+ * 仅在用户触发多选移除时（App 在前台）启动。
  */
 @AndroidEntryPoint
-class DoubanSyncService : Service() {
+class DoubanBatchRemovalService : Service() {
 
-    @Inject lateinit var doubanSyncManager: DoubanSyncManager
+    @Inject lateinit var batchRemovalManager: DoubanBatchRemovalManager
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    /** 进度收集协程 Job，防止多次 start() 启动多个收集协程 */
     private var progressJob: kotlinx.coroutines.Job? = null
 
     companion object {
-        const val CHANNEL_ID = "douban_sync"
-        const val NOTIF_ID = 9001
-        const val ACTION_START = "com.tracktosearch.START_DOUBAN_SYNC"
-        const val ACTION_CANCEL = "com.tracktosearch.CANCEL_DOUBAN_SYNC"
+        const val CHANNEL_ID = "douban_batch_removal"
+        const val NOTIF_ID = 9003
+        const val ACTION_START = "com.tracktosearch.START_DOUBAN_BATCH_REMOVAL"
+        const val ACTION_CANCEL = "com.tracktosearch.CANCEL_DOUBAN_BATCH_REMOVAL"
 
         fun start(context: Context) {
-            // 通知权限未授予时不启动 Service（同步仍在 Application scope 跑，只是没通知）
+            // 通知权限未授予时不启动 Service（移除仍在 Application scope 跑，只是没通知）
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val granted = context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
                 if (!granted) return
             }
-            val intent = Intent(context, DoubanSyncService::class.java).setAction(ACTION_START)
+            val intent = Intent(context, DoubanBatchRemovalService::class.java).setAction(ACTION_START)
             context.startForegroundService(intent)
-        }
-
-        fun cancel(context: Context) {
-            val intent = Intent(context, DoubanSyncService::class.java).setAction(ACTION_CANCEL)
-            context.startService(intent)
         }
     }
 
@@ -74,12 +67,11 @@ class DoubanSyncService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_CANCEL -> {
-                doubanSyncManager.cancel()
-                // 更新通知为"正在取消..."状态(若通知构建失败则直接 stopSelf)
+                batchRemovalManager.cancel()
                 try {
                     val cancellingNotif = buildNotification(
-                        doubanSyncManager.progress.value.current,
-                        doubanSyncManager.progress.value.total,
+                        batchRemovalManager.progress.value.current,
+                        batchRemovalManager.progress.value.total,
                         "正在取消..."
                     )
                     getSystemService(NotificationManager::class.java).notify(NOTIF_ID, cancellingNotif)
@@ -88,26 +80,21 @@ class DoubanSyncService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_START -> {
-                // 启动前台通知（Android 14+ 需要指定 foregroundServiceType）
-                // 用 try-catch 兜底：即使 FGS 启动失败（权限缺失或后台限制），也不崩溃，
-                // 同步仍在 DoubanSyncManager 的 Application scope 中继续运行。
                 try {
-                    val notif = buildNotification(0, 0, "准备同步...")
+                    val notif = buildNotification(0, 0, "准备移除豆瓣标记...")
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
                     } else {
                         startForeground(NOTIF_ID, notif)
                     }
+                    // WakeLock 由 DoubanBatchRemovalManager 统一管理
                 } catch (e: Exception) {
-                    // FGS 启动失败，直接停止 Service，同步不受影响
                     stopSelf()
                     return START_NOT_STICKY
                 }
-                // 监听同步进度并更新通知，同步结束后 stopSelf
-                // 先取消旧协程，防止多次 start() 启动多个收集协程导致通知重复更新
                 progressJob?.cancel()
                 progressJob = scope.launch {
-                    doubanSyncManager.progress.collectLatest { p: DoubanSyncProgress ->
+                    batchRemovalManager.progress.collectLatest { p: BatchRemovalProgress ->
                         if (p.isComplete) {
                             stopSelf()
                             return@collectLatest
@@ -120,8 +107,7 @@ class DoubanSyncService : Service() {
                 }
             }
         }
-        // START_STICKY:系统杀进程后可重启 Service 恢复通知(同步仍在 Application scope 继续运行)
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     /** 构建进度通知 */
@@ -133,13 +119,12 @@ class DoubanSyncService : Service() {
         )
         val cancelIntent = PendingIntent.getService(
             this, 1,
-            Intent(this, DoubanSyncService::class.java).setAction(ACTION_CANCEL),
+            Intent(this, DoubanBatchRemovalService::class.java).setAction(ACTION_CANCEL),
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 通知文案用字符串资源，phase 本身是中文阶段名（来自 DoubanSyncProgress.phase）
-        val title = getString(com.tracktosearch.R.string.douban_sync_title)
-        val cancelText = getString(com.tracktosearch.R.string.douban_sync_cancel)
+        val title = getString(com.tracktosearch.R.string.douban_batch_removal_title)
+        val cancelText = getString(com.tracktosearch.R.string.douban_batch_removal_cancel)
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(com.tracktosearch.R.drawable.ic_sync)
             .setContentTitle(title)
@@ -158,8 +143,8 @@ class DoubanSyncService : Service() {
 
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
-            CHANNEL_ID, getString(com.tracktosearch.R.string.douban_sync_title), NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Douban → Trakt sync progress" }
+            CHANNEL_ID, getString(com.tracktosearch.R.string.douban_batch_removal_title), NotificationManager.IMPORTANCE_LOW
+        ).apply { description = "Douban batch mark removal progress" }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 

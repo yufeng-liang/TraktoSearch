@@ -1,26 +1,36 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material3.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -29,12 +39,13 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import androidx.compose.ui.res.stringResource
 import com.tracktosearch.R
 import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.EntryPoint
@@ -44,7 +55,6 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import androidx.core.graphics.drawable.toBitmap
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -107,11 +117,12 @@ fun MovieCard(
         posterLoadedBitmap = null
     }
 
-    // 海报加载成功 + 卡片仍在组合树中,延迟 1.5s 后提取主色
+    // 海报加载成功 + 卡片仍在组合树中,延迟 500ms 后提取主色
     // 快速滑过的卡片会在 DisposableEffect 中取消协程,不会浪费 CPU
+    // 500ms 确保用户点击卡片进入详情页前 PosterColorCache 大概率已写入
     LaunchedEffect(posterLoaded, posterUrl) {
         if (posterLoaded && !colorExtracted && posterUrl != null) {
-            delay(1500L)
+            delay(500L)
             // 再检查一次:可能此时卡片已滑出屏幕但尚未被 dispose
             if (posterLoaded && !colorExtracted) {
                 val bitmap = posterLoadedBitmap

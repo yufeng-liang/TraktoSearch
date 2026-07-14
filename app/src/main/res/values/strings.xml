@@ -638,8 +638,21 @@ Config:
     <!-- Douban mark bidirectional write-back help -->
     <string name="help_douban_writeback">Douban Mark Write-back</string>
     <string name="help_douban_writeback_b1">On the Douban sync-failure item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
-    <string name="help_douban_writeback_b2">You can write \"watchlist / watched / remove\" directly back to Douban from a failed item\'s detail page, keeping Douban consistent with your choice (Trakt is the primary source).</string>
     <string name="help_douban_writeback_b3">Switching Wish/Collected persists the new status to the failure list. Removing the mark deletes the failure item (with a second confirmation).</string>
+    <string name="help_consistency_check">Status Consistency Check</string>
+    <string name="help_consistency_intro">Douban and Trakt statuses may diverge. The check unifies both sides by the rule &quot;Watched takes priority over Want-to-watch&quot;: the watched status overrides wishlist, and the side that is watched is written back to the other, so no mark is ever lost. The table below lists how every mismatch is handled.</string>
+    <string name="help_consistency_col_douban">Douban</string>
+    <string name="help_consistency_col_trakt">Trakt</string>
+    <string name="help_consistency_col_result">Result</string>
+    <string name="help_consistency_col_action">Action</string>
+    <string name="help_status_unmarked">Unmarked</string>
+    <string name="help_no_action">No action</string>
+    <string name="help_consistency_act_trakt_watched_remove_wish">Trakt mark watched (remove wishlist)</string>
+    <string name="help_consistency_act_douban_watched_upgrade">Douban mark watched (upgrade)</string>
+    <string name="help_consistency_act_trakt_watched">Trakt mark watched</string>
+    <string name="help_consistency_act_trakt_wish">Trakt mark wishlist</string>
+    <string name="help_consistency_act_douban_watched">Douban mark watched</string>
+    <string name="help_consistency_act_douban_wish">Douban mark wishlist</string>
     <string name="settings_restart_onboarding">Tutorial</string>
     <string name="settings_restart_onboarding_desc">Re-run the app feature tour</string>
     <string name="onboarding_skip">Skip</string>
@@ -746,6 +759,10 @@ Config:
     <string name="consistency_check_cancelling">Cancelling...</string>
     <string name="consistency_check_cancel">Cancel</string>
     <string name="consistency_check_complete_banner">Check complete</string>
+    <string name="douban_batch_removal_title">Remove Douban marks</string>
+    <string name="douban_batch_removal_cancel">Cancel</string>
+    <string name="douban_batch_removal_cancelling">Cancelling...</string>
+    <string name="douban_batch_removal_complete">Douban mark removal complete, %1$d succeeded, %2$d failed/skipped</string>
     <string name="consistency_check_phase_crawl">Crawling Douban lists</string>
     <string name="consistency_check_phase_compare">Comparing statuses</string>
     <string name="consistency_check_phase_update_trakt">Updating Trakt</string>

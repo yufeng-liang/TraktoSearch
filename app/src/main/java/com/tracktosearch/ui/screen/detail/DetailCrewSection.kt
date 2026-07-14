@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.detail
 
-import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
@@ -39,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,22 +52,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
 import com.tracktosearch.data.util.PersonAvatarColorStore
-import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
-import androidx.core.graphics.drawable.toBitmap
 
 // ==================== 演职员 ====================
 
