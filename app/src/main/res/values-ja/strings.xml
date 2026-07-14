@@ -1322,4 +1322,5 @@
     <string name="douban_spider_test_mark_result">結果</string>
     <string name="douban_spider_test_copy_result">結果をコピー</string>
     <string name="douban_spider_test_mark_copied">コピーしました</string>
+    <string name="statistics_info_wordcloud">Q：レビュー単語クラウドとは？\nA：Doubanの短評から頻出単語を抽出し、ワードクラウドとして表示します。文字が大きいほど出現回数が多く、視聴した感想を手軽に振り返れます。</string>
 </resources>

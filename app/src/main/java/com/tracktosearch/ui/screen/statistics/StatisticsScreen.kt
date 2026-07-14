@@ -191,7 +191,9 @@ fun StatisticsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                     ) {
                         OverviewCards(uiState, isVisible)
                     }
@@ -209,18 +211,6 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 评分统计
-                item(key = "ratings") {
-                    val isVisible by remember {
-                        derivedStateOf {
-                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ratings" }
-                        }
-                    }
-                    SectionCard(title = stringResource(R.string.statistics_ratings)) {
-                        RatingStatsCard(uiState = uiState, isVisible = isVisible)
-                    }
-                }
-
                 // 热力图
                 item(key = "heatmap") {
                     val isVisible by remember {
@@ -230,6 +220,18 @@ fun StatisticsScreen(
                     }
                     SectionCard(title = stringResource(R.string.statistics_heatmap)) {
                         HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
+                    }
+                }
+
+                // 评分统计
+                item(key = "ratings") {
+                    val isVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ratings" }
+                        }
+                    }
+                    SectionCard(title = stringResource(R.string.statistics_ratings)) {
+                        RatingStatsCard(uiState = uiState, isVisible = isVisible)
                     }
                 }
 
@@ -375,13 +377,19 @@ private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
+                    text = stringResource(R.string.statistics_info_heatmap),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
                     text = stringResource(R.string.statistics_info_ratings),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = stringResource(R.string.statistics_info_heatmap),
+                    text = stringResource(R.string.statistics_info_wordcloud),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )

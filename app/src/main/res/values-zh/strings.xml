@@ -1307,4 +1307,5 @@
     <string name="settings_douban_logout_done">已退出豆瓣</string>
     <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
     <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分及豆瓣同步功能</string>
+    <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>
 </resources>
