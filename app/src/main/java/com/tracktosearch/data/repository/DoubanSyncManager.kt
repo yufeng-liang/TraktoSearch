@@ -1360,8 +1360,13 @@ class DoubanSyncManager @Inject constructor(
         return runCatching {
             val outputFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
             outputFormat.timeZone = TimeZone.getTimeZone("UTC")
-            val date = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(markedAt) ?: return null
-            outputFormat.format(date)
+            // 在设备当前时区把 "yyyy-MM-dd" 解析为当天 00:00,再偏移 +12h 锚定到本地正午,
+            // 转成 UTC 后,在用户自身时区回看仍是同一天(避免 UTC+13/+14 等跨日, #10)
+            val parsed = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(markedAt) ?: return null
+            val cal = java.util.Calendar.getInstance()
+            cal.time = parsed
+            cal.add(java.util.Calendar.HOUR_OF_DAY, 12)
+            outputFormat.format(cal.time)
         }.getOrNull()
     }
 

@@ -1087,7 +1087,7 @@ fun DoubanHotCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                        .padding(2.dp)
                 )
             }
             if (isResolving) {

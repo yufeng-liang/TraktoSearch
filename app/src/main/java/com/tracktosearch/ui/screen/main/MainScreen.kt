@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -521,6 +522,46 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     val interactionSource = remember { MutableInteractionSource() }
     val density = LocalDensity.current
     val context = LocalContext.current
+    // 浅色模式下 primary 偏暗（Red700），选中态提亮饱和度与亮度，提升鲜亮感
+    val selectedColor = if (selected) {
+        val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
+        val base = MaterialTheme.colorScheme.primary
+        if (isLight) {
+            // RGB→HSL 手动转换，提亮饱和度与亮度后转回
+            val r = base.red; val g = base.green; val b = base.blue
+            val max = maxOf(r, g, b); val min = minOf(r, g, b)
+            val l = (max + min) / 2f
+            val s = if (max == min) 0f else {
+                val d = max - min
+                if (l > 0.5f) d / (2f - max - min) else d / (max + min)
+            }
+            val h = when {
+                max == min -> 0f
+                max == r -> (((g - b) / (max - min)) + (if (g < b) 6f else 0f)) * 60f
+                max == g -> (((b - r) / (max - min)) + 2f) * 60f
+                else -> (((r - g) / (max - min)) + 4f) * 60f
+            }
+            // 提亮后的 HSL → RGB
+            val newS = (s + 0.14f).coerceIn(0f, 1f)
+            val newL = (l + 0.07f).coerceIn(0f, 1f)
+            val c = (1f - kotlin.math.abs(2f * newL - 1f)) * newS
+            val x = c * (1f - kotlin.math.abs((h / 60f) % 2f - 1f))
+            val m = newL - c / 2f
+            val (r1, g1, b1) = when {
+                h < 60f -> Triple(c, x, 0f)
+                h < 120f -> Triple(x, c, 0f)
+                h < 180f -> Triple(0f, c, x)
+                h < 240f -> Triple(0f, x, c)
+                h < 300f -> Triple(x, 0f, c)
+                else -> Triple(c, 0f, x)
+            }
+            Color(r1 + m, g1 + m, b1 + m, base.alpha)
+        } else {
+            base
+        }
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Column(
         modifier = Modifier
             .weight(weight)
@@ -549,7 +590,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                     .then(
                         if (selected) Modifier.border(
                             width = 1.5.dp,
-                            color = MaterialTheme.colorScheme.primary,
+                            color = selectedColor,
                             shape = RoundedCornerShape(12.dp)
                         ) else Modifier
                     )
@@ -558,8 +599,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
             Icon(
                 imageVector = icon,
                 contentDescription = stringResource(labelRes),
-                tint = if (selected) MaterialTheme.colorScheme.primary
-                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = selectedColor,
                 modifier = Modifier
                     .size(24.dp)
                     .offset(y = 3.dp)
@@ -570,8 +610,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
             text = stringResource(labelRes),
             fontSize = 10.sp,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.primary
-                   else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = selectedColor,
             maxLines = 1
         )
     }

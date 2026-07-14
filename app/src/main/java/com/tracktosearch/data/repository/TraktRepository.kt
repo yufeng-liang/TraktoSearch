@@ -1143,18 +1143,26 @@ class TraktRepository @Inject constructor(
                 MediaType.PERSON -> "movies" // fallback
                 MediaType.DISK -> return null
             }
-            val response = traktApiService.getRatings(typeStr)
-            if (response.isSuccessful) {
-                val ratings = response.body() ?: emptyList()
-                ratings.find { item ->
-                    when (type) {
-                        MediaType.MOVIE -> item.movie?.ids?.trakt == traktId
-                        MediaType.SHOW -> item.show?.ids?.trakt == traktId
-                        MediaType.PERSON -> item.movie?.ids?.trakt == traktId // fallback
-                        MediaType.DISK -> false
-                    }
-                }?.rating
-            } else null
+            // Trakt /sync/ratings 默认每页 10 条,需分页拉全量,否则评分超过一页时查不到(true rating, #21)
+            val limit = 100
+            val ratings = mutableListOf<TraktRatingItem>()
+            var page = 1
+            do {
+                val response = traktApiService.getRatings(typeStr, page = page, limit = limit)
+                if (!response.isSuccessful) return null
+                val body = response.body() ?: break
+                ratings.addAll(body)
+                if (body.size < limit) break // 本页不足 limit 即末页
+                page++
+            } while (true)
+            ratings.find { item ->
+                when (type) {
+                    MediaType.MOVIE -> item.movie?.ids?.trakt == traktId
+                    MediaType.SHOW -> item.show?.ids?.trakt == traktId
+                    MediaType.PERSON -> item.movie?.ids?.trakt == traktId // fallback
+                    MediaType.DISK -> false
+                }
+            }?.rating
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             null
         }

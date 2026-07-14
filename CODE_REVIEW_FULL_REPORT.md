@@ -4,7 +4,7 @@
 审查范围：`app/src/main/java/com/tracktosearch/` 全部 192 个 Kotlin 文件
 审查角度：缓存层、Repository 层、ViewModel/UI 层、豆瓣爬虫+全局池、Trakt 认证+网络层
 
-总计发现 **37 个 bug**，按严重度分级如下。
+总计发现 **35 个 bug**（#8、#34 经评估无需修复，已移除），按严重度分级如下。
 
 ---
 
@@ -19,7 +19,6 @@
 | 5 | WatchlistViewModel.kt | 315 | 多个 async 协程并发执行 `while(size<=index) current.add(placeholder)` 修改同一 ArrayList | 想看列表 200 部 → `current.size` 被并发篡改 → 索引越界 / 占位重复 / item 错序 |
 | 6 | TraktRepository.kt | 141-144 | `loadWatchlistWatchedIds` 网络失败时吞异常并返回空 `WatchlistWatchedIds()` | 首次想看/已看加载超时 → 返回空对象写入内存缓存 → `checkInWatchlist/batchCheckStatus` 全返 false → UI 把已想看/已看的条目显示为未标记，用户可重复添加 |
 | 7 | DoubanTraktStatusConsistencyChecker.kt | 491,497 | `batchUpdateTrakt` 把 API 失败也计入 `traktUpdated` 成功数（`batchMarkAsWatched` 返回 `Result.failure` 不抛异常，`runCatching` 不会拦截） | Trakt 批量标记 401/500 → `traktUpdated += size` 仍执行 → UI 显示「更新 Trakt N 条」但实际全失败，用户误以为同步成功 |
-| 8 | DoubanSyncManager.kt | 1660 | `buildFailure` 重试用 `inferred` 重填 user 已清除的 mediaType | 用户点击「清除标注」→ DB `mediaType=null, mediaTypeCleared=true` → 重试时 `existing.mediaType==null` 触发 inferred 重填 → 用户清除操作被静默覆盖 |
 | 9 | DoubanSpider.kt | 151-152 | IMDb ID 用 `nextSibling` 完整文本 `startsWith('tt')` 兜底，未正则提取 | 豆瓣节点文本 `tt39528392（主）` → `imdbId` 被解析为 `tt39528392（主）` → `searchByImdb` 用完整串查 Trakt 返回空 → 被错误记为 `TRAKT_NOT_FOUND` 不可恢复 |
 | 10 | DoubanSyncManager.kt | 1292 | `markedAtToIso` 本地 12:00 转 UTC，UTC+13/+14 会跨日到前日（注释声称「正负12小时都不会跨日」错误） | UTC+13 用户标记「2026-07-13 看过」→ 解析为本地 12:00 → UTC 前日 23:00 → Trakt `watched_at` 聚合到 7/12 而非 7/13 |
 
@@ -54,7 +53,6 @@
 | 31 | data/repository/TraktRepository.kt | 1006-1008, 1173-1175 | `batchSync` 与 `searchPaginated` 存在重复 `catch (e: CancellationException)` 块，第二个不可达 | 死代码，编译器可能告警；误导维护者以为 CancellationException 被处理两次；修改首个 catch 逻辑后第二个 catch 实际永不执行，取消语义被静默吞掉 |
 | 32 | data/repository/TraktRepository.kt | 364-381 | `getCachedTraktId` 对「已查无有效 ID」返回非 null 的 0，三态（null/0/正数）违反 API 直觉 | 调用方写成 `getCachedTraktId(id)?.let { markAsWatched(it) }` → 负缓存命中返回 0 进入 let → 以 traktId=0 调后续接口，可能触发非法 ID 请求 |
 | 33 | data/repository/CloudPersonalSyncManager.kt | 398-400 | `refreshMetaOnly` 在节流窗口内直接返回 true（声称成功），即使上一次实际刷新失败 | 设置页两个 LaunchedEffect 并发触发 → 首次 `doRefreshMetaOnly` 网络失败返 false → 5s 内第二次调用被节流返 true → 调用方认为云端 meta 已合并跳过重试 → 跨设备 `lastFullSyncAt` 实际未更新 |
-| 34 | data/remote/trakt/TraktAuthManager.kt | 36-37 | TraktAuthManager 自建 Retrofit 写死 `baseUrl=https://api.trakt.tv/`，不读 RemoteConfig | 用户/RemoteConfig 把 `trakt.baseUrl` 改成代理地址 → 业务请求走代理，oauth/token 刷新仍直连官方 → 代理环境不通则刷新失败，或流量/鉴权策略不一致导致 token 刷新异常 |
 | 35 | DetailViewModel.kt | 641 | `translateSingleComment` 复用已暴露的 `translatedComments` 可变副本，违反 `@Immutable` 约定 | 复制列表后添加条目再写回 → 若期间并发替换同一字段 → 两次更新互相覆盖，翻译结果丢失且 UI 无提示 |
 | 36 | DoubanSyncManager.kt | 1157 | `runRetry` 的 `successCount` 来自 `result.success`（`withTraktId.size - writeFailedCount`），但 `allRetrySuccess = items - result.failed`，口径不同 | 阶段 4 部分失败时 writeFailedCount=withTraktId.size → success=0，但 `allRetrySuccess` 把「有 traktId 却写入失败」的项也算成功并从 failures 表删除 → 这些项实际没写进 Trakt 却永久移出重试队列 |
 | 37 | data/util/TtlCache.kt | getOrAwait | fetch lambda 永久挂起时 inFlight 槽位永不释放 | 网络库 bug 导致 fetch 永远不抛异常不返回 → deferred 永远不 complete → finally 不执行 → `inFlightRequests` 中该 key 残留 → 后续所有该 key 的 getOrAwait 全部卡死，UI 无限转圈且无法取消 |

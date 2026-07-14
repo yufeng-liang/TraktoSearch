@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Person
@@ -56,6 +57,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCast
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCrew
+import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
@@ -241,6 +243,8 @@ internal fun CastCard(
                                         posterColorExtractor.extractDominantColor(profileUrl, bitmap)
                                             .takeIf { it != 0L }
                                             ?.let { argb ->
+                                                // 写入进程内缓存，供 PersonScreen 首帧读取避免白色闪烁
+                                                PersonAvatarColorStore.put(personId, argb)
                                                 val color = Color(argb)
                                                 if (extractedColor != color) {
                                                     extractedColor = color
@@ -319,6 +323,7 @@ internal fun FullCastCrewSheet(
     val producers = crew.filter { it.job == "Producer" }
 
     val avatarColors = remember { mutableMapOf<Int, Color>() }
+    val listState = rememberLazyListState()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -346,6 +351,7 @@ internal fun FullCastCrewSheet(
 
             // 分组列表
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -361,7 +367,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
@@ -377,7 +383,7 @@ internal fun FullCastCrewSheet(
                             role = if (person.character.isNotEmpty()) stringResource(R.string.detail_cast_as, person.character) else "",
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
@@ -393,7 +399,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
@@ -409,7 +415,7 @@ internal fun FullCastCrewSheet(
                             role = person.job,
                             profileUrl = profileUrl,
                             personId = person.id,
-                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]); onDismiss() },
+                            onClick = { onPersonClick(person.id, person.name, profileUrl, avatarColors[person.id]) },
                             onAvatarColorExtracted = { color: Color -> avatarColors[person.id] = color }
                         )
                     }
@@ -474,6 +480,8 @@ internal fun FullCastItem(
                                         posterColorExtractor.extractDominantColor(profileUrl, bitmap)
                                             .takeIf { it != 0L }
                                             ?.let { argb ->
+                                                // 写入进程内缓存，供 PersonScreen 首帧读取避免白色闪烁
+                                                PersonAvatarColorStore.put(personId, argb)
                                                 val color = Color(argb)
                                                 if (extractedColor != color) {
                                                     extractedColor = color

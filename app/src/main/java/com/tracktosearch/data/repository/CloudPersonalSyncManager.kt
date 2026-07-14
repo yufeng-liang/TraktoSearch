@@ -401,13 +401,14 @@ class CloudPersonalSyncManager @Inject constructor(
      */
     suspend fun refreshMetaOnly(): Boolean = metaRefreshMutex.withLock {
         val now = System.currentTimeMillis()
-        // 节流:上次成功窗口内快速返回 true;上次失败时短节流让快速重试能通过
+        // 节流:上次成功窗口内直接返回 true(云端的确已合并);
+        // 上次失败时短节流窗口内不发起网络,但返回 false 告知调用方本次并未成功合并(避免谎报成功, #33)
         if (lastMetaRefreshSuccessAt > lastMetaRefreshFailedAt) {
             if (now - lastMetaRefreshSuccessAt < META_REFRESH_THROTTLE_MS) {
                 return@withLock true
             }
         } else if (now - lastMetaRefreshFailedAt < META_REFRESH_RETRY_THROTTLE_MS) {
-            return@withLock true
+            return@withLock false
         }
         val success = doRefreshMetaOnly()
         if (success) lastMetaRefreshSuccessAt = now else lastMetaRefreshFailedAt = now

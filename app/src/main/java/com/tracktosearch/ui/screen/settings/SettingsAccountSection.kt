@@ -135,7 +135,7 @@ internal fun AccountRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 账户标签：固定宽度让 Trakt/豆瓣两行的头像起点对齐
@@ -327,8 +327,6 @@ fun GuestLoginItem(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier

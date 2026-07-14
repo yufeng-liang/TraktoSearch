@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
@@ -16,14 +17,14 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,12 +35,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -50,11 +51,12 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -62,13 +64,12 @@ import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Sync
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +78,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -89,7 +91,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -107,17 +108,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -125,41 +121,40 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
-import com.tracktosearch.data.util.PosterColorExtractor
-import com.tracktosearch.ui.animation.fadeSlideIn
-import dagger.hilt.android.EntryPointAccessors
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.GlassSearchBar
+import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.LocalActivePosterClickToken
+import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
+import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
-import com.tracktosearch.ui.component.LocalActivePosterTmdbId
-import com.tracktosearch.ui.component.LocalActivePosterClickSetter
-import com.tracktosearch.ui.component.LocalActivePosterClickToken
-import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -633,7 +628,6 @@ fun WatchlistScreen(
                                     }
                             )
                             // 搜索栏 + 胶囊切换条
-                            val screenWidth = LocalConfiguration.current.screenWidthDp.dp
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -642,12 +636,28 @@ fun WatchlistScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
+                                // 测量切换条文字宽度，动态计算搜索框宽度
                                 val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
                                 val watchedLabel = stringResource(R.string.watchlist_mode_watched)
                                 val isWatchlist = selectedMode == 0
-                                // 胶囊约占父容器 60% 宽度，整体右对齐
-                                val capsuleWidth = screenWidth * 0.6f
-                                val modeTabWidth = capsuleWidth / 2
+                                val tabPadding = 14.dp
+                                val textMeasurer = rememberTextMeasurer()
+                                val watchlistTextWidthPx = remember(watchlistLabel) {
+                                    textMeasurer.measure(
+                                        text = watchlistLabel,
+                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                    ).size.width
+                                }
+                                val watchedTextWidthPx = remember(watchedLabel) {
+                                    textMeasurer.measure(
+                                        text = watchedLabel,
+                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                                    ).size.width
+                                }
+                                val capsuleDensity = LocalDensity.current
+                                val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
+                                val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
+                                val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
     
                                 // 毛玻璃搜索栏
                                 GlassSearchBar(
@@ -697,31 +707,36 @@ fun WatchlistScreen(
                                 }
     
                                 // 大胶囊切换条：想看 / 已看
-                                val tabHeight = 48.dp
+                                val tabHeight = 45.dp
                                 val indicatorOffset by animateDpAsState(
-                                    targetValue = if (isWatchlist) 0.dp else modeTabWidth,
+                                    targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
                                     animationSpec = tween(200),
                                     label = "modeIndicator"
+                                )
+                                val indicatorWidth by animateDpAsState(
+                                    targetValue = if (isWatchlist) watchlistTabWidthDp else watchedTabWidthDp,
+                                    animationSpec = tween(200),
+                                    label = "modeIndicatorWidth"
                                 )
                                 Box(
                                     modifier = Modifier
                                         .height(tabHeight)
                                         .width(capsuleWidth)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                                        .clip(RoundedCornerShape(25.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                                 ) {
                                     Box(
                                         modifier = Modifier
                                             .offset(x = indicatorOffset)
-                                            .width(modeTabWidth)
+                                            .width(indicatorWidth)
                                             .fillMaxHeight()
-                                            .clip(RoundedCornerShape(14.dp))
+                                            .clip(RoundedCornerShape(25.dp))
                                             .background(MaterialTheme.colorScheme.primary)
                                     )
                                     Row(modifier = Modifier.fillMaxSize()) {
                                         Box(
                                             modifier = Modifier
-                                                .width(modeTabWidth)
+                                                .width(watchlistTabWidthDp)
                                                 .fillMaxHeight()
                                                 .clickable(
                                                     interactionSource = remember { MutableInteractionSource() },
@@ -743,7 +758,7 @@ fun WatchlistScreen(
                                         }
                                         Box(
                                             modifier = Modifier
-                                                .width(modeTabWidth)
+                                                .width(watchedTabWidthDp)
                                                 .fillMaxHeight()
                                                 .clickable(
                                                     interactionSource = remember { MutableInteractionSource() },

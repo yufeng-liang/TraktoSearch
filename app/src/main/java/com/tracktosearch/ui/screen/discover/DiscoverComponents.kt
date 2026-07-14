@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.discover
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.component.YearBadge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -217,7 +218,7 @@ internal fun MovieCard(
                     rating = ratingValue,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                        .padding(2.dp)
                 )
             }
             if (isResolving) {
@@ -234,21 +235,14 @@ internal fun MovieCard(
                     )
                 }
             }
-            // 年份角标（海报右下角）
+            // 年份角标（海报右下角）：白色无填充 + 柔影
             if (year.isNotEmpty()) {
-                Text(
-                    text = year,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    color = Color.White,
+                YearBadge(
+                    year = year,
+                    fontSize = 10,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
         }

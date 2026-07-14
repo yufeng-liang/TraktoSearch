@@ -64,8 +64,6 @@ fun CacheManagementItem(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // 概览行（整卡可点击展开/收起）
@@ -73,7 +71,7 @@ fun CacheManagementItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                    .padding(horizontal = 6.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
@@ -161,7 +159,7 @@ private fun CacheCategoryRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(

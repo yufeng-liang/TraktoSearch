@@ -111,6 +111,7 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.ui.component.EmptyView
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -927,6 +928,8 @@ private fun PersonSearchCard(
                                             posterColorExtractor.extractDominantColor(profileUrl, bitmap)
                                                 .takeIf { it != 0L }
                                                 ?.let { argb ->
+                                                    // 写入进程内缓存，供 PersonScreen 首帧读取避免白色闪烁
+                                                    PersonAvatarColorStore.put(personId, argb)
                                                     val color = Color(argb)
                                                     if (extractedColor != color) {
                                                         extractedColor = color

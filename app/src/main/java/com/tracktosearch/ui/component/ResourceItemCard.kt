@@ -181,9 +181,9 @@ fun ResourceItemCard(
                     Surface(
                         shape = RoundedCornerShape(8.dp),
                         color = when (item.source) {
-                            "pansou" -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                            "panhub" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                            else -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f)
+                            "pansou" -> MaterialTheme.colorScheme.primaryContainer
+                            "panhub" -> MaterialTheme.colorScheme.tertiaryContainer
+                            else -> MaterialTheme.colorScheme.secondaryContainer
                         }
                     ) {
                         Text(

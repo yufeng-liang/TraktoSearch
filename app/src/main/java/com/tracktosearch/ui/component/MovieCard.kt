@@ -29,7 +29,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -266,20 +265,14 @@ fun MovieCard(
                         }
                     }
                 }
-                // 年份角标（海报右下角）
+                // 年份角标（海报右下角）：白色无填充 + 柔影
                 if (year != null && year != 0) {
-                    Text(
-                        text = "$year",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        ),
-                        color = Color.Black,
+                    YearBadge(
+                        year = "$year",
+                        fontSize = 10,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color.White.copy(alpha = 0.9f))
-                            .padding(horizontal = 4.dp, vertical = 0.dp)
+                            .padding(horizontal = 6.dp, vertical = 4.dp)
                     )
                 }
             }

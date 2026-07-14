@@ -159,15 +159,15 @@ fun DetailScreen(
     // posterDominantColor 就绪 → 立即标记就绪;未就绪(首次访问无缓存) → 400ms 后兜底就绪
     var contentReady by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.posterDominantColor) {
+        if (contentReady) return@LaunchedEffect // 已就绪则不重复触发淡入(#26)
         if (uiState.posterDominantColor != null) {
             // 颜色就绪后短暂延迟,让背景渐变先渲染出来再淡入内容
             delay(80)
-            contentReady = true
         } else {
             // 首次访问无缓存主色,400ms 后兜底显示内容,避免长时间空白
             delay(400)
-            contentReady = true
         }
+        contentReady = true
     }
     val contentAlpha by remember(contentReady) {
         derivedStateOf { if (contentReady) 1f else 0f }
@@ -883,11 +883,9 @@ fun DetailScreen(
                     backdrops = uiState.backdrops,
                     onDismiss = { showAllVideos = false },
                     onVideoClick = { video ->
-                        showAllVideos = false
                         playingVideoKey = video.key
                     },
                     onBackdropClick = { index ->
-                        showAllVideos = false
                         selectedBackdropIndex = index
                     }
                 )

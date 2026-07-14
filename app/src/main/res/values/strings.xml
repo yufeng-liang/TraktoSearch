@@ -420,6 +420,7 @@
     <string name="person_all">All ></string>
     <string name="person_all_count">All (%d)</string>
     <string name="person_images">Photos</string>
+    <string name="person_homepage">Homepage</string>
     <string name="poster_already_saved">Already saved</string>
     <string name="person_load_more">Load more</string>
     <string name="detail_close">Close</string>

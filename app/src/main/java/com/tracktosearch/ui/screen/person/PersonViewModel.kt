@@ -18,6 +18,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktPersonDetail
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PersonAvatarColorStore
 import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -95,13 +96,16 @@ class PersonViewModel @Inject constructor(
         movieCreditsPage = 1
         tvCreditsPage = 1
 
-        // 首帧直接带入前一屏已算好的主色，避免 surface 闪烁
+        // 首帧直接带入前一屏已算好的主色；路由未传时查进程内缓存，避免首次进入白色闪烁
+        val initialColor = avatarColor
+            ?: PersonAvatarColorStore.get(personId)?.let { Color(it) }
+
         _uiState.value = PersonUiState(
             isLoading = true,
             isLoadingMovies = true,
             isLoadingTvShows = true,
             isLoadingPersonImages = true,
-            avatarDominantColor = avatarColor
+            avatarDominantColor = initialColor
         )
 
         // 路由已带 profilePath（前一屏算好的头像 URL），不等 TMDB API 直接调色

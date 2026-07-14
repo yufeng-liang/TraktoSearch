@@ -133,7 +133,7 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(maxRetries = 2))
+            .addInterceptor(RetryInterceptor(maxRetries = 2, tokenProvider = tokenStorage::getCachedAccessToken))
             .addInterceptor(loggingInterceptor)
             .authenticator(traktAuthenticator)
             .build()
@@ -531,11 +531,12 @@ object NetworkModule {
  */
 class RetryInterceptor(
     private val maxRetries: Int = 2,
-    private val baseDelayMs: Long = 500L
+    private val baseDelayMs: Long = 500L,
+    private val tokenProvider: () -> String? = { null }
 ) : Interceptor {
     override fun intercept(chain: Interceptor.Chain): okhttp3.Response {
-        val request = chain.request()
-        var response = chain.proceed(request)
+        val original = chain.request()
+        var response = chain.proceed(original)
         var retries = 0
 
         while (shouldRetry(response) && retries < maxRetries) {
@@ -553,7 +554,14 @@ class RetryInterceptor(
                 return response
             }
             retries++
-            response = chain.proceed(request)
+            // 重试时重建请求并刷新 Authorization：auth 注入拦截器位于 RetryInterceptor 之前，
+            // 重试走 chain.proceed 不会重新执行它，故此处手动补上最新 token，
+            // 避免用过期 Authorization 重试（#19）。original 的其余 header（Content-Type 等）被 newBuilder 保留。
+            val retryBuilder = original.newBuilder()
+            tokenProvider()?.takeIf { it.isNotEmpty() }?.let {
+                retryBuilder.header("Authorization", "Bearer $it")
+            }
+            response = chain.proceed(retryBuilder.build())
         }
         return response
     }

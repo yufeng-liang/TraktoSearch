@@ -285,8 +285,9 @@ class DoubanRepository(
         for (attempt in 0..1) {
             if (attempt > 0) {
                 delayWithEvent(DelayType.DOUBAN_RETRY, 2000L..4000L) // 重试前等待
+                // 反爬延迟 3-5 秒:仅在重试(前一次失败)时施加,避免首次无失败也强制等待导致 UI 虚假倒计时(#22)
+                delayWithEvent(DelayType.DOUBAN_DETAIL_CRAWL, 3000L..5000L)
             }
-            delayWithEvent(DelayType.DOUBAN_DETAIL_CRAWL, 3000L..5000L) // 反爬延迟 3-5 秒
             // 捕获网络异常(超时/连接失败),重试一次
             val html = try {
                 fetchHtml(doubanUrl, cookie)

@@ -79,8 +79,6 @@ fun SettingsGroupCard(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         shape = RoundedCornerShape(16.dp),
         color = cardSurfaceColor(),
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -187,8 +185,6 @@ internal fun SettingsItemCard(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier
@@ -430,8 +426,6 @@ internal fun DataFlowCard(
         modifier = modifier.clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -472,8 +466,6 @@ internal fun SettingsCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier.padding(8.dp),
@@ -549,11 +541,9 @@ internal fun SearchSourceCard(
         modifier = modifier.fillMaxSize(),
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
-            modifier = Modifier.padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -609,8 +599,6 @@ internal fun SearchSourceAddCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(12.dp),
         color = containerColor,
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Column(
             modifier = Modifier
@@ -655,8 +643,6 @@ internal fun StatisticsCard(
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(16.dp),
         color = cardSurfaceColor(),
-        shadowElevation = 2.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
     ) {
         Row(
             modifier = Modifier

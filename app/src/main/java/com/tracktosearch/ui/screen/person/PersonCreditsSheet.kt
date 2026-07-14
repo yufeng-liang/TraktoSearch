@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +54,7 @@ internal fun AllMovieCreditsSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
+        val gridState = rememberLazyGridState()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -77,6 +79,7 @@ internal fun AllMovieCreditsSheet(
 
             // Grid 列表
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxHeight(0.85f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -97,7 +100,6 @@ internal fun AllMovieCreditsSheet(
                                 isMovie = true,
                                 onNavigate = onMovieClick
                             )
-                            onDismiss()
                         }
                     )
                 }
@@ -137,6 +139,7 @@ internal fun AllTvCreditsSheet(
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
+        val gridState = rememberLazyGridState()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -161,6 +164,7 @@ internal fun AllTvCreditsSheet(
 
             // Grid 列表
             LazyVerticalGrid(
+                state = gridState,
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxHeight(0.85f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
@@ -181,7 +185,6 @@ internal fun AllTvCreditsSheet(
                                 isMovie = false,
                                 onNavigate = onShowClick
                             )
-                            onDismiss()
                         }
                     )
                 }

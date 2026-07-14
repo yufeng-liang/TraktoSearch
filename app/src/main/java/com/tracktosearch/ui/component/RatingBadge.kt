@@ -36,6 +36,6 @@ fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
         fontWeight = FontWeight.Bold,
         modifier = modifier
             .background(background, RoundedCornerShape(8.dp))
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .padding(horizontal = 2.dp, vertical = 0.dp)
     )
 }

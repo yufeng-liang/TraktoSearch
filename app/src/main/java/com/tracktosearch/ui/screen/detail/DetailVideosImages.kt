@@ -51,7 +51,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -281,25 +280,6 @@ internal fun FullVideosImagesSheet(
     val selectedTabIndex = pagerState.currentPage
     val scope = rememberCoroutineScope()
 
-    // 延迟导航：先关闭弹窗，再执行操作
-    var pendingVideoKey by remember { mutableStateOf<String?>(null) }
-    var pendingBackdropIndex by remember { mutableIntStateOf(-1) }
-    LaunchedEffect(pendingVideoKey) {
-        pendingVideoKey?.let { key ->
-            kotlinx.coroutines.delay(300)
-            onVideoClick(TmdbVideo(key = key))
-            pendingVideoKey = null
-        }
-    }
-    LaunchedEffect(pendingBackdropIndex) {
-        if (pendingBackdropIndex >= 0) {
-            val idx = pendingBackdropIndex
-            pendingBackdropIndex = -1
-            kotlinx.coroutines.delay(300)
-            onBackdropClick(idx)
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -374,7 +354,7 @@ internal fun FullVideosImagesSheet(
                             itemsIndexed(videos, key = { index, video -> "video_${index}_${video.key}" }) { _, video ->
                                 FullVideoItem(
                                     video = video,
-                                    onClick = { onDismiss(); pendingVideoKey = video.key }
+                                    onClick = { onVideoClick(video) }
                                 )
                             }
                         }
@@ -387,7 +367,7 @@ internal fun FullVideosImagesSheet(
                             itemsIndexed(backdrops, key = { index, url -> "backdrop_${index}_$url" }) { index, backdropUrl ->
                                 FullBackdropItem(
                                     backdropUrl = backdropUrl,
-                                    onClick = { onDismiss(); pendingBackdropIndex = index }
+                                    onClick = { onBackdropClick(index) }
                                 )
                             }
                         }
@@ -465,7 +445,7 @@ internal fun FullVideoItem(
                 Text(
                     text = typeLabel,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
                 )
             }

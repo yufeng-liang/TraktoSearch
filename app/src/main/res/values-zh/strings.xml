@@ -420,6 +420,7 @@
     <string name="person_all">全部 ></string>
     <string name="person_all_count">全部(%d)</string>
     <string name="person_images">图片</string>
+    <string name="person_homepage">个人主页</string>
     <string name="poster_already_saved">已保存</string>
     <string name="person_load_more">加载更多</string>
     <string name="detail_close">关闭</string>

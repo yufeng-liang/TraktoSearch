@@ -542,6 +542,7 @@
     <string name="person_all">すべて ></string>
     <string name="person_all_count">すべて(%d)</string>
     <string name="person_images">写真</string>
+    <string name="person_homepage">ホームページ</string>
     <string name="poster_already_saved">保存済み</string>
     <string name="person_load_more">さらに読み込む</string>
     <string name="detail_close">閉じる</string>

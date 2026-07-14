@@ -42,6 +42,8 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = Color.White,
     surfaceVariant = CinemaCard,
     onSurfaceVariant = LightGray,
+    outline = Color(0xFF3A3A5A),
+    outlineVariant = Color(0xFF1E1E32),
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -54,6 +56,8 @@ private val LightColorScheme = lightColorScheme(
     onBackground = DarkGray,
     surface = Color.White,
     onSurface = DarkGray,
+    outline = Color(0xFFBDBDBD),
+    outlineVariant = Color(0xFFE8E8E8),
 )
 
 /** 根据种子色生成自定义 colorScheme */
@@ -80,6 +84,8 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
             onSurface = Color.White,
             surfaceVariant = CinemaCard,
             onSurfaceVariant = LightGray,
+            outline = Color(0xFF3A3A5A),
+            outlineVariant = Color(0xFF1E1E32),
         )
     } else {
         lightColorScheme(
@@ -99,6 +105,8 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
                 green = seed.green * 0.08f + 0.92f,
                 blue = seed.blue * 0.08f + 0.92f
             ),
+            outline = Color(0xFFBDBDBD),
+            outlineVariant = Color(0xFFE8E8E8),
         )
     }
 }

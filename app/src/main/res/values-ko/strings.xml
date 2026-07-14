@@ -542,6 +542,7 @@
     <string name="person_all">전체 ></string>
     <string name="person_all_count">전체(%d)</string>
     <string name="person_images">사진</string>
+    <string name="person_homepage">홈페이지</string>
     <string name="poster_already_saved">이미 저장됨</string>
     <string name="person_load_more">더 불러오기</string>
     <string name="detail_close">닫기</string>

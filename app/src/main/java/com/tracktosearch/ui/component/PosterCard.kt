@@ -152,23 +152,17 @@ fun PosterCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                        .padding(2.dp)
                 )
             }
             val showYear = !year.isNullOrBlank() && year != "0"
             if (showYear) {
-                Text(
-                    text = year,
-                    color = Color.White,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
+                YearBadge(
+                    year = year,
+                    fontSize = 10,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .background(
-                            Color.Black.copy(alpha = 0.5f),
-                            RoundedCornerShape(8.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 0.dp)
+                        .padding(6.dp)
                 )
             }
         }

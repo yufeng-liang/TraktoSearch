@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,9 +89,9 @@ fun PersonScreen(
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
     // 全部作品展开状态
-    var showAllMovies by remember { mutableStateOf(false) }
-    var showAllTvShows by remember { mutableStateOf(false) }
-    var showAllPersonImages by remember { mutableStateOf(false) }
+    var showAllMovies by rememberSaveable { mutableStateOf(false) }
+    var showAllTvShows by rememberSaveable { mutableStateOf(false) }
+    var showAllPersonImages by rememberSaveable { mutableStateOf(false) }
     var selectedPersonImageIndex by remember { mutableIntStateOf(-1) }
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
@@ -451,7 +452,6 @@ fun PersonScreen(
                         AllPersonImagesSheet(
                             images = uiState.personImages,
                             onImageClick = { index ->
-                                showAllPersonImages = false
                                 selectedPersonImageIndex = index
                             },
                             onDismiss = { showAllPersonImages = false }
