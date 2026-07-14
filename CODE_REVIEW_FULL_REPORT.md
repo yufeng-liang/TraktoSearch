@@ -4,7 +4,7 @@
 审查范围：`app/src/main/java/com/tracktosearch/` 全部 192 个 Kotlin 文件
 审查角度：缓存层、Repository 层、ViewModel/UI 层、豆瓣爬虫+全局池、Trakt 认证+网络层
 
-总计发现 **35 个 bug**（#8、#34 经评估无需修复，已移除），按严重度分级如下。
+总计发现 **34 个 bug**（#8、#22、#34 经评估无需修复/为设计需要，已移除），按严重度分级如下。
 
 ---
 
@@ -38,7 +38,6 @@
 ## 🟡 中（性能 / 功能缺陷）
 
 | 21 | TraktRepository.kt | 1139 | `getUserRating` 调用 `getRatings(type)` 只取第一页（Trakt /ratings 默认每页 10 条，无分页参数） | 用户已评分超过 10 部电影 → 查第 11 部评分时 find 匹配不到 → 返回 null → UI 显示「未评分」而实际已评分，用户可重复提交 |
-| 22 | DoubanRepository.kt | 285-289 | `fetchDetail` 的 `for(attempt in 0..1)` 每次 attempt 顶部无条件 `delayWithEvent(3000..5000)`，首次请求无失败也强制等 3-5s | 100 条想看列表无缓存命中 → attempt=0 每条先 sleep 3-5s（共 ~400s 等待）→ 解析失败重试再叠加 2-4s retry 延迟，总等待最高 9s/条；UI 倒计时首条无失败时也虚假闪烁 |
 | 23 | DetailViewModel/ViewedItem | - | 静态缓存跨 VM 实例存活，viewedUrls 陈旧 | 返回旧页，高亮落后于最新点击 |
 | 24 | WatchlistViewModel.kt | 337 | 离线缓存仅在 `moviePage==2` 时写入，非首页分页加载时缓存永不更新 | 用户首次加载首页后上滑触发 `loadMoreMovies` → `moviePage` 跳至 3 → 条件永不成立 → 离线缓存只有首页数据，断网刷新后首页丢失 |
 | 25 | DetailViewModel.kt | 1337 | `updateSearchResults` 在主线程同步执行资源过滤，源/类型多时计算成本线性增长 | 启用 10+ 搜索源且关键词结果数千条 → 每次流发射同步 `filterItems` → 主线程短时阻塞，筛选标签切换掉帧 |
