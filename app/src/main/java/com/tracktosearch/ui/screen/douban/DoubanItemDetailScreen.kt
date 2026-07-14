@@ -10,8 +10,8 @@ import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,8 +19,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -35,6 +35,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Nature
 import androidx.compose.material.icons.rounded.OpenInBrowser
@@ -55,18 +57,14 @@ import androidx.compose.material.icons.rounded.TheaterComedy
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
-import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
@@ -123,27 +121,27 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
-import com.tracktosearch.data.remote.dto.DiskType
-import com.tracktosearch.data.remote.dto.ResourceItem
-import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.dto.ResourceItem
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.repository.ResourceRepository
+import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
-import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
@@ -151,11 +149,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -410,7 +404,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 keywords.add(mainNoSeason)
             }
             val subtitle = failure.subtitle ?: titleForeignName
-            if (subtitle != null && subtitle.isNotBlank() && _uiState.value.searchWithSubtitle) {
+            if (!subtitle.isNullOrBlank() && _uiState.value.searchWithSubtitle) {
                 val subNoSeason = removeSeasonInfo(subtitle)
                 keywords.add(subtitle)
                 if (subNoSeason != subtitle) {
@@ -535,11 +529,6 @@ class DoubanItemDetailViewModel @Inject constructor(
             }
         }
         return withSeason + withoutSeason
-    }
-
-    /** 手动刷新入口(供 TopAppBar 刷新按钮调用):强制清缓存重拉 */
-    fun refreshResources() {
-        searchResources(forceRefresh = true)
     }
 
     /** 切换「同时用子标题搜索」开关,切换后自动重新搜索 */

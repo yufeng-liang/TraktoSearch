@@ -1,6 +1,5 @@
 package com.tracktosearch.ui.screen.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,18 +49,6 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
-
-@Composable
-fun SettingsSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    )
-}
 
 /**
  * 设置分组卡片：半透明圆角卡片，顶部显示 12sp 大写加粗分组标题。
@@ -119,50 +106,6 @@ fun ColumnScope.GroupDivider(modifier: Modifier = Modifier) {
 private fun cardSurfaceColor(): Color {
     val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     return MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isLight) 1.0f else 0.3f)
-}
-
-@Composable
-fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: (() -> Unit)?
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        if (onClick != null) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
 }
 
 /**
@@ -228,122 +171,7 @@ internal fun SettingsItemCard(
     }
 }
 
-@Composable
-fun SearchSourceItem(
-    name: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val view = LocalView.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = name,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f)
-        )
-        Switch(
-            checked = checked,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
-            colors = appSwitchColors()
-        )
-    }
-}
 
-@Composable
-fun PanHubSettingsItem(
-    enabled: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
-    onConfigClick: () -> Unit
-) {
-    val view = LocalView.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "PanHub",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f)
-            )
-            IconButton(
-                onClick = {
-                    view.performHaptic(HapticType.CLICK)
-                    onConfigClick()
-                },
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(
-                    Icons.Rounded.Tune,
-                    contentDescription = stringResource(R.string.settings_panhub_config),
-                    modifier = Modifier.size(24.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Switch(
-                checked = enabled,
-                onCheckedChange = { view.performHaptic(HapticType.CLICK); onEnabledChange(it) },
-                colors = appSwitchColors()
-            )
-        }
-        Text(
-            text = stringResource(R.string.settings_panhub_desc),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp)
-        )
-    }
-}
-
-@Composable
-fun SwitchSettingsItem(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    enabled: Boolean = true,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    val view = LocalView.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (enabled) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            if (subtitle.isNotEmpty()) {
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-        Spacer(modifier = Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            enabled = enabled,
-            onCheckedChange = { view.performHaptic(HapticType.CLICK); onCheckedChange(it) },
-            colors = appSwitchColors()
-        )
-    }
-}
 
 /** 自定义搜索源列表项 */
 @Composable

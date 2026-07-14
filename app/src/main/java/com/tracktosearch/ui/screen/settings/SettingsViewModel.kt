@@ -57,7 +57,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -243,10 +242,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun clearTestResult(sourceId: String) {
-        _testResults.value = _testResults.value - sourceId
-    }
-
     fun setNotificationEnabled(enabled: Boolean) {
         viewModelScope.launch {
             notificationStorage.setEnabled(enabled)
@@ -292,7 +287,7 @@ class SettingsViewModel @Inject constructor(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_success)
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_failed)
@@ -358,15 +353,11 @@ class SettingsViewModel @Inject constructor(
                         val searchResult = when (mediaType) {
                             MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
                             MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
-                            MediaType.PERSON -> Result.failure(Exception("Person not supported"))
-                            MediaType.DISK -> Result.failure(Exception("DISK not supported"))
                         }
                         val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
                             when (mediaType) {
                                 MediaType.MOVIE -> result.movie?.ids?.trakt
                                 MediaType.SHOW -> result.show?.ids?.trakt
-                                MediaType.PERSON -> null
-                                MediaType.DISK -> null
                             }
                         }
                         if (traktId != null && traktId > 0) {
@@ -392,7 +383,7 @@ class SettingsViewModel @Inject constructor(
                     syncFailed = failed,
                     message = context.getString(R.string.snackbar_import_done_imdb, success, failed)
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
                     message = context.getString(R.string.error_parse_failed, e.message ?: "")
@@ -418,7 +409,7 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_clear_failed)
                 )
@@ -452,15 +443,6 @@ class SettingsViewModel @Inject constructor(
     private val _cacheBreakdown = MutableStateFlow(CacheBreakdown())
     val cacheBreakdown: StateFlow<CacheBreakdown> = _cacheBreakdown.asStateFlow()
 
-    /** 设置页统计入口显示的观影数量（已看影片 + 剧集） */
-    private val _statisticsCount = MutableStateFlow(0)
-    val statisticsCount: StateFlow<Int> = _statisticsCount.asStateFlow()
-
-    /** 旧 API：兼容只显示总大小的调用方 */
-    val cacheInfo: StateFlow<String> = _cacheBreakdown
-        .map { formatFileSize(it.totalBytes) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "0 B")
-
     /** 按类目清除缓存 */
     fun clearCategory(category: CacheCategory) {
         viewModelScope.launch {
@@ -484,7 +466,7 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_cleared)
                 )
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_cache_clear_failed)
                 )
@@ -499,11 +481,6 @@ class SettingsViewModel @Inject constructor(
 
     // ========== 豆瓣登录态（账户区展示用） ==========
     val doubanLoggedIn: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
-
-    // 豆瓣 userId：登录态变化时从加密存储读取
-    val doubanUserId: StateFlow<String?> = doubanAuthStorage.isLoggedIn
-        .map { loggedIn -> if (loggedIn) doubanAuthStorage.getCredentials()?.userId else null }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     // 豆瓣用户资料（头像/昵称）：从加密存储恢复，登录后异步抓取
     val doubanProfile: StateFlow<com.tracktosearch.data.local.DoubanUserProfile?> = doubanAuthStorage.doubanProfile
@@ -617,10 +594,6 @@ class SettingsViewModel @Inject constructor(
     fun refreshCacheInfo() {
         viewModelScope.launch {
             try {
-                // 统计入口数量（已看影片 + 剧集）
-                val cacheInfo = offlineCacheManager.getCacheInfo()
-                _statisticsCount.value = cacheInfo.historyMovies + cacheInfo.historyShows
-
                 // DataStore 文件大小（含影视数据 + ID 映射 + 豆瓣详情，共用同一个目录）
                 val dataStoreTotal = offlineCacheManager.getDataStoreSizeBytes()
                 // 按 PersistentTtlCache.getSizeBytes() 比例拆分影视数据 vs ID 映射
@@ -641,19 +614,6 @@ class SettingsViewModel @Inject constructor(
                 _cacheBreakdown.value = CacheBreakdown()
             }
         }
-    }
-
-    private fun formatFileSize(bytes: Long): String {
-        if (bytes <= 0) return "0 B"
-        val units = arrayOf("B", "KB", "MB", "GB")
-        var size = bytes.toDouble()
-        var unitIndex = 0
-        while (size >= 1024 && unitIndex < units.size - 1) {
-            size /= 1024
-            unitIndex++
-        }
-        return if (unitIndex == 0) "${bytes} B"
-               else String.format("%.1f %s", size, units[unitIndex])
     }
 
     // ========== 发现页栏目设置 ==========
@@ -741,7 +701,7 @@ class SettingsViewModel @Inject constructor(
                         message = context.getString(R.string.snackbar_check_update_failed)
                     )
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     message = context.getString(R.string.snackbar_check_update_failed)
                 )

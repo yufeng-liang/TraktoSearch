@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -48,12 +48,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
-import com.tracktosearch.data.remote.douban.DelayInfo
-import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.DoubanSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -73,11 +72,6 @@ class DoubanSyncViewModel @Inject constructor(
 ) : ViewModel() {
 
     val progress = doubanSyncManager.progress
-
-    /** 启动同步（内部用 Application scope，不依赖 ViewModel 生命周期） */
-    fun startSync() {
-        doubanSyncManager.startSync()
-    }
 
     fun cancel() {
         doubanSyncManager.cancel()

@@ -1,9 +1,6 @@
 package com.tracktosearch.ui.screen.douban
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,14 +11,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -46,10 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.CloudFailureSyncManager
-import com.tracktosearch.data.repository.DownloadResult
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.data.repository.DownloadResult
 import com.tracktosearch.data.repository.FailureReason
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,14 +86,6 @@ class DoubanRetryViewModel @Inject constructor(
     /** 启动本地重试 */
     suspend fun startRetryFromLocal(selectedReasons: Set<FailureReason>): Boolean {
         return doubanRetryManager.startRetryFromLocal(selectedReasons)
-    }
-
-    /** 启动 JSON 导入重试 */
-    fun startRetryFromJson(
-        failures: List<com.tracktosearch.data.repository.DoubanSyncFailure>,
-        selectedReasons: Set<FailureReason>
-    ): Boolean {
-        return doubanRetryManager.startRetryFromJson(failures, selectedReasons)
     }
 
     /** 清空失败记录 */

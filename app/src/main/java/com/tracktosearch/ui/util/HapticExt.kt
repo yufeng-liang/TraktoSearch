@@ -34,11 +34,6 @@ enum class HapticType {
     HEAVY_CLICK
 }
 
-/** 极轻触感（无 View 引用时的降级方案） */
-fun Context.performHapticClick() {
-    performHapticFallback(HapticType.TICK)
-}
-
 /** 指定类型的震动反馈（优先 View.performHapticFeedback） */
 fun View.performHaptic(type: HapticType) {
     val feedbackConstant = when (type) {

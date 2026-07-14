@@ -1,9 +1,18 @@
 package com.tracktosearch.ui.screen.watchlist
 
+import android.content.Context
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.compose.runtime.Immutable
+import com.tracktosearch.R
+import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanSyncMetaStorage
+import com.tracktosearch.data.local.db.MediaItemEntity
+import com.tracktosearch.data.local.db.OfflineCacheManager
+import com.tracktosearch.data.repository.BatchRemovalItem
+import com.tracktosearch.data.repository.BatchRemovalProgress
 import com.tracktosearch.data.repository.ConsistencyCheckResult
+import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
@@ -11,14 +20,8 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.data.local.DoubanAuthStorage
-import com.tracktosearch.data.local.DoubanSyncMetaStorage
-import com.tracktosearch.data.local.db.MediaItemEntity
-import com.tracktosearch.data.local.db.OfflineCacheManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.tracktosearch.R
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -34,8 +37,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @Immutable
@@ -91,7 +92,9 @@ data class WatchlistUiState(
     // 豆瓣同步进度（isRunning 时在 Tab 栏下方显示横幅，点击重新打开同步弹窗）
     val doubanSyncProgress: DoubanSyncProgress? = null,
     // 状态一致性检查进度（isRunning 时显示横幅，点击重新打开检查弹窗）
-    val consistencyCheckProgress: ConsistencyCheckResult? = null
+    val consistencyCheckProgress: ConsistencyCheckResult? = null,
+    // 豆瓣标记批量移除进度（多选移除后后台同步移除豆瓣标记，isRunning 时显示横幅）
+    val batchRemovalProgress: BatchRemovalProgress? = null
 ) {
     /**
      * 当前可见 tab 是否存在 TMDB 不可用的条目。
@@ -119,6 +122,7 @@ class WatchlistViewModel @Inject constructor(
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
+    private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -210,9 +214,6 @@ class WatchlistViewModel @Inject constructor(
     fun updateSelectedGenres(genres: Set<String>) {
         _filterState.value = _filterState.value.copy(selectedGenres = genres)
     }
-    fun updateSelectedDecades(keys: Set<Int>) {
-        _filterState.value = _filterState.value.copy(selectedDecadeKeys = keys)
-    }
     fun toggleDecade(key: Int) {
         val current = _filterState.value.selectedDecadeKeys
         _filterState.value = _filterState.value.copy(
@@ -271,6 +272,29 @@ class WatchlistViewModel @Inject constructor(
                 }
             }
         }
+        // 监听豆瓣标记批量移除进度：isRunning 时显示横幅，完成后 5 秒消失
+        viewModelScope.launch {
+            doubanBatchRemovalManager.progress.collect { progress: BatchRemovalProgress ->
+                if (progress.isRunning || progress.isComplete) {
+                    _uiState.value = _uiState.value.copy(batchRemovalProgress = progress)
+                    if (progress.isComplete) {
+                        // 完成后 5 秒横幅消失
+                        delay(5000)
+                        _uiState.value = _uiState.value.copy(batchRemovalProgress = null)
+                        // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复显示横幅
+                        doubanBatchRemovalManager.resetProgress()
+                    }
+                }
+            }
+        }
+    }
+
+    /** 批量移除豆瓣标记是否在运行中（UI 用于判断是否允许重复触发） */
+    fun isBatchRemovalRunning(): Boolean = doubanBatchRemovalManager.isRunning()
+
+    /** 取消正在进行的批量移除 */
+    fun cancelBatchRemoval() {
+        doubanBatchRemovalManager.cancel()
     }
 
     fun loadMovies(forceReload: Boolean = false, silent: Boolean = false) {
@@ -650,11 +674,22 @@ class WatchlistViewModel @Inject constructor(
         }
         val allSuccess = results.all { it.isSuccess }
         if (allSuccess) {
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            val itemsToSync = if (isMovie) {
+                _uiState.value.movies.filter { it.traktId in traktIds }
+            } else {
+                _uiState.value.shows.filter { it.traktId in traktIds }
+            }
             // 全部成功才更新 UI，避免部分失败时 UI 与服务端不一致
             _uiState.value = if (isMovie) {
                 _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
             } else {
                 _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
+            }
+            // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
+            if (itemsToSync.isNotEmpty()) {
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
     }
@@ -669,43 +704,21 @@ class WatchlistViewModel @Inject constructor(
         }
         val allSuccess = results.all { it.isSuccess }
         if (allSuccess) {
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            val itemsToSync = if (isMovie) {
+                _uiState.value.historyMovies.filter { it.traktId in traktIds }
+            } else {
+                _uiState.value.historyShows.filter { it.traktId in traktIds }
+            }
             _uiState.value = if (isMovie) {
                 _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
             } else {
                 _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
             }
-        }
-    }
-
-    fun loadMoreMovies() {
-        if (_uiState.value.isLoadingMovies || !_uiState.value.hasMoreMovies) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoadingMovies = true)
-            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200) }
-            result.onSuccess { (items, totalPages) ->
-                // 用 mapIndexed 而非 map,避免与 kotlinx.coroutines.flow.map 导入产生歧义
-                val deferredItems = items.mapIndexed { _, item ->
-                    async {
-                        enrichMediaItem(
-                            traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
-                            title = item.movie.title, year = item.movie.year,
-                            imdbId = item.movie.ids.imdb, rating = item.movie.rating,
-                            listedAt = item.listed_at, isMovie = true
-                        )
-                    }
-                }
-                val uiItems = deferredItems.awaitAll()
-                _uiState.value = _uiState.value.copy(
-                    movies = (_uiState.value.movies + uiItems).distinctBy { it.traktId },
-                    isLoadingMovies = false,
-                    hasMoreMovies = _uiState.value.moviePage < totalPages,
-                    moviePage = _uiState.value.moviePage + 1
-                )
-            }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
-                    isLoadingMovies = false,
-                    moviesError = e.message
-                )
+            // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
+            if (itemsToSync.isNotEmpty()) {
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
     }

@@ -101,15 +101,6 @@ class DoubanLoginViewModel @Inject constructor(
         viewModelScope.launch { runCatching { cloudPersonalSyncManager.refreshMetaOnly() } }
     }
 
-    /**
-     * 已登录豆瓣时直接触发同步（从设置页「重新导入」场景）。
-     * 默认 forceOverwrite=false：跳过已同步条目，支持断点续传。
-     * @param forceOverwrite true=强制重新同步所有条目
-     */
-    fun triggerSync(forceOverwrite: Boolean = false) {
-        doubanSyncManager.startSync(forceOverwrite = forceOverwrite)
-    }
-
     /** 检测云端是否有当前豆瓣账号的失败数据 */
     private fun checkCloudFailures() {
         viewModelScope.launch {
@@ -132,15 +123,6 @@ class DoubanLoginViewModel @Inject constructor(
     /** 用户忽略云端数据 */
     fun dismissCloudFailures() {
         _cloudFailureCount.value = null
-    }
-
-    /**
-     * Cookie 过期后重置：清除旧凭证 + 重置同步进度，让 UI 回到 WebView 登录页。
-     */
-    fun resetForRelogin() {
-        doubanAuthStorage.clearCredentials()
-        _loginSuccess.value = false
-        doubanSyncManager.resetProgress()
     }
 }
 
