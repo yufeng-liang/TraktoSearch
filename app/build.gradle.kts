@@ -1,5 +1,6 @@
 import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.gradle.api.tasks.testing.Test
 
 val localProps = rootProject.file("local.properties")
 val properties = Properties()
@@ -212,4 +213,11 @@ dependencies {
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:oppo:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:vivo:5.8.0")
+}
+
+// JPush SDK 的 SchedulerReceiver 字节码缺少 stackmap frame,
+// Robolectric 加载 merged manifest 时会触发 VerifyError。
+// -Xverify:none 在 JDK 17 中 deprecated 但仍可用,跳过字节码校验让 Robolectric 测试能初始化。
+tasks.withType<Test>().configureEach {
+    jvmArgs("-Xverify:none")
 }
