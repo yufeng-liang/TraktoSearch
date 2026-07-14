@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +51,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
@@ -92,6 +95,9 @@ fun PersonScreen(
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
     var showAllPersonImages by rememberSaveable { mutableStateOf(false) }
     var selectedPersonImageIndex by remember { mutableIntStateOf(-1) }
+    // 将 gridState 提升到屏幕级，使用 rememberSaveable 保留导航往返后的滚动位置
+    val movieCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
+    val tvCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
 
     Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) { padding ->
         Box(modifier = Modifier
@@ -419,7 +425,8 @@ fun PersonScreen(
                             onLoadMore = { viewModel.loadMoreMovies() },
                             onMovieClick = onMovieClick,
                             viewModel = viewModel,
-                            onDismiss = { showAllMovies = false }
+                            onDismiss = { showAllMovies = false },
+                            gridState = movieCreditsGridState
                         )
                     }
 
@@ -433,17 +440,26 @@ fun PersonScreen(
                             onLoadMore = { viewModel.loadMoreTvShows() },
                             onShowClick = onShowClick,
                             viewModel = viewModel,
-                            onDismiss = { showAllTvShows = false }
+                            onDismiss = { showAllTvShows = false },
+                            gridState = tvCreditsGridState
                         )
                     }
 
-                    // 人物图片大图查看
+                    // 人物图片大图查看（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
                     if (selectedPersonImageIndex >= 0 && uiState.personImages.isNotEmpty()) {
-                        PersonImagePagerOverlay(
-                            images = uiState.personImages,
-                            initialIndex = selectedPersonImageIndex,
-                            onDismiss = { selectedPersonImageIndex = -1 }
-                        )
+                        Dialog(
+                            onDismissRequest = { selectedPersonImageIndex = -1 },
+                            properties = DialogProperties(
+                                usePlatformDefaultWidth = false,
+                                decorFitsSystemWindows = false
+                            )
+                        ) {
+                            PersonImagePagerOverlay(
+                                images = uiState.personImages,
+                                initialIndex = selectedPersonImageIndex,
+                                onDismiss = { selectedPersonImageIndex = -1 }
+                            )
+                        }
                     }
 
                     // 全部人物图片弹窗

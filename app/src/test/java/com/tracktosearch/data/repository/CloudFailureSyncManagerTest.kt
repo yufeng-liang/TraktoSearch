@@ -10,6 +10,7 @@ import com.tracktosearch.data.remote.cloud.AesCrypto
 import com.tracktosearch.data.remote.cloud.GiteeContentRequest
 import com.tracktosearch.data.remote.cloud.GiteeContentUpdateResponse
 import com.tracktosearch.data.remote.cloud.GiteeContentsApi
+import com.tracktosearch.data.repository.UploadResult
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -236,7 +237,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isFalse()
+        assertThat(result).isEqualTo(UploadResult.Failed)
         coVerify(exactly = 0) {
             giteeApi.getFileContent(any(), any(), any(), any())
             giteeApi.createFileContent(any(), any(), any(), any())
@@ -251,7 +252,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isTrue()
+        assertThat(result).isEqualTo(UploadResult.Skipped(0L, 0L))
         // 本地空时早返回，不调用任何 Gitee API（包括 GET）
         coVerify(exactly = 0) {
             giteeApi.getFileContent(any(), any(), any(), any())
@@ -275,7 +276,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isTrue()
+        assertThat(result).isEqualTo(UploadResult.Uploaded)
         coVerify(exactly = 0) { giteeApi.putFileContent(any(), any(), any(), any()) }
         coVerify(exactly = 1) { giteeApi.createFileContent(any(), any(), any(), any()) }
 
@@ -312,7 +313,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isTrue()
+        assertThat(result).isEqualTo(UploadResult.Uploaded)
         coVerify(exactly = 0) { giteeApi.createFileContent(any(), any(), any(), any()) }
         coVerify(exactly = 1) { giteeApi.putFileContent(any(), any(), any(), any()) }
 
@@ -332,7 +333,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isTrue()
+        assertThat(result).isEqualTo(UploadResult.Skipped(3000L, 1000L))
         coVerify(exactly = 1) { giteeApi.getFileContent(any(), any(), any(), any()) }
         coVerify(exactly = 0) { giteeApi.createFileContent(any(), any(), any(), any()) }
         coVerify(exactly = 0) { giteeApi.putFileContent(any(), any(), any(), any()) }
@@ -350,7 +351,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isFalse()
+        assertThat(result).isEqualTo(UploadResult.Failed)
     }
 
     @Test
@@ -365,7 +366,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.uploadIfHasFailures()
 
-        assertThat(result).isFalse()
+        assertThat(result).isEqualTo(UploadResult.Failed)
     }
 
     // ============================================================
@@ -467,7 +468,7 @@ class CloudFailureSyncManagerTest {
 
         val result = manager.downloadAndMerge()
 
-        assertThat(result).isEqualTo(DownloadResult.LocalNewer)
+        assertThat(result).isEqualTo(DownloadResult.LocalNewer(cloudTime = 1000L, localTime = 2000L))
         coVerify(exactly = 0) { doubanSyncFailureDao.replaceAll(any()) }
     }
 
@@ -597,7 +598,7 @@ class CloudFailureSyncManagerTest {
         } returns mockSuccessUpdateResponse()
 
         val uploadResult = manager.uploadIfHasFailures()
-        assertThat(uploadResult).isTrue()
+        assertThat(uploadResult).isEqualTo(UploadResult.Uploaded)
 
         // ===== 2. 用上传的 content 构造云端响应 =====
         val capturedContent = createSlot.captured.content

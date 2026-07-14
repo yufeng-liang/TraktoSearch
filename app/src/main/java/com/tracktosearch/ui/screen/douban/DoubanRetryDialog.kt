@@ -39,12 +39,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
+import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
 import com.tracktosearch.data.repository.CloudFailureSyncManager
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DownloadResult
 import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.repository.UploadResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -107,8 +109,18 @@ class DoubanRetryViewModel @Inject constructor(
                 _cloudSyncLoading.value = false
                 return@launch
             }
-            val success = cloudFailureSyncManager.uploadIfHasFailures()
-            _cloudSyncEvent.value = if (success) CloudSyncEvent.UploadSuccess else CloudSyncEvent.UploadFailed
+            when (val result = cloudFailureSyncManager.uploadIfHasFailures()) {
+                is UploadResult.Uploaded ->
+                    _cloudSyncDialog.value = CloudSyncCompareInfo(0L, 0L, CompareKind.UPLOAD_DONE)
+                is UploadResult.Skipped ->
+                    _cloudSyncDialog.value = CloudSyncCompareInfo(
+                        localTime = result.localTime,
+                        cloudTime = result.cloudTime,
+                        kind = CompareKind.UPLOAD_SKIPPED
+                    )
+                is UploadResult.Failed ->
+                    _cloudSyncEvent.value = CloudSyncEvent.UploadFailed
+            }
             _cloudSyncLoading.value = false
         }
     }
@@ -122,16 +134,34 @@ class DoubanRetryViewModel @Inject constructor(
                 _cloudSyncLoading.value = false
                 return@launch
             }
-            val result = cloudFailureSyncManager.downloadAndMerge()
-            _cloudSyncEvent.value = when (result) {
+            val result = cloudFailureSyncManager.downloadAndMerge(autoCommit = false)
+            when (result) {
                 is DownloadResult.Success -> {
-                    // 云端更新,本地已替换 → 刷新失败项统计
+                    // 本地无数据,已用云端替换 → 刷新失败项统计,弹信息对话框
                     refreshRetryState()
-                    CloudSyncEvent.DownloadSuccess(result.count)
+                    _cloudSyncDialog.value = CloudSyncCompareInfo(
+                        localTime = result.localTime,
+                        cloudTime = result.cloudTime,
+                        kind = CompareKind.DOWNLOAD_LOCAL_EMPTY,
+                        count = result.count
+                    )
                 }
-                DownloadResult.CloudEmpty -> CloudSyncEvent.CloudEmpty
-                DownloadResult.LocalNewer -> CloudSyncEvent.LocalNewer
-                DownloadResult.Failed -> CloudSyncEvent.DownloadFailed
+                is DownloadResult.LocalNewer ->
+                    _cloudSyncDialog.value = CloudSyncCompareInfo(
+                        localTime = result.localTime,
+                        cloudTime = result.cloudTime,
+                        kind = CompareKind.DOWNLOAD_LOCAL_NEWER
+                    )
+                is DownloadResult.OverwritePending ->
+                    _cloudSyncDialog.value = CloudSyncCompareInfo(
+                        localTime = result.localTime,
+                        cloudTime = result.cloudTime,
+                        kind = CompareKind.DOWNLOAD_OVERWRITE,
+                        count = result.count,
+                        entities = result.entities
+                    )
+                DownloadResult.CloudEmpty -> _cloudSyncEvent.value = CloudSyncEvent.CloudEmpty
+                DownloadResult.Failed -> _cloudSyncEvent.value = CloudSyncEvent.DownloadFailed
             }
             _cloudSyncLoading.value = false
         }
@@ -139,6 +169,53 @@ class DoubanRetryViewModel @Inject constructor(
 
     fun clearCloudSyncEvent() {
         _cloudSyncEvent.value = null
+    }
+
+    /** 云端同步时间戳比较对话框数据(信息展示或覆盖前确认) */
+    data class CloudSyncCompareInfo(
+        val localTime: Long,
+        val cloudTime: Long,
+        val kind: CompareKind,
+        val count: Int = 0,
+        /** 仅 kind=DOWNLOAD_OVERWRITE 时非空,确认后提交落库 */
+        val entities: List<DoubanSyncFailureEntity>? = null
+    )
+
+    /** 比较对话框类型 */
+    enum class CompareKind {
+        /** 下载:云端较新,将覆盖本地(需用户确认) */
+        DOWNLOAD_OVERWRITE,
+        /** 下载:本地较新,跳过云端 */
+        DOWNLOAD_LOCAL_NEWER,
+        /** 下载:本地无数据,已用云端替换 */
+        DOWNLOAD_LOCAL_EMPTY,
+        /** 上传:本地不比云端新,跳过上传 */
+        UPLOAD_SKIPPED,
+        /** 上传:本地较新,已上传到云端 */
+        UPLOAD_DONE
+    }
+
+    private val _cloudSyncDialog = MutableStateFlow<CloudSyncCompareInfo?>(null)
+    val cloudSyncDialog: StateFlow<CloudSyncCompareInfo?> = _cloudSyncDialog.asStateFlow()
+
+    fun dismissCloudSyncDialog() {
+        _cloudSyncDialog.value = null
+    }
+
+    /** 用户确认用云端数据覆盖本地失败项(对应 [DownloadResult.OverwritePending]) */
+    fun confirmCloudOverwrite() {
+        val info = _cloudSyncDialog.value ?: return
+        val entities = info.entities ?: run {
+            _cloudSyncDialog.value = null
+            return
+        }
+        viewModelScope.launch {
+            _cloudSyncLoading.value = true
+            cloudFailureSyncManager.commitCloudMerge(entities)
+            refreshRetryState()
+            _cloudSyncLoading.value = false
+            _cloudSyncDialog.value = null
+        }
     }
 }
 

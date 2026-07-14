@@ -114,10 +114,10 @@ class CloudFailureSyncManager @Inject constructor(
      *
      * @return true 成功,false 失败(失败只记日志,不阻塞主流程)
      */
-    suspend fun uploadIfHasFailures(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun uploadIfHasFailures(): UploadResult = withContext(Dispatchers.IO) {
         val creds = doubanAuthStorage.getCredentials() ?: run {
             Log.d(TAG, "未登录豆瓣,跳过上传")
-            return@withContext false
+            return@withContext UploadResult.Failed
         }
         val path = buildPath(creds.userId)
         val entities = doubanSyncFailureDao.getAll()
@@ -126,7 +126,7 @@ class CloudFailureSyncManager @Inject constructor(
             if (entities.isEmpty()) {
                 // 本地无失败项,不主动删除云端(保留云端历史,避免误删)
                 Log.d(TAG, "本地无失败项,跳过上传")
-                return@withContext true
+                return@withContext UploadResult.Skipped(cloudTime = 0L, localTime = 0L)
             }
 
             // 先 GET 云端文件,同时获取 sha(更新必传)和 uploadedAt(时间戳比较)
@@ -165,7 +165,7 @@ class CloudFailureSyncManager @Inject constructor(
             val localNewest = entities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
             if (cloudUploadedAt > 0L && localNewest <= cloudUploadedAt) {
                 Log.d(TAG, "本地数据不比云端新(localNewest=$localNewest, cloudUploadedAt=$cloudUploadedAt),跳过上传")
-                return@withContext true
+                return@withContext UploadResult.Skipped(cloudTime = cloudUploadedAt, localTime = localNewest)
             }
 
             val payload = CloudPayload(
@@ -220,15 +220,15 @@ class CloudFailureSyncManager @Inject constructor(
             }
             if (putResp.isSuccessful) {
                 Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"}, uploadedAt=${payload.uploadedAt})")
-                true
+                UploadResult.Uploaded
             } else {
                 val errorBody = putResp.errorBody()?.string()
                 Log.w(TAG, "上传失败: ${putResp.code()} ${putResp.message()} | path=$path | error=$errorBody")
-                false
+                UploadResult.Failed
             }
         } catch (e: Exception) {
             Log.w(TAG, "上传异常: ${e.message}")
-            false
+            UploadResult.Failed
         }
     }
 
@@ -283,7 +283,7 @@ class CloudFailureSyncManager @Inject constructor(
      *
      * @return [DownloadResult] 语义化返回值,调用方根据类型做 UI 反馈和刷新
      */
-    suspend fun downloadAndMerge(): DownloadResult = withContext(Dispatchers.IO) {
+    suspend fun downloadAndMerge(autoCommit: Boolean = true): DownloadResult = withContext(Dispatchers.IO) {
         val creds = doubanAuthStorage.getCredentials() ?: return@withContext DownloadResult.Failed
         val path = buildPath(creds.userId)
 
@@ -309,7 +309,7 @@ class CloudFailureSyncManager @Inject constructor(
             if (localNewest > 0L && payload.uploadedAt <= localNewest) {
                 // 本地有数据且本地更新或相等 → 忽略云端,以本地显示为准
                 Log.d(TAG, "本地数据更新(localNewest=$localNewest, cloudUploadedAt=${payload.uploadedAt}),忽略云端")
-                return@withContext DownloadResult.LocalNewer
+                return@withContext DownloadResult.LocalNewer(cloudTime = payload.uploadedAt, localTime = localNewest)
             }
 
             // 本地无数据 或 云端更新 → 替换全部本地失败数据(事务包装)
@@ -331,34 +331,85 @@ class CloudFailureSyncManager @Inject constructor(
                     subtitle = dto.subtitle
                 )
             }
+
+            // 手动拉取且需要覆盖本地时,先返回待确认结果,等用户确认后再 commit(不在此落库)
+            if (!autoCommit) {
+                Log.d(TAG, "云端数据较新,等待用户确认覆盖(localNewest=$localNewest, cloudUploadedAt=${payload.uploadedAt})")
+                return@withContext DownloadResult.OverwritePending(
+                    count = entities.size,
+                    cloudTime = payload.uploadedAt,
+                    localTime = localNewest,
+                    entities = entities
+                )
+            }
+
             doubanSyncFailureDao.replaceAll(entities)
             Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
-            DownloadResult.Success(entities.size)
+            DownloadResult.Success(count = entities.size, cloudTime = payload.uploadedAt, localTime = localNewest)
         } catch (e: Exception) {
             Log.w(TAG, "下载合并异常: ${e.message}")
             DownloadResult.Failed
         }
     }
+
+    /**
+     * 确认用云端数据覆盖本地失败项(对应 [DownloadResult.OverwritePending] 的用户确认分支)。
+     * @return 实际写入的条数
+     */
+    suspend fun commitCloudMerge(entities: List<com.tracktosearch.data.local.db.DoubanSyncFailureEntity>): Int =
+        withContext(Dispatchers.IO) {
+            doubanSyncFailureDao.replaceAll(entities)
+            entities.size
+        }
 }
 
 /**
  * 云端失败数据下载结果(语义化返回值)。
  *
  * - [CloudEmpty] 云端无失败数据
- * - [LocalNewer] 本地数据更新,跳过云端(本地数据未变更,无需刷新 UI)
- * - [Success] 云端更新,已替换全部本地失败数据(调用方需刷新 retryState)
+ * - [LocalNewer] 本地数据更新,跳过云端(携带两端时间戳供 UI 展示)
+ * - [Success] 云端更新,已替换全部本地失败数据(携带两端时间戳,调用方需刷新 retryState)
+ * - [OverwritePending] 云端更新但调用方要求手动确认(autoCommit=false),未落库,需 [commitCloudMerge]
  * - [Failed] 下载失败(网络/解密/服务端错误)
  */
 sealed class DownloadResult {
     /** 云端无失败数据 */
     object CloudEmpty : DownloadResult()
 
-    /** 本地数据更新,跳过云端(本地数据未变更) */
-    object LocalNewer : DownloadResult()
+    /** 本地数据更新,跳过云端(本地数据未变更);携带两端时间戳 */
+    data class LocalNewer(val cloudTime: Long, val localTime: Long) : DownloadResult()
 
-    /** 云端更新,已替换全部本地失败数据(调用方需刷新 retryState) */
-    data class Success(val count: Int) : DownloadResult()
+    /** 云端更新,已替换全部本地失败数据(调用方需刷新 retryState);携带两端时间戳 */
+    data class Success(val count: Int, val cloudTime: Long = 0L, val localTime: Long = 0L) : DownloadResult()
+
+    /** 云端更新,但调用方要求手动确认(autoCommit=false),未落库;confirm 后调 [commitCloudMerge] */
+    data class OverwritePending(
+        val count: Int,
+        val cloudTime: Long,
+        val localTime: Long,
+        val entities: List<com.tracktosearch.data.local.db.DoubanSyncFailureEntity>
+    ) : DownloadResult()
 
     /** 下载失败 */
     object Failed : DownloadResult()
 }
+
+/**
+ * 上传本地失败项到云端的结果(语义化返回值,供 UI 展示时间戳比较信息)。
+ *
+ * - [Skipped] 本地不比云端新(或本地无失败项),跳过上传;携带两端时间戳
+ * - [Uploaded] 本地较新,已加密上传到云端
+ * - [Failed] 上传失败(网络/服务端错误)
+ */
+sealed class UploadResult {
+    /** 跳过上传(本地不比云端新或本地无失败项);携带两端时间戳,均无则均为 0 */
+    data class Skipped(val cloudTime: Long, val localTime: Long) : UploadResult()
+
+    /** 本地较新,已上传到云端 */
+    object Uploaded : UploadResult()
+
+    /** 上传失败 */
+    object Failed : UploadResult()
+}
+
+

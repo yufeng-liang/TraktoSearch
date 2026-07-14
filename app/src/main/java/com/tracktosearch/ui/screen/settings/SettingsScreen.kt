@@ -258,60 +258,37 @@ fun SettingsScreen(
         }
     }
 
-    // 云端同步事件 → Snackbar 反馈(一次性,显示后清空)
-    // DownloadSuccess 改为弹窗提示(提供跳转失败页按钮)
-    var showDownloadSuccessDialog by remember { mutableStateOf(false) }
-    var downloadedCount by remember { mutableStateOf(0) }
+    // 云端同步事件 → Snackbar 反馈(仅错误/前置校验类;比较类结果走对话框)
     val cloudSyncNoLogin = stringResource(R.string.cloud_sync_no_login)
     val cloudSyncNoLocalFailures = stringResource(R.string.cloud_sync_no_local_failures)
-    val cloudSyncUploadSuccess = stringResource(R.string.cloud_sync_upload_success)
     val cloudSyncUploadFailed = stringResource(R.string.cloud_sync_upload_failed)
     val cloudSyncDownloadEmpty = stringResource(R.string.cloud_sync_download_empty)
-    val cloudSyncDownloadLocalNewer = stringResource(R.string.cloud_sync_download_local_newer)
     val cloudSyncDownloadFailed = stringResource(R.string.cloud_sync_download_failed)
     LaunchedEffect(cloudSyncEvent) {
         val event = cloudSyncEvent ?: return@LaunchedEffect
-        when (event) {
-            is CloudSyncEvent.DownloadSuccess -> {
-                downloadedCount = event.count
-                showDownloadSuccessDialog = true
-            }
-            else -> {
-                val msg = when (event) {
-                    is CloudSyncEvent.NotLoggedIn -> cloudSyncNoLogin
-                    is CloudSyncEvent.NoLocalFailures -> cloudSyncNoLocalFailures
-                    is CloudSyncEvent.UploadSuccess -> cloudSyncUploadSuccess
-                    is CloudSyncEvent.UploadFailed -> cloudSyncUploadFailed
-                    is CloudSyncEvent.CloudEmpty -> cloudSyncDownloadEmpty
-                    is CloudSyncEvent.LocalNewer -> cloudSyncDownloadLocalNewer
-                    is CloudSyncEvent.DownloadFailed -> cloudSyncDownloadFailed
-                }
-                snackbarHostState.showSnackbar(msg)
-            }
+        val msg = when (event) {
+            is CloudSyncEvent.NotLoggedIn -> cloudSyncNoLogin
+            is CloudSyncEvent.NoLocalFailures -> cloudSyncNoLocalFailures
+            is CloudSyncEvent.UploadFailed -> cloudSyncUploadFailed
+            is CloudSyncEvent.CloudEmpty -> cloudSyncDownloadEmpty
+            is CloudSyncEvent.DownloadFailed -> cloudSyncDownloadFailed
+            // 比较类结果已通过 cloudSyncDialog 展示,这里不弹 snackbar
+            is CloudSyncEvent.DownloadSuccess -> null
+            is CloudSyncEvent.LocalNewer -> null
+            is CloudSyncEvent.UploadSuccess -> null
         }
+        if (msg != null) snackbarHostState.showSnackbar(msg)
         doubanRetryViewModel.clearCloudSyncEvent()
     }
 
-    // 下载成功弹窗:提示用户可进入查看同步失败项页面查看
-    if (showDownloadSuccessDialog) {
-        AlertDialog(
-            onDismissRequest = { showDownloadSuccessDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.dialog_download_success_title)) },
-            text = { Text(stringResource(R.string.dialog_download_success_message, downloadedCount)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDownloadSuccessDialog = false
-                    onDoubanFailures()
-                }) {
-                    Text(stringResource(R.string.dialog_download_success_view))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDownloadSuccessDialog = false }) {
-                    Text(stringResource(R.string.dialog_download_success_dismiss))
-                }
-            }
+    // 云端同步时间戳比较对话框(信息展示 / 下载覆盖前确认)
+    val cloudSyncDialog by doubanRetryViewModel.cloudSyncDialog.collectAsStateWithLifecycle()
+    cloudSyncDialog?.let { info ->
+        CloudSyncCompareDialog(
+            info = info,
+            onDismiss = { doubanRetryViewModel.dismissCloudSyncDialog() },
+            onConfirmOverwrite = { doubanRetryViewModel.confirmCloudOverwrite() },
+            onViewFailures = onDoubanFailures
         )
     }
 
@@ -590,7 +567,7 @@ fun SettingsScreen(
                                 LinearProgressIndicator(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                                        .padding(horizontal = 6.dp, vertical = 4.dp)
                                 )
                             }
 
@@ -1690,4 +1667,101 @@ private fun formatLastCheckTime(timestampMs: Long, context: android.content.Cont
             sdf.format(java.util.Date(timestampMs))
         }
     }
+}
+
+/** 将时间戳格式化为「yyyy-MM-dd HH:mm」(设备时区)，0 或负数返回空串 */
+private fun formatSyncTime(time: Long): String {
+    if (time <= 0L) return ""
+    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    return sdf.format(java.util.Date(time))
+}
+
+/**
+ * 云端同步时间戳比较对话框。
+ * - 下载覆盖(DOWNLOAD_OVERWRITE)：双按钮「取消 / 覆盖本地」，确认才落库
+ * - 下载空(DOWNLOAD_LOCAL_EMPTY)：「查看失败项 / 关闭」
+ * - 其余(本地较新 / 上传跳过 / 已上传)：单按钮「关闭」
+ */
+@Composable
+private fun CloudSyncCompareDialog(
+    info: DoubanRetryViewModel.CloudSyncCompareInfo,
+    onDismiss: () -> Unit,
+    onConfirmOverwrite: () -> Unit,
+    onViewFailures: () -> Unit
+) {
+    val localText = if (info.localTime > 0) formatSyncTime(info.localTime) else stringResource(R.string.cloud_sync_dialog_no_time)
+    val cloudText = if (info.cloudTime > 0) formatSyncTime(info.cloudTime) else stringResource(R.string.cloud_sync_dialog_no_time)
+
+    val (titleRes, messageRes) = when (info.kind) {
+        DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ->
+            R.string.cloud_sync_dialog_title_overwrite to R.string.cloud_sync_dialog_overwrite_message
+        DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_NEWER ->
+            R.string.cloud_sync_dialog_title_local_newer to R.string.cloud_sync_dialog_local_newer_message
+        DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY ->
+            R.string.cloud_sync_dialog_title_download_empty to R.string.cloud_sync_dialog_download_empty_message
+        DoubanRetryViewModel.CompareKind.UPLOAD_SKIPPED ->
+            R.string.cloud_sync_dialog_title_upload_skip to R.string.cloud_sync_dialog_upload_skip_message
+        DoubanRetryViewModel.CompareKind.UPLOAD_DONE ->
+            R.string.cloud_sync_dialog_title_upload_done to R.string.cloud_sync_dialog_upload_done_message
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text(stringResource(titleRes)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (info.localTime > 0) {
+                    Text(stringResource(R.string.cloud_sync_dialog_local_time, localText))
+                }
+                if (info.cloudTime > 0) {
+                    Text(stringResource(R.string.cloud_sync_dialog_cloud_time, cloudText))
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(stringResource(messageRes, info.count))
+            }
+        },
+        confirmButton = {
+            when (info.kind) {
+                DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ->
+                    TextButton(onClick = onConfirmOverwrite) {
+                        Text(stringResource(R.string.cloud_sync_dialog_overwrite_confirm))
+                    }
+                DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY ->
+                    TextButton(onClick = {
+                        onDismiss()
+                        onViewFailures()
+                    }) {
+                        Text(stringResource(R.string.dialog_download_success_view))
+                    }
+                else ->
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.dialog_download_success_dismiss))
+                    }
+            }
+        },
+        dismissButton = if (
+            info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE ||
+            info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_LOCAL_EMPTY
+        ) {
+            {
+                TextButton(onClick = onDismiss) {
+                    Text(
+                        stringResource(
+                            if (info.kind == DoubanRetryViewModel.CompareKind.DOWNLOAD_OVERWRITE) {
+                                R.string.permission_cancel
+                            } else {
+                                R.string.dialog_download_success_dismiss
+                            }
+                        )
+                    )
+                }
+            }
+        } else {
+            {}
+        }
+    )
 }

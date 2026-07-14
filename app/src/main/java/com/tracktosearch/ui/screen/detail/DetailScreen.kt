@@ -71,6 +71,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -885,22 +887,38 @@ fun DetailScreen(
                 )
             }
 
-            // YouTube 内置播放器
+            // YouTube 内置播放器（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
             if (playingVideoKey != null) {
-                YouTubePlayerOverlay(
-                    videoKey = playingVideoKey!!,
-                    videoTitle = "",
-                    onDismiss = { playingVideoKey = null }
-                )
+                Dialog(
+                    onDismissRequest = { playingVideoKey = null },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    YouTubePlayerOverlay(
+                        videoKey = playingVideoKey!!,
+                        videoTitle = "",
+                        onDismiss = { playingVideoKey = null }
+                    )
+                }
             }
 
-            // 截图滑动查看
+            // 截图滑动查看（用 Dialog 包裹以确保覆盖在 ModalBottomSheet 之上）
             if (selectedBackdropIndex >= 0 && uiState.backdrops.isNotEmpty()) {
-                BackdropPagerOverlay(
-                    backdrops = uiState.backdrops,
-                    initialIndex = selectedBackdropIndex,
-                    onDismiss = { selectedBackdropIndex = -1 }
-                )
+                Dialog(
+                    onDismissRequest = { selectedBackdropIndex = -1 },
+                    properties = DialogProperties(
+                        usePlatformDefaultWidth = false,
+                        decorFitsSystemWindows = false
+                    )
+                ) {
+                    BackdropPagerOverlay(
+                        backdrops = uiState.backdrops,
+                        initialIndex = selectedBackdropIndex,
+                        onDismiss = { selectedBackdropIndex = -1 }
+                    )
+                }
             }
 
             // 全部预告片与截图弹窗

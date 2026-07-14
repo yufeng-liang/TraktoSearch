@@ -12,9 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.CircularProgressIndicator
@@ -47,14 +47,14 @@ internal fun AllMovieCreditsSheet(
     onLoadMore: () -> Unit,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     viewModel: PersonViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    gridState: LazyGridState
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        val gridState = rememberLazyGridState()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(
@@ -132,14 +132,14 @@ internal fun AllTvCreditsSheet(
     onLoadMore: () -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double) -> Unit,
     viewModel: PersonViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    gridState: LazyGridState
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        val gridState = rememberLazyGridState()
         Column(modifier = Modifier.fillMaxWidth()) {
             // 标题栏
             Row(

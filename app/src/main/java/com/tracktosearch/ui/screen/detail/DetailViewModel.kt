@@ -328,9 +328,12 @@ class DetailViewModel @Inject constructor(
             currentCollectionId = cached.currentCollectionId
             detailLoaded = true
             allResources = cached.allResources
+            // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
+            val realInWatchlist = traktRepository.checkInWatchlist(traktId, cached.currentMediaType)
+            val realWatched = traktRepository.checkWatched(traktId, cached.currentMediaType)
             _uiState.value = cached.uiState.copy(
-                isMarkedWatchlist = inWatchlist,
-                isMarkedWatched = isWatched
+                isMarkedWatchlist = realInWatchlist,
+                isMarkedWatched = realWatched
             )
             // 从存储拉取最新 viewedUrls 覆盖缓存旧值，避免跨页面返回后丢失状态
             val latestViewed = withContext(Dispatchers.IO) { viewedItemStorage.getViewedUrls() }
@@ -388,6 +391,14 @@ class DetailViewModel @Inject constructor(
             // 先检查登录状态
             isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
+
+            // 从全局缓存校正想看/已看状态（路由参数从推荐列表进入时可能为 false）
+            val realInWatchlist = traktRepository.checkInWatchlist(currentTraktId, currentMediaType)
+            val realWatched = traktRepository.checkWatched(currentTraktId, currentMediaType)
+            _uiState.value = _uiState.value.copy(
+                isMarkedWatchlist = realInWatchlist,
+                isMarkedWatched = realWatched
+            )
 
             var tmdbRating = 0.0
             var collectionId = 0
@@ -1467,8 +1478,9 @@ class DetailViewModel @Inject constructor(
         }
 
         // 如果已标记已看，则取消标记
+        // removeWatched 会副操作添加到想看列表，因此同时标记 watchlistChanged 以触发返回后刷新想看列表
         if (current.isMarkedWatched) {
-            _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true)
+            _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true, watchlistChanged = true)
             viewModelScope.launch {
                 traktRepository.removeWatched(currentTraktId, currentMediaType, currentTmdbId)
                     .onSuccess {
@@ -1482,7 +1494,11 @@ class DetailViewModel @Inject constructor(
                         syncDoubanMark(DoubanSyncAction.REMOVE_COLLECT)
                     }
                     .onFailure {
-                        _uiState.value = _uiState.value.copy(isMarkingWatched = false)
+                        _uiState.value = _uiState.value.copy(
+                            isMarkingWatched = false,
+                            watchedChanged = false,
+                            watchlistChanged = false
+                        )
                     }
             }
             return
@@ -1495,7 +1511,8 @@ class DetailViewModel @Inject constructor(
         }
 
         // 电影：直接标记
-        _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true)
+        // markAsWatched 会副操作从想看列表移除，因此同时标记 watchlistChanged 以触发返回后刷新想看列表
+        _uiState.value = current.copy(isMarkingWatched = true, watchedChanged = true, watchlistChanged = true)
         viewModelScope.launch {
             traktRepository.markAsWatched(currentTraktId, currentMediaType)
                 .onSuccess {
@@ -1512,7 +1529,8 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isMarkingWatched = false,
-                        watchedChanged = false
+                        watchedChanged = false,
+                        watchlistChanged = false
                     )
                 }
         }
@@ -1537,10 +1555,11 @@ class DetailViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             showMarkWatchedDialog = false,
             isMarkingWatched = true,
-            watchedChanged = true
+            watchedChanged = true,
+            watchlistChanged = true
         )
         viewModelScope.launch {
-            traktRepository.markEpisodesWatched(selectedEpisodeIds)
+            traktRepository.markEpisodesWatched(selectedEpisodeIds, currentTraktId, currentTmdbId)
                 .onSuccess {
                     // 标记成功后刷新观看进度
                     fetchWatchedProgress()
@@ -1557,7 +1576,8 @@ class DetailViewModel @Inject constructor(
                 .onFailure {
                     _uiState.value = _uiState.value.copy(
                         isMarkingWatched = false,
-                        watchedChanged = false
+                        watchedChanged = false,
+                        watchlistChanged = false
                     )
                 }
         }

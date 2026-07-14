@@ -744,7 +744,11 @@ class TraktRepository @Inject constructor(
     }
 
     /** 批量标记多集为已看 */
-    suspend fun markEpisodesWatched(episodeTraktIds: List<Int>): Result<Unit> {
+    suspend fun markEpisodesWatched(
+        episodeTraktIds: List<Int>,
+        showTraktId: Int = 0,
+        showTmdbId: Int = 0
+    ): Result<Unit> {
         if (episodeTraktIds.isEmpty()) return Result.success(Unit)
         return try {
             val request = TraktSyncRequest(
@@ -752,6 +756,11 @@ class TraktRepository @Inject constructor(
             )
             val response = traktApiService.addToHistory(request)
             if (response.isSuccessful) {
+                // 更新本地已看缓存，确保下次进入详情页 checkWatched() 返回 true
+                if (showTraktId > 0) {
+                    addToWatchedCache(showTraktId, showTmdbId, MediaType.SHOW)
+                    showWatchlistCache.clear()
+                }
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Failed to mark episodes: ${response.code()}"))
@@ -799,6 +808,9 @@ class TraktRepository @Inject constructor(
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     Log.w("TraktRepository", "markAsWatched 副操作 removeFromWatchlist 异常: ${e.message}, traktId=$traktId")
                 }
+                // 失效想看列表缓存，确保下次刷新获取最新数据（副操作 removeFromWatchlist 已改变服务端数据）
+                movieWatchlistCache.clear()
+                showWatchlistCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to mark as watched: ${response.code()}"))
@@ -829,6 +841,11 @@ class TraktRepository @Inject constructor(
                 } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     Log.w("TraktRepository", "removeWatched 副操作 addToWatchlist 异常: ${e.message}, traktId=$traktId")
                 }
+                // 失效已看历史和想看列表缓存（副操作 addToWatchlist 已改变服务端数据）
+                movieHistoryCache.clear()
+                showHistoryCache.clear()
+                movieWatchlistCache.clear()
+                showWatchlistCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove watched: ${response.code()}"))
@@ -894,6 +911,34 @@ class TraktRepository @Inject constructor(
         return false
     }
 
+    /**
+     * 获取本地已标记已看但不在想看缓存中的 traktId 集合。
+     * 用于过滤 API 返回的想看列表，处理标记已看后 Trakt API 最终一致性延迟（服务端已移除但 API 仍返回旧数据）。
+     * 仅排除"已看且不在想看"的项，保留"已看但同时在想看"的项（用户看过后又加回想看）。
+     */
+    fun getLocallyWatchedOnlyTraktIds(type: MediaType): Set<Int> {
+        val cached = watchlistWatchedIds ?: return emptySet()
+        return when (type) {
+            MediaType.MOVIE -> cached.movieWatchedTraktIds - cached.movieWatchlistTraktIds
+            MediaType.SHOW -> cached.showWatchedTraktIds - cached.showWatchlistTraktIds
+            else -> emptySet()
+        }
+    }
+
+    /**
+     * 获取本地已标记想看但不在已看缓存中的 traktId 集合。
+     * 用于过滤 API 返回的已看历史，处理取消已看后 Trakt API 最终一致性延迟（服务端已移除但 API 仍返回旧数据）。
+     * 仅排除"想看且不在已看"的项，保留"想看但同时在已看"的项（用户想看后又标记已看）。
+     */
+    fun getLocallyWatchlistOnlyTraktIds(type: MediaType): Set<Int> {
+        val cached = watchlistWatchedIds ?: return emptySet()
+        return when (type) {
+            MediaType.MOVIE -> cached.movieWatchlistTraktIds - cached.movieWatchedTraktIds
+            MediaType.SHOW -> cached.showWatchlistTraktIds - cached.showWatchedTraktIds
+            else -> emptySet()
+        }
+    }
+
     /** 批量获取推荐项的想看/已看状态，返回 traktId -> (inWatchlist, watched) 映射 */
     suspend fun batchCheckStatus(traktIds: List<Int>, type: MediaType): Map<Int, Pair<Boolean, Boolean>> {
         if (traktIds.isEmpty()) return emptyMap()
@@ -921,6 +966,9 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.addToWatchlist(request)
             if (response.isSuccessful) {
                 addToWatchlistCache(traktId, tmdbId, type)
+                // 失效想看列表缓存，确保下次刷新获取最新数据
+                movieWatchlistCache.clear()
+                showWatchlistCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to add to watchlist: ${response.code()}"))
@@ -943,6 +991,9 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.removeFromWatchlist(request)
             if (response.isSuccessful) {
                 removeFromWatchlistCache(traktId, tmdbId, type)
+                // 失效想看列表缓存，确保下次刷新获取最新数据
+                movieWatchlistCache.clear()
+                showWatchlistCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove from watchlist: ${response.code()}"))

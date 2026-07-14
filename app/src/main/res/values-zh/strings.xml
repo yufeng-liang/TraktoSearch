@@ -1325,4 +1325,18 @@
     <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
     <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分及豆瓣同步功能</string>
     <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>
+    <string name="cloud_sync_dialog_no_time">无</string>
+    <string name="cloud_sync_dialog_title_overwrite">云端数据较新</string>
+    <string name="cloud_sync_dialog_title_local_newer">本地数据较新</string>
+    <string name="cloud_sync_dialog_title_upload_skip">无需上传</string>
+    <string name="cloud_sync_dialog_title_upload_done">已上传到云端</string>
+    <string name="cloud_sync_dialog_title_download_empty">已下载云端数据</string>
+    <string name="cloud_sync_dialog_local_time">本地：%1$s</string>
+    <string name="cloud_sync_dialog_cloud_time">云端：%1$s</string>
+    <string name="cloud_sync_dialog_overwrite_message">云端有 %1$d 条失败数据（更新于上方时间）。将覆盖本地现有数据，是否继续？</string>
+    <string name="cloud_sync_dialog_local_newer_message">本地失败数据较新，已保留本地，未从云端下载。</string>
+    <string name="cloud_sync_dialog_upload_skip_message">本地失败数据不比云端新，已跳过上传，云端保持不变。</string>
+    <string name="cloud_sync_dialog_upload_done_message">本地失败数据已加密上传到云端。</string>
+    <string name="cloud_sync_dialog_download_empty_message">已将云端 %1$d 条失败数据下载并合并到本地。</string>
+    <string name="cloud_sync_dialog_overwrite_confirm">覆盖本地</string>
 </resources>

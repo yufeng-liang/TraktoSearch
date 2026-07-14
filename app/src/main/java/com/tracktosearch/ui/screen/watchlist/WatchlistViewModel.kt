@@ -308,7 +308,10 @@ class WatchlistViewModel @Inject constructor(
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200, forceRefresh = forceReload) }
-            result.onSuccess { (items, totalPages) ->
+            result.onSuccess { (rawItems, totalPages) ->
+                // 过滤掉本地已标记已看但不在想看缓存中的电影（处理标记已看后 Trakt API 最终一致性延迟）
+                val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
+                val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.movie.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
                     val newIds = items.map { it.movie.ids.trakt }.toSet()
@@ -391,7 +394,10 @@ class WatchlistViewModel @Inject constructor(
                 showsError = if (silent) _uiState.value.showsError else null
             )
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage, limit = 200, forceRefresh = forceReload) }
-            result.onSuccess { (items, totalPages) ->
+            result.onSuccess { (rawItems, totalPages) ->
+                // 过滤掉本地已标记已看但不在想看缓存中的剧集（处理标记已看后 Trakt API 最终一致性延迟）
+                val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)
+                val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.show.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload) {
                     val newIds = items.map { it.show.ids.trakt }.toSet()
@@ -480,7 +486,10 @@ class WatchlistViewModel @Inject constructor(
                 }
                 // 历史记录可能包含同一部电影的多次观看，按 traktId 去重
                 val dedupedItems = items.distinctBy { it.movie.ids.trakt }
-                val deferredItems = dedupedItems.map { item ->
+                // 过滤掉本地已取消已看的电影（处理取消已看后 Trakt API 最终一致性延迟）
+                val locallyRemovedIds = traktRepository.getLocallyWatchlistOnlyTraktIds(MediaType.MOVIE)
+                val filteredItems = if (locallyRemovedIds.isNotEmpty()) dedupedItems.filter { it.movie.ids.trakt !in locallyRemovedIds } else dedupedItems
+                val deferredItems = filteredItems.map { item ->
                     async {
                         enrichMediaItem(
                             traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
@@ -528,7 +537,10 @@ class WatchlistViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(historyShows = emptyList())
                 }
                 val dedupedItems = items.distinctBy { it.show.ids.trakt }
-                val deferredItems = dedupedItems.map { item ->
+                // 过滤掉本地已取消已看的剧集（处理取消已看后 Trakt API 最终一致性延迟）
+                val locallyRemovedIds = traktRepository.getLocallyWatchlistOnlyTraktIds(MediaType.SHOW)
+                val filteredItems = if (locallyRemovedIds.isNotEmpty()) dedupedItems.filter { it.show.ids.trakt !in locallyRemovedIds } else dedupedItems
+                val deferredItems = filteredItems.map { item ->
                     async {
                         enrichMediaItem(
                             traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,

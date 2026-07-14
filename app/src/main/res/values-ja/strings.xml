@@ -1340,4 +1340,18 @@
     <string name="douban_spider_test_copy_result">結果をコピー</string>
     <string name="douban_spider_test_mark_copied">コピーしました</string>
     <string name="statistics_info_wordcloud">Q：レビュー単語クラウドとは？\nA：Doubanの短評から頻出単語を抽出し、ワードクラウドとして表示します。文字が大きいほど出現回数が多く、視聴した感想を手軽に振り返れます。</string>
+    <string name="cloud_sync_dialog_no_time">なし</string>
+    <string name="cloud_sync_dialog_title_overwrite">クラウドの方が新しい</string>
+    <string name="cloud_sync_dialog_title_local_newer">ローカルの方が新しい</string>
+    <string name="cloud_sync_dialog_title_upload_skip">アップロード不要</string>
+    <string name="cloud_sync_dialog_title_upload_done">クラウドにアップロード済み</string>
+    <string name="cloud_sync_dialog_title_download_empty">クラウドデータをダウンロード</string>
+    <string name="cloud_sync_dialog_local_time">ローカル：%1$s</string>
+    <string name="cloud_sync_dialog_cloud_time">クラウド：%1$s</string>
+    <string name="cloud_sync_dialog_overwrite_message">クラウドに失敗データが %1$d 件あります（上記時刻に更新）。ローカルデータを上書きします。続行しますか？</string>
+    <string name="cloud_sync_dialog_local_newer_message">ローカルの失敗データの方が新しいため、ローカルを保持しクラウドはダウンロードしませんでした。</string>
+    <string name="cloud_sync_dialog_upload_skip_message">ローカルデータはクラウドより新しくないため、アップロードをスキップしクラウドは変更しませんでした。</string>
+    <string name="cloud_sync_dialog_upload_done_message">ローカルの失敗データをクラウドに暗号化アップロードしました。</string>
+    <string name="cloud_sync_dialog_download_empty_message">クラウドの失敗データ %1$d 件をダウンロードしてローカルに統合しました。</string>
+    <string name="cloud_sync_dialog_overwrite_confirm">ローカルを上書き</string>
 </resources>
