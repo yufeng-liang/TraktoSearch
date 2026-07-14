@@ -49,4 +49,45 @@ class ReviewTokenizerTest {
         assertTrue("应保留实词 story", result.containsKey("story"))
         assertEquals("movie 出现 1 次", 1, result["movie"])
     }
+
+    @Test
+    fun tokenize_emptyList_returnsEmptyMap() {
+        val result = ReviewTokenizer.tokenize(emptyList())
+        assertTrue("空列表应返回空 Map", result.isEmpty())
+    }
+
+    @Test
+    fun tokenize_singleReview_returnsNonEmptyMap() {
+        val result = ReviewTokenizer.tokenize(listOf("剧情精彩"))
+        assertTrue("单条评论应返回非空 Map", result.isNotEmpty())
+    }
+
+    @Test
+    fun tokenize_longText_doesNotCrash() {
+        val longReview = "精彩".repeat(500)
+        val result = ReviewTokenizer.tokenize(listOf(longReview))
+        assertTrue("超长文本不应崩溃且应返回非空 Map", result.isNotEmpty())
+    }
+
+    @Test
+    fun tokenize_mixedChineseEnglish_handlesBoth() {
+        val result = ReviewTokenizer.tokenize(
+            listOf("剧情精彩 story is great")
+        )
+        assertTrue("应包含中文词", result.containsKey("剧情") || result.containsKey("精彩"))
+        assertTrue("应包含英文词 story", result.containsKey("story"))
+        assertTrue("应包含英文词 great", result.containsKey("great"))
+    }
+
+    @Test
+    fun tokenize_onlyStopWords_returnsEmptyOrSmallMap() {
+        val result = ReviewTokenizer.tokenize(listOf("我们 你们 他们 但是 因为 所以"))
+        assertTrue("全停用词应返回空或极小 Map", result.size <= 2)
+    }
+
+    @Test
+    fun tokenize_numbersAndPunctuation_notReturnedAsValidWords() {
+        val result = ReviewTokenizer.tokenize(listOf("123 456 789 !@# $%^"))
+        assertTrue("纯数字与标点应返回空 Map", result.isEmpty())
+    }
 }
