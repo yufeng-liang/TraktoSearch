@@ -34,8 +34,10 @@ class UpdateRepository @Inject constructor(
         // 公开仓库，专门存放 release APK
         private const val RELEASE_REPO_OWNER = "yufeng-liang"
         private const val RELEASE_REPO = "TrackToSearch-release"
-        // 启动时自动检查更新的最小间隔（24 小时），避免每次启动都请求 GitHub API
-        private const val UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        // 启动时自动检查更新的最小间隔（2 小时）。
+        // 缩短以覆盖"一天内多次发版"场景：用户当日再次启动即可拉到最新 release。
+        // 仍远低于 GitHub 未鉴权限流（60 次/小时），按每次启动计即使重度使用也远达不到。
+        private const val UPDATE_CHECK_INTERVAL_MS = 2 * 60 * 60 * 1000L
     }
 
     // 缓存上次获取的 changelog，避免重复请求
