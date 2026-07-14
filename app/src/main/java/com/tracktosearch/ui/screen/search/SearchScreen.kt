@@ -319,7 +319,7 @@ fun SearchScreen(
             }
         }
 
-        // 白云图标（搜索框未激活时显示在搜索框上方 25dp，水平居中）
+        // 白云图标（搜索框未激活时显示在搜索框上方 16dp，水平居中）
         CloudIconWithAnimation(
             cloudThemeManager = cloudThemeManager,
             isActive = isActive,
@@ -327,7 +327,7 @@ fun SearchScreen(
                 .size(cloudIconSize)
                 .align(Alignment.TopCenter)
                 .offset(
-                    y = targetSearchBoxY - cloudIconSize - 25.dp
+                    y = targetSearchBoxY - cloudIconSize - 16.dp
                 )
         )
 
