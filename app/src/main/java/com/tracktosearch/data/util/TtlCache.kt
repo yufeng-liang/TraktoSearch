@@ -59,6 +59,7 @@ open class TtlCache<T>(
     protected fun putInternal(key: String, value: T, expireAt: Long) {
         cache[key] = Entry(value, expireAt, accessCounter.incrementAndGet())
         trimCounter.incrementAndGet()
+        trimToSize()
     }
 
     /** 子类专用：获取 key 的当前 expireAt（用于持久化时保存原始过期时间） */
