@@ -1,4 +1,4 @@
-﻿import java.util.Properties
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 val localProps = rootProject.file("local.properties")
@@ -97,6 +97,14 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+    packaging {
+        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
 }
 
 dependencies {
@@ -193,6 +201,12 @@ dependencies {
 
     // 单元测试
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.truth)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.core.testing)
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")

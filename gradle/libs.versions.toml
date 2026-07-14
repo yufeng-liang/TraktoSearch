@@ -35,6 +35,12 @@ profileinstaller = "1.4.1"
 securityCrypto = "1.1.0"
 jieba-analysis = "1.0.2"
 junit = "4.13.2"
+mockk = "1.13.13"
+turbine = "1.2.0"
+coroutinesTest = "1.11.0"
+truth = "1.4.4"
+robolectric = "4.13"
+coreTesting = "2.2.0"
 
 [libraries]
 # AndroidX Core
@@ -130,6 +136,12 @@ jieba-analysis = { module = "com.huaban:jieba-analysis", version.ref = "jieba-an
 
 # Unit Test
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine" }
+coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectric" }
+core-testing = { group = "androidx.arch.core", name = "core-testing", version.ref = "coreTesting" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
