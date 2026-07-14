@@ -208,6 +208,7 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.core.testing)
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
