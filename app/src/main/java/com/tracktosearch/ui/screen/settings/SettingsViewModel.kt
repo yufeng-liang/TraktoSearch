@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -353,11 +354,13 @@ class SettingsViewModel @Inject constructor(
                         val searchResult = when (mediaType) {
                             MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
                             MediaType.SHOW -> traktRepository.searchShows(item.title, page = 1, limit = 1)
+                            else -> Result.failure(Exception("Unsupported media type: $mediaType"))
                         }
                         val traktId = searchResult.getOrNull()?.first?.firstOrNull()?.let { result ->
                             when (mediaType) {
                                 MediaType.MOVIE -> result.movie?.ids?.trakt
                                 MediaType.SHOW -> result.show?.ids?.trakt
+                                else -> null
                             }
                         }
                         if (traktId != null && traktId > 0) {
@@ -383,7 +386,7 @@ class SettingsViewModel @Inject constructor(
                     syncFailed = failed,
                     message = context.getString(R.string.snackbar_import_done_imdb, success, failed)
                 )
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 _exportImportState.value = _exportImportState.value.copy(
                     isImporting = false,
                     message = context.getString(R.string.error_parse_failed, e.message ?: "")
