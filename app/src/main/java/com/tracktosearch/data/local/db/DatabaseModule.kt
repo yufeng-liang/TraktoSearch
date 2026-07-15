@@ -181,6 +181,35 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v10 → v11: 新增 mark_action_record 表（App 内标记操作流水）
+            db.execSQL(
+                """CREATE TABLE IF NOT EXISTS mark_action_record (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    traktId INTEGER NOT NULL,
+                    tmdbId INTEGER NOT NULL,
+                    imdbId TEXT NOT NULL,
+                    mediaType TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    displayTitle TEXT NOT NULL,
+                    posterUrl TEXT,
+                    year INTEGER,
+                    actionType TEXT NOT NULL,
+                    actedAt INTEGER NOT NULL,
+                    episodeInfo TEXT
+                )""".trimIndent()
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_actionType ON mark_action_record(actionType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_actedAt ON mark_action_record(actedAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_mediaType ON mark_action_record(mediaType)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_traktId ON mark_action_record(traktId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_actionType_actedAt ON mark_action_record(actionType, actedAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_mediaType_actedAt ON mark_action_record(mediaType, actedAt)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mark_action_record_actionType_mediaType_actedAt ON mark_action_record(actionType, mediaType, actedAt)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -189,7 +218,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "tracktosearch.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
     }
 
@@ -224,4 +253,8 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideUserReviewDao(db: AppDatabase): UserReviewDao = db.userReviewDao()
+
+    @Provides
+    @Singleton
+    fun provideMarkActionRecordDao(db: AppDatabase): MarkActionRecordDao = db.markActionRecordDao()
 }
