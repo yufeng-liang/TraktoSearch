@@ -1367,4 +1367,14 @@
     <string name="mark_records_media_show">剧集</string>
     <string name="mark_records_reset">重置</string>
     <string name="mark_records_confirm">确定</string>
+    <string name="mark_records_title">标记记录</string>
+    <string name="mark_records_tab_all">全部</string>
+    <string name="mark_records_tab_watchlist">想看</string>
+    <string name="mark_records_tab_watched">已看</string>
+    <string name="mark_records_tab_removed">移除</string>
+    <string name="mark_records_search_hint">搜索标题…</string>
+    <string name="mark_records_empty_watchlist">暂无想看记录</string>
+    <string name="mark_records_empty_watched">暂无已看记录</string>
+    <string name="mark_records_empty_removed">暂无移除记录</string>
+    <string name="mark_records_retry">重试</string>
 </resources>

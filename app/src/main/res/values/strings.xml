@@ -1367,4 +1367,14 @@ Config:
     <string name="mark_records_media_show">TV Show</string>
     <string name="mark_records_reset">Reset</string>
     <string name="mark_records_confirm">Confirm</string>
+    <string name="mark_records_title">Mark Records</string>
+    <string name="mark_records_tab_all">All</string>
+    <string name="mark_records_tab_watchlist">Watchlist</string>
+    <string name="mark_records_tab_watched">Watched</string>
+    <string name="mark_records_tab_removed">Removed</string>
+    <string name="mark_records_search_hint">Search title…</string>
+    <string name="mark_records_empty_watchlist">No watchlist records</string>
+    <string name="mark_records_empty_watched">No watched records</string>
+    <string name="mark_records_empty_removed">No removed records</string>
+    <string name="mark_records_retry">Retry</string>
 </resources>
