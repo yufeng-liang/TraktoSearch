@@ -28,7 +28,7 @@ android {
         versionCode = 58
         versionName = "3.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
         buildConfigField("String", "TRAKT_CLIENT_ID", "\"${properties.getProperty("trakt.client.id", "")}\"")
         buildConfigField("String", "TRAKT_CLIENT_SECRET", "\"${properties.getProperty("trakt.client.secret", "")}\"")
@@ -105,6 +105,8 @@ android {
     }
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        resources.excludes += "/META-INF/LICENSE.md"
+        resources.excludes += "/META-INF/LICENSE-notice.md"
     }
 }
 
@@ -209,6 +211,24 @@ dependencies {
     testImplementation(libs.robolectric)
     testImplementation(libs.core.testing)
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+
+    // Compose UI 测试（Robolectric 组件测试用）
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.test.core)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Instrumented 测试（页面测试用）
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.hilt.android.testing)
+    androidTestImplementation(libs.mockk)
+    androidTestImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.truth)
+    kspAndroidTest(libs.hilt.compiler)
     // 厂商通道
     //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
     //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
