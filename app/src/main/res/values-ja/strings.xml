@@ -1354,4 +1354,44 @@
     <string name="cloud_sync_dialog_upload_done_message">ローカルの失敗データをクラウドに暗号化アップロードしました。</string>
     <string name="cloud_sync_dialog_download_empty_message">クラウドの失敗データ %1$d 件をダウンロードしてローカルに統合しました。</string>
     <string name="cloud_sync_dialog_overwrite_confirm">ローカルを上書き</string>
+
+    <!-- マーク記録 -->
+    <string name="mark_records_title">マーク記録</string>
+    <string name="mark_records_tab_all">すべて</string>
+    <string name="mark_records_tab_watchlist">ウォッチリスト</string>
+    <string name="mark_records_tab_watched">視聴済み</string>
+    <string name="mark_records_tab_removed">削除</string>
+    <string name="mark_records_search_hint">タイトル検索…</string>
+    <string name="mark_records_filter_media_type">メディアタイプ</string>
+    <string name="mark_records_filter_date_range">期間</string>
+    <string name="mark_records_filter_sort">並び替え</string>
+    <string name="mark_records_sort_desc">新着順</string>
+    <string name="mark_records_sort_asc">古い順</string>
+    <string name="mark_records_date_preset_7d">過去7日間</string>
+    <string name="mark_records_date_preset_30d">過去30日間</string>
+    <string name="mark_records_date_preset_all">すべて</string>
+    <string name="mark_records_date_preset_custom">カスタム</string>
+    <string name="mark_records_empty_all">マーク記録がありません</string>
+    <string name="mark_records_empty_watchlist">ウォッチリスト操作記録がありません</string>
+    <string name="mark_records_empty_watched">視聴記録がありません</string>
+    <string name="mark_records_empty_removed">削除操作記録がありません</string>
+    <string name="mark_records_retry">再試行</string>
+    <string name="mark_records_current_in_watchlist">現在:ウォッチリスト</string>
+    <string name="mark_records_current_watched">現在:視聴済み</string>
+    <string name="mark_records_current_none">現在:なし</string>
+    <string name="mark_records_current_changed">変更済み</string>
+    <string name="mark_records_action_add_watchlist">ウォッチリストに追加</string>
+    <string name="mark_records_action_remove_watchlist">ウォッチリストから削除</string>
+    <string name="mark_records_action_unmark_watched">視聴済み解除</string>
+    <string name="mark_records_action_watched">視聴済み</string>
+    <string name="mark_records_settings_entry">マーク記録</string>
+    <string name="mark_records_settings_entry_desc">ウォッチリスト/視聴済み/削除の操作履歴を表示</string>
+    <string name="mark_records_reset">リセット</string>
+    <string name="mark_records_confirm">OK</string>
+    <string name="mark_records_media_movie">映画</string>
+    <string name="mark_records_media_show">ドラマ</string>
+    <string name="mark_records_time_just_now">たった今</string>
+    <string name="mark_records_time_minutes_ago">%1$d 分前</string>
+    <string name="mark_records_time_hours_ago">%1$d 時間前</string>
+    <string name="mark_records_time_days_ago">%1$d 日前</string>
 </resources>

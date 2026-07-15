@@ -1354,4 +1354,44 @@
     <string name="cloud_sync_dialog_upload_done_message">로컬 실패 데이터를 클라우드에 암호화 업로드했습니다.</string>
     <string name="cloud_sync_dialog_download_empty_message">클라우드 실패 항목 %1$d개를 다운로드해 로컬에 병합했습니다.</string>
     <string name="cloud_sync_dialog_overwrite_confirm">로컬 덮어쓰기</string>
+
+    <!-- 표시 기록 -->
+    <string name="mark_records_title">표시 기록</string>
+    <string name="mark_records_tab_all">전체</string>
+    <string name="mark_records_tab_watchlist">관심목록</string>
+    <string name="mark_records_tab_watched">시청함</string>
+    <string name="mark_records_tab_removed">제거</string>
+    <string name="mark_records_search_hint">제목 검색…</string>
+    <string name="mark_records_filter_media_type">미디어 유형</string>
+    <string name="mark_records_filter_date_range">날짜 범위</string>
+    <string name="mark_records_filter_sort">정렬</string>
+    <string name="mark_records_sort_desc">최신순</string>
+    <string name="mark_records_sort_asc">오래된순</string>
+    <string name="mark_records_date_preset_7d">최근 7일</string>
+    <string name="mark_records_date_preset_30d">최근 30일</string>
+    <string name="mark_records_date_preset_all">전체</string>
+    <string name="mark_records_date_preset_custom">사용자 지정</string>
+    <string name="mark_records_empty_all">표시 기록이 없습니다</string>
+    <string name="mark_records_empty_watchlist">관심목록 작업 기록이 없습니다</string>
+    <string name="mark_records_empty_watched">시청 기록이 없습니다</string>
+    <string name="mark_records_empty_removed">제거 작업 기록이 없습니다</string>
+    <string name="mark_records_retry">재시도</string>
+    <string name="mark_records_current_in_watchlist">현재:관심목록</string>
+    <string name="mark_records_current_watched">현재:시청함</string>
+    <string name="mark_records_current_none">현재:없음</string>
+    <string name="mark_records_current_changed">변경됨</string>
+    <string name="mark_records_action_add_watchlist">관심목록 추가</string>
+    <string name="mark_records_action_remove_watchlist">관심목록 제거</string>
+    <string name="mark_records_action_unmark_watched">시청 해제</string>
+    <string name="mark_records_action_watched">시청함</string>
+    <string name="mark_records_settings_entry">표시 기록</string>
+    <string name="mark_records_settings_entry_desc">관심목록/시청/제거 작업 기록 보기</string>
+    <string name="mark_records_reset">초기화</string>
+    <string name="mark_records_confirm">확인</string>
+    <string name="mark_records_media_movie">영화</string>
+    <string name="mark_records_media_show">드라마</string>
+    <string name="mark_records_time_just_now">방금</string>
+    <string name="mark_records_time_minutes_ago">%1$d 분 전</string>
+    <string name="mark_records_time_hours_ago">%1$d 시간 전</string>
+    <string name="mark_records_time_days_ago">%1$d 일 전</string>
 </resources>
