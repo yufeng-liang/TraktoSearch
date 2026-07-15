@@ -1339,4 +1339,32 @@ Config:
     <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
     <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and Douban sync</string>
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>
+
+    <!-- Mark Records (temporary, task 9 will complete 4 languages) -->
+    <string name="mark_records_action_add_watchlist">Added to Watchlist</string>
+    <string name="mark_records_action_remove_watchlist">Removed from Watchlist</string>
+    <string name="mark_records_action_unmark_watched">Unmarked Watched</string>
+    <string name="mark_records_action_watched">Watched</string>
+    <string name="mark_records_current_in_watchlist">Current: Watchlist</string>
+    <string name="mark_records_current_watched">Current: Watched</string>
+    <string name="mark_records_current_none">Current: No mark</string>
+    <string name="mark_records_current_changed">Changed</string>
+    <string name="mark_records_time_just_now">Just now</string>
+    <string name="mark_records_time_minutes_ago">%1$d minutes ago</string>
+    <string name="mark_records_time_hours_ago">%1$d hours ago</string>
+    <string name="mark_records_time_days_ago">%1$d days ago</string>
+    <string name="mark_records_empty_all">No records</string>
+    <string name="mark_records_filter_media_type">Media Type</string>
+    <string name="mark_records_filter_date_range">Date Range</string>
+    <string name="mark_records_filter_sort">Sort</string>
+    <string name="mark_records_sort_desc">Newest First</string>
+    <string name="mark_records_sort_asc">Oldest First</string>
+    <string name="mark_records_date_preset_7d">Last 7 Days</string>
+    <string name="mark_records_date_preset_30d">Last 30 Days</string>
+    <string name="mark_records_date_preset_all">All</string>
+    <string name="mark_records_date_preset_custom">Custom</string>
+    <string name="mark_records_media_movie">Movie</string>
+    <string name="mark_records_media_show">TV Show</string>
+    <string name="mark_records_reset">Reset</string>
+    <string name="mark_records_confirm">Confirm</string>
 </resources>

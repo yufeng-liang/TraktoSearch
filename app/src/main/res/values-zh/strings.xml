@@ -1339,4 +1339,32 @@
     <string name="cloud_sync_dialog_upload_done_message">本地失败数据已加密上传到云端。</string>
     <string name="cloud_sync_dialog_download_empty_message">已将云端 %1$d 条失败数据下载并合并到本地。</string>
     <string name="cloud_sync_dialog_overwrite_confirm">覆盖本地</string>
+
+    <!-- 标记记录（临时，任务 9 会补充完整 4 语言） -->
+    <string name="mark_records_action_add_watchlist">加入想看</string>
+    <string name="mark_records_action_remove_watchlist">移除想看</string>
+    <string name="mark_records_action_unmark_watched">取消已看</string>
+    <string name="mark_records_action_watched">标记已看</string>
+    <string name="mark_records_current_in_watchlist">当前:想看</string>
+    <string name="mark_records_current_watched">当前:已看</string>
+    <string name="mark_records_current_none">当前:无标记</string>
+    <string name="mark_records_current_changed">已变更</string>
+    <string name="mark_records_time_just_now">刚刚</string>
+    <string name="mark_records_time_minutes_ago">%1$d 分钟前</string>
+    <string name="mark_records_time_hours_ago">%1$d 小时前</string>
+    <string name="mark_records_time_days_ago">%1$d 天前</string>
+    <string name="mark_records_empty_all">暂无记录</string>
+    <string name="mark_records_filter_media_type">媒体类型</string>
+    <string name="mark_records_filter_date_range">日期范围</string>
+    <string name="mark_records_filter_sort">排序</string>
+    <string name="mark_records_sort_desc">最新优先</string>
+    <string name="mark_records_sort_asc">最早优先</string>
+    <string name="mark_records_date_preset_7d">近 7 天</string>
+    <string name="mark_records_date_preset_30d">近 30 天</string>
+    <string name="mark_records_date_preset_all">全部</string>
+    <string name="mark_records_date_preset_custom">自定义</string>
+    <string name="mark_records_media_movie">电影</string>
+    <string name="mark_records_media_show">剧集</string>
+    <string name="mark_records_reset">重置</string>
+    <string name="mark_records_confirm">确定</string>
 </resources>
