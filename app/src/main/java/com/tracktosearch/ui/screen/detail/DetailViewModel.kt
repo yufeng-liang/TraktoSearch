@@ -1189,7 +1189,14 @@ class DetailViewModel @Inject constructor(
 
         viewModelScope.launch {
             val result = if (isWatched) {
-                traktRepository.unmarkEpisodeWatched(episodeTraktId)
+                traktRepository.unmarkEpisodeWatched(
+                    episodeTraktId,
+                    season = seasonNumber,
+                    episode = episodeNumber,
+                    showTraktId = currentTraktId,
+                    showTmdbId = currentTmdbId,
+                    showTitle = currentTitle
+                )
             } else {
                 traktRepository.markEpisodeWatched(episodeTraktId)
             }

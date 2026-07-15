@@ -6,6 +6,9 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.data.local.UserProfileStorage
+import com.tracktosearch.data.local.db.MarkActionRecordDao
+import com.tracktosearch.data.local.db.MarkActionRecordEntity
+import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -34,6 +37,7 @@ private val Context.traktPersistentCacheStore: DataStore<Preferences> by prefere
 class TraktRepository @Inject constructor(
     private val traktApiService: TraktApiService,
     private val userProfileStorage: UserProfileStorage,
+    private val markActionRecordDao: MarkActionRecordDao,
     private val json: Json,
     @ApplicationContext private val context: Context
 ) {
@@ -46,6 +50,8 @@ class TraktRepository @Inject constructor(
         private const val TTL_TRENDING = 6 * 60 * 60 * 1000L  // 趋势/最受期待/社区列表 6 小时（榜单更新不频繁）
         private const val TTL_WATCHLIST_IDS = 6 * 60 * 60 * 1000L // 想看/已看 ID 集合 6 小时（避免每次启动全量拉取）
         private const val TTL_SEARCH_PERSON = 10 * 60 * 1000L    // 人物搜索/详情缓存 10 分钟（避免重复请求）
+        private const val TTL_WATCH_HISTORY = 60 * 60 * 1000L  // 已看历史 1 小时缓存
+        private const val MAX_MARK_RECORDS = 10000              // 流水表上限
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
@@ -82,6 +88,28 @@ class TraktRepository @Inject constructor(
             else -> null
         }
     }
+
+    /** Trakt /sync/history 分页结果 */
+    data class WatchHistoryPage(
+        val items: List<WatchHistoryItem>,
+        val currentPage: Int,
+        val totalPages: Int,
+        val totalCount: Int
+    )
+
+    /** 已看记录（统一表示 movie/episode） */
+    data class WatchHistoryItem(
+        val traktId: Int,
+        val tmdbId: Int,
+        val imdbId: String,
+        val mediaType: String,         // "movie" / "show"
+        val title: String,
+        val displayTitle: String,
+        val posterUrl: String?,
+        val year: Int?,
+        val watchedAt: Long,
+        val episodeInfo: String?       // "S01E03"，仅 episode 类型
+    )
 
     @Volatile
     private var watchlistWatchedIds: WatchlistWatchedIds? = null
@@ -164,6 +192,7 @@ class TraktRepository @Inject constructor(
         userStatsCache.clear()
         movieWatchlistCache.clear()
         showWatchlistCache.clear()
+        watchHistoryCache.clear()
         // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
         notFoundTmdbIds.clear()
         notFoundImdbIds.clear()
@@ -360,6 +389,8 @@ class TraktRepository @Inject constructor(
     // Watchlist 首页缓存：splash 预取的结果供 MainScreen 复用，避免重复请求
     private val movieWatchlistCache = TtlCache<Pair<List<TraktWatchlistMovieItem>, Int>>(TTL_STATS, maxSize = 5)
     private val showWatchlistCache = TtlCache<Pair<List<TraktWatchlistShowItem>, Int>>(TTL_STATS, maxSize = 5)
+    // 已看历史分页缓存（fetchWatchHistory 用，1 小时 TTL）
+    private val watchHistoryCache = TtlCache<WatchHistoryPage>(TTL_WATCH_HISTORY, maxSize = 10)
 
     /** 已搜索但未找到有效 Trakt ID 的 tmdbId 集合（负缓存，避免重复请求和转圈） */
     private val notFoundTmdbIds = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -770,14 +801,142 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 取消某集已看标记 */
-    suspend fun unmarkEpisodeWatched(episodeTraktId: Int): Result<Unit> {
+    /**
+     * 拉取 Trakt 已看历史（含电影和剧集）。
+     * 分页拉取，每页 100 条。movie 和 episode 并行拉取后合并按 watched_at 倒序排序。
+     * @param page 页码，从 1 开始
+     */
+    suspend fun fetchWatchHistory(page: Int): Result<WatchHistoryPage> {
+        val cacheKey = "watch_history_page_$page"
+        watchHistoryCache.get(cacheKey)?.let { return Result.success(it) }
+        return try {
+            coroutineScope {
+                val movieDef = async { traktApiService.getMovieHistory(page = page, limit = 100) }
+                val episodeDef = async { traktApiService.getEpisodeHistory(page = page, limit = 100) }
+                val movieResp = movieDef.await()
+                val episodeResp = episodeDef.await()
+                if (!movieResp.isSuccessful || !episodeResp.isSuccessful) {
+                    return@coroutineScope Result.failure(Exception("fetchWatchHistory failed: movie=${movieResp.code()}, episode=${episodeResp.code()}"))
+                }
+                val movieEntries = movieResp.body() ?: emptyList()
+                val episodeEntries = episodeResp.body() ?: emptyList()
+                val movieTotal = movieResp.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                val episodeTotal = episodeResp.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: 0
+                val moviePageCount = movieResp.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                val episodePageCount = episodeResp.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                val totalPages = maxOf(moviePageCount, episodePageCount)
+                val totalCount = movieTotal + episodeTotal
+
+                val items = mutableListOf<WatchHistoryItem>()
+                // movie 记录（TraktWatchlistMovieItem.watched_at 和 movie 字段）
+                for (entry in movieEntries) {
+                    val m = entry.movie
+                    val watchedAt = parseTraktDate(entry.watched_at)
+                    items.add(WatchHistoryItem(
+                        traktId = m.ids.trakt,
+                        tmdbId = m.ids.tmdb,
+                        imdbId = m.ids.imdb,
+                        mediaType = "movie",
+                        title = m.title,
+                        displayTitle = m.title,
+                        posterUrl = m.posterPath,
+                        year = m.year.takeIf { it > 0 },
+                        watchedAt = watchedAt,
+                        episodeInfo = null
+                    ))
+                }
+                // episode 记录
+                for (entry in episodeEntries) {
+                    val ep = entry.episode ?: continue
+                    val show = entry.show ?: continue
+                    val watchedAt = parseTraktDate(entry.watched_at)
+                    items.add(WatchHistoryItem(
+                        traktId = show.ids.trakt,
+                        tmdbId = show.ids.tmdb,
+                        imdbId = show.ids.imdb,
+                        mediaType = "show",
+                        title = show.title,
+                        displayTitle = show.title,
+                        posterUrl = null,
+                        year = show.year,
+                        watchedAt = watchedAt,
+                        episodeInfo = "S${ep.season}E${ep.number}"
+                    ))
+                }
+                // 按 watchedAt 倒序
+                items.sortByDescending { it.watchedAt }
+                val result = WatchHistoryPage(items, page, totalPages, totalCount)
+                watchHistoryCache.put(cacheKey, result)
+                Result.success(result)
+            }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /** 清空已看历史缓存（下拉刷新时调用） */
+    fun clearWatchHistoryCache() {
+        watchHistoryCache.clear()
+    }
+
+    /** 解析 Trakt ISO8601 时间字符串为毫秒时间戳 */
+    private fun parseTraktDate(dateStr: String?): Long {
+        if (dateStr.isNullOrBlank()) return System.currentTimeMillis()
+        return try {
+            java.time.Instant.parse(dateStr).toEpochMilli()
+        } catch (e: Exception) {
+            System.currentTimeMillis()
+        }
+    }
+
+    /**
+     * 取消某集已看标记。
+     * @param season 季号（用于流水记录）
+     * @param episode 集号（用于流水记录）
+     * @param showTraktId 剧集 Trakt ID（用于流水记录）
+     * @param showTmdbId 剧集 TMDB ID（用于流水记录）
+     * @param showTitle 剧名（用于流水记录）
+     */
+    suspend fun unmarkEpisodeWatched(
+        episodeTraktId: Int,
+        season: Int = 0,
+        episode: Int = 0,
+        showTraktId: Int = 0,
+        showTmdbId: Int = 0,
+        showTitle: String = ""
+    ): Result<Unit> {
         return try {
             val request = TraktSyncRequest(
                 episodes = listOf(TraktSyncItem(TraktIds(trakt = episodeTraktId)))
             )
             val response = traktApiService.removeFromHistory(request)
             if (response.isSuccessful) {
+                // 写入标记操作流水（取消单集已看）
+                if (season > 0 && episode > 0) {
+                    try {
+                        markActionRecordDao.insert(
+                            MarkActionRecordEntity(
+                                traktId = showTraktId,
+                                tmdbId = showTmdbId,
+                                imdbId = "",
+                                mediaType = "show",
+                                title = showTitle,
+                                displayTitle = showTitle,
+                                posterUrl = null,
+                                year = null,
+                                actionType = MarkActionType.UNMARK_WATCHED.value,
+                                actedAt = System.currentTimeMillis(),
+                                episodeInfo = "S${season}E${episode}"
+                            )
+                        )
+                        val count = markActionRecordDao.count()
+                        if (count > MAX_MARK_RECORDS) {
+                            markActionRecordDao.deleteOldest(count - MAX_MARK_RECORDS)
+                        }
+                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                        Log.w("TraktRepository", "unmarkEpisodeWatched 流水写入失败: ${e.message}")
+                    }
+                }
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Failed to unmark episode watched: ${response.code()}"))
@@ -846,6 +1005,8 @@ class TraktRepository @Inject constructor(
                 showHistoryCache.clear()
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                // 写入标记操作流水（取消已看）
+                insertMarkRecord(traktId, tmdbId, type, MarkActionType.UNMARK_WATCHED)
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove watched: ${response.code()}"))
@@ -953,6 +1114,45 @@ class TraktRepository @Inject constructor(
         return traktIds.associateWith { Pair(false, false) }
     }
 
+    /**
+     * 异步写入一条标记操作流水。失败仅记录日志，不影响主操作。
+     * 超过 MAX_MARK_RECORDS 上限时自动删最旧的。
+     * 注意：快照字段（title/posterUrl 等）暂未从 TMDB 详情缓存填充（缓存在 TmdbRepository 中），
+     *       仅记录 traktId/tmdbId/mediaType/actionType 等核心字段。
+     */
+    private suspend fun insertMarkRecord(
+        traktId: Int,
+        tmdbId: Int,
+        mediaType: MediaType,
+        actionType: MarkActionType,
+        episodeInfo: String? = null
+    ) {
+        try {
+            val mediaTypeStr = if (mediaType == MediaType.MOVIE) "movie" else "show"
+            markActionRecordDao.insert(
+                MarkActionRecordEntity(
+                    traktId = traktId,
+                    tmdbId = tmdbId,
+                    imdbId = "",
+                    mediaType = mediaTypeStr,
+                    title = "",
+                    displayTitle = "",
+                    posterUrl = null,
+                    year = null,
+                    actionType = actionType.value,
+                    actedAt = System.currentTimeMillis(),
+                    episodeInfo = episodeInfo
+                )
+            )
+            val count = markActionRecordDao.count()
+            if (count > MAX_MARK_RECORDS) {
+                markActionRecordDao.deleteOldest(count - MAX_MARK_RECORDS)
+            }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w("TraktRepository", "insertMarkRecord failed: ${e.message}")
+        }
+    }
+
     /** 添加到想看列表 */
     suspend fun addToWatchlist(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
         return try {
@@ -969,6 +1169,8 @@ class TraktRepository @Inject constructor(
                 // 失效想看列表缓存，确保下次刷新获取最新数据
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                // 写入标记操作流水（异步，失败不影响主操作）
+                insertMarkRecord(traktId, tmdbId, type, MarkActionType.ADD_WATCHLIST)
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to add to watchlist: ${response.code()}"))
@@ -994,6 +1196,8 @@ class TraktRepository @Inject constructor(
                 // 失效想看列表缓存，确保下次刷新获取最新数据
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                // 写入标记操作流水
+                insertMarkRecord(traktId, tmdbId, type, MarkActionType.REMOVE_WATCHLIST)
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to remove from watchlist: ${response.code()}"))
