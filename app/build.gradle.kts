@@ -225,7 +225,7 @@ dependencies {
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.hilt.android.testing)
-    androidTestImplementation(libs.mockk)
+    androidTestImplementation(libs.mockk.android)
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.truth)
     kspAndroidTest(libs.hilt.compiler)
