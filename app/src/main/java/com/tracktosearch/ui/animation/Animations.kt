@@ -36,3 +36,9 @@ fun Modifier.fadeSlideIn(index: Int = 0): Modifier = composed {
         translationY = offsetY.value
     )
 }
+
+/** 错峰延迟：按行内位置 (index%3) 各延 0/30/60ms，避免深列表累计延迟爆炸。 */
+fun enterStaggerDelayMs(index: Int): Int = (index % 3) * 30
+
+/** 默认动画是否仍需播放：id 不在已播集合中才播（一生一次）。 */
+fun shouldPlayDefault(id: Long, played: Set<Long>): Boolean = !played.contains(id)
