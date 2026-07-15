@@ -49,6 +49,14 @@ interface TraktApiService {
         @Query("limit") limit: Int = 200
     ): Response<List<TraktWatchlistShowItem>>
 
+    @GET("sync/history")
+    suspend fun getEpisodeHistory(
+        @Query("type") type: String = "episodes",
+        @Query("extended") extended: String = "full",
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 100
+    ): Response<List<TraktHistoryEntry>>
+
     @POST("oauth/token")
     suspend fun exchangeCodeForToken(@Body body: TraktTokenRequest): Response<TraktTokenResponse>
 
