@@ -44,6 +44,7 @@ import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
+import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
@@ -90,6 +91,7 @@ object Routes {
     const val DOUBAN_FAILURES = "doubanFailures"
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
+    const val MARK_RECORDS = "markRecords"
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
@@ -329,6 +331,9 @@ fun AppNavigation(
                             },
                             onStatisticsClick = {
                                 navController.navigate(Routes.STATISTICS)
+                            },
+                            onMarkRecordsClick = {
+                                navController.navigate(Routes.MARK_RECORDS)
                             },
                             onTraktSearch = { type, query ->
                                 navController.navigate(Routes.traktSearchRoute(type, query))
@@ -630,6 +635,20 @@ fun AppNavigation(
                     DoubanSpiderTestScreen(
                         onBack = { navController.popBackStack() }
                     )
+                }
+
+                composable(Routes.MARK_RECORDS) {
+                    CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        MarkRecordScreen(
+                            onBack = { navController.popBackStack() },
+                            onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
+                            },
+                            onShowClick = { traktId, tmdbId, title, imdbId, traktRating ->
+                                navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating))
+                            }
+                        )
+                    }
                 }
             }
 

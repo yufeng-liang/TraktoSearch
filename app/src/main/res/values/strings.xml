@@ -714,6 +714,8 @@ Config:
     <string name="settings_import_imdb_desc">Import watchlist from IMDb CSV</string>
     <string name="settings_export_marks_data">Export marks</string>
     <string name="settings_view_statistics">View statistics</string>
+    <string name="mark_records_settings_entry">Mark Records</string>
+    <string name="mark_records_settings_entry_desc">View your watchlist/watched/removed action history</string>
     <string name="settings_douban_resync">Re-sync from Douban</string>
     <string name="settings_douban_resync_desc">Choose sync mode to handle Douban status changes</string>
     <string name="settings_douban_not_logged_in_title">Not logged in to Douban</string>

@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
@@ -121,6 +122,7 @@ fun SettingsScreen(
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
     onStatisticsClick: () -> Unit = {},
+    onMarkRecordsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -371,6 +373,13 @@ fun SettingsScreen(
                     modifier = statisticsEntryModifier,
                     onClick = onStatisticsClick
                 )
+            }
+
+            // 标记记录（仅登录可见，独占整行卡片）
+            if (isLoggedIn) {
+                item(key = "mark_records_entry") {
+                    MarkRecordsEntryCard(onClick = onMarkRecordsClick)
+                }
             }
 
             // 外观
@@ -1264,6 +1273,49 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * 标记记录入口卡片（仅登录用户可见，独占整行）。
+ * 与 StatisticsCard 风格保持一致，点击跳转标记记录页。
+ */
+@Composable
+private fun MarkRecordsEntryCard(onClick: () -> Unit) {
+    val view = LocalView.current
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.History,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.mark_records_settings_entry),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.mark_records_settings_entry_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
