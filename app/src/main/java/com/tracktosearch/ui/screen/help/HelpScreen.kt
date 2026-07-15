@@ -139,12 +139,25 @@ fun HelpScreen(
                     }
                 }
 
+                // 标记记录
+                item {
+                    HelpSection(
+                        title = stringResource(R.string.mark_records_settings_entry),
+                        isExpanded = expandedIndex == 3,
+                        onToggle = { expandedIndex = if (expandedIndex == 3) -1 else 3 }
+                    ) {
+                        HelpBullet(stringResource(R.string.mark_records_help_entry_location))
+                        HelpBullet(stringResource(R.string.mark_records_help_data_source))
+                        HelpBullet(stringResource(R.string.mark_records_help_history_limit))
+                    }
+                }
+
                 // 通知提醒
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_notification),
-                        isExpanded = expandedIndex == 3,
-                        onToggle = { expandedIndex = if (expandedIndex == 3) -1 else 3 }
+                        isExpanded = expandedIndex == 4,
+                        onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 }
                     ) {
                         HelpBullet(stringResource(R.string.help_notification_b1))
                         HelpBullet(stringResource(R.string.help_notification_b2))
@@ -157,8 +170,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_data),
-                        isExpanded = expandedIndex == 4,
-                        onToggle = { expandedIndex = if (expandedIndex == 4) -1 else 4 }
+                        isExpanded = expandedIndex == 5,
+                        onToggle = { expandedIndex = if (expandedIndex == 5) -1 else 5 }
                     ) {
                         HelpSubtitle(stringResource(R.string.help_data_table_title))
                         Spacer(modifier = Modifier.height(4.dp))
@@ -228,8 +241,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_custom_source),
-                        isExpanded = expandedIndex == 5,
-                        onToggle = { expandedIndex = if (expandedIndex == 5) -1 else 5 }
+                        isExpanded = expandedIndex == 6,
+                        onToggle = { expandedIndex = if (expandedIndex == 6) -1 else 6 }
                     ) {
                         HelpBullet(stringResource(R.string.help_custom_source_b1))
                         HelpBullet(stringResource(R.string.help_custom_source_b2))
@@ -261,8 +274,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_detail),
-                        isExpanded = expandedIndex == 6,
-                        onToggle = { expandedIndex = if (expandedIndex == 6) -1 else 6 }
+                        isExpanded = expandedIndex == 7,
+                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 }
                     ) {
                         HelpBullet(stringResource(R.string.help_detail_custom))
                         HelpBullet(stringResource(R.string.help_videos_images))
@@ -273,8 +286,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_discover_filter),
-                        isExpanded = expandedIndex == 7,
-                        onToggle = { expandedIndex = if (expandedIndex == 7) -1 else 7 }
+                        isExpanded = expandedIndex == 8,
+                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
                     ) {
                         HelpBullet(stringResource(R.string.help_discover_filter_b1))
                         HelpBullet(stringResource(R.string.help_discover_filter_b2))
@@ -288,8 +301,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_tips),
-                        isExpanded = expandedIndex == 8,
-                        onToggle = { expandedIndex = if (expandedIndex == 8) -1 else 8 }
+                        isExpanded = expandedIndex == 9,
+                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 }
                     ) {
                         HelpBullet(stringResource(R.string.help_tips_b1))
                         HelpBullet(stringResource(R.string.help_tips_b2))
@@ -308,8 +321,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_vpn),
-                        isExpanded = expandedIndex == 9,
-                        onToggle = { expandedIndex = if (expandedIndex == 9) -1 else 9 }
+                        isExpanded = expandedIndex == 10,
+                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 }
                     ) {
                         HelpBullet(stringResource(R.string.help_vpn_b1))
                         HelpBullet(stringResource(R.string.help_vpn_b2))
@@ -320,8 +333,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_douban_writeback),
-                        isExpanded = expandedIndex == 10,
-                        onToggle = { expandedIndex = if (expandedIndex == 10) -1 else 10 }
+                        isExpanded = expandedIndex == 11,
+                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 }
                     ) {
                         HelpBullet(stringResource(R.string.help_douban_writeback_b1))
                         HelpBullet(stringResource(R.string.help_douban_writeback_b3))
@@ -332,8 +345,8 @@ fun HelpScreen(
                 item {
                     HelpSection(
                         title = stringResource(R.string.help_consistency_check),
-                        isExpanded = expandedIndex == 11,
-                        onToggle = { expandedIndex = if (expandedIndex == 11) -1 else 11 }
+                        isExpanded = expandedIndex == 12,
+                        onToggle = { expandedIndex = if (expandedIndex == 12) -1 else 12 }
                     ) {
                         HelpBullet(stringResource(R.string.help_consistency_intro))
                         Spacer(modifier = Modifier.height(8.dp))

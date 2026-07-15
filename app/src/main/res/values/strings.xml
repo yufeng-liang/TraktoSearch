@@ -1379,4 +1379,7 @@ Config:
     <string name="mark_records_empty_watched">No watched records</string>
     <string name="mark_records_empty_removed">No removed records</string>
     <string name="mark_records_retry">Retry</string>
+    <string name="mark_records_help_entry_location">Entry: Settings → Mark Records card (login required)</string>
+    <string name="mark_records_help_data_source">Watched records from Trakt history; watchlist/removed records from in-app action log</string>
+    <string name="mark_records_help_history_limit">Watchlist/removal actions before feature launch cannot be traced (Trakt doesn\'t retain them)</string>
 </resources>

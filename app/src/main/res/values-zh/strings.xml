@@ -1379,4 +1379,7 @@
     <string name="mark_records_empty_watched">暂无已看记录</string>
     <string name="mark_records_empty_removed">暂无移除记录</string>
     <string name="mark_records_retry">重试</string>
+    <string name="mark_records_help_entry_location">入口：设置页顶部「标记记录」卡片（需登录）</string>
+    <string name="mark_records_help_data_source">已看记录来自 Trakt 观看历史；想看/移除记录为 App 内操作流水</string>
+    <string name="mark_records_help_history_limit">功能上线前的想看/移除操作无法追溯（Trakt 不留存）</string>
 </resources>
