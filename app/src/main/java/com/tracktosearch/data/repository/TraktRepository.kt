@@ -9,6 +9,7 @@ import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
+import com.tracktosearch.data.local.db.MediaDetailDao
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -38,6 +39,7 @@ class TraktRepository @Inject constructor(
     private val traktApiService: TraktApiService,
     private val userProfileStorage: UserProfileStorage,
     private val markActionRecordDao: MarkActionRecordDao,
+    private val mediaDetailDao: MediaDetailDao,
     private val json: Json,
     @ApplicationContext private val context: Context
 ) {
@@ -914,16 +916,19 @@ class TraktRepository @Inject constructor(
                 // 写入标记操作流水（取消单集已看）
                 if (season > 0 && episode > 0) {
                     try {
+                        // 优先用传入的 showTitle，其次从 MediaDetailEntity 查快照
+                        val detail = if (showTraktId > 0) mediaDetailDao.getByTraktId(showTraktId) else null
+                        val title = showTitle.ifBlank { detail?.title ?: "" }
                         markActionRecordDao.insert(
                             MarkActionRecordEntity(
                                 traktId = showTraktId,
                                 tmdbId = showTmdbId,
                                 imdbId = "",
                                 mediaType = "show",
-                                title = showTitle,
-                                displayTitle = showTitle,
-                                posterUrl = null,
-                                year = null,
+                                title = title,
+                                displayTitle = title,
+                                posterUrl = detail?.posterUrl,
+                                year = detail?.year,
                                 actionType = MarkActionType.UNMARK_WATCHED.value,
                                 actedAt = System.currentTimeMillis(),
                                 episodeInfo = "S${season}E${episode}"
@@ -1117,8 +1122,7 @@ class TraktRepository @Inject constructor(
     /**
      * 异步写入一条标记操作流水。失败仅记录日志，不影响主操作。
      * 超过 MAX_MARK_RECORDS 上限时自动删最旧的。
-     * 注意：快照字段（title/posterUrl 等）暂未从 TMDB 详情缓存填充（缓存在 TmdbRepository 中），
-     *       仅记录 traktId/tmdbId/mediaType/actionType 等核心字段。
+     * 快照字段（title/posterUrl/year/imdbId）从 MediaDetailEntity 持久化缓存查询填充。
      */
     private suspend fun insertMarkRecord(
         traktId: Int,
@@ -1129,16 +1133,18 @@ class TraktRepository @Inject constructor(
     ) {
         try {
             val mediaTypeStr = if (mediaType == MediaType.MOVIE) "movie" else "show"
+            // 从 MediaDetailEntity 持久化缓存查快照（主键 traktId，O(1) 查询）
+            val detail = mediaDetailDao.getByTraktId(traktId)
             markActionRecordDao.insert(
                 MarkActionRecordEntity(
                     traktId = traktId,
                     tmdbId = tmdbId,
-                    imdbId = "",
+                    imdbId = "",  // MediaDetailEntity 不含 imdbId，留空
                     mediaType = mediaTypeStr,
-                    title = "",
-                    displayTitle = "",
-                    posterUrl = null,
-                    year = null,
+                    title = detail?.title ?: "",
+                    displayTitle = detail?.displayTitle ?: detail?.title ?: "",
+                    posterUrl = detail?.posterUrl,
+                    year = detail?.year,
                     actionType = actionType.value,
                     actedAt = System.currentTimeMillis(),
                     episodeInfo = episodeInfo
