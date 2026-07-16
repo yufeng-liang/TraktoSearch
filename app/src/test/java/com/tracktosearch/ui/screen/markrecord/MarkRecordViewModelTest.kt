@@ -489,4 +489,204 @@ class MarkRecordViewModelTest {
         assertThat(start).isEqualTo(0L)
         assertThat(end).isEqualTo(0L)
     }
+
+    // ==================== WATCHED Tab Trakt 分页补充 ====================
+
+    @Test
+    fun `WATCHED_Tab_满50条hasMore为true`() = runTest {
+        val items = List(50) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
+                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
+                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
+            )
+        }
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
+            TraktRepository.WatchHistoryPage(items, 1, 2, 100)
+        )
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(50)
+        assertThat(viewModel.uiState.value.hasMore).isTrue()
+    }
+
+    @Test
+    fun `WATCHED_Tab_不足50条hasMore为false`() = runTest {
+        val items = List(30) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
+                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
+                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
+            )
+        }
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
+            TraktRepository.WatchHistoryPage(items, 1, 1, 30)
+        )
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(30)
+        assertThat(viewModel.uiState.value.hasMore).isFalse()
+    }
+
+    @Test
+    fun `WATCHED_Tab_loadNextPage加载第二页`() = runTest {
+        val page1Items = List(50) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 1000 + i, tmdbId = 2000 + i, imdbId = "tt$i",
+                mediaType = "movie", title = "Movie $i", displayTitle = "Movie $i",
+                posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
+            )
+        }
+        val page2Items = List(10) { i ->
+            TraktRepository.WatchHistoryItem(
+                traktId = 2000 + i, tmdbId = 3000 + i, imdbId = "tt2_$i",
+                mediaType = "movie", title = "Movie P2 $i", displayTitle = "Movie P2 $i",
+                posterUrl = null, year = 2024, watchedAt = 5000L - i, episodeInfo = null
+            )
+        }
+        coEvery { traktRepo.fetchWatchHistory(1) } returns Result.success(
+            TraktRepository.WatchHistoryPage(page1Items, 1, 2, 60)
+        )
+        coEvery { traktRepo.fetchWatchHistory(2) } returns Result.success(
+            TraktRepository.WatchHistoryPage(page2Items, 2, 2, 60)
+        )
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentPage).isEqualTo(1)
+        assertThat(viewModel.uiState.value.hasMore).isTrue()
+
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentPage).isEqualTo(2)
+        assertThat(viewModel.uiState.value.items).hasSize(60)
+        // 第二页只有 10 条（< 50），hasMore 为 false
+        assertThat(viewModel.uiState.value.hasMore).isFalse()
+    }
+
+    @Test
+    fun `WATCHED_Tab_retry后重新加载`() = runTest {
+        // 第一次失败
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.failure(RuntimeException("network error"))
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.error).isNotNull()
+        assertThat(viewModel.uiState.value.items).isEmpty()
+
+        // 恢复并 retry
+        val item = TraktRepository.WatchHistoryItem(
+            traktId = 500, tmdbId = 501, imdbId = "tt500", mediaType = "movie",
+            title = "Trakt Movie", displayTitle = "Trakt Movie", posterUrl = null,
+            year = 2023, watchedAt = 1000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
+            TraktRepository.WatchHistoryPage(listOf(item), 1, 1, 1)
+        )
+        viewModel.retry()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.error).isNull()
+        assertThat(viewModel.uiState.value.items).hasSize(1)
+        assertThat(viewModel.uiState.value.items[0].title).isEqualTo("Trakt Movie")
+    }
+
+    // ==================== ALL Tab 合并补充 ====================
+
+    @Test
+    fun `ALL_Tab_同traktId不去重显示两条`() = runTest {
+        // DAO 和 Trakt 都返回 traktId=100 的记录，合并后应显示两条（不去重）
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(sampleEntity(MarkActionType.ADD_WATCHLIST.value, 100, 2000L))
+        val traktItem = TraktRepository.WatchHistoryItem(
+            traktId = 100, tmdbId = 200, imdbId = "tt100", mediaType = "movie",
+            title = "Test", displayTitle = "Test", posterUrl = null,
+            year = 2024, watchedAt = 5000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
+            TraktRepository.WatchHistoryPage(listOf(traktItem), 1, 1, 1)
+        )
+        viewModel.refresh()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.items).hasSize(2)
+        assertThat(viewModel.uiState.value.items.all { it.traktId == 100 }).isTrue()
+    }
+
+    // ==================== 状态徽标一致性 ====================
+
+    @Test
+    fun `loadNextPage后新item不在currentStatusMap中`() = runTest {
+        // 第一页 50 条（traktId 0-49），第二页 10 条（traktId 50-59）
+        val page1 = List(50) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, it, 1000L + it) }
+        val page2 = List(10) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, 50 + it, 1000L + 50 + it) }
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(0))
+        } returns page1
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), eq(50))
+        } returns page2
+        // 缓存非 null，使 updateCurrentStatusMap 执行
+        coEvery { traktRepo.getWatchlistWatchedIds() } returns TraktRepository.WatchlistWatchedIds()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+        // 第一页的 item 在 currentStatusMap 中
+        assertThat(viewModel.uiState.value.currentStatusMap).isNotEmpty()
+        assertThat(viewModel.uiState.value.currentStatusMap).hasSize(50)
+
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+        // 第二页的 item (traktId 50-59) 不在 currentStatusMap 中
+        // 因为 updateCurrentStatusMap 只在 loadFirstPage 调用，loadNextPage 不调用
+        (50..59).forEach { id ->
+            assertThat(viewModel.uiState.value.currentStatusMap).doesNotContainKey(id)
+        }
+        // currentStatus 字段也为 null（转换函数始终设为 null）
+        val newItems = viewModel.uiState.value.items.filter { it.traktId in 50..59 }
+        assertThat(newItems).hasSize(10)
+        assertThat(newItems.all { it.currentStatus == null }).isTrue()
+    }
+
+    // ==================== 边界情况 ====================
+
+    @Test
+    fun `updateSearchQuery空字符串触发重载`() = runTest {
+        advanceUntilIdle() // 等 init 完成（init 调用 dao.query 一次）
+        viewModel.updateSearchQuery("")
+        advanceUntilIdle()
+        // init (1) + updateSearchQuery (1) = 2 次
+        coVerify(exactly = 2) {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `loadNextPage_ALL_Tab安全返回不触发加载`() = runTest {
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.currentTab).isEqualTo(MarkRecordTab.ALL)
+        assertThat(viewModel.uiState.value.hasMore).isFalse()
+
+        val pageBefore = viewModel.uiState.value.currentPage
+        viewModel.loadNextPage()
+        advanceUntilIdle()
+        // ALL Tab hasMore 恒为 false，loadNextPage 早退，currentPage 不变
+        assertThat(viewModel.uiState.value.currentPage).isEqualTo(pageBefore)
+        // dao.query 仅 init 调用一次，未额外触发
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `switchTab同Tab重复点击早退`() = runTest {
+        advanceUntilIdle() // 等 init 完成
+        // init 已调用 dao.query 一次（ALL Tab page 1）
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+        // 同 Tab 重复点击，应早退不触发额外加载
+        viewModel.switchTab(MarkRecordTab.ALL)
+        advanceUntilIdle()
+        coVerify(exactly = 1) {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        }
+    }
 }
