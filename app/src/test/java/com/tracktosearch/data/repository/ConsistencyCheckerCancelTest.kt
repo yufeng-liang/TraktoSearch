@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import android.content.Context
+import android.os.PowerManager
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
@@ -262,6 +263,115 @@ class ConsistencyCheckerCancelTest {
     }
 
     // ============================================================
+    // WakeLock 生命周期
+    // ============================================================
+
+    /**
+     * checkAndUnifyWithCrawl 启动时 acquireWakeLock。
+     *
+     * acquireWakeLock 在 appScope.launch 之前同步调用。
+     * 用 gate 阻塞 fetchMarkList(WISH) 保持协程运行,
+     * 验证 wakeLock 字段不为 null 且 isHeld=true。
+     */
+    @Test
+    fun 检查启动时acquireWakeLock() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val gate = CompletableDeferred<Boolean>()
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            val status = thirdArg<DoubanMarkStatus>()
+            if (status == DoubanMarkStatus.WISH) {
+                gate.await()
+            }
+            true
+        }
+        try {
+            assertThat(checker.checkAndUnifyWithCrawl()).isTrue()
+            // 等待协程进入 fetchMarkList(WISH) 并阻塞在 gate
+            waitForCondition { checker.isRunning() }
+            val wl = readWakeLockField()
+            assertThat(wl).isNotNull()
+            assertThat(wl!!.isHeld).isTrue()
+        } finally {
+            // 释放 gate 让阻塞协程继续完成(避免泄漏)
+            gate.complete(true)
+        }
+    }
+
+    /**
+     * 检查正常完成(未登录豆瓣直接返回)时 releaseWakeLock。
+     *
+     * 未登录场景 runCheckWithCrawl 直接 return,
+     * finally 块执行 releaseWakeLock,wakeLock 字段置 null。
+     * 轮询 !isRunning() 确保 finally 块已执行(避免与 isComplete 设置的竞态)。
+     */
+    @Test
+    fun 检查正常完成时releaseWakeLock() = runBlocking {
+        // 默认未登录豆瓣,runCheckWithCrawl 直接返回
+        checker.checkAndUnifyWithCrawl()
+        // 等待 checkJob 完全结束(包括 finally 块的 releaseWakeLock)
+        waitForCondition { checker.checkProgress.value.isComplete && !checker.isRunning() }
+        assertThat(readWakeLockField()).isNull()
+    }
+
+    /**
+     * 检查异常时(网络错误)releaseWakeLock。
+     *
+     * fetchMarkList 抛出 RuntimeException,catch(e: Exception) 块捕获并设置友好提示,
+     * finally 块执行 releaseWakeLock,wakeLock 字段置 null。
+     */
+    @Test
+    fun 检查异常时releaseWakeLock() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } throws RuntimeException("network resolve failed")
+
+        checker.checkAndUnifyWithCrawl()
+        // 等待异常被 catch,checkJob 完全结束(包括 finally 块的 releaseWakeLock)
+        waitForCondition { checker.checkProgress.value.isComplete && !checker.isRunning() }
+        assertThat(readWakeLockField()).isNull()
+    }
+
+    /**
+     * 取消检查时 releaseWakeLock。
+     *
+     * 用 gate 阻塞 fetchMarkList(WISH) 保持协程运行,
+     * cancel() 触发 CancellationException,catch 块设置 isCancelled=true,
+     * finally 块执行 releaseWakeLock,wakeLock 字段置 null。
+     */
+    @Test
+    fun 取消时releaseWakeLock() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val gate = CompletableDeferred<Boolean>()
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            val status = thirdArg<DoubanMarkStatus>()
+            if (status == DoubanMarkStatus.WISH) {
+                gate.await()
+            }
+            true
+        }
+        try {
+            assertThat(checker.checkAndUnifyWithCrawl()).isTrue()
+            // 等待协程进入 fetchMarkList(WISH) 并阻塞在 gate
+            waitForCondition { checker.isRunning() }
+            // cancel 触发 CancellationException
+            checker.cancel()
+            // 等待 checkJob 完全结束(包括 finally 块的 releaseWakeLock)
+            waitForCondition {
+                checker.checkProgress.value.isCancelled && !checker.isRunning()
+            }
+            assertThat(readWakeLockField()).isNull()
+        } finally {
+            // 释放 gate 避免协程泄漏(取消后 gate.await() 已抛 CancellationException,保险起见)
+            gate.complete(true)
+        }
+    }
+
+    // ============================================================
     // 辅助函数
     // ============================================================
 
@@ -285,5 +395,12 @@ class ConsistencyCheckerCancelTest {
             Thread.sleep(intervalMs)
         }
         throw AssertionError("条件在 ${timeoutMs}ms 内未满足")
+    }
+
+    /** 反射读取 private var wakeLock 字段 */
+    private fun readWakeLockField(): PowerManager.WakeLock? {
+        val field = DoubanTraktStatusConsistencyChecker::class.java.getDeclaredField("wakeLock")
+        field.isAccessible = true
+        return field.get(checker) as? PowerManager.WakeLock
     }
 }
