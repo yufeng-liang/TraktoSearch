@@ -3,11 +3,15 @@ package com.tracktosearch.data.util
 import android.util.Log
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
 import java.net.URLEncoder
 import java.security.MessageDigest
@@ -82,6 +86,50 @@ class CommentTranslator @Inject constructor() {
             results.filterNotNull()
         }
     }
+
+    /**
+     * 流式翻译评论列表，每条翻译完成立即 emit（index, 译文）。
+     *
+     * 缓存命中的评论立即发送；未命中的并发翻译，完成一条就推送一条，
+     * 让 UI 可以渐进展示翻译结果，无需等待全部完成。
+     *
+     * 取消语义：collect 端取消会自动传播到 channelFlow 内部所有子协程。
+     *
+     * @return Flow<Pair<原索引, 译文>>
+     */
+    fun translateCommentsFlow(comments: List<TraktComment>): Flow<Pair<Int, TraktComment>> = channelFlow {
+        if (comments.isEmpty()) return@channelFlow
+        val targetLang = getTargetLangCode()
+        if (targetLang == "en") {
+            // 设备为英文：直接原样 emit
+            comments.forEachIndexed { index, comment ->
+                send(index to comment)
+            }
+            return@channelFlow
+        }
+
+        // 缓存命中的立即 emit；未命中的进入 pending 列表
+        val pending = comments.mapIndexedNotNull { index, comment ->
+            val cached = translationCache[comment.id]
+            if (cached != null) {
+                send(index to comment.copy(comment = cached))
+                null
+            } else {
+                index to comment
+            }
+        }
+        if (pending.isEmpty()) return@channelFlow
+
+        // 并发翻译未缓存评论，每条完成立即 emit
+        coroutineScope {
+            pending.forEach { (originIndex, comment) ->
+                launch {
+                    val translated = translateOneComment(comment, targetLang)
+                    send(originIndex to translated)
+                }
+            }
+        }
+    }.flowOn(Dispatchers.IO)
 
     /** 翻译单条评论（内部复用，供并发调用） */
     private suspend fun translateOneComment(comment: TraktComment, targetLang: String): TraktComment {
