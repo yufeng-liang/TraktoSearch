@@ -225,6 +225,119 @@ class SettingsScreenTest {
         composeRule.onNodeWithText(doubanLoginText).assertIsDisplayed()
     }
 
+    // ============ 检查一致性交互测试 ============
+
+    @Test
+    fun `设置页显示检查一致性按钮`() {
+        setContentWithMockedViewModels {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = createMockSettingsViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+        val buttonText = context.getString(R.string.settings_douban_status_consistency)
+        scrollToText(buttonText)
+        composeRule.onNodeWithText(buttonText).assertIsDisplayed()
+    }
+
+    @Test
+    fun `点击检查一致性按钮显示二次确认弹窗`() {
+        setContentWithMockedViewModels {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = createMockSettingsViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+        val buttonText = context.getString(R.string.settings_douban_status_consistency)
+        scrollToText(buttonText)
+        composeRule.onNodeWithText(buttonText).performClick()
+        composeRule.waitForIdle()
+        // 按钮文案"检查状态一致性"与弹窗标题文案相同,改用弹窗描述文案断言
+        val confirmDesc = context.getString(R.string.consistency_check_confirm_desc)
+        composeRule.onNodeWithText(confirmDesc).assertIsDisplayed()
+    }
+
+    @Test
+    fun `检查进行中入口卡片显示正在检查文案`() {
+        setContentWithMockedViewModels {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = createMockSettingsViewModel(
+                    checkProgress = ConsistencyCheckResult(isRunning = true)
+                )
+            )
+        }
+        composeRule.waitForIdle()
+        val buttonText = context.getString(R.string.settings_douban_status_consistency)
+        scrollToText(buttonText)
+        // isRunning=true 时入口卡片副标题切换为"正在检查…"
+        val checkingText = context.getString(R.string.settings_douban_status_consistency_checking)
+        composeRule.onNodeWithText(checkingText).assertIsDisplayed()
+    }
+
+    @Test
+    fun `检查完成入口卡片显示统计文案`() {
+        setContentWithMockedViewModels {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = createMockSettingsViewModel(
+                    checkProgress = ConsistencyCheckResult(
+                        isComplete = true,
+                        conflictsFound = 5,
+                        traktUpdated = 3,
+                        doubanUpdated = 2
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+        val buttonText = context.getString(R.string.settings_douban_status_consistency)
+        scrollToText(buttonText)
+        // isComplete=true 时副标题显示"发现冲突 5 项，Trakt 更新 3 项，豆瓣更新 2 项"
+        val doneText = context.getString(
+            R.string.settings_douban_status_consistency_done, 5, 3, 2
+        )
+        composeRule.onNodeWithText(doneText).assertIsDisplayed()
+    }
+
+    @Test
+    fun `检查运行中点击按钮直接显示进度弹窗`() {
+        val viewModel = createMockSettingsViewModel(
+            checkProgress = ConsistencyCheckResult(
+                isRunning = true,
+                phase = "检查中",
+                current = 5,
+                total = 100
+            )
+        )
+        every { viewModel.isCheckRunning() } returns true
+        // 预填充 SettingsViewModel 到 ViewModelStore,使 ConsistencyCheckDialog 内部
+        // hiltViewModel() 命中缓存(避免 Hilt 创建真实 VM)
+        setContentWithMockedViewModels(settingsViewModel = viewModel) {
+            SettingsScreen(
+                isLoggedIn = true,
+                onLogout = {},
+                viewModel = viewModel
+            )
+        }
+        composeRule.waitForIdle()
+        val buttonText = context.getString(R.string.settings_douban_status_consistency)
+        scrollToText(buttonText)
+        composeRule.onNodeWithText(buttonText).performClick()
+        composeRule.waitForIdle()
+        // isCheckRunning=true 时点击按钮直接弹 ConsistencyCheckDialog（跳过二次确认）
+        val dialogTitle = context.getString(R.string.consistency_check_title)
+        composeRule.onNodeWithText(dialogTitle).assertIsDisplayed()
+        // 进度弹窗渲染阶段文案为 "检查中 (5/100)",用子串匹配断言
+        composeRule.onNodeWithText("检查中", substring = true).assertIsDisplayed()
+    }
+
     // ============ Helper ============
 
     /**
@@ -247,8 +360,14 @@ class SettingsScreenTest {
      * 预填充后步骤 2 命中,绕过 HiltViewModelFactory.create() 对真实依赖的需求。
      * HiltViewModelFactory 构造时仍会执行(检查 activity 实现 GeneratedComponentManager),
      * 但 HiltTestActivity 被 @AndroidEntryPoint 注解,满足此要求。
+     *
+     * @param settingsViewModel 可选,传入后预填充到 ViewModelStore,供 ConsistencyCheckDialog
+     *        内部的 `hiltViewModel<SettingsViewModel>()` 命中(避免 Hilt 创建真实 VM)
      */
-    private inline fun setContentWithMockedViewModels(crossinline content: @androidx.compose.runtime.Composable () -> Unit) {
+    private inline fun setContentWithMockedViewModels(
+        settingsViewModel: SettingsViewModel? = null,
+        crossinline content: @androidx.compose.runtime.Composable () -> Unit
+    ) {
         val mockDoubanRetryVM = createMockDoubanRetryViewModel()
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -256,11 +375,18 @@ class SettingsScreenTest {
                     @Suppress("UNCHECKED_CAST")
                     return mockDoubanRetryVM as T
                 }
+                if (modelClass == SettingsViewModel::class.java && settingsViewModel != null) {
+                    @Suppress("UNCHECKED_CAST")
+                    return settingsViewModel as T
+                }
                 throw IllegalArgumentException("Unknown ViewModel: $modelClass")
             }
         }
         // 预填充:通过 activity 的 ViewModelStore 将 mock 放入 store
         ViewModelProvider(composeRule.activity, factory).get(DoubanRetryViewModel::class.java)
+        if (settingsViewModel != null) {
+            ViewModelProvider(composeRule.activity, factory).get(SettingsViewModel::class.java)
+        }
 
         composeRule.setContent {
             content()
@@ -286,7 +412,8 @@ class SettingsScreenTest {
         themeMode: String = "system",
         pansouEnabled: Boolean = false,
         notificationEnabled: Boolean = false,
-        doubanLoggedIn: Boolean = false
+        doubanLoggedIn: Boolean = false,
+        checkProgress: ConsistencyCheckResult = ConsistencyCheckResult()
     ): SettingsViewModel {
         val mock = mockk<SettingsViewModel>(relaxed = true)
         every { mock.themeMode } returns MutableStateFlow(themeMode)
@@ -304,7 +431,7 @@ class SettingsScreenTest {
         every { mock.newSeasonReminderEnabled } returns MutableStateFlow(false)
         every { mock.exportImportState } returns MutableStateFlow(ExportImportState())
         every { mock.cooldownStatus } returns MutableStateFlow<CooldownStatus?>(null)
-        every { mock.checkProgress } returns MutableStateFlow(ConsistencyCheckResult())
+        every { mock.checkProgress } returns MutableStateFlow(checkProgress)
         every { mock.isDoubanSyncRunning } returns MutableStateFlow(false)
         every { mock.userProfile } returns MutableStateFlow<TraktUserProfileResponse?>(null)
         every { mock.doubanLoggedIn } returns MutableStateFlow(doubanLoggedIn)
