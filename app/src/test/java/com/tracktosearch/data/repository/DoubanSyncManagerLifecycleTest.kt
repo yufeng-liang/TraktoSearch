@@ -7,6 +7,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
+import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemDao
 import com.tracktosearch.data.local.db.DoubanSyncRollbackDao
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
@@ -208,6 +209,12 @@ class DoubanSyncManagerLifecycleTest {
 
     /**
      * 正常同步(isRetry=false):对 WISH 和 COLLECT 两个 status 各调用一次 replaceByStatus。
+     *
+     * 字段验证补强:用 answers 记录每次 replaceByStatus 的 (status, entities) 参数,
+     * 验证 toEntity() 字段映射正确(doubanId/title/status/failureReason)。
+     * 回归场景:若 DoubanSyncFailure.toEntity() 字段错位(如 status 写成枚举名而非 path,
+     * 或 failureReason 写成 ordinal 而非 name),持久化的失败项会被错误覆盖,
+     * 下次重试时 status 分组失效,UI 展示与重试链路都会受影响。
      */
     @Test
     fun persistFailures正常同步按status覆盖调用replaceByStatus() {
@@ -215,10 +222,38 @@ class DoubanSyncManagerLifecycleTest {
             buildFailure(DoubanMarkStatus.WISH),
             buildFailure(DoubanMarkStatus.COLLECT)
         )
+        val capturedCalls = mutableListOf<Pair<String, List<DoubanSyncFailureEntity>>>()
+        coEvery {
+            doubanSyncFailureDao.replaceByStatus(any(), any())
+        } answers {
+            capturedCalls.add(firstArg<String>() to secondArg<List<DoubanSyncFailureEntity>>())
+        }
+
         invokePersistFailures(failures, isRetry = false)
+
         // 两个 status 都调用 replaceByStatus(空列表也清空)
         coVerify(exactly = 1) { doubanSyncFailureDao.replaceByStatus("wish", any()) }
         coVerify(exactly = 1) { doubanSyncFailureDao.replaceByStatus("collect", any()) }
+
+        // 字段验证:按 status 分组,每个 status 的 entity 列表字段正确传递
+        assertThat(capturedCalls).hasSize(2)
+        val wishCall = capturedCalls.first { it.first == "wish" }
+        val collectCall = capturedCalls.first { it.first == "collect" }
+
+        assertThat(wishCall.second).hasSize(1)
+        val wishEntity = wishCall.second[0]
+        assertThat(wishEntity.doubanId).isEqualTo("id-wish")
+        assertThat(wishEntity.title).isEqualTo("title-wish")
+        assertThat(wishEntity.status).isEqualTo("wish") // status.path,非枚举名
+        assertThat(wishEntity.failureReason).isEqualTo("DETAIL_FETCH_FAILED") // 枚举 name,非 ordinal
+        assertThat(wishEntity.failedAt).isEqualTo(0L)
+
+        assertThat(collectCall.second).hasSize(1)
+        val collectEntity = collectCall.second[0]
+        assertThat(collectEntity.doubanId).isEqualTo("id-collect")
+        assertThat(collectEntity.title).isEqualTo("title-collect")
+        assertThat(collectEntity.status).isEqualTo("collect")
+        assertThat(collectEntity.failureReason).isEqualTo("DETAIL_FETCH_FAILED")
     }
 
     /**

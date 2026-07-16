@@ -189,6 +189,10 @@ class DoubanSyncManagerCancelTest {
      *
      * 流程: cancel() → appScope.launch { syncJob?.join(); uploadAll("CANCELLED", false); ... }
      * syncJob 为 null(未调用 startSync),join() 立即完成,随后 uploadAll 被调用。
+     *
+     * 字段验证补强:精确匹配 isFullComplete=false(取消是部分完成,不是完整同步完成)。
+     * 回归场景:若 cancel 后误传 isFullComplete=true,会更新 lastFullSyncAt 时间戳,
+     * 导致 UI 误显示"上次完整同步时间"为取消时间,且会触发不必要的 id_mappings 上传。
      */
     @Test
     fun cancel后uploadAllCancelled被调用() = runBlocking {
@@ -197,8 +201,13 @@ class DoubanSyncManagerCancelTest {
         manager.cancel()
         // 等待 IO 协程执行 uploadAll(syncJob 为 null,join 立即完成,uploadAll 紧随其后)
         Thread.sleep(1000)
+        // 精确匹配 isFullComplete=false(取消不是完整同步完成)
         coVerify(atLeast = 1) {
-            cloudPersonalSyncManager.uploadAll("CANCELLED", any(), any())
+            cloudPersonalSyncManager.uploadAll("CANCELLED", false, any())
+        }
+        // 反向验证:从未以 isFullComplete=true 调用
+        coVerify(exactly = 0) {
+            cloudPersonalSyncManager.uploadAll("CANCELLED", true, any())
         }
     }
 

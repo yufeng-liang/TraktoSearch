@@ -163,6 +163,12 @@ class DoubanBatchRemovalManagerTest {
      * 测试点1：startRemoval(items, isMovie=true) 已登录 → 执行完整移除链路，
      * removeMark 被调用 N 次，全部成功。
      * 链路：getByImdbId 命中 → fetchCsrfToken → removeMark success
+     *
+     * 字段验证补强:用 coAnswers 记录每次 removeMark 的 (doubanId, cookie, csrf) 参数,
+     * 验证 doubanId 来自 getByImdbId 返回值(非 traktId),cookie 来自 credentials,
+     * csrf 来自 fetchCsrfToken 返回值。
+     * 回归场景:若 doubanId 误传成 traktId,会移除错误的豆瓣条目(可能不存在或属于其他用户);
+     * 若 cookie 传成空字符串,豆瓣 API 会返回 401 导致移除失败。
      */
     @Test
     fun startRemoval_已登录_执行完整移除链路() = runTest {
@@ -171,15 +177,20 @@ class DoubanBatchRemovalManagerTest {
             buildItem(traktId = 2, imdbId = "tt0000002"),
             buildItem(traktId = 3, imdbId = "tt0000003")
         )
-        stubLoggedIn()
+        stubLoggedIn(cookie = "ck=test-cookie")
         // 每个 imdbId 命中不同的 doubanId
         coEvery { doubanSyncedItemDao.getByImdbId("tt0000001") } returns buildSyncedItem(doubanId = "db-1")
         coEvery { doubanSyncedItemDao.getByImdbId("tt0000002") } returns buildSyncedItem(doubanId = "db-2")
         coEvery { doubanSyncedItemDao.getByImdbId("tt0000003") } returns buildSyncedItem(doubanId = "db-3")
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "csrf-token"
+        // 用 coAnswers 记录每次 removeMark 的参数(doubanId, cookie, csrf)
+        val removeMarkCalls = mutableListOf<Triple<String, String, String>>()
         coEvery {
             doubanRepository.removeMark(any(), any(), any())
-        } returns MarkWriteResult(success = true, statusCode = 302, message = "ok")
+        } coAnswers {
+            removeMarkCalls.add(Triple(firstArg(), secondArg(), thirdArg()))
+            MarkWriteResult(success = true, statusCode = 302, message = "ok")
+        }
 
         val result = manager.startRemoval(items, isMovie = true)
 
@@ -192,6 +203,15 @@ class DoubanBatchRemovalManagerTest {
         coVerify(exactly = 0) { doubanRepository.findDoubanId(any(), any(), any()) }
         coVerify(exactly = 3) { doubanRepository.fetchCsrfToken(any(), any()) }
         coVerify(exactly = 3) { doubanRepository.removeMark(any(), any(), any()) }
+
+        // 字段验证:3 次 removeMark 的 doubanId/cookie/csrf 参数正确传递
+        assertThat(removeMarkCalls).hasSize(3)
+        val doubanIds = removeMarkCalls.map { it.first }.sorted()
+        assertThat(doubanIds).containsExactly("db-1", "db-2", "db-3") // 来自 getByImdbId 返回值,非 traktId
+        // 所有调用的 cookie 来自 credentials("ck=test-cookie")
+        assertThat(removeMarkCalls.all { it.second == "ck=test-cookie" }).isTrue()
+        // 所有调用的 csrf 来自 fetchCsrfToken 返回值("csrf-token")
+        assertThat(removeMarkCalls.all { it.third == "csrf-token" }).isTrue()
 
         // 验证最终进度
         val p = manager.progress.value

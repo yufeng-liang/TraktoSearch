@@ -17,6 +17,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -221,17 +222,28 @@ class DoubanTraktStatusConsistencyCheckerTest {
     /**
      * 测试点3：checkAndUnify() douban=collect + trakt=watchlist → 冲突（conflictsFound=1），
      * traktNeedWatched，调用 batchMarkAsWatched，traktUpdated=1。
+     *
+     * 字段验证补强:用 slot 捕获 batchMarkAsWatched 的 movieIds/showIds,
+     * 验证 traktId 和 mediaType 分流正确（movie→movieIds, show→showIds）。
+     * 回归场景:若 DoubanSyncedItem.traktId 未正确传递到 batchMarkAsWatched,
+     * 或 mediaType 分流出错（movie 错分到 showIds）,会导致错误的影视被标记为已看。
      */
     @Test
     fun checkAndUnify_doubanCollectTraktWatchlist_冲突TraktNeedWatched() = runTest {
         val items = listOf(
-            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect", mediaType = "movie")
         )
         coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns items
         every { traktRepository.getWatchlistWatchedIds() } returns WatchlistWatchedIds(
             movieWatchlistTraktIds = setOf(1)  // traktId=1 在想看列表（不是已看）
         )
-        stubTraktBatchSuccess()
+        // slot 捕获 batchMarkAsWatched 参数
+        val movieIdsSlot = slot<List<Int>>()
+        val showIdsSlot = slot<List<Int>>()
+        coEvery {
+            traktRepository.batchMarkAsWatched(capture(movieIdsSlot), capture(showIdsSlot))
+        } returns Result.success(TraktSyncResponse())
+        coEvery { traktRepository.batchAddToWatchlist(any(), any()) } returns Result.success(TraktSyncResponse())
 
         val result = checker.checkAndUnify()
 
@@ -239,6 +251,36 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(result.traktUpdated).isEqualTo(1)
         coVerify(exactly = 1) { traktRepository.batchMarkAsWatched(any(), any()) }
         coVerify(exactly = 0) { traktRepository.batchAddToWatchlist(any(), any()) }
+        // 字段验证:movieIds=[1], showIds=[]（mediaType="movie" 分流到 movieIds）
+        assertThat(movieIdsSlot.captured).containsExactly(1)
+        assertThat(showIdsSlot.captured).isEmpty()
+    }
+
+    /**
+     * 字段验证补强:douban=collect + trakt=watchlist 冲突,但 mediaType="show" 时,
+     * traktId 应分流到 showIds 而非 movieIds。
+     */
+    @Test
+    fun checkAndUnify_doubanCollectTraktWatchlist_show类型_分流到showIds() = runTest {
+        val items = listOf(
+            buildSyncedItem(doubanId = "db-2", traktId = 2, status = "collect", mediaType = "show")
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns items
+        every { traktRepository.getWatchlistWatchedIds() } returns WatchlistWatchedIds(
+            showWatchlistTraktIds = setOf(2)  // traktId=2 在想看列表
+        )
+        val movieIdsSlot = slot<List<Int>>()
+        val showIdsSlot = slot<List<Int>>()
+        coEvery {
+            traktRepository.batchMarkAsWatched(capture(movieIdsSlot), capture(showIdsSlot))
+        } returns Result.success(TraktSyncResponse())
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.traktUpdated).isEqualTo(1)
+        // show 类型分流到 showIds
+        assertThat(movieIdsSlot.captured).isEmpty()
+        assertThat(showIdsSlot.captured).containsExactly(2)
     }
 
     // ============================================================

@@ -8,6 +8,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncPendingItemDao
 import com.tracktosearch.data.local.db.DoubanSyncRollbackDao
+import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
@@ -21,6 +22,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Before
 import org.junit.Test
@@ -335,6 +337,12 @@ class DoubanSyncManagerBatchPipelineTest {
      * - watchlistWatchedIds=null → 阶段3冲突分类走默认分支(WISH 且未在 watchlist/watched → 加入 watchlist)
      * - 阶段4 batchAddToWatchlist(relaxed mock 自动返回)
      * success=1,failed 为空,successDoubanIds 包含 doubanId。
+     *
+     * 字段验证补强:用 slot 捕获 batchAddToWatchlist 的 movieIds/showIds 和
+     * doubanSyncedItemDao.insertAll 的 DoubanSyncedItem 列表,验证全字段正确传递。
+     * 回归场景:若 syncBatchToTrakt 字段映射错误(如 doubanId/traktId 错位、
+     * status 写成 "collect" 而非 "wish"、mediaType 推断错误、rating 转换丢失),
+     * synced_items 表会写入错误数据,后续状态一致性检查和重试都会受影响。
      */
     @Test
     fun 完整流水线成功写入Trakt() {
@@ -343,6 +351,16 @@ class DoubanSyncManagerBatchPipelineTest {
             doubanRepository.fetchDetail(any(), any(), any(), any(), any())
         } returns Pair(buildDetail(imdbId = "tt12345", isTvShow = false), false)
         every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 12345
+
+        // slot 捕获 batchAddToWatchlist 的 movieIds/showIds
+        val movieIdsSlot = slot<List<Int>>()
+        val showIdsSlot = slot<List<Int>>()
+        coEvery {
+            traktRepository.batchAddToWatchlist(capture(movieIdsSlot), capture(showIdsSlot))
+        } returns mockk(relaxed = true)
+        // slot 捕获 doubanSyncedItemDao.insertAll 的参数
+        val syncedItemsSlot = slot<List<DoubanSyncedItem>>()
+        coEvery { doubanSyncedItemDao.insertAll(capture(syncedItemsSlot)) } returns Unit
 
         val progressCalls = mutableListOf<ProgressCall>()
         val result = invokeSyncBatchToTrakt(
@@ -357,11 +375,72 @@ class DoubanSyncManagerBatchPipelineTest {
         coVerify(exactly = 0) { traktRepository.searchByImdb(any(), any()) }
         // 阶段4: status=WISH 调用 batchAddToWatchlist
         coVerify(atLeast = 1) { traktRepository.batchAddToWatchlist(any(), any()) }
+
+        // 字段验证:batchAddToWatchlist 的 movieIds=[12345], showIds=[]
+        assertThat(movieIdsSlot.captured).containsExactly(12345)
+        assertThat(showIdsSlot.captured).isEmpty()
+
+        // 字段验证:doubanSyncedItemDao.insertAll 写入的 DoubanSyncedItem 全字段
+        assertThat(syncedItemsSlot.captured).hasSize(1)
+        val synced = syncedItemsSlot.captured[0]
+        assertThat(synced.doubanId).isEqualTo("1") // 来自 buildMarkItem
+        assertThat(synced.imdbId).isEqualTo("tt12345") // 来自 buildDetail
+        assertThat(synced.traktId).isEqualTo(12345) // 来自 getCachedTraktIdByImdb
+        assertThat(synced.title).isEqualTo("测试-1") // 来自 buildMarkItem.title
+        assertThat(synced.status).isEqualTo("wish") // status.path（WISH 分支）
+        assertThat(synced.rating).isNull() // buildMarkItem.rating=null
+        assertThat(synced.syncedAt).isGreaterThan(0L) // System.currentTimeMillis()
+        assertThat(synced.mediaType).isEqualTo("movie") // isTvShow=false → MOVIE → "movie"
+
         // 阶段1成功路径不调用 onProgress(只有失败才调用),且 cacheHit=0 不触发详情页阶段回调;
         // 阶段2成功调用 onProgress(done, "Trakt 查询", 0, title, null),failure=null 表示成功
         assertThat(progressCalls.any { it.subPhase == "Trakt 查询" && it.failure == null }).isTrue()
         // 阶段4开始时调用 onProgress(withTraktId.size, "写入 Trakt", 0, null, null)
         assertThat(progressCalls.any { it.subPhase == "写入 Trakt" }).isTrue()
+    }
+
+    /**
+     * 字段验证补强:COLLECT 分支的 DoubanSyncedItem 字段传递。
+     * status=COLLECT 时,synced_items 表的 status 字段应为 "collect",
+     * mediaType 由 isTvShow 推断。验证评分转换:豆瓣 rating=5 → Trakt 评分=10,
+     * 但 synced_items 表的 rating 字段保留豆瓣原始 rating=5(不转换)。
+     */
+    @Test
+    fun 完整流水线COLLECT分支_syncedItem字段正确传递() {
+        val markItem = DoubanMarkItem(
+            doubanId = "2", title = "测试电影-2", rating = 5,
+            comment = null, markedAt = "2024-01-02",
+            doubanUrl = "https://movie.douban.com/subject/2/",
+            posterUrl = null
+        )
+        coEvery {
+            doubanRepository.fetchDetail(any(), any(), any(), any(), any())
+        } returns Pair(buildDetail(imdbId = "tt67890", isTvShow = true), false)
+        every { traktRepository.getCachedTraktIdByImdb(any(), any()) } returns 67890
+
+        val syncedItemsSlot = slot<List<DoubanSyncedItem>>()
+        coEvery { doubanSyncedItemDao.insertAll(capture(syncedItemsSlot)) } returns Unit
+        // COLLECT 分支会调用 batchRemoveFromWatchlist + batchMarkAsWatchedAt
+        coEvery { traktRepository.batchRemoveFromWatchlist(any(), any()) } returns mockk(relaxed = true)
+        coEvery { traktRepository.batchMarkAsWatchedAt(any(), any()) } returns mockk(relaxed = true)
+        coEvery { traktRepository.batchAddRatingsAt(any(), any()) } returns Result.success(Unit)
+
+        val result = invokeSyncBatchToTrakt(
+            items = listOf(markItem),
+            status = DoubanMarkStatus.COLLECT
+        )
+        assertThat(resultSuccess(result)).isEqualTo(1)
+
+        // 字段验证:COLLECT 分支的 DoubanSyncedItem
+        assertThat(syncedItemsSlot.captured).hasSize(1)
+        val synced = syncedItemsSlot.captured[0]
+        assertThat(synced.doubanId).isEqualTo("2")
+        assertThat(synced.imdbId).isEqualTo("tt67890")
+        assertThat(synced.traktId).isEqualTo(67890)
+        assertThat(synced.title).isEqualTo("测试电影-2")
+        assertThat(synced.status).isEqualTo("collect") // COLLECT 分支
+        assertThat(synced.rating).isEqualTo(5) // 豆瓣原始 rating,未转换
+        assertThat(synced.mediaType).isEqualTo("show") // isTvShow=true → SHOW → "show"
     }
 
     // ============================================================
