@@ -6,6 +6,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.spyk
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Before
@@ -540,6 +541,195 @@ class CommentTranslatorTest {
         assertThat(result[1].comment).isEqualTo("通用翻译")
         assertThat(result[2].comment).isEqualTo("通用翻译")
         coVerify(exactly = 3) { translator["translateWithBaidu"](any<String>(), any<String>()) }
+    }
+
+    // ==================== translateCommentsFlow（流式翻译） ====================
+    // translateCommentsFlow 返回 Flow<Pair<原索引, 译文>>，每条翻译完成立即 emit。
+    // 与 translateComments（suspend 返回完整列表）不同，Flow 版本用于 UI 渐进展示。
+    // 缓存命中立即 emit，未命中的并发翻译完成后 emit（顺序不确定）。
+
+    /**
+     * 空列表：channelFlow 直接 return，不 emit 任何元素。
+     */
+    @Test
+    fun translateCommentsFlow_空列表不emit任何元素() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+
+        val result = translator.translateCommentsFlow(emptyList()).toList()
+
+        assertThat(result).isEmpty()
+        coVerify(exactly = 0) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
+    }
+
+    /**
+     * 设备语言为 en：直接原样 emit 每条评论（index to comment）。
+     * 验证 emit 的 Pair.index 与 Pair.second.id 一一对应。
+     */
+    @Test
+    fun translateCommentsFlow_设备语言为en_原样按索引emit() = runBlocking {
+        Locale.setDefault(Locale.ENGLISH)
+        val comments = listOf(
+            TraktComment(id = 101, comment = "hello"),
+            TraktComment(id = 102, comment = "world")
+        )
+
+        val result = translator.translateCommentsFlow(comments).toList()
+
+        assertThat(result).hasSize(2)
+        // 验证索引与评论配对正确
+        assertThat(result[0].first).isEqualTo(0)
+        assertThat(result[0].second.id).isEqualTo(101)
+        assertThat(result[0].second.comment).isEqualTo("hello")
+        assertThat(result[1].first).isEqualTo(1)
+        assertThat(result[1].second.id).isEqualTo(102)
+        assertThat(result[1].second.comment).isEqualTo("world")
+        coVerify(exactly = 0) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
+    }
+
+    /**
+     * 缓存命中：立即 emit (index, comment.copy(comment = cached))。
+     * 验证 emit 的译文是缓存值，且不调用翻译 API。
+     */
+    @Test
+    fun translateCommentsFlow_缓存命中立即emit_译文为缓存值() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+        val cache = getTranslationCache()
+        cache.put(201, "缓存译文201")
+        cache.put(202, "缓存译文202")
+        val comments = listOf(
+            TraktComment(id = 201, comment = "original1"),
+            TraktComment(id = 202, comment = "original2")
+        )
+
+        val result = translator.translateCommentsFlow(comments).toList()
+
+        assertThat(result).hasSize(2)
+        // 按 index 排序后验证（缓存命中立即 emit，顺序应与输入一致）
+        val byIndex = result.associate { it.first to it.second }
+        assertThat(byIndex[0]!!.comment).isEqualTo("缓存译文201")
+        assertThat(byIndex[0]!!.id).isEqualTo(201)
+        assertThat(byIndex[1]!!.comment).isEqualTo("缓存译文202")
+        assertThat(byIndex[1]!!.id).isEqualTo(202)
+        coVerify(exactly = 0) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
+    }
+
+    /**
+     * 未缓存评论并发翻译 emit：用 coAnswers 区分不同输入，验证索引与译文内容严格配对。
+     * 回归场景：若并发翻译结果错位写回（originIndex 与 translated 不配对），
+     * 用单一返回值 mock 无法捕获，必须用 coAnswers 区分输入。
+     */
+    @Test
+    fun translateCommentsFlow_未缓存评论并发翻译emit_索引配对正确() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+        // 用 coAnswers 区分不同输入，让每条评论返回不同译文
+        coEvery { translator["translateWithBaiduAI"](any<String>(), any<String>()) } coAnswers {
+            when (firstArg<String>()) {
+                "input1" -> "译文1"
+                "input2" -> "译文2"
+                "input3" -> "译文3"
+                else -> null
+            }
+        }
+        val comments = listOf(
+            TraktComment(id = 301, comment = "input1"),
+            TraktComment(id = 302, comment = "input2"),
+            TraktComment(id = 303, comment = "input3")
+        )
+
+        val result = translator.translateCommentsFlow(comments).toList()
+
+        assertThat(result).hasSize(3)
+        // 并发 emit 顺序不确定，用 index 查找对应的 Pair，验证内容严格配对
+        val byIndex = result.associate { it.first to it.second }
+        assertThat(byIndex[0]!!.comment).isEqualTo("译文1")
+        assertThat(byIndex[0]!!.id).isEqualTo(301)
+        assertThat(byIndex[1]!!.comment).isEqualTo("译文2")
+        assertThat(byIndex[1]!!.id).isEqualTo(302)
+        assertThat(byIndex[2]!!.comment).isEqualTo("译文3")
+        assertThat(byIndex[2]!!.id).isEqualTo(303)
+        coVerify(exactly = 3) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
+        // 验证缓存写入
+        val cache = getTranslationCache()
+        assertThat(cache.get(301)).isEqualTo("译文1")
+        assertThat(cache.get(302)).isEqualTo("译文2")
+        assertThat(cache.get(303)).isEqualTo("译文3")
+    }
+
+    /**
+     * 部分翻译失败：AI 和通用都失败时，失败项 emit 原文（translateOneComment 返回 comment 原文）。
+     * 验证成功项正常翻译，失败项 emit 原文，两者都 emit。
+     */
+    @Test
+    fun translateCommentsFlow_部分翻译失败_失败项emit原文() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+        // id=401 翻译成功，id=402 AI+通用都失败返回原文
+        coEvery { translator["translateWithBaiduAI"](any<String>(), any<String>()) } coAnswers {
+            when (firstArg<String>()) {
+                "good" -> "好"
+                else -> null
+            }
+        }
+        coEvery { translator["translateWithBaidu"](any<String>(), any<String>()) } coAnswers {
+            when (firstArg<String>()) {
+                "bad" -> null
+                else -> null
+            }
+        }
+        val comments = listOf(
+            TraktComment(id = 401, comment = "good"),
+            TraktComment(id = 402, comment = "bad")
+        )
+
+        val result = translator.translateCommentsFlow(comments).toList()
+
+        assertThat(result).hasSize(2)
+        val byIndex = result.associate { it.first to it.second }
+        // 成功项 emit 译文
+        assertThat(byIndex[0]!!.comment).isEqualTo("好")
+        assertThat(byIndex[0]!!.id).isEqualTo(401)
+        // 失败项 emit 原文（translateOneComment 返回 comment 原文）
+        assertThat(byIndex[1]!!.comment).isEqualTo("bad")
+        assertThat(byIndex[1]!!.id).isEqualTo(402)
+        // 成功项写入缓存，失败项不写入
+        val cache = getTranslationCache()
+        assertThat(cache.get(401)).isEqualTo("好")
+        assertThat(cache.get(402)).isNull()
+    }
+
+    /**
+     * 缓存命中与新评论混合：缓存命中立即 emit，新评论并发翻译后 emit。
+     * 验证混合场景下所有评论都 emit，且译文内容正确。
+     */
+    @Test
+    fun translateCommentsFlow_缓存与新评论混合_全部emit内容正确() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+        val cache = getTranslationCache()
+        cache.put(502, "缓存502")
+        coEvery { translator["translateWithBaiduAI"](any<String>(), any<String>()) } coAnswers {
+            when (firstArg<String>()) {
+                "new1" -> "新译文1"
+                "new3" -> "新译文3"
+                else -> null
+            }
+        }
+        val comments = listOf(
+            TraktComment(id = 501, comment = "new1"), // 新
+            TraktComment(id = 502, comment = "cached"), // 缓存命中
+            TraktComment(id = 503, comment = "new3")  // 新
+        )
+
+        val result = translator.translateCommentsFlow(comments).toList()
+
+        assertThat(result).hasSize(3)
+        val byIndex = result.associate { it.first to it.second }
+        assertThat(byIndex[0]!!.comment).isEqualTo("新译文1")
+        assertThat(byIndex[0]!!.id).isEqualTo(501)
+        assertThat(byIndex[1]!!.comment).isEqualTo("缓存502")
+        assertThat(byIndex[1]!!.id).isEqualTo(502)
+        assertThat(byIndex[2]!!.comment).isEqualTo("新译文3")
+        assertThat(byIndex[2]!!.id).isEqualTo(503)
+        // 只翻译了 2 条新评论（id=501,503），缓存命中的不翻译
+        coVerify(exactly = 2) { translator["translateWithBaiduAI"](any<String>(), any<String>()) }
     }
 
     // ==================== translationCache LruCache ====================
