@@ -550,6 +550,70 @@ class CloudFailureSyncManagerTest {
         coVerify(exactly = 0) { doubanSyncFailureDao.replaceAll(any()) }
     }
 
+    /**
+     * 回归测试：本地无数据 + 手动拉取(autoCommit=false) 应返回 Success 而非 OverwritePending。
+     *
+     * Bug 场景：用户本地无失败数据时选择从云端拉取，downloadAndMerge(autoCommit=false)
+     * 因 !autoCommit 分支总是返回 OverwritePending，导致 UI 显示"覆盖现有数据"弹窗
+     * （本地无数据何来覆盖）。且 OverwritePending 不落库，用户确认前数据未写入。
+     *
+     * 修复：!autoCommit && localNewest > 0L 时才返回 OverwritePending，
+     * 本地无数据(localNewest=0)时直接 replaceAll 返回 Success。
+     *
+     * 验证：本地空 + autoCommit=false → 返回 Success（非 OverwritePending），且数据已落库。
+     */
+    @Test
+    fun `downloadAndMerge_本地无数据且手动拉取_returnsSuccess而非OverwritePending`() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user-1", "cookie")
+        val cloudFailures = listOf(
+            buildFailureEntity(doubanId = "cloud-1", failedAt = 1000L),
+            buildFailureEntity(doubanId = "cloud-2", failedAt = 2000L)
+        )
+        val cloudBody = buildCloudResponseJson(uploadedAt = 3000L, failures = cloudFailures, sha = "sha-succ")
+        coEvery { giteeApi.getFileContent(any(), any(), any(), any()) } returns mockSuccessResponse(cloudBody)
+        // 本地无数据 → localNewest=0
+        coEvery { doubanSyncFailureDao.getAll() } returns emptyList()
+
+        val replaceSlot = slot<List<DoubanSyncFailureEntity>>()
+        coEvery { doubanSyncFailureDao.replaceAll(capture(replaceSlot)) } returns Unit
+
+        // 手动拉取：autoCommit=false
+        val result = manager.downloadAndMerge(autoCommit = false)
+
+        // 应返回 Success（已落库），而非 OverwritePending（等待确认）
+        assertThat(result).isInstanceOf(DownloadResult.Success::class.java)
+        assertThat(result).isNotInstanceOf(DownloadResult.OverwritePending::class.java)
+        assertThat((result as DownloadResult.Success).count).isEqualTo(2)
+        // 数据已落库
+        coVerify(exactly = 1) { doubanSyncFailureDao.replaceAll(any()) }
+        assertThat(replaceSlot.captured).hasSize(2)
+    }
+
+    /**
+     * 回归测试：本地有数据 + 手动拉取(autoCommit=false) 应返回 OverwritePending。
+     *
+     * 这是 autoCommit=false 的正常路径：本地有数据时需要用户确认是否覆盖。
+     * 与上一个测试对比，确保 localNewest > 0 时仍返回 OverwritePending。
+     */
+    @Test
+    fun `downloadAndMerge_本地有数据且手动拉取_returnsOverwritePending`() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user-1", "cookie")
+        val cloudFailures = listOf(buildFailureEntity(doubanId = "cloud-new", failedAt = 5000L))
+        val cloudBody = buildCloudResponseJson(uploadedAt = 5000L, failures = cloudFailures, sha = "sha-update")
+        coEvery { giteeApi.getFileContent(any(), any(), any(), any()) } returns mockSuccessResponse(cloudBody)
+
+        // 本地有数据 → localNewest=1000 > 0
+        val localEntities = listOf(buildFailureEntity(doubanId = "local-old", failedAt = 1000L, updatedAt = 1000L))
+        coEvery { doubanSyncFailureDao.getAll() } returns localEntities
+
+        // 手动拉取：autoCommit=false
+        val result = manager.downloadAndMerge(autoCommit = false)
+
+        // 应返回 OverwritePending（等待用户确认），且未落库
+        assertThat(result).isInstanceOf(DownloadResult.OverwritePending::class.java)
+        coVerify(exactly = 0) { doubanSyncFailureDao.replaceAll(any()) }
+    }
+
     // ============================================================
     // AES 加密往返测试
     // ============================================================

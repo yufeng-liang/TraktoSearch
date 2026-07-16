@@ -309,4 +309,459 @@ class StatisticsViewModelTest {
         // 验证确实调用了 getAllReviews
         coVerify { userReviewRepository.getAllReviews() }
     }
+
+    // ==================== 统计数据正确性测试 ====================
+
+    /**
+     * 测试点9：totalShowCount 正确计算（看完一整季才算看完该剧）
+     *
+     * 场景：3 部剧
+     * - 剧集A：S1 全部 completed=1 → 计入
+     * - 剧集B：S1 部分 completed=0 → 不计入
+     * - 剧集C：S0（特别篇）全部 completed=1，S1 无 → 不计入（season.number > 0 排除特别篇）
+     */
+    @Test
+    fun `loadStatistics_totalShowCount_看完一整季才算`() = runTest {
+        val watchedShows = listOf(
+            // 剧集A：S1 全部看完
+            TraktWatchedShow(
+                show = TraktShow(title = "剧集A"),
+                seasons = listOf(
+                    TraktWatchedSeason(
+                        number = 1,
+                        episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1),
+                            TraktWatchedEpisode(number = 2, completed = 1)
+                        )
+                    )
+                )
+            ),
+            // 剧集B：S1 部分看完
+            TraktWatchedShow(
+                show = TraktShow(title = "剧集B"),
+                seasons = listOf(
+                    TraktWatchedSeason(
+                        number = 1,
+                        episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1),
+                            TraktWatchedEpisode(number = 2, completed = 0)  // 未看完
+                        )
+                    )
+                )
+            ),
+            // 剧集C：仅 S0（特别篇）看完，S1 无
+            TraktWatchedShow(
+                show = TraktShow(title = "剧集C"),
+                seasons = listOf(
+                    TraktWatchedSeason(
+                        number = 0,  // 特别篇，被排除
+                        episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1)
+                        )
+                    )
+                )
+            )
+        )
+        stubAllSuccess(watchedShows = watchedShows)
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // 只有剧集A满足"存在 number>0 的季且该季所有 episode completed>0"
+        assertThat(viewModel.uiState.value.totalShowCount).isEqualTo(1)
+    }
+
+    /**
+     * 测试点10：totalShowCount 多季任意一季看完即计入
+     */
+    @Test
+    fun `loadStatistics_totalShowCount_多季任意一季看完即计入`() = runTest {
+        val watchedShows = listOf(
+            TraktWatchedShow(
+                show = TraktShow(title = "剧集"),
+                seasons = listOf(
+                    TraktWatchedSeason(
+                        number = 1,
+                        episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 0)  // S1 未看完
+                        )
+                    ),
+                    TraktWatchedSeason(
+                        number = 2,
+                        episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1),  // S2 全部看完
+                            TraktWatchedEpisode(number = 2, completed = 1)
+                        )
+                    )
+                )
+            )
+        )
+        stubAllSuccess(watchedShows = watchedShows)
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // seasons.any { ... } → S2 满足条件，计入
+        assertThat(viewModel.uiState.value.totalShowCount).isEqualTo(1)
+    }
+
+    /**
+     * 测试点11：totalEpisodeCount 优先使用 userStats
+     */
+    @Test
+    fun `loadStatistics_totalEpisodeCount_优先使用userStats`() = runTest {
+        stubAllSuccess(
+            watchedShows = listOf(
+                TraktWatchedShow(
+                    show = TraktShow(title = "T"),
+                    seasons = listOf(
+                        TraktWatchedSeason(number = 1, episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1),
+                            TraktWatchedEpisode(number = 2, completed = 1)
+                        ))
+                    )
+                )
+            ),
+            userStats = TraktUserStatsResponse(
+                episodes = TraktStatsDetail(watched = 100)  // userStats 优先
+            )
+        )
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // userStats.episodes.watched=100 优先于 watchedShows 兜底（2集）
+        assertThat(viewModel.uiState.value.totalEpisodeCount).isEqualTo(100)
+    }
+
+    /**
+     * 测试点12：totalEpisodeCount userStats 为 0 时降级到 watchedShows 兜底
+     */
+    @Test
+    fun `loadStatistics_totalEpisodeCount_userStats为0降级到watchedShows`() = runTest {
+        stubAllSuccess(
+            watchedShows = listOf(
+                TraktWatchedShow(
+                    show = TraktShow(title = "T"),
+                    seasons = listOf(
+                        TraktWatchedSeason(number = 1, episodes = listOf(
+                            TraktWatchedEpisode(number = 1, completed = 1),
+                            TraktWatchedEpisode(number = 2, completed = 1),
+                            TraktWatchedEpisode(number = 3, completed = 0)  // 未看完不计
+                        ))
+                    )
+                )
+            ),
+            userStats = TraktUserStatsResponse(
+                episodes = TraktStatsDetail(watched = 0)  // userStats 为 0，降级
+            )
+        )
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // 降级到 watchedShows：2 集完成
+        assertThat(viewModel.uiState.value.totalEpisodeCount).isEqualTo(2)
+    }
+
+    /**
+     * 测试点13：totalWatchMinutes 优先使用 userStats
+     */
+    @Test
+    fun `loadStatistics_totalWatchMinutes_优先使用userStats`() = runTest {
+        stubAllSuccess(
+            movies = testMovies,  // runtime=120+90=210
+            userStats = TraktUserStatsResponse(
+                movies = TraktStatsDetail(minutes = 300),
+                episodes = TraktStatsDetail(minutes = 500)
+            )
+        )
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // userStats.movies.minutes + userStats.episodes.minutes = 300+500=800
+        assertThat(viewModel.uiState.value.totalWatchMinutes).isEqualTo(800L)
+    }
+
+    /**
+     * 测试点14：totalWatchMinutes userStats 缺失时降级到 movies.runtime 求和
+     */
+    @Test
+    fun `loadStatistics_totalWatchMinutes_降级到movies_runtime`() = runTest {
+        stubAllSuccess(movies = testMovies)  // runtime=120+90=210
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        // userStats 为 null → 降级到 movies.sumOf { runtime } = 120+90=210
+        assertThat(viewModel.uiState.value.totalWatchMinutes).isEqualTo(210L)
+    }
+
+    /**
+     * 测试点15：averageRating 正确计算
+     */
+    @Test
+    fun `loadStatistics_averageRating正确计算`() = runTest {
+        stubAllSuccess(ratings = testRatings)  // [8, 8, 9, 7] → avg=8.0
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        assertThat(viewModel.uiState.value.averageRating).isEqualTo(8.0)
+    }
+
+    /**
+     * 测试点16：averageRating 无评分时为 0.0
+     */
+    @Test
+    fun `loadStatistics_无评分_averageRating为0`() = runTest {
+        stubAllSuccess(ratings = emptyList())
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        assertThat(viewModel.uiState.value.averageRating).isEqualTo(0.0)
+        assertThat(viewModel.uiState.value.totalRatings).isEqualTo(0)
+    }
+
+    /**
+     * 测试点17：thisMonthWatched / thisYearWatched 正确计算
+     */
+    @Test
+    fun `loadStatistics_本月本年观看数正确`() = runTest {
+        val cal = java.util.Calendar.getInstance()
+        val currentYear = cal.get(java.util.Calendar.YEAR)
+        val currentMonth = cal.get(java.util.Calendar.MONTH)
+
+        // 构造本月、本年（非本月）、去年的观影记录
+        val thisMonthDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(cal.time)
+
+        cal.add(java.util.Calendar.MONTH, -2)
+        val thisYearOtherMonthDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(cal.time)
+
+        cal.add(java.util.Calendar.YEAR, -1)
+        val lastYearDate = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }.format(cal.time)
+
+        val movies = listOf(
+            TraktWatchlistMovieItem(watched_at = thisMonthDate, movie = TraktMovie(title = "本月")),
+            TraktWatchlistMovieItem(watched_at = thisYearOtherMonthDate, movie = TraktMovie(title = "本年")),
+            TraktWatchlistMovieItem(watched_at = lastYearDate, movie = TraktMovie(title = "去年"))
+        )
+        stubAllSuccess(movies = movies)
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        // thisMonthWatched=1（仅本月），thisYearWatched=2（本月+本年其他月）
+        assertThat(state.thisMonthWatched).isEqualTo(1)
+        assertThat(state.thisYearWatched).isEqualTo(2)
+    }
+
+    /**
+     * 测试点18：heatmapData 正确按日期分组
+     */
+    @Test
+    fun `loadStatistics_heatmapData按日期分组`() = runTest {
+        // 使用本地时区当天中午时间，避免跨日时区偏移导致日期 key 不稳定
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 12)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        val today = cal.time
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
+
+        val movies = listOf(
+            TraktWatchlistMovieItem(watched_at = fmt.format(today), movie = TraktMovie(title = "A")),
+            TraktWatchlistMovieItem(watched_at = fmt.format(today), movie = TraktMovie(title = "B")),
+            TraktWatchlistMovieItem(watched_at = fmt.format(today), movie = TraktMovie(title = "C"))
+        )
+        val shows = listOf(
+            TraktWatchlistShowItem(watched_at = fmt.format(today), show = TraktShow(title = "S"))
+        )
+        stubAllSuccess(movies = movies, shows = shows)
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val heatmap = viewModel.uiState.value.heatmapData
+        // 4 条记录都在同一天（本地时区），应分组到同一个 key
+        assertThat(heatmap.values.sum()).isEqualTo(4)
+        // 不为空
+        assertThat(heatmap).isNotEmpty()
+    }
+
+    // ==================== 增量渲染测试 ====================
+
+    /**
+     * 测试点19：词云先到达时 wordCloudReady=true，其他区块仍为 false
+     *
+     * 通过让 traktRepository 的网络方法延迟返回（返回 failure 快速中断致命链），
+     * 验证 wordCloudDeferred 最先 publish 时只有 wordCloudReady 为 true。
+     */
+    @Test
+    fun `增量渲染_词云先到达_wordCloudReady为true_其他区块为false`() = runTest {
+        // 词云有数据（本地最快）
+        stubAllSuccess(reviews = testReviews)
+        // 电影历史失败（致命），会在词云发布后中断
+        coEvery { traktRepository.getAllMovieHistory(any()) } returns Result.failure(IOException("fail"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        // 词云先到达 → wordCloudReady=true
+        assertThat(state.wordCloudReady).isTrue()
+        assertThat(state.wordCloud).isNotEmpty()
+        // 电影失败 → 致命中断，其他区块未就绪
+        assertThat(state.overviewReady).isFalse()
+        assertThat(state.watchTimeReady).isFalse()
+        assertThat(state.heatmapReady).isFalse()
+        assertThat(state.genreReady).isFalse()
+        // initialLoading 因 wordCloudReady 已退出骨架
+        assertThat(state.initialLoading).isFalse()
+        // error 来自电影失败
+        assertThat(state.error).isEqualTo("fail")
+    }
+
+    /**
+     * 测试点20：电影到达后 watchTimeReady=true，但 heatmap/overview 仍为 false
+     *
+     * 剧集历史失败（致命），在电影 publish 后中断。
+     */
+    @Test
+    fun `增量渲染_电影到达后_watchTimeReady为true_heatmap仍为false`() = runTest {
+        stubAllSuccess(movies = testMovies)
+        // 剧集历史失败（致命），在电影 publish 后中断
+        coEvery { traktRepository.getAllShowHistory(any()) } returns Result.failure(IOException("show fail"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        // 电影到达 → watchTimeReady=true（movies != null）
+        assertThat(state.watchTimeReady).isTrue()
+        assertThat(state.totalMovieCount).isEqualTo(2)
+        // 剧集未到达 → heatmapReady=false（需要 movies && shows）
+        assertThat(state.heatmapReady).isFalse()
+        // watchedShows 未到达 → overviewReady=false
+        assertThat(state.overviewReady).isFalse()
+        // error 来自剧集失败
+        assertThat(state.error).isEqualTo("show fail")
+    }
+
+    /**
+     * 测试点21：电影+剧集到达后 heatmapReady=true，但 overview 仍为 false
+     *
+     * watchedShows 失败（致命），在 heatmap publish 后中断。
+     */
+    @Test
+    fun `增量渲染_电影剧集到达后_heatmapReady为true_overview仍为false`() = runTest {
+        stubAllSuccess(movies = testMovies, shows = testShows)
+        // watchedShows 失败（致命）
+        coEvery { traktRepository.getWatchedShowsWithEpisodes() } returns Result.failure(IOException("ws fail"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        // 电影+剧集到达 → heatmapReady=true
+        assertThat(state.heatmapReady).isTrue()
+        assertThat(state.heatmapData).isNotEmpty()
+        // watchedShows 未到达 → overviewReady=false
+        assertThat(state.overviewReady).isFalse()
+        assertThat(state.genreReady).isFalse()  // genre 需要 movies && watchedShows
+        // totalShowCount=0（watchedShows 未到达）
+        assertThat(state.totalShowCount).isEqualTo(0)
+        // error 来自 watchedShows 失败
+        assertThat(state.error).isEqualTo("ws fail")
+    }
+
+    /**
+     * 测试点22：userStats 失败（非致命）不中断加载，降级处理
+     */
+    @Test
+    fun `增量渲染_userStats失败_非致命_不中断加载`() = runTest {
+        stubAllSuccess(
+            movies = testMovies,
+            shows = testShows,
+            watchedShows = testWatchedShows
+        )
+        coEvery { traktRepository.getUserStats() } returns Result.failure(IOException("stats fail"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        // userStats 失败为非致命，不设 error
+        assertThat(state.error).isNull()
+        // overview 仍就绪
+        assertThat(state.overviewReady).isTrue()
+        // totalEpisodeCount 降级到 watchedShows 兜底（testWatchedShows 有 2 集完成）
+        assertThat(state.totalEpisodeCount).isEqualTo(2)
+        // totalWatchMinutes 降级到 movies.sumOf { runtime } = 120+90=210
+        assertThat(state.totalWatchMinutes).isEqualTo(210L)
+    }
+
+    /**
+     * 测试点23：ratings 失败（非致命）不中断加载，ratings 区块降级为空
+     */
+    @Test
+    fun `增量渲染_ratings失败_非致命_ratings区块降级为空`() = runTest {
+        stubAllSuccess(
+            movies = testMovies,
+            shows = testShows,
+            watchedShows = testWatchedShows
+        )
+        coEvery { traktRepository.getAllUserRatings() } returns Result.failure(IOException("ratings fail"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        assertThat(state.error).isNull()
+        // ratings 失败 → getOrDefault(emptyList()) → ratingsReady=true（allRatings 非null而是空list）
+        // 注意：publish 中 ratingsReady = allRatings != null，空 list 也算就绪
+        assertThat(state.ratingsReady).isTrue()
+        assertThat(state.totalRatings).isEqualTo(0)
+        assertThat(state.averageRating).isEqualTo(0.0)
+    }
+
+    /**
+     * 测试点24：所有非致命同时失败，致命成功，加载正常完成
+     */
+    @Test
+    fun `增量渲染_非致命全失败_致命成功_加载完成`() = runTest {
+        stubAllSuccess(
+            movies = testMovies,
+            shows = testShows,
+            watchedShows = testWatchedShows
+        )
+        coEvery { traktRepository.getUserStats() } returns Result.failure(IOException("e1"))
+        coEvery { traktRepository.getAllUserRatings() } returns Result.failure(IOException("e2"))
+
+        viewModel.loadStatistics()
+        waitForLoadComplete()
+
+        val state = viewModel.uiState.value
+        assertThat(state.error).isNull()
+        assertThat(state.overviewReady).isTrue()
+        assertThat(state.heatmapReady).isTrue()
+        assertThat(state.watchTimeReady).isTrue()
+        assertThat(state.genreReady).isTrue()
+        // ratings 降级为空 list，ratingsReady=true
+        assertThat(state.ratingsReady).isTrue()
+        // 词云无数据（reviews 为空），wordCloudReady=false
+        assertThat(state.wordCloudReady).isFalse()
+    }
 }

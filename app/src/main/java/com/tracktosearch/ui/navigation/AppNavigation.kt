@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
@@ -26,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.DeepLinkNavigator
+import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.MediaType
@@ -293,7 +295,10 @@ fun AppNavigation(
                                     // 继续同步:走 startResume,跳过列表爬取
                                     // 留在 MainScreen，Watchlist 横幅会显示进度
                                     pendingCount = 0
-                                    doubanSyncManager.startResume()
+                                    val started = doubanSyncManager.startResume()
+                                    if (!started) {
+                                        Toast.makeText(context, context.getString(R.string.sync_already_running), Toast.LENGTH_SHORT).show()
+                                    }
                                 },
                                 onFullSync = {
                                     // 完整同步:清空 pending items,走 FULL_REWRITE
@@ -301,7 +306,10 @@ fun AppNavigation(
                                     pendingCount = 0
                                     scope.launch {
                                         doubanSyncManager.clearPendingItems()
-                                        doubanSyncManager.startSync(SyncMode.FULL_REWRITE)
+                                        val started = doubanSyncManager.startSync(SyncMode.FULL_REWRITE)
+                                        if (!started) {
+                                            Toast.makeText(context, context.getString(R.string.sync_already_running), Toast.LENGTH_SHORT).show()
+                                        }
                                     }
                                 }
                             )

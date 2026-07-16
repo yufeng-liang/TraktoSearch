@@ -328,8 +328,10 @@ class DiscoverFilterViewModel @Inject constructor(
                 } else result.items
 
                 val existing = if (page == 1) emptyList() else _uiState.value.items
+                // 按 id 去重：TMDB Discover API 在某些排序方式下可能跨页返回相同条目，
+                // 直接拼接会导致 LazyColumn key 重复崩溃
                 _uiState.value = _uiState.value.copy(
-                    items = existing + filtered,
+                    items = (existing + filtered).distinctBy { it.id },
                     currentPage = result.totalPages.coerceAtMost(page),
                     totalPages = result.totalPages,
                     totalResults = result.totalResults,

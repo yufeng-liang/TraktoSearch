@@ -263,7 +263,10 @@ class WatchlistViewModel @Inject constructor(
                 if (progress.isRunning || progress.isComplete) {
                     _uiState.value = _uiState.value.copy(consistencyCheckProgress = progress)
                     if (progress.isComplete) {
-                        _consistencyCheckCompleteEvent.emit(Unit)
+                        // 取消时不自动弹窗（用户已在设置页的 ConsistencyCheckDialog 看到取消结果）
+                        if (!progress.isCancelled) {
+                            _consistencyCheckCompleteEvent.emit(Unit)
+                        }
                         delay(5000)
                         _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
                         // 重置 checkProgress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗

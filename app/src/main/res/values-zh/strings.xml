@@ -153,6 +153,9 @@
     <string name="detail_overview_label">简介</string>
     <string name="detail_filter_sources">搜索源</string>
     <string name="detail_filter_disk_types">网盘类型</string>
+    <string name="detail_filter_relevance">相关度</string>
+    <string name="detail_filter_high_relevance">仅显示高相关</string>
+    <string name="detail_hidden_low_relevance">已隐藏 %1$d 个低相关结果，点击显示全部</string>
     <string name="detail_searching">正在搜索网盘资源…</string>
     <string name="detail_searching_info">%1$d/%2$d 源已完成</string>
     <string name="detail_no_resources">未找到网盘资源</string>
@@ -298,6 +301,7 @@
     <string name="douban_resume_cancel">取消</string>
     <string name="douban_resume_phase">续传上次未处理完的列表</string>
     <string name="douban_resume_complete">续传完成</string>
+    <string name="sync_already_running">已有同步任务正在运行，请稍后</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
     <string name="douban_rollback_title">恢复被删除的标记</string>

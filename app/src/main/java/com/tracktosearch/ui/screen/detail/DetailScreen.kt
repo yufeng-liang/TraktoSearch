@@ -412,8 +412,33 @@ fun DetailScreen(
                                 customSourceNames = uiState.customSourceNames,
                                 enabledDiskTypes = uiState.enabledDiskTypes,
                                 onToggleSource = { viewModel.toggleSource(it) },
-                                onToggleDiskType = { viewModel.toggleDiskType(it) }
+                                onToggleDiskType = { viewModel.toggleDiskType(it) },
+                                relevanceEnabled = uiState.title.isNotBlank(),
+                                showHighRelevanceOnly = uiState.showHighRelevanceOnly,
+                                onToggleShowHighRelevanceOnly = { viewModel.toggleShowHighRelevanceOnly() }
                             )
+                        }
+                    }
+
+                    // 低相关隐藏提示（开启"仅显示高相关"且有被隐藏项时）
+                    if (uiState.showHighRelevanceOnly && uiState.lowRelevanceHiddenCount > 0) {
+                        item(key = "low_relevance_hint") {
+                            Box(
+                                modifier = Modifier
+                                    .alpha(contentAlpha)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        R.string.detail_hidden_low_relevance,
+                                        uiState.lowRelevanceHiddenCount
+                                    ),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
 

@@ -10,6 +10,7 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.dto.DiskType
+import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.RatingsRepository
 import com.tracktosearch.data.repository.ResourceRepository
@@ -103,6 +104,9 @@ class DetailViewModelTest {
         every { tokenStorage.accessToken } returns flowOf(null)
         every { detailSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
         every { doubanAuthStorage.getCredentials() } returns null
+        // localizeEpisodeTitles 会调用 languageStorage.language.first()，
+        // relaxed mock 的 Flow 调用 first() 会抛异常，全局 stub 为英文让该方法提前 return
+        every { languageStorage.language } returns MutableStateFlow(LanguageStorage.LANGUAGE_ENGLISH)
 
         // 4. resourceRepository.filterItems 默认返回空列表
         every { resourceRepository.filterItems(any(), any(), any()) } returns emptyList()
@@ -379,5 +383,359 @@ class DetailViewModelTest {
 
         assertThat(viewModel.uiState.value.viewedUrls).contains("https://example.com")
         coVerify { viewedItemStorage.markViewed("https://example.com") }
+    }
+
+    // ==================== 标记操作补充测试（成功路径/失败回滚/复合分支）====================
+
+    /**
+     * 测试点17：setRating 已登录成功添加评分
+     */
+    @Test
+    fun `setRating_已登录_成功添加评分`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.success(Unit)
+
+        viewModel.setRating(8)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isEqualTo(8)
+        assertThat(viewModel.uiState.value.isRating).isFalse()
+    }
+
+    /**
+     * 测试点18：setRating 同分触发 removeRating
+     */
+    @Test
+    fun `setRating_同分_触发removeRating`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(userRating = 8) }
+        coEvery { traktRepository.removeRating(any(), any()) } returns Result.success(Unit)
+
+        viewModel.setRating(8)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isNull()
+        assertThat(viewModel.uiState.value.isRating).isFalse()
+        coVerify { traktRepository.removeRating(any(), any()) }
+    }
+
+    /**
+     * 测试点19：setRating 失败 isRating 回滚
+     */
+    @Test
+    fun `setRating_失败_isRating回滚`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.setRating(8)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isNull()
+        assertThat(viewModel.uiState.value.isRating).isFalse()
+    }
+
+    /**
+     * 测试点20：setRatingWithComment 成功更新评分和短评
+     */
+    @Test
+    fun `setRatingWithComment_成功_更新评分和短评`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { traktRepository.postComment(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+
+        viewModel.setRatingWithComment(9, "很好看")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isEqualTo(9)
+        assertThat(viewModel.uiState.value.userComment).isEqualTo("很好看")
+        assertThat(viewModel.uiState.value.isRating).isFalse()
+        assertThat(viewModel.uiState.value.showRatingDialog).isFalse()
+    }
+
+    /**
+     * 测试点21：setRatingWithComment 失败 isRating 回滚
+     */
+    @Test
+    fun `setRatingWithComment_失败_isRating回滚`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.setRatingWithComment(9, "很好看")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isNull()
+        assertThat(viewModel.uiState.value.isRating).isFalse()
+    }
+
+    /**
+     * 测试点22：setRatingWithComment 空短评不调用 postComment
+     */
+    @Test
+    fun `setRatingWithComment_空短评_不调用postComment`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addRating(any(), any(), any()) } returns Result.success(Unit)
+
+        viewModel.setRatingWithComment(7, "")
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.userRating).isEqualTo(7)
+        assertThat(viewModel.uiState.value.userComment).isNull()
+        coVerify(exactly = 0) { traktRepository.postComment(any(), any(), any()) }
+    }
+
+    /**
+     * 测试点23：toggleWatched 电视剧弹出标记弹窗
+     */
+    @Test
+    fun `toggleWatched_电视剧_弹出标记弹窗`() {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        // 初始 isMarkedWatched = false（默认）
+
+        viewModel.toggleWatched()
+
+        assertThat(viewModel.uiState.value.showMarkWatchedDialog).isTrue()
+    }
+
+    /**
+     * 测试点24：toggleWatched 失败状态回滚
+     */
+    @Test
+    fun `toggleWatched_失败_状态回滚`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.markAsWatched(any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatched()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.watchedChanged).isFalse()
+        assertThat(viewModel.uiState.value.watchlistChanged).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
+    }
+
+    /**
+     * 测试点25：toggleWatched 取消已看失败状态回滚
+     */
+    @Test
+    fun `toggleWatched_取消已看失败_状态回滚`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(isMarkedWatched = true) }
+        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatched()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
+    }
+
+    /**
+     * 测试点26：toggleWatchlist 已看→想看复合分支成功
+     */
+    @Test
+    fun `toggleWatchlist_已看→想看复合分支`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
+        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+        coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isTrue()
+        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+    }
+
+    /**
+     * 测试点27：toggleWatchlist 已看→想看 removeWatched 失败回滚
+     */
+    @Test
+    fun `toggleWatchlist_已看→想看_removeWatched失败_回滚`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
+        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+    }
+
+    /**
+     * 测试点28：toggleWatchlist 已看→想看 addToWatchlist 失败回滚
+     */
+    @Test
+    fun `toggleWatchlist_已看→想看_addToWatchlist失败_回滚`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
+        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+        coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+    }
+
+    /**
+     * 测试点29：toggleWatchlist 普通添加失败状态回滚
+     */
+    @Test
+    fun `toggleWatchlist_添加失败_状态回滚`() = runTest {
+        setupLoggedInState()
+        coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+    }
+
+    /**
+     * 测试点30：toggleWatchlist 普通取消失败状态回滚
+     */
+    @Test
+    fun `toggleWatchlist_取消失败_状态回滚`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(isMarkedWatchlist = true) }
+        coEvery { traktRepository.removeFromWatchlist(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isTrue()
+    }
+
+    /**
+     * 测试点31：submitMarkWatched 成功批量标记集为已看
+     */
+    @Test
+    fun `submitMarkWatched_成功_批量标记集为已看`() = runTest {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        coEvery { traktRepository.markEpisodesWatched(any(), any(), any()) } returns Result.success(Unit)
+        coEvery { traktRepository.getShowWatchedProgress(any()) } returns Result.failure(Exception("测试跳过"))
+
+        viewModel.submitMarkWatched(listOf(1, 2, 3))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.showRatingDialog).isTrue()
+        assertThat(viewModel.uiState.value.pendingDoubanAction).isEqualTo(DoubanSyncAction.COLLECT)
+    }
+
+    /**
+     * 测试点32：submitMarkWatched 失败状态回滚
+     */
+    @Test
+    fun `submitMarkWatched_失败_状态回滚`() = runTest {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        coEvery { traktRepository.markEpisodesWatched(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.submitMarkWatched(listOf(1, 2, 3))
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        assertThat(viewModel.uiState.value.watchedChanged).isFalse()
+        assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
+    }
+
+    /**
+     * 测试点33：toggleEpisodeWatched 标记单集已看
+     */
+    @Test
+    fun `toggleEpisodeWatched_标记单集已看`() = runTest {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        coEvery { traktRepository.markEpisodeWatched(any()) } returns Result.success(Unit)
+
+        viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).contains(1)
+        assertThat(viewModel.uiState.value.togglingEpisode).isNull()
+    }
+
+    /**
+     * 测试点34：toggleEpisodeWatched 取消单集已看
+     */
+    @Test
+    fun `toggleEpisodeWatched_取消单集已看`() = runTest {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        setUiState { it.copy(watchedEpisodeNumbers = mapOf(1 to setOf(1, 2))) }
+        coEvery {
+            traktRepository.unmarkEpisodeWatched(any(), any(), any(), any(), any(), any())
+        } returns Result.success(Unit)
+
+        viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).doesNotContain(1)
+        assertThat(viewModel.uiState.value.watchedEpisodeNumbers[1]).contains(2)
+        assertThat(viewModel.uiState.value.togglingEpisode).isNull()
+    }
+
+    /**
+     * 测试点35：toggleEpisodeWatched 失败回滚
+     */
+    @Test
+    fun `toggleEpisodeWatched_失败_回滚`() = runTest {
+        setupLoggedInState(mediaType = MediaType.SHOW)
+        coEvery { traktRepository.markEpisodeWatched(any()) } returns Result.failure(Exception("网络错误"))
+
+        viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.togglingEpisode).isNull()
+        assertThat(viewModel.uiState.value.watchedEpisodeNumbers).isEmpty()
+    }
+
+    /**
+     * 测试点36：toggleEpisodeWatched 未登录弹出登录提示
+     */
+    @Test
+    fun `toggleEpisodeWatched_未登录_弹出登录提示`() {
+        // getCachedAccessToken 默认返回 null（relaxed mock）
+        viewModel.toggleEpisodeWatched(seasonNumber = 1, episodeNumber = 1, episodeTraktId = 100)
+
+        assertThat(viewModel.uiState.value.showLoginPrompt).isTrue()
+    }
+
+    /**
+     * 测试点37：loadEpisodesForMarkWatched 加载集信息
+     */
+    @Test
+    fun `loadEpisodesForMarkWatched_加载集信息`() = runTest {
+        setupLoggedInState()
+        val episodes = listOf(mockk<TraktEpisode>(relaxed = true))
+        coEvery { traktRepository.getSeasonEpisodes(any(), any()) } returns Result.success(episodes)
+
+        viewModel.loadEpisodesForMarkWatched(1)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.episodes).containsKey(1)
+    }
+
+    /**
+     * 测试点38：loadEpisodesForMarkWatched 已加载则跳过
+     */
+    @Test
+    fun `loadEpisodesForMarkWatched_已加载则跳过`() = runTest {
+        setupLoggedInState()
+        setUiState { it.copy(episodes = mapOf(1 to emptyList())) }
+        coEvery { traktRepository.getSeasonEpisodes(any(), any()) } returns Result.success(emptyList())
+
+        viewModel.loadEpisodesForMarkWatched(1)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getSeasonEpisodes(any(), any()) }
     }
 }

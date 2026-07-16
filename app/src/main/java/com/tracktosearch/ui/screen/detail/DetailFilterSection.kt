@@ -35,7 +35,10 @@ internal fun FilterSection(
     customSourceNames: Map<String, String>,
     enabledDiskTypes: Set<DiskType>,
     onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit
+    onToggleDiskType: (DiskType) -> Unit,
+    relevanceEnabled: Boolean = false,
+    showHighRelevanceOnly: Boolean = false,
+    onToggleShowHighRelevanceOnly: () -> Unit = {}
 ) {
     val view = LocalView.current
     // 固定左侧标签宽度，保证两个行的 Chip 起点对齐
@@ -119,6 +122,29 @@ internal fun FilterSection(
                         modifier = Modifier.height(28.dp)
                     )
                 }
+            }
+        }
+
+        // 相关度过滤：仅在存在目标影视上下文（relevanceEnabled）时显示
+        if (relevanceEnabled) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_filter_relevance),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = labelColor,
+                    modifier = Modifier.width(labelWidth)
+                )
+                FilterChip(
+                    selected = showHighRelevanceOnly,
+                    border = if (showHighRelevanceOnly) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    onClick = { view.performHaptic(HapticType.TICK); onToggleShowHighRelevanceOnly() },
+                    label = { Text(stringResource(R.string.detail_filter_high_relevance), style = MaterialTheme.typography.labelSmall, maxLines = 1) },
+                    modifier = Modifier.height(28.dp)
+                )
             }
         }
     }

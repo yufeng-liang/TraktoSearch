@@ -20,6 +20,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -477,5 +478,52 @@ class DoubanSyncManagerTest {
         assertThat(p.total).isEqualTo(0)
         assertThat(p.current).isEqualTo(0)
         assertThat(p.successCount).isEqualTo(0)
+    }
+
+    /**
+     * 回归测试：startResume 在已有同步运行时返回 false。
+     *
+     * Bug 场景：App 启动时检测到 pending items，弹出续传对话框，
+     * 用户点击"继续同步"时，如果已有同步在运行（如自动触发的同步），
+     * startResume 返回 false，但 AppNavigation 忽略返回值，
+     * 用户感觉"按钮无反应"。
+     *
+     * 此测试验证 DoubanSyncManager 层：isRunning=true 时 startResume 返回 false。
+     * Composable 层的 Toast 反馈需要 Compose UI 测试覆盖。
+     *
+     * 技巧：mock getCachedAccessToken 挂起（delay Long.MAX_VALUE），
+     * 让 syncJob 在 IO 线程上保持 active 不完成。
+     */
+    @Test
+    fun `startResume_已有同步运行时返回false`() = runTest {
+        // 让 checkTraktAvailable 内部的 getCachedAccessToken 挂起，syncJob 保持 active
+        coEvery { tokenStorage.getCachedAccessToken() } coAnswers { delay(Long.MAX_VALUE); "" }
+
+        // 启动同步（startSync 返回 true，syncJob 已创建且 active）
+        val started = manager.startSync(SyncMode.FULL_REWRITE)
+        assertThat(started).isTrue()
+        assertThat(manager.isRunning()).isTrue()
+
+        // 再次启动 resume 应返回 false（已有同步在运行）
+        val resumeResult = manager.startResume()
+        assertThat(resumeResult).isFalse()
+    }
+
+    /**
+     * 回归测试：startSync 在已有同步运行时返回 false。
+     *
+     * 与 startResume 测试配合，确保两个启动方法都正确防护并发。
+     */
+    @Test
+    fun `startSync_已有同步运行时返回false`() = runTest {
+        coEvery { tokenStorage.getCachedAccessToken() } coAnswers { delay(Long.MAX_VALUE); "" }
+
+        // 第一次 startSync 成功
+        val first = manager.startSync(SyncMode.FULL_REWRITE)
+        assertThat(first).isTrue()
+
+        // 第二次 startSync 应返回 false
+        val second = manager.startSync(SyncMode.FULL_REWRITE)
+        assertThat(second).isFalse()
     }
 }

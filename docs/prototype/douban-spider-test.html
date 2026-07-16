@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>豆瓣爬取测试页 - 设计原型</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0f1115;
+    color: #e6e6e6;
+    padding: 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .phone-frame {
+    background: #1a1d23;
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid #2a2e36;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  /* TopAppBar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    padding: 14px 16px;
+    background: linear-gradient(180deg, #1f2329 0%, #1a1d23 100%);
+    border-bottom: 1px solid #2a2e36;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar .back { font-size: 22px; color: #4a9eff; cursor: pointer; margin-right: 12px; }
+  .topbar .title { font-size: 17px; font-weight: 600; }
+  .topbar .badge { margin-left: auto; font-size: 11px; color: #888; padding: 3px 8px; background: #2a2e36; border-radius: 10px; }
+
+  .section {
+    margin: 12px;
+    background: #1f2329;
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid #2a2e36;
+  }
+  .section-title {
+    font-size: 12px;
+    color: #888;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .section-title::before { content: '──'; color: #444; }
+
+  /* Cookie */
+  .cookie-box {
+    background: #0f1115;
+    border: 1px solid #2a2e36;
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'Consolas', monospace;
+    font-size: 11px;
+    color: #9aa0a6;
+    max-height: 80px;
+    overflow-y: auto;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .login-status {
+    margin-top: 8px;
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4caf50; }
+  .dot.off { background: #f44336; }
+  .login-status .text { color: #4caf50; }
+  .login-status .text.off { color: #f44336; }
+
+  /* 输入 */
+  .url-input {
+    width: 100%;
+    background: #0f1115;
+    border: 1px solid #2a2e36;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #e6e6e6;
+    font-size: 13px;
+    font-family: 'Consolas', monospace;
+  }
+  .chips { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .chip {
+    padding: 6px 14px;
+    border-radius: 16px;
+    background: #2a2e36;
+    color: #9aa0a6;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }
+  .chip.active { background: #1e3a5f; color: #4a9eff; border-color: #4a9eff; }
+  .chip-group-label { font-size: 11px; color: #666; margin: 10px 0 6px; }
+
+  .fetch-btn {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px;
+    background: #4a9eff;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .fetch-btn:active { background: #3a8ee0; }
+  .fetch-btn.loading { background: #2a2e36; color: #888; }
+
+  /* Tab */
+  .tabs {
+    display: flex;
+    margin: 12px;
+    background: #1f2329;
+    border-radius: 10px;
+    padding: 4px;
+    border: 1px solid #2a2e36;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px;
+    font-size: 12px;
+    color: #888;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+  .tab.active { background: #2a3a4f; color: #4a9eff; }
+
+  /* 结果区 */
+  .result-section { margin: 0 12px 24px; }
+  .meta-stats {
+    display: flex; gap: 12px;
+    font-size: 11px; color: #888;
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    background: #1f2329;
+    border-radius: 8px;
+    border: 1px solid #2a2e36;
+  }
+  .meta-stats .ok { color: #4caf50; }
+  .meta-stats .warn { color: #ff9800; }
+
+  .field-row {
+    display: flex;
+    padding: 8px 12px;
+    background: #1f2329;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    font-size: 12px;
+    border: 1px solid #2a2e36;
+  }
+  .field-row .label { color: #888; min-width: 110px; }
+  .field-row .value { color: #e6e6e6; font-family: 'Consolas', monospace; word-break: break-all; flex: 1; }
+  .field-row .value.empty { color: #f44336; font-style: italic; }
+  .field-row .value.ok { color: #4caf50; }
+
+  .html-box {
+    background: #0a0c10;
+    border: 1px solid #2a2e36;
+    border-radius: 8px;
+    padding: 10px;
+    font-family: 'Consolas', monospace;
+    font-size: 10px;
+    color: #9aa0a6;
+    max-height: 320px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .copy-btn {
+    margin-top: 8px;
+    padding: 6px 14px;
+    background: #2a2e36;
+    color: #4a9eff;
+    border: 1px solid #4a9eff;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .preview-box {
+    background: white;
+    border-radius: 8px;
+    height: 360px;
+    display: flex; align-items: center; justify-content: center;
+    color: #333;
+    font-size: 13px;
+    flex-direction: column; gap: 8px;
+  }
+  .preview-box .url-tag {
+    font-size: 10px; color: #999; font-family: monospace;
+    background: #f0f0f0; padding: 4px 8px; border-radius: 4px;
+  }
+
+  .design-notes {
+    margin-top: 24px;
+    padding: 14px;
+    background: #1a2030;
+    border-radius: 12px;
+    border: 1px solid #2a4a6f;
+  }
+  .design-notes h3 { color: #4a9eff; font-size: 13px; margin-bottom: 10px; }
+  .design-notes ul { padding-left: 18px; }
+  .design-notes li { font-size: 11px; color: #9aa0a6; margin-bottom: 6px; line-height: 1.6; }
+  .design-notes strong { color: #e6e6e6; }
+
+  .loading-spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid #4a9eff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="phone-frame">
+
+  <!-- TopAppBar -->
+  <div class="topbar">
+    <span class="back">←</span>
+    <span class="title">豆瓣爬取测试</span>
+    <span class="badge">DEBUG</span>
+  </div>
+
+  <!-- Cookie 信息 -->
+  <div class="section">
+    <div class="section-title">Cookie 信息</div>
+    <div class="cookie-box">dbcl2="123456789:ABCdefGHI"; bid=abcDEF123; ck=xyz789; ll="118.172,39.938"; _pk_ref.100001.4=...</div>
+    <div class="login-status">
+      <span class="dot"></span>
+      <span class="text">已登录 · userId: 123456789</span>
+    </div>
+  </div>
+
+  <!-- 爬取目标 -->
+  <div class="section">
+    <div class="section-title">爬取目标</div>
+    <input class="url-input" value="https://movie.douban.com/subject/37335468/">
+    <div class="chip-group-label">快选</div>
+    <div class="chips">
+      <span class="chip active">影视条目</span>
+      <span class="chip">用户主页</span>
+    </div>
+    <div class="chip-group-label">User-Agent</div>
+    <div class="chips">
+      <span class="chip active">电脑版</span>
+      <span class="chip">手机版</span>
+    </div>
+    <button class="fetch-btn">爬取</button>
+  </div>
+
+  <!-- Tab -->
+  <div class="tabs">
+    <div class="tab active">提取字段</div>
+    <div class="tab">原始 HTML</div>
+    <div class="tab">网页预览</div>
+  </div>
+
+  <!-- 结果: 提取字段 -->
+  <div class="result-section">
+    <div class="meta-stats">
+      <span>状态码: <span class="ok">200</span></span>
+      <span>耗时: 1234ms</span>
+      <span>isLoginPage: <span class="ok">false</span></span>
+    </div>
+
+    <div style="font-size:11px;color:#666;margin:8px 4px;">DoubanDetailInfo 解析结果:</div>
+
+    <div class="field-row">
+      <span class="label">imdbId</span>
+      <span class="value ok">tt1234567</span>
+    </div>
+    <div class="field-row">
+      <span class="label">isTvShow</span>
+      <span class="value">true</span>
+    </div>
+    <div class="field-row">
+      <span class="label">doubanRating</span>
+      <span class="value ok">9.2</span>
+    </div>
+    <div class="field-row">
+      <span class="label">ratingCount</span>
+      <span class="value">12345</span>
+    </div>
+    <div class="field-row">
+      <span class="label">summary</span>
+      <span class="value">本片以壮丽的视角展现了自然界...</span>
+    </div>
+    <div class="field-row">
+      <span class="label">episodeCount</span>
+      <span class="value ok">10</span>
+    </div>
+    <div class="field-row">
+      <span class="label">episodeDuration</span>
+      <span class="value">45分钟</span>
+    </div>
+    <div class="field-row">
+      <span class="label">aka</span>
+      <span class="value">["Dynasties", "王朝 第一季"]</span>
+    </div>
+    <div class="field-row">
+      <span class="label">runtime</span>
+      <span class="value empty">(空) — 电视剧无此字段</span>
+    </div>
+    <div class="field-row">
+      <span class="label">genres</span>
+      <span class="value">["纪录片"]</span>
+    </div>
+    <div class="field-row">
+      <span class="label">year</span>
+      <span class="value">2018</span>
+    </div>
+    <div class="field-row">
+      <span class="label">countries</span>
+      <span class="value">["英国"]</span>
+    </div>
+    <div class="field-row">
+      <span class="label">directors</span>
+      <span class="value">["史蒂夫·古德"]</span>
+    </div>
+  </div>
+
+  <!-- 设计说明 -->
+  <div class="design-notes">
+    <h3>设计要点</h3>
+    <ul>
+      <li><strong>触发:</strong> 首页搜索框输入 <code>13638719007</code> 提交,不进搜索结果页,直接进测试页</li>
+      <li><strong>Cookie:</strong> 从 DoubanAuthStorage 读取,显示登录状态;未登录也允许爬取(豆瓣条目页未登录可访问)</li>
+      <li><strong>URL 快选:</strong> "影视条目" 填 subject 模板,"用户主页" 填 people 模板,便于切换测试场景</li>
+      <li><strong>UA 切换:</strong> 电脑版/手机版二选一,测试豆瓣 PC 版与移动端页面结构差异(parseDetail 基于电脑版结构)</li>
+      <li><strong>不走缓存:</strong> 测试方法 fetchHtmlForTest 每次真实爬取,不读/写缓存,不上传全局池</li>
+      <li><strong>异常隔离:</strong> parseDetail 用 runCatching 包裹,异常时显示堆栈而非崩溃</li>
+      <li><strong>字段空值标红:</strong> 提取字段区空值显示 "(空)" 红色斜体,便于定位 parseDetail 遗漏的字段</li>
+      <li><strong>原始 HTML:</strong> 等宽字体可滚动,"复制全部" 按钮便于贴到外部工具分析</li>
+      <li><strong>WebView 预览:</strong> 同 URL 同 UA 同 cookie 加载,对比解析结果与页面实际渲染内容</li>
+      <li><strong>meta-stats:</strong> 状态码/耗时/isLoginPage 三个指标一眼判断响应是否正常</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

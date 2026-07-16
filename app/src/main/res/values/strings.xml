@@ -153,6 +153,9 @@
     <string name="detail_overview_label">Overview</string>
     <string name="detail_filter_sources">Sources</string>
     <string name="detail_filter_disk_types">Disk Types</string>
+    <string name="detail_filter_relevance">Relevance</string>
+    <string name="detail_filter_high_relevance">High relevance only</string>
+    <string name="detail_hidden_low_relevance">%1$d low-relevance results hidden, tap to show all</string>
     <string name="detail_searching">Searching cloud resources…</string>
     <string name="detail_searching_info">%1$d/%2$d sources completed</string>
     <string name="detail_no_resources">No cloud resources found</string>
@@ -298,6 +301,7 @@
     <string name="douban_resume_cancel">Cancel</string>
     <string name="douban_resume_phase">Resuming unprocessed list</string>
     <string name="douban_resume_complete">Resume complete</string>
+    <string name="sync_already_running">A sync task is already running, please wait</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
     <string name="douban_rollback_title">Restore Deleted Marks</string>

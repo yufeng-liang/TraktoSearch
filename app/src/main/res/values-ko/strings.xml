@@ -209,6 +209,7 @@
     <string name="douban_resume_cancel">취소</string>
     <string name="douban_resume_phase">미처리 리스트 재개 중</string>
     <string name="douban_resume_complete">재개 완료</string>
+    <string name="sync_already_running">동기화 작업이 이미 실행 중입니다. 잠시 기다려주세요</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
     <string name="douban_rollback_title">삭제된 표시 복원</string>
@@ -388,6 +389,9 @@
     <string name="detail_login_go">로그인하기</string>
     <string name="detail_filter_sources">검색 소스</string>
     <string name="detail_filter_disk_types">디스크 유형</string>
+    <string name="detail_filter_relevance">관련도</string>
+    <string name="detail_filter_high_relevance">높은 관련성만 표시</string>
+    <string name="detail_hidden_low_relevance">낮은 관련성 결과 %1$d개 숨김, 탭하여 전체 보기</string>
     <string name="detail_searching">클라우드 리소스 검색 중…</string>
     <string name="detail_searching_info">%1$d/%2$d 소스 완료</string>
     <string name="detail_no_resources">클라우드 리소스를 찾을 수 없습니다</string>

@@ -49,7 +49,8 @@ data class ConsistencyCheckResult(
     val cookieExpired: Boolean = false,
     val isComplete: Boolean = false,
     val startTimeMs: Long = 0,
-    val isCancelling: Boolean = false  // true=用户已点击取消,正在停止中的中间态
+    val isCancelling: Boolean = false,  // true=用户已点击取消,正在停止中的中间态
+    val isCancelled: Boolean = false    // true=检查已被用户取消(区分正常完成与取消,避免 WatchlistScreen 自动弹窗)
 )
 
 /**
@@ -197,9 +198,11 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 runCheckWithCrawl()
             } catch (e: CancellationException) {
                 // 取消时更新进度状态,否则 isRunning 仍为 true 导致弹窗不响应
+                // isCancelled=true 区分"取消"与"正常完成",避免 WatchlistScreen 自动弹出结果弹窗
                 _checkProgress.value = _checkProgress.value.copy(
                     isRunning = false,
                     isComplete = true,
+                    isCancelled = true,
                     phase = "已取消"
                 )
                 throw e

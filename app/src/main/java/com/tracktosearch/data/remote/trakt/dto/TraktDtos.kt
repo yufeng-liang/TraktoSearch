@@ -3,6 +3,7 @@ package com.tracktosearch.data.remote.trakt.dto
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 @Serializable
 data class TraktIds(
@@ -228,7 +229,7 @@ data class TraktWatchedSeason(
 @Serializable
 data class TraktWatchedEpisode(
     val number: Int = 0,
-    val completed: Int = 0
+    @SerialName("plays") val completed: Int = 0
 )
 
 @Serializable

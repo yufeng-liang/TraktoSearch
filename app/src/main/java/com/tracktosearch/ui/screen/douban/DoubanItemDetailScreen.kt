@@ -130,6 +130,9 @@ import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.RelevanceScorerProvider
+import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
@@ -184,6 +187,8 @@ data class DoubanItemDetailUiState(
     val error: String? = null,
     // 资源搜索
     val searchResults: List<ResourceItem> = emptyList(),
+    val lowRelevanceHiddenCount: Int = 0,
+    val showHighRelevanceOnly: Boolean = false,
     val isSearching: Boolean = false,
     val searchError: String? = null,
     val searchWithSubtitle: Boolean = true,
@@ -240,6 +245,11 @@ class DoubanItemDetailViewModel @Inject constructor(
     private var searchJob: Job? = null
     /** 全量资源结果(未按筛选器过滤),用于本地切换筛选器时即时过滤 */
     private var allResources: List<ResourceItem> = emptyList()
+    // 资源相关度评分用的目标影视上下文（搜索开始时构造）
+    private var currentResourceQuery: ResourceQuery? = null
+    // 当前搜索结果的相关度分值表（url -> score），与 allResources 同生命周期
+    // 用于"仅显示高相关"过滤，避免重复打分；query 为空时为空 map（不过滤）
+    private var currentScoreMap: Map<String, Int> = emptyMap()
 
     /** 加载指定豆瓣条目的失败项数据 */
     fun loadFailure(doubanId: String) {
@@ -412,6 +422,20 @@ class DoubanItemDetailViewModel @Inject constructor(
                 }
             }
 
+            // 构造目标影视查询上下文（用于资源相关度评分；缺字段时对应信号自动跳过）
+            // 导演/演员作为强相关信号：标题命中导演名明显指向同一作品
+            val detailInfo = _uiState.value.detailInfo
+            val resourceQuery = ResourceQuery(
+                title = mainTitle,
+                originalTitle = subtitle?.takeIf { it.isNotBlank() },
+                year = detailInfo?.year?.toIntOrNull(),
+                country = detailInfo?.countries?.firstOrNull(),
+                mediaType = if (isShow) MediaType.SHOW else MediaType.MOVIE,
+                directors = detailInfo?.directors ?: emptyList(),
+                cast = (detailInfo?.cast ?: emptyList()).take(5)
+            )
+            currentResourceQuery = resourceQuery
+
             // forceRefresh=true 时清缓存
             if (forceRefresh) {
                 keywords.forEach { kw ->
@@ -419,7 +443,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                         keyword = kw,
                         enabledSources = storageEnabledSources,
                         enabledDiskTypes = _uiState.value.enabledDiskTypes,
-                        isShow = isShow
+                        isShow = isShow,
+                        query = resourceQuery
                     )
                 }
             }
@@ -431,7 +456,8 @@ class DoubanItemDetailViewModel @Inject constructor(
                         keyword = kw,
                         enabledSources = storageEnabledSources,
                         enabledDiskTypes = _uiState.value.enabledDiskTypes,
-                        isShow = isShow
+                        isShow = isShow,
+                        query = resourceQuery
                     ).map { items -> kw to items }
                 }
                 val mergedFlow = if (keywordFlows.size == 1) {
@@ -458,24 +484,34 @@ class DoubanItemDetailViewModel @Inject constructor(
                         }
                     }
                     // 写入缓存并按筛选器过滤
-                    allResources = if (merged.isNotEmpty()) {
-                        resourceRepository.mergeAndCacheResources(
+                    if (merged.isNotEmpty()) {
+                        val ranked = resourceRepository.mergeAndCacheResources(
                             keyword = failure.title,
                             items = merged,
-                            isShow = isShow
+                            isShow = isShow,
+                            query = resourceQuery
                         )
+                        allResources = ranked.items
+                        currentScoreMap = ranked.scoreMap
                     } else {
-                        resourceRepository.getCachedAllResources(failure.title)
+                        allResources = resourceRepository.getCachedAllResources(failure.title)
+                        currentScoreMap = emptyMap()
                     }
                     val filtered = resourceRepository.filterItems(
                         allResources,
                         _uiState.value.enabledSources,
                         _uiState.value.enabledDiskTypes
                     )
-                    // 排序：含季信息的结果排前面（与查询关键词的「含季版本」匹配的结果更靠前）
-                    val sorted = sortResourcesBySeasonPresence(filtered)
+                    // 按"仅显示高相关"过滤并统计隐藏数
+                    val (displayed, hiddenCount) = applyHighRelevanceFilter(
+                        filtered, _uiState.value.showHighRelevanceOnly
+                    )
+                    // 不再调用 sortResourcesBySeasonPresence：它会把列表拆成"含季/不含季"两组再拼接，
+                    // 完全破坏 Repository 按相关度排好的主序。含季优先已由 multiSeasonScore 作为
+                    // comparator 次级条件处理，两个页面行为一致。
                     _uiState.value = _uiState.value.copy(
-                        searchResults = sorted,
+                        searchResults = displayed,
+                        lowRelevanceHiddenCount = hiddenCount,
                         searchAttempted = true
                     )
                     // 第一次有非空结果时关闭搜索状态
@@ -513,29 +549,42 @@ class DoubanItemDetailViewModel @Inject constructor(
         return result.trim()
     }
 
-    /**
-     * 排序：标题/资源名里含「第x季」或「season x」的项排在前面。
-     * 含季信息的项内部保持原顺序（来自搜索结果顺序），不含季的项也保持原顺序。
-     */
-    private fun sortResourcesBySeasonPresence(items: List<ResourceItem>): List<ResourceItem> {
-        val withSeason = mutableListOf<ResourceItem>()
-        val withoutSeason = mutableListOf<ResourceItem>()
-        val seasonRegex = Regex("""第\s*[一二三四五六七八九十0-9]+\s*季|(?i)\bseason\s*\d+\b""")
-        for (item in items) {
-            if (seasonRegex.containsMatchIn(item.name)) {
-                withSeason.add(item)
-            } else {
-                withoutSeason.add(item)
-            }
-        }
-        return withSeason + withoutSeason
-    }
-
     /** 切换「同时用子标题搜索」开关,切换后自动重新搜索 */
     fun toggleSearchWithSubtitle() {
         val newValue = !_uiState.value.searchWithSubtitle
         _uiState.value = _uiState.value.copy(searchWithSubtitle = newValue)
         searchResources()
+    }
+
+    /**
+     * 应用"仅显示高相关"过滤：低于阈值的结果隐藏，返回（展示列表, 隐藏数量）。
+     * 分值从 [currentScoreMap] 读取（url -> score），避免 ResourceItem 作为可变共享状态。
+     */
+    private fun applyHighRelevanceFilter(
+        items: List<ResourceItem>,
+        onlyHigh: Boolean
+    ): Pair<List<ResourceItem>, Int> {
+        if (!onlyHigh || currentResourceQuery == null || currentScoreMap.isEmpty()) return items to 0
+        val kept = items.filter { (currentScoreMap[it.url] ?: 0) >= RelevanceScorerProvider.HIGH_RELEVANCE_THRESHOLD }
+        return kept to (items.size - kept.size)
+    }
+
+    /**
+     * 切换"仅显示高相关"开关。
+     * 关键：必须从 [allResources] 重新过滤，不能用已被旧开关过滤的列表，
+     * 否则从"仅高相关"切回"全部"时低相关项已丢失无法恢复。
+     * 不再调用 sortResourcesBySeasonPresence：它会破坏 Repository 按相关度排好的主序。
+     */
+    fun toggleShowHighRelevanceOnly() {
+        val newVal = !_uiState.value.showHighRelevanceOnly
+        val state = _uiState.value
+        val filtered = resourceRepository.filterItems(allResources, state.enabledSources, state.enabledDiskTypes)
+        val (displayed, hiddenCount) = applyHighRelevanceFilter(filtered, newVal)
+        _uiState.value = _uiState.value.copy(
+            showHighRelevanceOnly = newVal,
+            searchResults = displayed,
+            lowRelevanceHiddenCount = hiddenCount
+        )
     }
 
     /** 切换搜索源筛选(至少保留 1 个) */
@@ -547,12 +596,16 @@ class DoubanItemDetailViewModel @Inject constructor(
             current + source
         }
         if (newSources == current) return
-        val filtered = resourceRepository.filterItems(
-            allResources, newSources, _uiState.value.enabledDiskTypes
-        )
+        val (displayed, hiddenCount) = run {
+            val filtered = resourceRepository.filterItems(
+                allResources, newSources, _uiState.value.enabledDiskTypes
+            )
+            applyHighRelevanceFilter(filtered, _uiState.value.showHighRelevanceOnly)
+        }
         _uiState.value = _uiState.value.copy(
             enabledSources = newSources,
-            searchResults = filtered
+            searchResults = displayed,
+            lowRelevanceHiddenCount = hiddenCount
         )
     }
 
@@ -565,12 +618,16 @@ class DoubanItemDetailViewModel @Inject constructor(
             current + type
         }
         if (newTypes == current) return
-        val filtered = resourceRepository.filterItems(
-            allResources, _uiState.value.enabledSources, newTypes
-        )
+        val (displayed, hiddenCount) = run {
+            val filtered = resourceRepository.filterItems(
+                allResources, _uiState.value.enabledSources, newTypes
+            )
+            applyHighRelevanceFilter(filtered, _uiState.value.showHighRelevanceOnly)
+        }
         _uiState.value = _uiState.value.copy(
             enabledDiskTypes = newTypes,
-            searchResults = filtered
+            searchResults = displayed,
+            lowRelevanceHiddenCount = hiddenCount
         )
     }
 
@@ -1041,7 +1098,10 @@ fun DoubanItemDetailScreen(
                                         customSourceNames = uiState.customSourceNames,
                                         enabledDiskTypes = uiState.enabledDiskTypes,
                                         onToggleSource = { viewModel.toggleSource(it) },
-                                        onToggleDiskType = { viewModel.toggleDiskType(it) }
+                                        onToggleDiskType = { viewModel.toggleDiskType(it) },
+                                        relevanceEnabled = uiState.failure?.title?.isNotBlank() == true,
+                                        showHighRelevanceOnly = uiState.showHighRelevanceOnly,
+                                        onToggleShowHighRelevanceOnly = { viewModel.toggleShowHighRelevanceOnly() }
                                     )
                                 }
                             }
@@ -1057,6 +1117,27 @@ fun DoubanItemDetailScreen(
                                     }
                                 }
                                 else -> {
+                                    // 低相关隐藏提示（开启"仅显示高相关"且有被隐藏项时）
+                                    if (uiState.showHighRelevanceOnly && uiState.lowRelevanceHiddenCount > 0) {
+                                        item(key = "low_relevance_hint") {
+                                            Box(
+                                                modifier = Modifier
+                                                    .alpha(contentAlpha)
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                                    .clickable { viewModel.toggleShowHighRelevanceOnly() }
+                                            ) {
+                                                Text(
+                                                    text = stringResource(
+                                                        R.string.detail_hidden_low_relevance,
+                                                        uiState.lowRelevanceHiddenCount
+                                                    ),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.primary
+                                                )
+                                            }
+                                        }
+                                    }
                                     itemsIndexed(
                                         items = uiState.searchResults,
                                         key = { _, item -> item.url },
@@ -1922,7 +2003,10 @@ private fun DoubanFilterSection(
     customSourceNames: Map<String, String>,
     enabledDiskTypes: Set<DiskType>,
     onToggleSource: (String) -> Unit,
-    onToggleDiskType: (DiskType) -> Unit
+    onToggleDiskType: (DiskType) -> Unit,
+    relevanceEnabled: Boolean = false,
+    showHighRelevanceOnly: Boolean = false,
+    onToggleShowHighRelevanceOnly: () -> Unit = {}
 ) {
     val view = LocalView.current
     val labelWidth = 64.dp
@@ -2023,6 +2107,38 @@ private fun DoubanFilterSection(
                         modifier = Modifier.height(28.dp)
                     )
                 }
+            }
+        }
+
+        // 相关度过滤：仅在存在目标影视上下文（relevanceEnabled）时显示
+        if (relevanceEnabled) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.detail_filter_relevance),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = LocalContentColor.current,
+                    modifier = Modifier.width(labelWidth)
+                )
+                androidx.compose.material3.FilterChip(
+                    selected = showHighRelevanceOnly,
+                    border = if (showHighRelevanceOnly) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
+                    onClick = {
+                        view.performHaptic(HapticType.TICK)
+                        onToggleShowHighRelevanceOnly()
+                    },
+                    label = {
+                        Text(
+                            stringResource(R.string.detail_filter_high_relevance),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    },
+                    modifier = Modifier.height(28.dp)
+                )
             }
         }
     }

@@ -201,7 +201,8 @@ class CommentTranslator @Inject constructor() {
             "ar" -> "ara"
             "th" -> "th"
             "vi" -> "vie"
-            else -> "zh"
+            "en" -> "en"
+            else -> "zh" // 不支持的小语种默认翻译成中文
         }
     }
 

@@ -341,6 +341,10 @@ class TraktRepository @Inject constructor(
     private val trendingListsCache = persistentTtlCache<List<TraktTrendingListResponse>>(
         TTL_TRENDING, 5, persistentDataStore, json, "trending_lists_v1", persistentScope
     )
+    // 季信息持久化缓存（永久）：剧集的季集结构基本不变，跨 App 重启复用
+    private val showSeasonsCache = persistentTtlCache<List<TraktSeason>>(
+        TTL_ID_MAPPING, 200, persistentDataStore, json, "show_seasons_v1", persistentScope
+    )
 
     // 短期内存缓存：人物详情和演字号搜索，App 进程内有效（10 分钟）
     private val personSummaryCache = TtlCache<Result<TraktPersonDetail>>(TTL_SEARCH_PERSON, maxSize = 50)
@@ -351,7 +355,8 @@ class TraktRepository @Inject constructor(
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
         searchByTmdbCache, searchByImdbCache, watchlistWatchedIdsCache, recommendationsCache,
         trendingMoviesCache, trendingShowsCache, anticipatedMoviesCache,
-        anticipatedShowsCache, showRecommendationsCache, trendingListsCache
+        anticipatedShowsCache, showRecommendationsCache, trendingListsCache,
+        showSeasonsCache
     )
 
     /** ID 映射持久化缓存（tmdb↔trakt、imdb↔trakt），用于设置页按类目清除 */
@@ -720,10 +725,16 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getShowSeasons(traktId: Int): Result<List<TraktSeason>> {
+        val cacheKey = traktId.toString()
+        // 优先走持久化缓存（永久），命中则秒回
+        showSeasonsCache.awaitLoaded()
+        showSeasonsCache.get(cacheKey)?.let { return Result.success(it) }
         return try {
             val response = traktApiService.getShowSeasons(traktId.toString())
             if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
+                val seasons = response.body() ?: emptyList()
+                showSeasonsCache.put(cacheKey, seasons)
+                Result.success(seasons)
             } else {
                 Result.failure(Exception("Failed to fetch seasons: ${response.code()}"))
             }

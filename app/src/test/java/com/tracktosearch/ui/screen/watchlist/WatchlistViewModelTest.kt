@@ -32,6 +32,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -350,5 +351,64 @@ class WatchlistViewModelTest {
         viewModel.resetFilters()
 
         assertThat(viewModel.filterState.value).isEqualTo(FilterState())
+    }
+
+    /**
+     * 回归测试：一致性检查取消时不触发 consistencyCheckCompleteEvent。
+     *
+     * Bug 场景：用户在设置页手动检查状态一致性，爬取 15 条后点取消，
+     * WatchlistScreen 的 collector 收到 isComplete=true 后自动弹出结果弹窗，
+     * 与设置页的 ConsistencyCheckDialog 重复（两个"已取消"弹窗）。
+     *
+     * 根因：ConsistencyCheckResult 没有 isCancelled 字段，取消时 isComplete=true
+     * 无条件触发 _consistencyCheckCompleteEvent.emit(Unit)。
+     *
+     * 修复：ConsistencyCheckResult 新增 isCancelled 字段，取消时设为 true，
+     * WatchlistViewModel 检查 !progress.isCancelled 才 emit。
+     */
+    @Test
+    fun `consistencyCheck_取消时不触发完成事件`() = runTest {
+        advanceUntilIdle() // 让 init collector 启动
+
+        val events = mutableListOf<Unit>()
+        val collectJob = launch { viewModel.consistencyCheckCompleteEvent.collect { events.add(it) } }
+        advanceUntilIdle() // 让 collector 启动
+
+        // 模拟用户取消：isComplete=true + isCancelled=true
+        consistencyProgressFlow.value = ConsistencyCheckResult(
+            isRunning = false,
+            isComplete = true,
+            isCancelled = true
+        )
+        advanceUntilIdle()
+
+        // 取消时不应触发完成事件
+        assertThat(events).isEmpty()
+        collectJob.cancel()
+    }
+
+    /**
+     * 对照测试：一致性检查正常完成时（isCancelled=false）应触发 event。
+     * 与上一个测试配合，确保 isCancelled 标志正确区分取消与完成。
+     */
+    @Test
+    fun `consistencyCheck_正常完成时触发完成事件`() = runTest {
+        advanceUntilIdle()
+
+        val events = mutableListOf<Unit>()
+        val collectJob = launch { viewModel.consistencyCheckCompleteEvent.collect { events.add(it) } }
+        advanceUntilIdle()
+
+        // 模拟正常完成：isComplete=true + isCancelled=false
+        consistencyProgressFlow.value = ConsistencyCheckResult(
+            isRunning = false,
+            isComplete = true,
+            isCancelled = false
+        )
+        advanceUntilIdle()
+
+        // 正常完成应触发完成事件
+        assertThat(events).hasSize(1)
+        collectJob.cancel()
     }
 }

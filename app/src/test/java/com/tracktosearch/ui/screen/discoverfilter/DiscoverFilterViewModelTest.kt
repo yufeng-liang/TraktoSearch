@@ -276,4 +276,49 @@ class DiscoverFilterViewModelTest {
 
         assertThat(viewModel.uiState.value.showAdvanced).isTrue()
     }
+
+    /**
+     * 回归测试：loadMore 跨页返回重复 id 时 items 必须去重。
+     *
+     * Bug 场景：TMDB Discover API 在某些排序方式下可能跨页返回相同 id 的条目，
+     * 直接拼接 existing + filtered 会导致 LazyColumn key 重复崩溃
+     * （java.lang.IllegalArgumentException: Key "xxx" was already used）。
+     *
+     * 修复：loadPage 合并时用 distinctBy { it.id } 去重。
+     *
+     * 验证：第一页返回 [id=1, id=2]，第二页返回 [id=2, id=3]（id=2 跨页重复），
+     * loadMore 后 items 应为 [id=1, id=2, id=3]，无重复 id。
+     */
+    @Test
+    fun `loadMore_跨页返回重复id_items去重无重复`() = runTest {
+        advanceUntilIdle() // 推进 init 协程
+
+        val page1 = listOf(
+            TmdbSearchResult(id = 1, title = "电影A"),
+            TmdbSearchResult(id = 2, title = "电影B")
+        )
+        val page2 = listOf(
+            TmdbSearchResult(id = 2, title = "电影B"), // 与第一页重复
+            TmdbSearchResult(id = 3, title = "电影C")
+        )
+
+        coEvery { tmdbRepository.discover(any(), any()) } returns
+            TmdbRepository.DiscoverPage(items = page1, totalPages = 5, totalResults = 100) andThen
+            TmdbRepository.DiscoverPage(items = page2, totalPages = 5, totalResults = 100)
+
+        viewModel.search()
+        advanceUntilIdle()
+
+        // 第一页结果
+        assertThat(viewModel.uiState.value.items.map { it.id }).containsExactly(1, 2).inOrder()
+
+        viewModel.loadMore()
+        advanceUntilIdle()
+
+        // 第二页合并后：id=2 去重，结果应为 [1, 2, 3]
+        val ids = viewModel.uiState.value.items.map { it.id }
+        assertThat(ids).containsExactly(1, 2, 3).inOrder()
+        // 确保没有重复 id（这正是 LazyColumn key 崩溃的根因）
+        assertThat(ids.toSet().size).isEqualTo(ids.size)
+    }
 }

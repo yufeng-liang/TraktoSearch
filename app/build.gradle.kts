@@ -239,6 +239,8 @@ dependencies {
 // JPush SDK 的 SchedulerReceiver 字节码缺少 stackmap frame,
 // Robolectric 加载 merged manifest 时会触发 VerifyError。
 // -Xverify:none 在 JDK 17 中 deprecated 但仍可用,跳过字节码校验让 Robolectric 测试能初始化。
+// -Xmx4g: 1195+ 测试用例（含 Robolectric）默认 512MB 堆内存不足，WatchlistViewModelTest 会 OOM。
 tasks.withType<Test>().configureEach {
     jvmArgs("-Xverify:none")
+    maxHeapSize = "4g"
 }

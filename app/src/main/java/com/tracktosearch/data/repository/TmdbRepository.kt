@@ -104,6 +104,20 @@ class TmdbRepository @Inject constructor(
     private val tvAltTitlesCache = persistentTtlCache<TmdbAlternativeTitlesResponse>(
         TTL_DETAIL, 1000, persistentDataStore, json, "tv_alt_titles_v1", persistentScope
     )
+    // 预告片（YouTube key 等不变字段）永久持久化缓存，避免二次进入详情页重新请求
+    private val movieVideosCache = persistentTtlCache<List<TmdbVideo>>(
+        TTL_DETAIL, 500, persistentDataStore, json, "movie_videos_v1", persistentScope
+    )
+    private val tvVideosCache = persistentTtlCache<List<TmdbVideo>>(
+        TTL_DETAIL, 500, persistentDataStore, json, "tv_videos_v1", persistentScope
+    )
+    // 剧照（backdrop file_path 不变）永久持久化缓存
+    private val movieImagesCache = persistentTtlCache<List<TmdbImage>>(
+        TTL_DETAIL, 500, persistentDataStore, json, "movie_images_v1", persistentScope
+    )
+    private val tvImagesCache = persistentTtlCache<List<TmdbImage>>(
+        TTL_DETAIL, 500, persistentDataStore, json, "tv_images_v1", persistentScope
+    )
 
     // 持久化缓存（6 小时）：发现页 TMDB 列表类栏目，跨 App 重启保留
     private val popularMoviesCache = persistentTtlCache<List<TmdbSearchResult>>(
@@ -138,13 +152,15 @@ class TmdbRepository @Inject constructor(
     val persistentCaches: List<PersistentTtlCache<*>> get() = listOf(
         movieDetailCache, tvDetailCache, creditsCache, personDetailCache,
         movieAltTitlesCache, tvAltTitlesCache,
+        movieVideosCache, tvVideosCache, movieImagesCache, tvImagesCache,
         popularMoviesCache, upcomingMoviesCache, topRatedMoviesCache, trendingMoviesCache
     )
 
-    /** 影视数据持久化缓存（详情/演职员/人物/别名 + 列表 6h），用于设置页按类目清除 */
+    /** 影视数据持久化缓存（详情/演职员/人物/别名/预告片/剧照 + 列表 6h），用于设置页按类目清除 */
     val mediaDataCaches: List<PersistentTtlCache<*>> get() = listOf(
         movieDetailCache, tvDetailCache, creditsCache, personDetailCache,
         movieAltTitlesCache, tvAltTitlesCache,
+        movieVideosCache, tvVideosCache, movieImagesCache, tvImagesCache,
         popularMoviesCache, upcomingMoviesCache, topRatedMoviesCache, trendingMoviesCache
     )
 
@@ -734,37 +750,49 @@ class TmdbRepository @Inject constructor(
     }
 
     suspend fun getMovieVideos(id: Int): List<TmdbVideo> {
-        return try {
-            val lang = getTmdbLanguage()
-            val response = tmdbApiService.getMovieVideos(id, lang)
-            if (response.isSuccessful) response.body()?.results ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(id)
+        return movieVideosCache.getOrAwait(key) {
+            try {
+                val lang = getTmdbLanguage()
+                val response = tmdbApiService.getMovieVideos(id, lang)
+                if (response.isSuccessful) response.body()?.results ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     suspend fun getTvVideos(id: Int): List<TmdbVideo> {
-        return try {
-            val lang = getTmdbLanguage()
-            val response = tmdbApiService.getTvVideos(id, lang)
-            if (response.isSuccessful) response.body()?.results ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(id)
+        return tvVideosCache.getOrAwait(key) {
+            try {
+                val lang = getTmdbLanguage()
+                val response = tmdbApiService.getTvVideos(id, lang)
+                if (response.isSuccessful) response.body()?.results ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     suspend fun getMovieImages(id: Int): List<TmdbImage> {
-        return try {
-            val response = tmdbApiService.getMovieImages(id, "zh,null")
-            if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(id)
+        return movieImagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getMovieImages(id, "zh,null")
+                if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     suspend fun getTvImages(id: Int): List<TmdbImage> {
-        return try {
-            val response = tmdbApiService.getTvImages(id, "zh,null")
-            if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(id)
+        return tvImagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getTvImages(id, "zh,null")
+                if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     /** 获取人物图片（TMDB profiles） */

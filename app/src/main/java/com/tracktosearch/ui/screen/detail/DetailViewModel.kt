@@ -30,6 +30,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktSeason
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.MultiRatings
 import com.tracktosearch.data.repository.RatingsRepository
+import com.tracktosearch.data.repository.RelevanceScorerProvider
+import com.tracktosearch.data.repository.ResourceQuery
 import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
@@ -88,6 +90,8 @@ data class DetailUiState(
     val posterDominantColor: Color? = null,
     val runtime: Int? = null,
     val resources: List<ResourceItem> = emptyList(),
+    val lowRelevanceHiddenCount: Int = 0,            // 开启"仅显示高相关"后被隐藏的低相关结果数
+    val showHighRelevanceOnly: Boolean = false,      // 是否仅显示高相关结果
     val availableSources: List<String> = emptyList(),   // 筛选条上所有可用源（来自设置页，固定不变）
     val enabledSources: Set<String> = ResourceRepository.ALL_SOURCES, // 当前选中的源（点击筛选时变化）
     val customSourceNames: Map<String, String> = emptyMap(), // 自定义源 ID -> 名称
@@ -296,6 +300,11 @@ class DetailViewModel @Inject constructor(
     private var currentTitle: String = ""
     private var currentKeyword: String = ""
     private var currentOriginalTitle: String = ""
+    // 资源相关度评分用的目标影视上下文（搜索开始时构造）
+    private var currentResourceQuery: ResourceQuery? = null
+    // 当前搜索结果的相关度分值表（url -> score），与 allResources 同生命周期
+    // 用于"仅显示高相关"过滤，避免重复打分；query 为空时为空 map（不过滤）
+    private var currentScoreMap: Map<String, Int> = emptyMap()
     private var currentImdbId: String = ""
     private var currentTraktRating: Double = 0.0
     private var currentTmdbId: Int = 0
@@ -353,8 +362,22 @@ class DetailViewModel @Inject constructor(
             if (cached.uiState.seasons.isEmpty() && cached.currentMediaType == MediaType.SHOW) fetchSeasons()
             if (visibility.cast && cached.uiState.cast.isEmpty() && cached.uiState.crew.isEmpty()) fetchCredits()
             if (visibility.videosImages && (cached.uiState.isLoadingVideosImages || (cached.uiState.videos.isEmpty() && cached.uiState.backdrops.isEmpty()))) fetchVideosAndImages()
-            // fetchUserRating 内部会判断 tokenStorage.getCachedAccessToken() 是否为空,无需在此重复判断
-            if (visibility.myRating && cached.uiState.userRating == null) fetchUserRating()
+            // 评分同步读取 Room DB（持久化缓存），命中则立即设置 userRating 消除"先 null 后有值"窗口
+            // 未命中时降级到异步 fetchUserRating（走 Trakt 网络）
+            if (visibility.myRating && cached.uiState.userRating == null) {
+                val localReview = withContext(Dispatchers.IO) {
+                    runCatching { userReviewRepository.getReview(currentTraktId.toLong()) }.getOrNull()
+                }
+                if (localReview != null && (localReview.rating != null || !localReview.comment.isNullOrBlank())) {
+                    _uiState.value = _uiState.value.copy(
+                        userRating = localReview.rating?.toInt(),
+                        userComment = localReview.comment,
+                        isRatingLoading = false
+                    )
+                } else {
+                    fetchUserRating()
+                }
+            }
             delayedLoadJob?.cancel()
             delayedLoadJob = viewModelScope.launch {
                 delay(1500)
@@ -1224,6 +1247,26 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
+     * 构造资源相关度评分用的目标影视查询上下文。
+     * 从当前 UI 状态提取导演/演员名作为强相关信号（标题命中导演名明显指向同一作品）。
+     * 导演取 job=Director 的 crew，演员取前 5 位（避免过多名字堆分）。
+     */
+    private fun buildResourceQuery(): ResourceQuery {
+        val state = _uiState.value
+        val directors = state.crew.filter { it.job == "Director" }.map { it.name }.filter { it.isNotBlank() }
+        val castNames = state.cast.take(5).map { it.name }.filter { it.isNotBlank() }
+        return ResourceQuery(
+            title = currentKeyword,
+            originalTitle = currentOriginalTitle.takeIf { it.isNotEmpty() },
+            year = state.year,
+            country = state.country.takeIf { it.isNotEmpty() },
+            mediaType = currentMediaType,
+            directors = directors,
+            cast = castNames
+        )
+    }
+
+    /**
      * 启动搜索：中英文并行搜索，源级别先到先显示，全部完成后合并去重
      */
     private fun startSearch() {
@@ -1246,6 +1289,10 @@ class DetailViewModel @Inject constructor(
             val isShow = currentMediaType == MediaType.SHOW
             val hasEnglish = currentOriginalTitle.isNotEmpty()
 
+            // 构造目标影视查询上下文，用于资源相关度评分（缺字段时对应信号自动跳过）
+            val resourceQuery = buildResourceQuery()
+            currentResourceQuery = resourceQuery
+
             // 线程安全地跟踪已完成的源（中英文搜索共享同一集合，去重计数）
             val completedSourceNames = ConcurrentHashMap.newKeySet<String>()
             val onSourceComplete: (String) -> Unit = { source ->
@@ -1255,11 +1302,11 @@ class DetailViewModel @Inject constructor(
 
             // conflate: 跳过中间值，只处理最新发射，减少高频更新时的重组
             val chineseFlow = resourceRepository.searchResourcesFlow(
-                currentKeyword, isShow = isShow, onSourceComplete = onSourceComplete
+                currentKeyword, isShow = isShow, query = resourceQuery, onSourceComplete = onSourceComplete
             ).conflate()
             val englishFlow = if (hasEnglish) {
                 resourceRepository.searchResourcesFlow(
-                    currentOriginalTitle, isShow = isShow, onSourceComplete = onSourceComplete
+                    currentOriginalTitle, isShow = isShow, query = resourceQuery, onSourceComplete = onSourceComplete
                 ).conflate()
             } else null
 
@@ -1328,13 +1375,17 @@ class DetailViewModel @Inject constructor(
         val mergedItems = chineseItems + englishItems.filter { it.url !in existingUrls }
 
         if (mergedItems.isNotEmpty()) {
-            allResources = resourceRepository.mergeAndCacheResources(
+            val ranked = resourceRepository.mergeAndCacheResources(
                 keyword = currentKeyword,
                 items = mergedItems,
-                isShow = isShow
+                isShow = isShow,
+                query = currentResourceQuery
             )
+            allResources = ranked.items
+            currentScoreMap = ranked.scoreMap
         } else {
             allResources = resourceRepository.getCachedAllResources(currentKeyword)
+            currentScoreMap = emptyMap()
         }
 
         val state = _uiState.value
@@ -1343,12 +1394,15 @@ class DetailViewModel @Inject constructor(
                 allResources, state.enabledSources, state.enabledDiskTypes
             )
         }
+        // 按"仅显示高相关"开关过滤，并统计被隐藏的低相关数量
+        val (displayed, hiddenCount) = applyHighRelevanceFilter(filtered, state.showHighRelevanceOnly)
         val viewedUrls = withContext(Dispatchers.IO) {
             viewedItemStorage.getViewedUrls()
         }
         _uiState.value = _uiState.value.copy(
             searchAttempted = true,
-            resources = filtered,
+            resources = displayed,
+            lowRelevanceHiddenCount = hiddenCount,
             viewedUrls = viewedUrls,
             completedSources = completedSourceCount
         )
@@ -1356,12 +1410,33 @@ class DetailViewModel @Inject constructor(
     }
 
     /**
-     * 本地过滤当前已缓存的全量结果，不调 API
+     * 应用"仅显示高相关"过滤：低于阈值的结果隐藏，返回（展示列表, 隐藏数量）。
+     * 若无目标影视上下文（query 为空，通用搜索），不隐藏。
+     * 分值从 [currentScoreMap] 读取（url -> score），避免 ResourceItem 作为可变共享状态。
      */
-    private fun applyLocalFilter(): List<ResourceItem> {
-        val state = _uiState.value
-        return resourceRepository.filterItems(allResources, state.enabledSources, state.enabledDiskTypes)
+    private fun applyHighRelevanceFilter(
+        items: List<ResourceItem>,
+        onlyHigh: Boolean
+    ): Pair<List<ResourceItem>, Int> {
+        if (!onlyHigh || currentResourceQuery == null || currentScoreMap.isEmpty()) return items to 0
+        val kept = items.filter { (currentScoreMap[it.url] ?: 0) >= RelevanceScorerProvider.HIGH_RELEVANCE_THRESHOLD }
+        return kept to (items.size - kept.size)
     }
+
+    /**
+     * 按当前源/网盘筛选 + "仅显示高相关"过滤，返回展示列表与被隐藏数量。
+     * 始终从 [allResources] 重新过滤，避免开关切换时复用已被旧开关过滤的子集导致低相关项丢失。
+     */
+    private fun applyCurrentFilters(): Pair<List<ResourceItem>, Int> {
+        val state = _uiState.value
+        val filtered = resourceRepository.filterItems(allResources, state.enabledSources, state.enabledDiskTypes)
+        return applyHighRelevanceFilter(filtered, state.showHighRelevanceOnly)
+    }
+
+    /**
+     * 本地过滤当前已缓存的全量结果，不调 API（保留原签名供复用）
+     */
+    private fun applyLocalFilter(): List<ResourceItem> = applyCurrentFilters().first
 
     /**
      * 重新搜索：清除缓存，强制重新请求 API（中英文名并行搜索）
@@ -1387,13 +1462,18 @@ class DetailViewModel @Inject constructor(
             )
             val isShow = currentMediaType == MediaType.SHOW
 
+            // 构造目标影视查询上下文（资源相关度评分）
+            val resourceQuery = buildResourceQuery()
+            currentResourceQuery = resourceQuery
+
             // 中英文名并行搜索
             val chineseDeferred = async {
                 resourceRepository.refreshResources(
                     keyword = currentKeyword,
                     enabledSources = storageEnabledSources,
                     enabledDiskTypes = state.enabledDiskTypes,
-                    isShow = isShow
+                    isShow = isShow,
+                    query = resourceQuery
                 )
             }
             val englishDeferred = if (currentOriginalTitle.isNotEmpty()) {
@@ -1402,7 +1482,8 @@ class DetailViewModel @Inject constructor(
                         keyword = currentOriginalTitle,
                         enabledSources = storageEnabledSources,
                         enabledDiskTypes = state.enabledDiskTypes,
-                        isShow = isShow
+                        isShow = isShow,
+                        query = resourceQuery
                     )
                 }
             } else null
@@ -1416,25 +1497,48 @@ class DetailViewModel @Inject constructor(
             val mergedItems = chineseItems + englishItems.filter { it.url !in existingUrls }
 
             if (mergedItems.isNotEmpty()) {
-                allResources = resourceRepository.mergeAndCacheResources(
+                val ranked = resourceRepository.mergeAndCacheResources(
                     keyword = currentKeyword,
                     items = mergedItems,
-                    isShow = isShow
+                    isShow = isShow,
+                    query = resourceQuery
                 )
+                allResources = ranked.items
+                currentScoreMap = ranked.scoreMap
             } else {
                 allResources = resourceRepository.getCachedAllResources(currentKeyword)
+                currentScoreMap = emptyMap()
             }
 
             val filtered = resourceRepository.filterItems(
                 allResources, storageEnabledSources, _uiState.value.enabledDiskTypes
             )
+            val (displayed, hiddenCount) = applyHighRelevanceFilter(filtered, _uiState.value.showHighRelevanceOnly)
             _uiState.value = _uiState.value.copy(
                 isSearching = false,
                 searchAttempted = true,
-                resources = filtered
+                resources = displayed,
+                lowRelevanceHiddenCount = hiddenCount
             )
             saveToCache()
         }
+    }
+
+    /**
+     * 切换"仅显示高相关"开关。
+     * 关键：必须从 [allResources] 重新过滤，不能用已被旧开关过滤的列表，
+     * 否则从"仅高相关"切回"全部"时低相关项已丢失无法恢复。
+     */
+    fun toggleShowHighRelevanceOnly() {
+        val newVal = !_uiState.value.showHighRelevanceOnly
+        val state = _uiState.value
+        val filtered = resourceRepository.filterItems(allResources, state.enabledSources, state.enabledDiskTypes)
+        val (displayed, hiddenCount) = applyHighRelevanceFilter(filtered, newVal)
+        _uiState.value = _uiState.value.copy(
+            showHighRelevanceOnly = newVal,
+            resources = displayed,
+            lowRelevanceHiddenCount = hiddenCount
+        )
     }
 
     fun toggleSource(source: String) {
@@ -1446,12 +1550,16 @@ class DetailViewModel @Inject constructor(
         }
         if (newSources == current) return
         // 直接传新值过滤，避免从 _uiState.value 读到尚未提交的旧状态
-        val filtered = resourceRepository.filterItems(
-            allResources, newSources, _uiState.value.enabledDiskTypes
-        )
+        val (displayed, hiddenCount) = run {
+            val filtered = resourceRepository.filterItems(
+                allResources, newSources, _uiState.value.enabledDiskTypes
+            )
+            applyHighRelevanceFilter(filtered, _uiState.value.showHighRelevanceOnly)
+        }
         _uiState.value = _uiState.value.copy(
             enabledSources = newSources,
-            resources = filtered
+            resources = displayed,
+            lowRelevanceHiddenCount = hiddenCount
         )
     }
 
@@ -1464,12 +1572,16 @@ class DetailViewModel @Inject constructor(
         }
         if (newTypes == current) return
         // 直接传新值过滤，避免从 _uiState.value 读到尚未提交的旧状态
-        val filtered = resourceRepository.filterItems(
-            allResources, _uiState.value.enabledSources, newTypes
-        )
+        val (displayed, hiddenCount) = run {
+            val filtered = resourceRepository.filterItems(
+                allResources, _uiState.value.enabledSources, newTypes
+            )
+            applyHighRelevanceFilter(filtered, _uiState.value.showHighRelevanceOnly)
+        }
         _uiState.value = _uiState.value.copy(
             enabledDiskTypes = newTypes,
-            resources = filtered
+            resources = displayed,
+            lowRelevanceHiddenCount = hiddenCount
         )
     }
 

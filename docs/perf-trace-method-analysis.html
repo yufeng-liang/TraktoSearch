@@ -1,0 +1,103 @@
+<!doctype html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Method Trace 复测分析 · com.tracktosearch</title>
+<style>
+  :root{--bg:#0f1419;--card:#161d24;--line:#26303a;--txt:#e6edf3;--mut:#8a97a3;--accent:#3aa0ff;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.55;padding:28px 22px 60px}
+  .wrap{max-width:1000px;margin:0 auto}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:var(--mut);font-size:13px;margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:22px}
+  .card h2{font-size:16px;margin:0 0 12px}
+  .kv{font-size:13px;color:var(--mut);margin:2px 0}
+  code{background:#0c1116;padding:1px 5px;border-radius:4px;font-size:12px;color:#9fd0ff}
+  pre{background:#0c1116;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px;line-height:1.5;color:#cfe3ff}
+  .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;margin-right:6px}
+  .p0{background:#8e1b1b;color:#fff}.p1{background:#9c5a17;color:#fff}.p2{background:#3a4a5a;color:#fff}.ok{background:#1d5631;color:#fff}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px}
+  .ev{color:var(--mut);font-size:12px}
+  ul{margin:8px 0;padding-left:20px}li{margin:4px 0}
+  .note{border-left:3px solid var(--accent);padding:8px 12px;background:#10202e;border-radius:0 8px 8px 0;font-size:13px;margin:10px 0}
+  .good{border-left-color:#2ecc71}
+</style></head><body><div class="wrap">
+<h1>Method Trace 复测分析报告</h1>
+<div class="sub">文件 <code>cpu-art-20260708T195745.trace</code> · 类型：Android Studio Java/Kotlin Method Recording（legacy ART “SLOW” 格式，debug 包）· 解析工具：Perfetto <code>trace_processor</code> 内置 ART 导入器</div>
+
+<div class="card">
+  <h2>① 与系统 trace 的对照结论</h2>
+  <p>系统 trace 发现的现象 → Method trace 把“卡在哪一行”坐实了：</p>
+  <table>
+    <tr><th>系统 trace 现象</th><th>Method trace 坐实</th><th>判定</th></tr>
+    <tr><td>主线程 <code>decodeBitmap</code> 峰值 828ms</td><td>源码唯一同步解码点在 <code>MainActivity.kt:357</code> 的启动闪屏图标 <code>BitmapFactory.decodeResource(R.drawable.ic_search_cloud)</code>；影片图走 Coil 在后台线程</td><td><span class="tag p0">P0</span> 闪屏图标同步解码</td></tr>
+    <tr><td><code>measure</code> 992ms / <code>Compose:recompose</code> 943ms</td><td>热点全部落在 <code>ui.screen.discover</code>（DiscoverScreen → DiscoverSections/TraktTrendingMovieSection/TmdbMovieSection → MovieCard 的 LazyList），由 <code>LookaheadPassDelegate.performMeasure/remeasure</code> + <code>SnapshotStateObserver.observeReads</code> + <code>LazyListMeasure</code> 驱动</td><td><span class="tag p0">P0</span> Discover 屏过度测量/重组</td></tr>
+    <tr><td>GC 累计 2.15s</td><td>主线程海量 <code>Float.floatToRawIntBits/intBitsToFloat</code>(27万次)、<code>Object.equals</code>(9.5万)、<code>LayoutNode/NodeCoordinator/IntOffset</code> 位置运算(各 5–6万次) → 每次测量都新建大量临时对象/装箱</td><td><span class="tag p1">P1</span> 测量产生内存抖动</td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h2><span class="tag p0">P0</span> 闪屏图标在主线程同步解码 — 系统 trace 那 828ms 的真凶</h2>
+  <p class="kv"><code>app/src/main/java/com/tracktosearch/MainActivity.kt:355-360</code>（启动闪屏/引导动画里）</p>
+  <pre>val context = LocalContext.current
+val launcherBitmap = remember {
+    android.graphics.BitmapFactory.decodeResource(
+        context.resources, R.drawable.ic_search_cloud
+    )?.asImageBitmap()   // ← 合成阶段在主线程同步解码
+}</pre>
+  <p><b>问题：</b><code>remember { BitmapFactory.decodeResource(...) }</code> 在首次组合（闪屏）时于<strong>主线程</strong>同步解码 <code>ic_search_cloud</code>，且 <code>decodeResource</code> 不解采样、按固有分辨率解码 → 直接造成启动期 828ms 卡顿（与系统 trace 中 resume 后约 367ms 出现的 1513ms 冻结帧吻合）。<code>remember</code> 只保证不重复解码，但<strong>第一次依然是同步的</strong>。</p>
+  <p><b>修复（不改功能/视觉）：</b></p>
+  <ul>
+    <li>最简洁：把 <code>Image(bitmap = launcherBitmap, ...)</code> 换成 <code>Image(painter = painterResource(R.drawable.ic_search_cloud), ...)</code>。Compose 的 <code>painterResource</code> 走异步加载，不会在主线程 <code>BitmapFactory.decodeResource</code>。</li>
+    <li>若确实需要 <code>ImageBitmap</code>（用于后续缩放/裁剪动画）：在 Application/启动协程里用 <code>Dispatchers.IO</code> 预解码一次并缓存结果，组合时直接取已解码的位图；或改用 Coil 的 <code>AsyncImage</code>/<code>ImageRequest</code> 加载该 drawable。</li>
+    <li>顺带：确认 <code>ic_search_cloud</code> 分辨率是否过大（闪屏仅显示 ~211dp），必要时提供匹配密度的资源或 <code>inSampleSize</code> 降采样。</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2><span class="tag p0">P0</span> Discover 屏 lazy 列表的“测量风暴”是主线程头号耗时</h2>
+  <p>主线程调用频次 Top（结构可靠，时长因导入放大见⑤）：</p>
+  <table>
+    <tr><th>方法</th><th>调用次数</th><th>含义</th></tr>
+    <tr><td><code>Float.floatToRawIntBits / intBitsToFloat</code></td><td>14.0万 / 13.0万</td><td>布局位置/偏移的 float↔bits 换算，测量越多越高</td></tr>
+    <tr><td><code>Intrinsics.areEqual</code> / <code>Object.equals</code></td><td>12.0万 / 9.5万</td><td>状态比较（重组/相等性判断）</td></tr>
+    <tr><td><code>LayoutNode.getParent / getDepth</code></td><td>6.3万</td><td>布局树遍历</td></tr>
+    <tr><td><code>NodeCoordinator.getPosition</code> / <code>IntOffset.getX/Y</code> / <code>Offset.constructor</code></td><td>6.0/5.7/5.6万</td><td>坐标计算</td></tr>
+    <tr><td><code>MutableVector.getSize</code> / <code>ArrayList.get</code></td><td>5.4/3.8万</td><td>列表/集合遍历（measure 子节点）</td></tr>
+  </table>
+  <p class="ev">热点调用链（来自方法树）：<code>LookaheadPassDelegate.performMeasure → ColumnMeasurePolicy.measure → LazyListMeasure(measureLazyList) → LazyLayoutMeasuredItemProvider.getPlaceables → subcompose → ComposableLambda(DiscoverSections/TraktTrendingMovieSection/TmdbMovieSection → MovieCard)</code>。即 Discover 屏的多个横向/纵向 <code>LazyList</code> 区块（每个区块一张张 <code>MovieCard</code>）在反复测量/重组。</p>
+  <div class="note"><b>线索：</b>调用栈里反复出现 <code>LookaheadPassDelegate</code>。若 Discover 屏用了 <code>AnimatedVisibility</code> / <code>AnimatedContent</code> / <code>LookaheadScope</code> / <code>Modifier.sharedBounds</code>（共享元素/转场），会触发 lookahead 测量使整棵子树测量翻倍。建议核查 <code>DiscoverScreen</code>/<code>DiscoverSections</code> 是否引入这类动画，并尽量缩小其作用范围。</div>
+  <p><b>修复方向（均不改功能）：</b></p>
+  <ul>
+    <li>给 <code>LazyList</code> 各 item（<code>MovieCard</code>）加稳定 <code>key</code>，并把卡片的 DTO 标 <code>@Immutable</code>/<code>@Stable</code>，减少因不稳定对象导致的整项重组。</li>
+    <li>收敛状态：卡片内 <code>remember</code> 提取稳定值，避免在 item 组合闭包里创建新 lambda/新对象（每次测量都新建 → 上面 27 万次 float 换算与 9.5 万次 equals 的来源之一）。</li>
+    <li>若区块内容高度固定，给容器显式约束高度，避免 LazyList 在测量期反复估算。</li>
+    <li>非首屏区块做懒加载/分页，减少同屏被测量的 item 数。</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2><span class="tag ok">好消息</span> 影片图片管线本身没问题，别动它</h2>
+  <p>Method trace 显示：主线程上所有 <code>Bitmap</code> 相关调用都是亚毫秒级（<code>BitmapPainter.onDraw</code> 0.25ms、<code>Bitmap.createBitmap</code> 1.2ms），<strong>没有</strong> <code>BitmapFactory.decodeStream</code> 出现在主线程。图像像素解码发生在后台线程（<code>OkHttp image.tmdb.org</code> 与协程 IO 调度器），由 <code>Coil</code>（<code>coil.RealImageLoader</code>、<code>DefaultRequestOptions.getBitmapConfig</code>）负责。</p>
+  <p class="ev">结论：上一版报告里把“图片解码”列为 P0 是<strong>方向对、但具体到影片图是误伤</strong>——影片图走 Coil 已经在后台解码。真正的主线程同步解码只有上面 P0 的闪屏图标一处。所以优化重点是“闪屏图标”+“Discover 屏测量”，而不是替换图片库。</p>
+</div>
+
+<div class="card">
+  <h2>⑤ 数据可信度说明（重要）</h2>
+  <div class="note">本 Method trace 经 Perfetto 导入后，<strong>调用结构、方法名、调用频次 100% 可靠</strong>；但 <code>measure/recompose</code> 子树的<strong>绝对时长被放大</strong>（主线程 699 万次切片中 4.3 万次 >1s、476 次 >1000s，疑似时钟/出序导致该子树 entry/exit 配对失真）。因此本报告的方法级结论基于“调用路径 + 频次”，而整体严重度仍以系统 trace 的实测帧耗时（平均 113ms、最差 1931ms）为准。</div>
+  <p><b>想要精确 ms：</b>用 Android Studio 重新录一段 <strong>5–10 秒</strong>的 Method Trace，只复现“进入 Discover 屏 / 点开详情”这一步，避免长录制触发时长失真；或直接用 <strong>release 包 + System Trace</strong> 复测帧耗时验证。闪屏图标那 828ms 已可凭源码定位直接修。</p>
+</div>
+
+<div class="card">
+  <h2>⑥ 修订后的优先级（综合两份 trace）</h2>
+  <ol>
+    <li><span class="tag p0">P0</span> <b>改闪屏图标加载</b>：<code>MainActivity.kt:357</code> 去掉主线程 <code>BitmapFactory.decodeResource</code>，改用 <code>painterResource</code> 或后台预解码。直接消除启动 828ms 卡顿。</li>
+    <li><span class="tag p0">P0</span> <b>收敛 Discover 屏测量/重组</b>：LazyList item 加 key + DTO <code>@Immutable</code> + 提取稳定状态 + 缩小动画 lookahead 范围。削减 992/943ms 级重组与测量。</li>
+    <li><span class="tag p1">P1</span> <b>降低测量期分配</b>：减少组合闭包里的临时对象/装箱（对应 27 万次 float 换算、9.5 万次 equals），缓解 GC 2.15s。</li>
+    <li><span class="tag p2">P2</span> <b>启动初始化移出主线程</b>：WorkManager 等（系统 trace 见 150ms 阻塞）继续按前报告处理。</li>
+  </ol>
+  <p class="ev">注：影片图片的 Coil 异步解码、TtlCache/持久化缓存（见 AGENTS.md）保持现状即可，无需为性能改动。</p>
+</div>
+
+</div></body></html>

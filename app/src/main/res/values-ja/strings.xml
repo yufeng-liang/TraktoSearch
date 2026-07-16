@@ -209,6 +209,7 @@
     <string name="douban_resume_cancel">キャンセル</string>
     <string name="douban_resume_phase">未処理リストを再開中</string>
     <string name="douban_resume_complete">レジューム完了</string>
+    <string name="sync_already_running">同期タスクが実行中です。しばらくお待ちください</string>
 
     <!-- Douban sync rollback (after failed full rewrite) -->
     <string name="douban_rollback_title">削除されたマークを復元</string>
@@ -388,6 +389,9 @@
     <string name="detail_login_go">ログインする</string>
     <string name="detail_filter_sources">検索ソース</string>
     <string name="detail_filter_disk_types">ディスクタイプ</string>
+    <string name="detail_filter_relevance">関連度</string>
+    <string name="detail_filter_high_relevance">高関連のみ表示</string>
+    <string name="detail_hidden_low_relevance">%1$d 件の低関連結果を非表示、タップで全表示</string>
     <string name="detail_searching">クラウドリソースを検索中…</string>
     <string name="detail_searching_info">%1$d/%2$d ソース完了</string>
     <string name="detail_no_resources">クラウドリソースが見つかりません</string>

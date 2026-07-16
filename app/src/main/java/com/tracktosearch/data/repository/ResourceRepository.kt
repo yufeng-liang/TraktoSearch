@@ -1,4 +1,4 @@
-﻿package com.tracktosearch.data.repository
+package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
@@ -114,7 +114,8 @@ class ResourceRepository @Inject constructor(
         keyword: String,
         enabledSources: Set<String> = ALL_SOURCES,
         enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
-        isShow: Boolean = false
+        isShow: Boolean = false,
+        query: ResourceQuery? = null
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
 
@@ -124,10 +125,11 @@ class ResourceRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val cached = cache[keyword]
         val allItems = if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
-            cached.items
+            // 命中缓存：query 非空时按当前 query 重算相关度（同关键词不同影视用各自元数据）
+            rank(cached.items, isShow, query).items
         } else {
             // 只查询用户选中的源，避免无效请求
-            val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow)
+            val fetched = fetchEnabledSources(keyword, effectiveSources, enabledDiskTypes, isShow, query)
             // 只缓存非空结果，避免"空结果被缓存导致后续一直空"的问题
             if (fetched.isNotEmpty()) {
                 cache.put(keyword, KeywordCache(fetched, now))
@@ -145,11 +147,12 @@ class ResourceRepository @Inject constructor(
         keyword: String,
         enabledSources: Set<String> = ALL_SOURCES,
         enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
-        isShow: Boolean = false
+        isShow: Boolean = false,
+        query: ResourceQuery? = null
     ): Result<List<ResourceItem>> {
         if (keyword.isBlank()) return Result.success(emptyList())
         cache.remove(keyword)
-        return searchResources(keyword, enabledSources, enabledDiskTypes, isShow)
+        return searchResources(keyword, enabledSources, enabledDiskTypes, isShow, query)
     }
 
     /**
@@ -164,6 +167,7 @@ class ResourceRepository @Inject constructor(
         enabledSources: Set<String> = ALL_SOURCES,
         enabledDiskTypes: Set<DiskType> = ALL_DISK_TYPES,
         isShow: Boolean = false,
+        query: ResourceQuery? = null,
         onSourceComplete: ((String) -> Unit)? = null
     ): Flow<List<ResourceItem>> = channelFlow {
         if (keyword.isBlank()) { send(emptyList()); return@channelFlow }
@@ -174,7 +178,8 @@ class ResourceRepository @Inject constructor(
         val now = System.currentTimeMillis()
         val cached = cache[keyword]
         if (cached != null && now - cached.timestamp < CACHE_TTL_MS) {
-            send(filterItems(cached.items, effectiveSources, enabledDiskTypes))
+            // 命中缓存：query 非空时按当前 query 重算相关度
+            send(filterItems(rank(cached.items, isShow, query).items, effectiveSources, enabledDiskTypes))
             // 缓存命中：所有源视为已完成
             effectiveSources.forEach { onSourceComplete?.invoke(it) }
             return@channelFlow
@@ -231,16 +236,15 @@ class ResourceRepository @Inject constructor(
             accumulated.addAll(completedItems)
             onSourceComplete?.invoke(completedSource)
 
-            val current = accumulated
-                .distinctBy { it.url }
-                .sortedWith(resourceComparator(isShow))
-            send(current)
+            val current = rank(accumulated.distinctBy { it.url }, isShow, query)
+            send(current.items)
         }
 
-        // 缓存最终合并结果
+        // 缓存最终合并结果（只存原始 items，分值不缓存）
         if (accumulated.isNotEmpty()) {
-                cache.put(keyword, KeywordCache(                    accumulated.distinctBy { it.url }.sortedWith(resourceComparator(isShow)),
-                    System.currentTimeMillis()))
+            cache.put(keyword, KeywordCache(
+                accumulated.distinctBy { it.url },
+                System.currentTimeMillis()))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -265,7 +269,8 @@ class ResourceRepository @Inject constructor(
         keyword: String,
         enabledSources: Set<String>,
         enabledDiskTypes: Set<DiskType>,
-        isShow: Boolean
+        isShow: Boolean,
+        query: ResourceQuery? = null
     ): List<ResourceItem> {
         // 获取启用的自定义源
         val customSources = customSearchSourceStorage.sources.first().filter { it.enabled }
@@ -303,7 +308,7 @@ class ResourceRepository @Inject constructor(
 
             // 等待所有选中源都返回，合并结果
             val allResults = deferreds.awaitAll()
-            allResults.flatten().sortedWith(resourceComparator(isShow))
+            rank(allResults.flatten(), isShow, query).items
         }
     }
 
@@ -374,29 +379,58 @@ class ResourceRepository @Inject constructor(
     }
 
     /**
-     * 资源排序规则：
-     * 1. 夸克网盘 > 其它
-     * 2. 日期新的在前
-     * 3. 电视剧多季结果优先
+     * 排序后的资源结果（items 已按相关度+次级规则排好，scoreMap 保留每条 url 的分值供后续过滤复用）。
+     * 用 url 作为 key 而非对象引用，避免 ResourceItem 作为可变共享状态在跨影视缓存场景下产生竞态。
      */
-    private fun resourceComparator(isShow: Boolean) = compareByDescending<ResourceItem> {
-        if (isShow) multiSeasonScore(it.name) else 0
-    }.thenByDescending { it.diskType == DiskType.QUARK } // 夸克优先
-        .thenByDescending { it.fileDate } // 日期新
-        .thenByDescending { it.fileCount }
-        .thenByDescending { it.source == SOURCE_PANSOU }
+    data class RankedResources(
+        val items: List<ResourceItem>,
+        val scoreMap: Map<String, Int> // url -> relevanceScore（query 为空时为空 map）
+    )
 
     /**
-     * 合并外部传入的资源列表并写入缓存（用于中英文搜索结果合并）
+     * 资源排序规则：
+     * - scoreMap 非空时，主排序按相关度分值降序，再按以下次级规则
+     * - scoreMap 为空时（无目标影视上下文，如通用搜索），沿用原规则：
+     *   1. 夸克网盘 > 其它  2. 日期新的在前  3. 电视剧多季结果优先
      */
-    fun mergeAndCacheResources(keyword: String, items: List<ResourceItem>, isShow: Boolean = false): List<ResourceItem> {
-        val merged = items
-            .distinctBy { it.url }
-            .sortedWith(resourceComparator(isShow))
-        if (merged.isNotEmpty()) {
-            cache.put(keyword, KeywordCache(merged, System.currentTimeMillis()))
+    private fun resourceComparator(isShow: Boolean, scoreMap: Map<String, Int> = emptyMap()) =
+        compareByDescending<ResourceItem> { scoreMap[it.url] ?: 0 }
+            .thenByDescending { if (isShow) multiSeasonScore(it.name) else 0 }
+            .thenByDescending { it.diskType == DiskType.QUARK } // 夸克优先
+            .thenByDescending { it.fileDate } // 日期新
+            .thenByDescending { it.fileCount }
+            .thenByDescending { it.source == SOURCE_PANSOU }
+
+    /**
+     * 按相关度（若有 query）排序，返回排好序的 items 与对应的 scoreMap。
+     * query 为空时 scoreMap 为空，沿用原排序规则（夸克/日期/多季）。
+     */
+    private fun rank(items: List<ResourceItem>, isShow: Boolean, query: ResourceQuery?): RankedResources {
+        val distinct = items.distinctBy { it.url }
+        val scoreMap: Map<String, Int> = if (query != null) {
+            val scorer = RelevanceScorerProvider.get()
+            distinct.associate { it.url to scorer.score(it, query) }
+        } else emptyMap()
+        val sorted = distinct.sortedWith(resourceComparator(isShow, scoreMap))
+        return RankedResources(sorted, scoreMap)
+    }
+
+    /**
+     * 合并外部传入的资源列表并写入缓存（用于中英文搜索结果合并）。
+     * 返回排好序的结果（含 scoreMap 供 ViewModel 后续本地过滤复用分值，避免重复打分）。
+     */
+    fun mergeAndCacheResources(
+        keyword: String,
+        items: List<ResourceItem>,
+        isShow: Boolean = false,
+        query: ResourceQuery? = null
+    ): RankedResources {
+        val ranked = rank(items, isShow, query)
+        if (ranked.items.isNotEmpty()) {
+            // 缓存只存原始 items（不打分），分值是 per-query 的不该被缓存
+            cache.put(keyword, KeywordCache(ranked.items, System.currentTimeMillis()))
         }
-        return merged
+        return ranked
     }
 
     /** 判断资源名是否包含多季信息，返回优先级分数 */

@@ -332,8 +332,9 @@ class CloudFailureSyncManager @Inject constructor(
                 )
             }
 
-            // 手动拉取且需要覆盖本地时,先返回待确认结果,等用户确认后再 commit(不在此落库)
-            if (!autoCommit) {
+            // 手动拉取且本地有数据时,先返回待确认结果,等用户确认后再 commit(不在此落库)
+            // 本地无数据(localNewest=0)时不存在"覆盖"问题,直接替换返回 Success
+            if (!autoCommit && localNewest > 0L) {
                 Log.d(TAG, "云端数据较新,等待用户确认覆盖(localNewest=$localNewest, cloudUploadedAt=${payload.uploadedAt})")
                 return@withContext DownloadResult.OverwritePending(
                     count = entities.size,
