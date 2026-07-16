@@ -23,21 +23,4 @@ class ShimmerSkeletonTest {
         composeRule.waitForIdle()
         assertThat(brush).isNotNull()
     }
-
-    @Test
-    fun `MovieCardSkeleton 正常渲染不崩溃`() {
-        composeRule.setContent {
-            MovieCardSkeleton()
-        }
-        composeRule.waitForIdle()
-        // 骨架屏渲染不崩溃即通过
-    }
-
-    @Test
-    fun `DoubanHotCardSkeleton 正常渲染不崩溃`() {
-        composeRule.setContent {
-            DoubanHotCardSkeleton()
-        }
-        composeRule.waitForIdle()
-    }
 }

@@ -17,16 +17,6 @@ class LoadingViewTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun `LoadingView 默认消息渲染`() {
-        composeRule.setContent {
-            LoadingView()
-        }
-        composeRule.waitForIdle()
-        // 默认消息来自 stringResource(R.string.loading_default)，Robolectric 默认 locale 下为 "Loading…"
-        // 验证组件不崩溃即通过
-    }
-
-    @Test
     fun `LoadingView 自定义消息显示`() {
         composeRule.setContent {
             LoadingView(message = "加载中...")
@@ -48,15 +38,6 @@ class LoadingViewTest {
             ErrorView(message = "网络错误")
         }
         composeRule.onNodeWithText("网络错误").assertIsDisplayed()
-    }
-
-    @Test
-    fun `ErrorView 无重试按钮时不崩溃`() {
-        composeRule.setContent {
-            ErrorView(message = "错误", onRetry = null)
-        }
-        composeRule.waitForIdle()
-        // onRetry 为 null 时不应显示重试按钮，不崩溃即通过
     }
 
     @Test

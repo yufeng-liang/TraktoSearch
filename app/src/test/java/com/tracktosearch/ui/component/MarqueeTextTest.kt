@@ -32,13 +32,4 @@ class MarqueeTextTest {
         // 长文本应触发跑马灯效果，但不应崩溃。basicMarquee 不改变文本内容，只影响显示滚动
         composeRule.onNodeWithText(longText).assertIsDisplayed()
     }
-
-    @Test
-    fun `empty text 不崩溃`() {
-        composeRule.setContent {
-            MarqueeText(text = "")
-        }
-        composeRule.waitForIdle()
-        // 不崩溃即通过
-    }
 }

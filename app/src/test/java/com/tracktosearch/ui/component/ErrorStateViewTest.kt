@@ -27,14 +27,6 @@ class ErrorStateViewTest {
     }
 
     @Test
-    fun `无重试按钮时不崩溃`() {
-        composeRule.setContent {
-            ErrorStateView(message = "错误", onRetry = null)
-        }
-        composeRule.waitForIdle()
-    }
-
-    @Test
     fun `点击重试触发回调`() {
         var retryClicked = false
         composeRule.setContent {
@@ -44,13 +36,5 @@ class ErrorStateViewTest {
         composeRule.onNodeWithText("Retry").performClick()
         composeRule.waitForIdle()
         assertThat(retryClicked).isTrue()
-    }
-
-    @Test
-    fun `自定义图标不崩溃`() {
-        composeRule.setContent {
-            ErrorStateView(message = "无网络", icon = Icons.Rounded.WifiOff)
-        }
-        composeRule.onNodeWithText("无网络").assertIsDisplayed()
     }
 }

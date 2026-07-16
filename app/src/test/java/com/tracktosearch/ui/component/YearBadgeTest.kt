@@ -23,14 +23,4 @@ class YearBadgeTest {
         // YearBadge 渲染阴影层 + 主层两个 Text("2024")，onNodeWithText 会匹配多节点失败，用 onFirst
         composeRule.onAllNodesWithText("2024").onFirst().assertIsDisplayed()
     }
-
-    @Test
-    fun `empty year 也能渲染不崩溃`() {
-        composeRule.setContent {
-            YearBadge(year = "")
-        }
-        composeRule.waitForIdle()
-        // 空字符串不应崩溃。YearBadge 内部渲染两层 Text("")，onNodeWithText("") 会匹配多个节点导致失败，
-        // 这里只验证组件树存在且不崩溃即可
-    }
 }

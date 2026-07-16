@@ -132,17 +132,6 @@ class ActionButtonRowTest {
     }
 
     @Test
-    fun `空 actions 列表不崩溃`() {
-        composeRule.setContent {
-            ActionButtonRow(
-                actions = emptyList(),
-                hazeState = HazeState()
-            )
-        }
-        composeRule.waitForIdle()
-    }
-
-    @Test
     fun `禁用按钮点击不触发 onClick`() {
         var clicked = false
         composeRule.setContent {

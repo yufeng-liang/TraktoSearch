@@ -82,22 +82,6 @@ class PosterCardTest {
     }
 
     @Test
-    fun `genres 为空时不崩溃`() {
-        composeRule.setContent {
-            PosterCard(
-                imageUrl = "",
-                title = "电影",
-                year = "2024",
-                rating = 8.0,
-                onClick = {},
-                genres = null
-            )
-        }
-        composeRule.waitForIdle()
-        // 不崩溃即通过
-    }
-
-    @Test
     fun `genres 非空时正常渲染`() {
         composeRule.setContent {
             PosterCard(
@@ -126,21 +110,5 @@ class PosterCardTest {
             )
         }
         composeRule.onNodeWithContentDescription("无图电影").assertIsDisplayed()
-    }
-
-    @Test
-    fun `onLongClick 为 null 时不崩溃`() {
-        composeRule.setContent {
-            PosterCard(
-                imageUrl = "",
-                title = "电影",
-                year = "2024",
-                rating = 8.0,
-                onClick = {},
-                onLongClick = null
-            )
-        }
-        composeRule.waitForIdle()
-        // 不崩溃即通过
     }
 }

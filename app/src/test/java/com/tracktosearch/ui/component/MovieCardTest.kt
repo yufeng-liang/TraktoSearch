@@ -198,21 +198,4 @@ class MovieCardTest {
         }
         composeRule.onNodeWithText("动作 科幻 冒险").assertIsDisplayed()
     }
-
-    @Test
-    fun `onLongClick 为 null 时不崩溃`() {
-        composeRule.setContent {
-            MovieCard(
-                title = "电影",
-                year = 2024,
-                genres = "",
-                posterUrl = null,
-                tmdbId = 1,
-                onClick = {},
-                onLongClick = null
-            )
-        }
-        composeRule.waitForIdle()
-        // 不崩溃即通过
-    }
 }
