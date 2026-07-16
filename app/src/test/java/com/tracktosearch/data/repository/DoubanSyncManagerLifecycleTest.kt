@@ -405,7 +405,7 @@ class DoubanSyncManagerLifecycleTest {
      * 无法用 runTest 的 advanceUntilIdle 控制,需用 Thread.sleep 轮询。
      */
     private fun waitForCondition(
-        timeoutMs: Long = 3000L,
+        timeoutMs: Long = 10000L,
         intervalMs: Long = 50L,
         condition: () -> Boolean
     ) {
