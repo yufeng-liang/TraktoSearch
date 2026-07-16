@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Person
@@ -278,7 +277,7 @@ internal fun DoubanLoginPromptRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 6.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 账户标签：与 AccountRow 固定 40dp 宽度对齐
@@ -330,7 +329,7 @@ fun GuestLoginItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 6.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -353,36 +352,3 @@ fun GuestLoginItem(
     }
 }
 
-/** 退出登录项：文字"退出登录" + 右侧红色"登出"按钮 */
-@Composable
-fun LogoutItem(onClick: () -> Unit) {
-    val view = LocalView.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.Logout,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(16.dp))
-        Text(
-            text = stringResource(R.string.watchlist_logout),
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f)
-        )
-        Button(
-            onClick = { view.performHaptic(HapticType.HEAVY_CLICK); onClick() },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.error,
-                contentColor = MaterialTheme.colorScheme.onError
-            ),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-        ) {
-            Text(stringResource(R.string.settings_logout_button))
-        }
-    }
-}
