@@ -15,6 +15,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.HiltTestActivity
 import com.tracktosearch.R
+import com.tracktosearch.data.repository.DoubanSyncProgress
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import io.mockk.every
@@ -297,6 +298,106 @@ class WatchlistScreenTest {
         // 搜索框 placeholder 文字
         val searchPlaceholder = context.getString(R.string.watchlist_search_watchlist)
         composeRule.onNodeWithText(searchPlaceholder).assertIsDisplayed()
+    }
+
+    // ============ 豆瓣同步交互 ============
+
+    @Test
+    fun `同步进行中显示同步横幅`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel(
+                    uiState = WatchlistUiState(
+                        doubanSyncProgress = DoubanSyncProgress(
+                            isRunning = true,
+                            current = 5,
+                            total = 100,
+                            phase = "同步中"
+                        )
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+        // 横幅文案格式: "阶段 (current/total)"
+        composeRule.onNodeWithText("同步中 (5/100)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `同步未进行时不显示横幅`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel()
+            )
+        }
+        composeRule.waitForIdle()
+        // doubanSyncProgress = null (默认) 时横幅不显示
+        composeRule.onAllNodesWithText("同步中").fetchSemanticsNodes().also {
+            assertThat(it).isEmpty()
+        }
+    }
+
+    @Test
+    fun `点击同步横幅打开DoubanSyncDialog`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel(
+                    uiState = WatchlistUiState(
+                        doubanSyncProgress = DoubanSyncProgress(
+                            isRunning = true,
+                            current = 5,
+                            total = 100,
+                            phase = "同步中"
+                        )
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+        // 点击同步横幅
+        composeRule.onNodeWithText("同步中 (5/100)").performClick()
+        composeRule.waitForIdle()
+        // DoubanSyncDialog 打开,显示标题
+        val dialogTitle = context.getString(R.string.douban_sync_title)
+        composeRule.onNodeWithText(dialogTitle).assertIsDisplayed()
+    }
+
+    @Test
+    fun `cookie过期时横幅显示重新登录提示`() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel(
+                    uiState = WatchlistUiState(
+                        doubanSyncProgress = DoubanSyncProgress(
+                            isComplete = true,
+                            cookieExpired = true
+                        )
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+        // cookie 过期时横幅显示过期提示和重新登录按钮
+        val expiredBanner = context.getString(R.string.douban_sync_cookie_expired_banner)
+        val reloginText = context.getString(R.string.douban_sync_relogin)
+        composeRule.onNodeWithText(expiredBanner).assertIsDisplayed()
+        composeRule.onNodeWithText(reloginText).assertIsDisplayed()
     }
 
     // ============ Helper ============
