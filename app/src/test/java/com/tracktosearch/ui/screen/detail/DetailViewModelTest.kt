@@ -530,18 +530,23 @@ class DetailViewModelTest {
     }
 
     /**
-     * 测试点26：toggleWatchlist 已看→想看复合分支成功
+     * 测试点26：toggleWatchlist 已看→想看（简化后走通用分支，依赖 addToWatchlist 内部副操作）
      */
     @Test
     fun `toggleWatchlist_已看→想看复合分支`() = runTest {
         setupLoggedInState()
         setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
-        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
+        // addToWatchlist 内部已有 removeFromHistory 副操作，UI 不再单独调 removeWatched
         coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
 
         viewModel.toggleWatchlist()
         advanceUntilIdle()
 
+        // 不再调用 removeWatched
+        coVerify(exactly = 0) { traktRepository.removeWatched(any(), any(), any()) }
+        // 直接调用 addToWatchlist
+        coVerify(exactly = 1) { traktRepository.addToWatchlist(any(), any(), any()) }
+        // 乐观设置已看为 false（副操作失败由下次全量拉取纠正）
         assertThat(viewModel.uiState.value.isMarkedWatched).isFalse()
         assertThat(viewModel.uiState.value.isMarkedWatchlist).isTrue()
         assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
@@ -549,31 +554,12 @@ class DetailViewModelTest {
     }
 
     /**
-     * 测试点27：toggleWatchlist 已看→想看 removeWatched 失败回滚
-     */
-    @Test
-    fun `toggleWatchlist_已看→想看_removeWatched失败_回滚`() = runTest {
-        setupLoggedInState()
-        setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
-        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
-
-        viewModel.toggleWatchlist()
-        advanceUntilIdle()
-
-        assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
-        assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
-        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
-        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
-    }
-
-    /**
-     * 测试点28：toggleWatchlist 已看→想看 addToWatchlist 失败回滚
+     * 测试点27：toggleWatchlist 已看→想看 addToWatchlist 失败回滚
      */
     @Test
     fun `toggleWatchlist_已看→想看_addToWatchlist失败_回滚`() = runTest {
         setupLoggedInState()
         setUiState { it.copy(isMarkedWatched = true, isMarkedWatchlist = false) }
-        coEvery { traktRepository.removeWatched(any(), any(), any()) } returns Result.success(mockk(relaxed = true))
         coEvery { traktRepository.addToWatchlist(any(), any(), any()) } returns Result.failure(Exception("网络错误"))
 
         viewModel.toggleWatchlist()
@@ -581,6 +567,9 @@ class DetailViewModelTest {
 
         assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
         assertThat(viewModel.uiState.value.isMarkingWatched).isFalse()
+        // 失败时不改变已标记状态
+        assertThat(viewModel.uiState.value.isMarkedWatched).isTrue()
+        assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
     }
 
     /**

@@ -1734,52 +1734,14 @@ class DetailViewModel @Inject constructor(
         }
 
         val targetState = !current.isMarkedWatchlist
-
-        // 已看过时点击想看:从已看列表移除 + 添加到想看列表(把看过变成想看)
-        if (targetState && current.isMarkedWatched) {
-            _uiState.value = current.copy(
-                isMarkingWatchlist = true,
-                isMarkingWatched = true,
-                watchlistChanged = true,
-                watchedChanged = true
-            )
-            viewModelScope.launch {
-                // 先从已看列表移除
-                traktRepository.removeWatched(currentTraktId, currentMediaType, currentTmdbId)
-                    .onSuccess {
-                        // 再添加到想看列表
-                        traktRepository.addToWatchlist(currentTraktId, currentMediaType, currentTmdbId)
-                            .onSuccess {
-                                _uiState.value = _uiState.value.copy(
-                                    isMarkedWatched = false,
-                                    isMarkedWatchlist = true,
-                                    isMarkingWatchlist = false,
-                                    isMarkingWatched = false
-                                )
-                                saveToCache()
-                                // 豆瓣双向同步:已看→想看,豆瓣标记为 wish
-                                syncDoubanMark(DoubanSyncAction.WISH)
-                            }
-                            .onFailure {
-                                _uiState.value = _uiState.value.copy(
-                                    isMarkingWatchlist = false,
-                                    isMarkingWatched = false
-                                )
-                            }
-                    }
-                    .onFailure {
-                        _uiState.value = _uiState.value.copy(
-                            isMarkingWatchlist = false,
-                            isMarkingWatched = false
-                        )
-                    }
-            }
-            return
-        }
+        // 已看过时点击想看：标记 watched 正在变更（addToWatchlist 内部副操作会从 watched 移除）
+        val willChangeWatched = targetState && current.isMarkedWatched
 
         _uiState.value = current.copy(
             isMarkingWatchlist = true,
-            watchlistChanged = targetState || current.watchlistChanged
+            isMarkingWatched = willChangeWatched,
+            watchlistChanged = targetState || current.watchlistChanged,
+            watchedChanged = willChangeWatched || current.watchedChanged
         )
 
         viewModelScope.launch {
@@ -1791,13 +1753,19 @@ class DetailViewModel @Inject constructor(
             if (result.isSuccess) {
                 _uiState.value = _uiState.value.copy(
                     isMarkedWatchlist = targetState,
-                    isMarkingWatchlist = false
+                    // 乐观设置已看为 false（副操作失败由下次全量拉取纠正，对称于 markAsWatched 副操作失败处理）
+                    isMarkedWatched = if (willChangeWatched) false else _uiState.value.isMarkedWatched,
+                    isMarkingWatchlist = false,
+                    isMarkingWatched = false
                 )
                 saveToCache()
                 // 豆瓣双向同步:标记想看→豆瓣 wish,取消想看→豆瓣 remove
                 syncDoubanMark(if (targetState) DoubanSyncAction.WISH else DoubanSyncAction.REMOVE_WISH)
             } else {
-                _uiState.value = _uiState.value.copy(isMarkingWatchlist = false)
+                _uiState.value = _uiState.value.copy(
+                    isMarkingWatchlist = false,
+                    isMarkingWatched = false
+                )
             }
         }
     }
