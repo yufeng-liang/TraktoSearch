@@ -103,6 +103,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -137,7 +138,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
-import com.tracktosearch.ui.animation.fadeSlideIn
+import com.tracktosearch.ui.animation.EnterMode
+import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.GlassSearchBar
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
@@ -204,6 +206,14 @@ fun WatchlistScreen(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     // 0=想看, 1=已看
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
+    // 卡片入场动画状态
+    var enterMode by remember { mutableStateOf(EnterMode.DEFAULT) }
+    val animatedIds = rememberSaveable(
+        saver = listSaver(
+            save = { it.value.toList() },
+            restore = { mutableStateOf(it.toMutableSet()) },
+        ),
+    ) { mutableStateOf(mutableSetOf<Long>()) }
     val tabScope = rememberCoroutineScope()
     // 控制豆瓣同步进度弹窗显示（点击横幅重新打开 / 同步完成自动弹出）
     var showSyncDialog by rememberSaveable { mutableStateOf(false) }
@@ -265,6 +275,7 @@ fun WatchlistScreen(
     val density = LocalDensity.current
     val triggerThreshold = with(density) { 80.dp.toPx() } // 触发刷新的阈值
     val isThresholdReached = overscrollOffset >= triggerThreshold
+    val gridCoroutineScope = rememberCoroutineScope()
     val pullToRefreshConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
@@ -292,6 +303,8 @@ fun WatchlistScreen(
                 if (overscrollOffset >= triggerThreshold && !isRefreshing) {
                     isRefreshing = true
                     viewModel.refresh()
+                    enterMode = EnterMode.EMPHASIS
+                    gridCoroutineScope.launch { delay(500); enterMode = EnterMode.DEFAULT }
                     isRefreshing = false
                 }
                 // 始终弹回
@@ -312,7 +325,6 @@ fun WatchlistScreen(
     val singleModeGridState = rememberLazyGridState()
     val historyModeGridState = rememberLazyGridState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
-    val gridCoroutineScope = rememberCoroutineScope()
 
     // 根据 selectedMode 选择对应的 gridState
     val currentGridState = if (selectedMode == 0) singleModeGridState else historyModeGridState
@@ -343,7 +355,15 @@ fun WatchlistScreen(
 
     // 监听 tab 切换，保存/恢复滚动位置 + 退出多选
     var prevTabKey by remember { mutableStateOf("${selectedMode}_${selectedTab}") }
+    var firstTabSwitch by remember { mutableStateOf(true) }
     LaunchedEffect(selectedMode, selectedTab) {
+        if (firstTabSwitch) {
+            firstTabSwitch = false
+        } else {
+            enterMode = EnterMode.EMPHASIS
+            delay(500)
+            enterMode = EnterMode.DEFAULT
+        }
         val currentKey = "${selectedMode}_${selectedTab}"
         // 保存旧 tab 的位置
         savedScrollPositions[prevTabKey] = Pair(
@@ -556,7 +576,7 @@ fun WatchlistScreen(
                             val item = items[index]
                             val isSelected = selectedItems[item.traktId] == true
                             val isResolving = isRemoving && isSelected
-                            Box(modifier = Modifier.fadeSlideIn(index)) {
+                            Box(modifier = Modifier.cardEnter(item.traktId.toLong(), index, enterMode, animatedIds)) {
                                 WatchlistPosterCard(
                                     item = item,
                                     isInWatchlist = selectedMode == 0,
