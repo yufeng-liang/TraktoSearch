@@ -307,6 +307,26 @@ class TraktRepository @Inject constructor(
         }
     }
 
+    /** 缓存已加载时，仅从已看缓存移除 ID（不加回 watchlist，供批量添加想看的副操作使用） */
+    private fun removeFromWatchedCacheOnly(traktId: Int, tmdbId: Int, type: MediaType) {
+        synchronized(watchlistWatchedIdsLock) {
+            watchlistWatchedIds?.let { current ->
+                watchlistWatchedIds = when (type) {
+                    MediaType.MOVIE -> current.copy(
+                        movieWatchedTraktIds = current.movieWatchedTraktIds - traktId,
+                        movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds - tmdbId else current.movieWatchedTmdbIds
+                    )
+                    MediaType.SHOW -> current.copy(
+                        showWatchedTraktIds = current.showWatchedTraktIds - traktId,
+                        showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds - tmdbId else current.showWatchedTmdbIds
+                    )
+                    else -> current
+                }
+                persistWatchlistWatchedIds()
+            }
+        }
+    }
+
     // 持久化缓存作用域
     private val persistentScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val persistentDataStore get() = context.traktPersistentCacheStore

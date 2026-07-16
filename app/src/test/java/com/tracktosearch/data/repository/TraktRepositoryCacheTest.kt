@@ -276,6 +276,38 @@ class TraktRepositoryCacheTest {
         assertThat(ids.showWatchedTraktIds).contains(600)
     }
 
+    // ==================== removeFromWatchedCacheOnly（仅移除已看，不加回 watchlist）====================
+
+    @Test
+    fun `removeFromWatchedCacheOnly_MOVIE_仅移除已看不加回watchlist`() {
+        // 初始：100 在已看中，不在想看中
+        setWatchlistWatchedIds(WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(100),
+            movieWatchedTmdbIds = setOf(1000)
+        ))
+        invokePrivate("removeFromWatchedCacheOnly", 100, 1000, MediaType.MOVIE)
+
+        val ids = getWatchlistWatchedIds()!!
+        // 已看已移除
+        assertThat(ids.movieWatchedTraktIds).doesNotContain(100)
+        assertThat(ids.movieWatchedTmdbIds).doesNotContain(1000)
+        // 想看不会被加回（与 removeFromWatchedCache 的区别）
+        assertThat(ids.movieWatchlistTraktIds).doesNotContain(100)
+        assertThat(ids.movieWatchlistTmdbIds).doesNotContain(1000)
+    }
+
+    @Test
+    fun `removeFromWatchedCacheOnly_SHOW_仅移除已看不加回watchlist`() {
+        setWatchlistWatchedIds(WatchlistWatchedIds(
+            showWatchedTraktIds = setOf(200)
+        ))
+        invokePrivate("removeFromWatchedCacheOnly", 200, 0, MediaType.SHOW)
+
+        val ids = getWatchlistWatchedIds()!!
+        assertThat(ids.showWatchedTraktIds).doesNotContain(200)
+        assertThat(ids.showWatchlistTraktIds).doesNotContain(200)
+    }
+
     // ==================== removeFromWatchedCache（核心一致性）====================
 
     @Test
