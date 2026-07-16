@@ -1397,9 +1397,25 @@ class TraktRepository @Inject constructor(
         }
     }
 
-    /** 批量添加到想看列表（Trakt API 原生支持批量，一次 POST 传多个 ids）。 */
-    suspend fun batchAddToWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>) =
-        batchSync(movieTraktIds, showTraktIds, traktApiService::addToWatchlist, ::addToWatchlistCache, "batchAddToWatchlist")
+    /**
+     * 批量添加到想看列表（Trakt API 原生支持批量，一次 POST 传多个 ids）。
+     * 注意：Trakt 的 addToWatchlist 不会自动从 history 移除，本方法已添加副操作 batchRemoveFromWatched。
+     */
+    suspend fun batchAddToWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>): Result<TraktSyncResponse> {
+        val mainResult = batchSync(movieTraktIds, showTraktIds, traktApiService::addToWatchlist, ::addToWatchlistCache, "batchAddToWatchlist")
+        // 主操作成功后，副操作从已看移除（失败仅记录日志，不影响主操作结果）
+        if (mainResult.isSuccess && (movieTraktIds.isNotEmpty() || showTraktIds.isNotEmpty())) {
+            try {
+                val sideResult = batchSync(movieTraktIds, showTraktIds, traktApiService::removeFromHistory, ::removeFromWatchedCacheOnly, "batchAddToWatchlist_sideEffect")
+                if (sideResult.isFailure) {
+                    Log.w("TraktRepository", "batchAddToWatchlist 副操作 batchRemoveFromWatched 失败: ${sideResult.exceptionOrNull()?.message}")
+                }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Log.w("TraktRepository", "batchAddToWatchlist 副操作 batchRemoveFromWatched 异常: ${e.message}")
+            }
+        }
+        return mainResult
+    }
 
     /** 批量从想看列表移除。 */
     suspend fun batchRemoveFromWatchlist(movieTraktIds: List<Int>, showTraktIds: List<Int>) =

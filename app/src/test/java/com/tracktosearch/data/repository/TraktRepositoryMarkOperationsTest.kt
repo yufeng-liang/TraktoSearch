@@ -575,6 +575,39 @@ class TraktRepositoryMarkOperationsTest {
         assertThat(result.isSuccess).isTrue()
     }
 
+    // ==================== batchAddToWatchlist（含对称副操作）====================
+
+    @Test
+    fun batchAddToWatchlist_成功_调用副操作batchRemoveFromWatched() = runTest {
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
+
+        val result = repository.batchAddToWatchlist(listOf(100, 101), listOf(200))
+
+        assertThat(result.isSuccess).isTrue()
+        coVerify(exactly = 1) { traktApiService.addToWatchlist(any()) }
+        coVerify(exactly = 1) { traktApiService.removeFromHistory(any()) }
+    }
+
+    @Test
+    fun batchAddToWatchlist_副操作失败_主操作仍成功() = runTest {
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } returns errorResponse(500)
+
+        val result = repository.batchAddToWatchlist(listOf(100), emptyList())
+
+        assertThat(result.isSuccess).isTrue()
+    }
+
+    @Test
+    fun batchAddToWatchlist_空列表_不调用任何API() = runTest {
+        val result = repository.batchAddToWatchlist(emptyList(), emptyList())
+
+        assertThat(result.isSuccess).isTrue()
+        coVerify(exactly = 0) { traktApiService.addToWatchlist(any()) }
+        coVerify(exactly = 0) { traktApiService.removeFromHistory(any()) }
+    }
+
     @Test
     fun addToWatchlist_DISK类型返回failure() = runTest {
         val result = repository.addToWatchlist(100, MediaType.DISK)
