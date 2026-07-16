@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,9 +63,12 @@ fun MarkRecordItemRow(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 小海报 48×72dp
+        // 小海报 48×72dp（兜底：如果是相对路径则拼接 TMDB 基础 URL）
+        val fullPosterUrl = item.posterUrl?.let { path ->
+            if (path.startsWith("http")) path else TmdbImageUrls.build(path)
+        }
         AsyncImage(
-            model = item.posterUrl,
+            model = fullPosterUrl,
             contentDescription = item.title,
             modifier = Modifier
                 .size(width = 48.dp, height = 72.dp)

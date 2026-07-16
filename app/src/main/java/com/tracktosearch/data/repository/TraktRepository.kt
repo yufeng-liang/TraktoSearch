@@ -9,7 +9,6 @@ import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
-import com.tracktosearch.data.local.db.MediaDetailDao
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -39,7 +38,7 @@ class TraktRepository @Inject constructor(
     private val traktApiService: TraktApiService,
     private val userProfileStorage: UserProfileStorage,
     private val markActionRecordDao: MarkActionRecordDao,
-    private val mediaDetailDao: MediaDetailDao,
+    private val tmdbRepository: TmdbRepository,
     private val json: Json,
     @ApplicationContext private val context: Context
 ) {
@@ -845,15 +844,31 @@ class TraktRepository @Inject constructor(
                 for (entry in movieEntries) {
                     val m = entry.movie
                     val watchedAt = parseTraktDate(entry.watched_at)
+                    // 通过 TmdbRepository.enrich 获取本地化标题和完整海报 URL
+                    var displayTitle = m.title
+                    var posterUrl: String? = null
+                    var year = m.year.takeIf { it > 0 }
+                    var imdbId = m.ids.imdb
+                    if (m.ids.tmdb > 0) {
+                        try {
+                            val enrichment = tmdbRepository.enrichMovie(m.ids.tmdb, m.title, year)
+                            displayTitle = enrichment.chineseTitle.ifBlank { m.title }
+                            posterUrl = enrichment.posterUrl
+                            year = enrichment.year ?: year
+                            imdbId = enrichment.imdbId ?: imdbId
+                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                            Log.w("TraktRepository", "fetchWatchHistory movie enrich failed: ${e.message}")
+                        }
+                    }
                     items.add(WatchHistoryItem(
                         traktId = m.ids.trakt,
                         tmdbId = m.ids.tmdb,
-                        imdbId = m.ids.imdb,
+                        imdbId = imdbId,
                         mediaType = "movie",
                         title = m.title,
-                        displayTitle = m.title,
-                        posterUrl = m.posterPath,
-                        year = m.year.takeIf { it > 0 },
+                        displayTitle = displayTitle,
+                        posterUrl = posterUrl,
+                        year = year,
                         watchedAt = watchedAt,
                         episodeInfo = null
                     ))
@@ -863,15 +878,31 @@ class TraktRepository @Inject constructor(
                     val ep = entry.episode ?: continue
                     val show = entry.show ?: continue
                     val watchedAt = parseTraktDate(entry.watched_at)
+                    // 通过 TmdbRepository.enrich 获取剧集本地化标题和海报 URL
+                    var displayTitle = show.title
+                    var posterUrl: String? = null
+                    var year = show.year
+                    var imdbId = show.ids.imdb
+                    if (show.ids.tmdb > 0) {
+                        try {
+                            val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, year)
+                            displayTitle = enrichment.chineseTitle.ifBlank { show.title }
+                            posterUrl = enrichment.posterUrl
+                            year = enrichment.year ?: year
+                            imdbId = enrichment.imdbId ?: imdbId
+                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                            Log.w("TraktRepository", "fetchWatchHistory episode enrich failed: ${e.message}")
+                        }
+                    }
                     items.add(WatchHistoryItem(
                         traktId = show.ids.trakt,
                         tmdbId = show.ids.tmdb,
-                        imdbId = show.ids.imdb,
+                        imdbId = imdbId,
                         mediaType = "show",
                         title = show.title,
-                        displayTitle = show.title,
-                        posterUrl = null,
-                        year = show.year,
+                        displayTitle = displayTitle,
+                        posterUrl = posterUrl,
+                        year = year,
                         watchedAt = watchedAt,
                         episodeInfo = "S${ep.season}E${ep.number}"
                     ))
@@ -927,19 +958,34 @@ class TraktRepository @Inject constructor(
                 // 写入标记操作流水（取消单集已看）
                 if (season > 0 && episode > 0) {
                     try {
-                        // 优先用传入的 showTitle，其次从 MediaDetailEntity 查快照
-                        val detail = if (showTraktId > 0) mediaDetailDao.getByTraktId(showTraktId) else null
-                        val title = showTitle.ifBlank { detail?.title ?: "" }
+                        // 通过 TmdbRepository.enrich 获取本地化标题和海报
+                        var title = showTitle
+                        var displayTitle = showTitle
+                        var posterUrl: String? = null
+                        var year: Int? = null
+                        var imdbId = ""
+                        if (showTmdbId > 0) {
+                            try {
+                                val enrichment = tmdbRepository.enrichTv(showTmdbId, showTitle, null)
+                                title = enrichment.originalTitle.ifBlank { enrichment.chineseTitle }
+                                displayTitle = enrichment.chineseTitle.ifBlank { showTitle }
+                                posterUrl = enrichment.posterUrl
+                                year = enrichment.year
+                                imdbId = enrichment.imdbId ?: ""
+                            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                                Log.w("TraktRepository", "unmarkEpisodeWatched enrich failed: ${e.message}")
+                            }
+                        }
                         markActionRecordDao.insert(
                             MarkActionRecordEntity(
                                 traktId = showTraktId,
                                 tmdbId = showTmdbId,
-                                imdbId = "",
+                                imdbId = imdbId,
                                 mediaType = "show",
                                 title = title,
-                                displayTitle = title,
-                                posterUrl = detail?.posterUrl,
-                                year = detail?.year,
+                                displayTitle = displayTitle,
+                                posterUrl = posterUrl,
+                                year = year,
                                 actionType = MarkActionType.UNMARK_WATCHED.value,
                                 actedAt = System.currentTimeMillis(),
                                 episodeInfo = "S${season}E${episode}"
@@ -1133,7 +1179,8 @@ class TraktRepository @Inject constructor(
     /**
      * 异步写入一条标记操作流水。失败仅记录日志，不影响主操作。
      * 超过 MAX_MARK_RECORDS 上限时自动删最旧的。
-     * 快照字段（title/posterUrl/year/imdbId）从 MediaDetailEntity 持久化缓存查询填充。
+     * 快照字段（title/posterUrl/year/imdbId）通过 TmdbRepository.enrich 获取，
+     * 复用 TMDB 持久化缓存（永久），缓存未命中时自动请求 TMDB API。
      */
     private suspend fun insertMarkRecord(
         traktId: Int,
@@ -1144,18 +1191,43 @@ class TraktRepository @Inject constructor(
     ) {
         try {
             val mediaTypeStr = if (mediaType == MediaType.MOVIE) "movie" else "show"
-            // 从 MediaDetailEntity 持久化缓存查快照（主键 traktId，O(1) 查询）
-            val detail = mediaDetailDao.getByTraktId(traktId)
+            // 通过 TmdbRepository.enrich 获取本地化标题和完整海报 URL（有持久化缓存）
+            var title = ""
+            var displayTitle = ""
+            var posterUrl: String? = null
+            var year: Int? = null
+            var imdbId = ""
+            if (tmdbId > 0) {
+                try {
+                    if (mediaType == MediaType.MOVIE) {
+                        val enrichment = tmdbRepository.enrichMovie(tmdbId, "", null)
+                        title = enrichment.originalTitle.ifBlank { enrichment.chineseTitle }
+                        displayTitle = enrichment.chineseTitle
+                        posterUrl = enrichment.posterUrl
+                        year = enrichment.year
+                        imdbId = enrichment.imdbId ?: ""
+                    } else {
+                        val enrichment = tmdbRepository.enrichTv(tmdbId, "", null)
+                        title = enrichment.originalTitle.ifBlank { enrichment.chineseTitle }
+                        displayTitle = enrichment.chineseTitle
+                        posterUrl = enrichment.posterUrl
+                        year = enrichment.year
+                        imdbId = enrichment.imdbId ?: ""
+                    }
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    Log.w("TraktRepository", "insertMarkRecord enrichment failed: ${e.message}")
+                }
+            }
             markActionRecordDao.insert(
                 MarkActionRecordEntity(
                     traktId = traktId,
                     tmdbId = tmdbId,
-                    imdbId = "",  // MediaDetailEntity 不含 imdbId，留空
+                    imdbId = imdbId,
                     mediaType = mediaTypeStr,
-                    title = detail?.title ?: "",
-                    displayTitle = detail?.displayTitle ?: detail?.title ?: "",
-                    posterUrl = detail?.posterUrl,
-                    year = detail?.year,
+                    title = title,
+                    displayTitle = displayTitle,
+                    posterUrl = posterUrl,
+                    year = year,
                     actionType = actionType.value,
                     actedAt = System.currentTimeMillis(),
                     episodeInfo = episodeInfo
