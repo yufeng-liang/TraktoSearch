@@ -480,6 +480,7 @@ private fun getSectionDisplayName(id: String): String {
         "trakt-recommendations" -> stringResource(R.string.discover_recommended)
         "trakt-show-recommendations" -> stringResource(R.string.discover_trakt_recommendations_shows)
         "trakt-lists" -> stringResource(R.string.discover_trending_lists)
+        "douban-recommend" -> stringResource(R.string.discover_douban_recommend)
         else -> id
     }
 }

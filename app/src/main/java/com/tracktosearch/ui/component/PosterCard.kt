@@ -99,8 +99,8 @@ fun PosterCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .shadow(8.dp, RoundedCornerShape(14.dp))
-                .clip(RoundedCornerShape(14.dp))
+                .shadow(8.dp, RoundedCornerShape(12.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .then(posterModifier)
                 .then(
                     if (onClick != null) {

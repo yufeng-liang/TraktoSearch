@@ -1,8 +1,11 @@
 package com.tracktosearch.ui.screen.discover
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -197,10 +201,11 @@ fun DiscoverScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(24.dp)
             ) {
-                // 顶部 Hero 分类快捷入口
+                // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
-                    val heroCategories = listOf(
-                        HeroCategory(
+                    // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
+                    val heroCategoryDefs = mapOf<String, HeroCategory>(
+                        "tmdb-popular" to HeroCategory(
                             id = "tmdb-popular",
                             title = stringResource(R.string.discover_trending),
                             count = uiState.tmdbPopularMovies.size,
@@ -209,7 +214,7 @@ fun DiscoverScreen(
                             ),
                             onClick = { showPopularAll = true }
                         ),
-                        HeroCategory(
+                        "tmdb-upcoming" to HeroCategory(
                             id = "tmdb-upcoming",
                             title = stringResource(R.string.discover_upcoming),
                             count = uiState.tmdbUpcomingMovies.size,
@@ -218,7 +223,7 @@ fun DiscoverScreen(
                             ),
                             onClick = { showUpcomingAll = true }
                         ),
-                        HeroCategory(
+                        "trakt-recommendations" to HeroCategory(
                             id = "trakt-recommendations",
                             title = stringResource(R.string.discover_recommended),
                             count = uiState.traktRecommendations.size,
@@ -227,8 +232,8 @@ fun DiscoverScreen(
                             ),
                             onClick = { showRecommendationsAll = true }
                         ),
-                        HeroCategory(
-                            id = "douban-hot",
+                        "douban-movie" to HeroCategory(
+                            id = "douban-movie",
                             title = stringResource(R.string.discover_douban_new_movies),
                             count = uiState.doubanHotCategories.sumOf { it.items.size },
                             gradient = Brush.linearGradient(
@@ -239,7 +244,7 @@ fun DiscoverScreen(
                                 showDoubanAllDialog = firstCategory?.id ?: "douban-movie"
                             }
                         ),
-                        HeroCategory(
+                        "trakt-lists" to HeroCategory(
                             id = "trakt-lists",
                             title = stringResource(R.string.discover_trending_lists),
                             count = uiState.trendingLists.size,
@@ -249,18 +254,24 @@ fun DiscoverScreen(
                             onClick = { showTrendingListsAll = true }
                         )
                     )
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(9.dp),
-                        contentPadding = PaddingValues(horizontal = 0.dp)
-                    ) {
-                        itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->
-                            Box(modifier = Modifier.fadeSlideIn(index)) {
-                                CategoryHeroCard(
-                                    title = category.title,
-                                    count = category.count,
-                                    gradient = category.gradient,
-                                    onClick = category.onClick
-                                )
+                    // 按栏目设置顺序过滤可见且存在 Hero 定义的栏目，实现 Hero 卡片排序与显隐联动
+                    val heroCategories = sectionConfigs
+                        .filter { it.visible && it.id in heroCategoryDefs }
+                        .mapNotNull { heroCategoryDefs[it.id] }
+                    if (heroCategories.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(9.dp),
+                            contentPadding = PaddingValues(horizontal = 0.dp)
+                        ) {
+                            itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->
+                                Box(modifier = Modifier.fadeSlideIn(index)) {
+                                    CategoryHeroCard(
+                                        title = category.title,
+                                        count = category.count,
+                                        gradient = category.gradient,
+                                        onClick = category.onClick
+                                    )
+                                }
                             }
                         }
                     }
@@ -576,6 +587,12 @@ fun DiscoverScreen(
                 }
                 // 底部：去影视筛选页入口卡片
                 item(key = "discover_filter_entry") {
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed by interactionSource.collectIsPressedAsState()
+                    val cardScale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.96f else 1f,
+                        label = "discover_filter_entry_scale"
+                    )
                     // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
                     val cardModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "card" && LocalSharedTransitionEnabled.current) {
                         with(sharedTransitionScope) {
@@ -591,6 +608,7 @@ fun DiscoverScreen(
                     }
                     Box(
                         modifier = cardModifier
+                            .scale(cardScale)
                             .clip(RoundedCornerShape(20.dp))
                             .background(
                                 Brush.linearGradient(
@@ -600,7 +618,10 @@ fun DiscoverScreen(
                                     )
                                 )
                             )
-                            .clickable {
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null
+                            ) {
                                 activeFilterEntry = "card"
                                 onFilterDiscoverClick()
                             }
