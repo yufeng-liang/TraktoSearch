@@ -689,4 +689,104 @@ class MarkRecordViewModelTest {
             dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         }
     }
+
+    // ==================== displayTitle / posterUrl 字段传递测试 ====================
+    // 回归测试：DAO entity 和 Trakt 历史返回的 displayTitle/posterUrl 必须原样传递到 UI item。
+    // 之前 sampleEntity 用 displayTitle="Test"、posterUrl=null，且只断言 title，
+    // 导致「标题英文+海报不显示」bug 无法被测试覆盖。
+    // 这里使用 title 与 displayTitle 不同的数据，强制区分两个字段的传递。
+
+    /**
+     * 测试：DAO 路径下 MarkActionRecordEntity 的 displayTitle/posterUrl 字段
+     * 必须原样映射到 MarkRecordItem 的 displayTitle/posterUrl 字段。
+     *
+     * 回归场景：DAO 中 displayTitle="盗梦空间"、posterUrl="https://..."，
+     * 若 toMarkRecordItem() 字段映射错误，UI 上标题显示英文 title 而非 displayTitle。
+     */
+    @Test
+    fun `WATCHLIST_Tab_displayTitle和posterUrl字段从DAO正确传递`() = runTest {
+        val entity = MarkActionRecordEntity(
+            traktId = 100, tmdbId = 200, imdbId = "tt1375666", mediaType = "movie",
+            title = "Inception", displayTitle = "盗梦空间",
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            year = 2010, actionType = MarkActionType.ADD_WATCHLIST.value,
+            actedAt = 5000L, episodeInfo = null
+        )
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(entity)
+        coEvery { traktRepo.getWatchlistWatchedIds() } returns TraktRepository.WatchlistWatchedIds()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.items[0]
+        // title 与 displayTitle 不同，验证两个字段都正确传递
+        assertThat(item.title).isEqualTo("Inception")
+        assertThat(item.displayTitle).isEqualTo("盗梦空间")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        // 其他字段也验证
+        assertThat(item.traktId).isEqualTo(100)
+        assertThat(item.tmdbId).isEqualTo(200)
+        assertThat(item.imdbId).isEqualTo("tt1375666")
+        assertThat(item.mediaType).isEqualTo("movie")
+        assertThat(item.year).isEqualTo(2010)
+        assertThat(item.actionType).isEqualTo(MarkActionType.ADD_WATCHLIST.value)
+        assertThat(item.actedAt).isEqualTo(5000L)
+    }
+
+    /**
+     * 测试：Trakt 历史路径下 WatchHistoryItem 的 displayTitle/posterUrl 字段
+     * 必须原样映射到 MarkRecordItem 的 displayTitle/posterUrl 字段。
+     */
+    @Test
+    fun `WATCHED_Tab_displayTitle和posterUrl字段从Trakt历史正确传递`() = runTest {
+        val historyItem = TraktRepository.WatchHistoryItem(
+            traktId = 500, tmdbId = 501, imdbId = "tt0816692", mediaType = "movie",
+            title = "Interstellar", displayTitle = "星际穿越",
+            posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
+            year = 2014, watchedAt = 1000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
+            TraktRepository.WatchHistoryPage(listOf(historyItem), 1, 1, 1)
+        )
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.items[0]
+        assertThat(item.title).isEqualTo("Interstellar")
+        assertThat(item.displayTitle).isEqualTo("星际穿越")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/interstellar.jpg")
+        assertThat(item.traktId).isEqualTo(500)
+        assertThat(item.tmdbId).isEqualTo(501)
+        assertThat(item.imdbId).isEqualTo("tt0816692")
+        assertThat(item.year).isEqualTo(2014)
+        assertThat(item.actionType).isEqualTo("WATCHED")
+        assertThat(item.actedAt).isEqualTo(1000L)
+    }
+
+    /**
+     * 测试：episodeInfo 字段从 DAO entity 正确传递到 MarkRecordItem。
+     * 剧集标记记录的 episodeInfo 形如 "S01E03"，UI 用于显示季集信息。
+     */
+    @Test
+    fun `WATCHLIST_Tab_episodeInfo字段从DAO正确传递`() = runTest {
+        val entity = MarkActionRecordEntity(
+            traktId = 100, tmdbId = 200, imdbId = "tt1", mediaType = "show",
+            title = "Breaking Bad", displayTitle = "绝命毒师",
+            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
+            year = 2008, actionType = MarkActionType.ADD_WATCHLIST.value,
+            actedAt = 5000L, episodeInfo = "S01E03"
+        )
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(entity)
+        coEvery { traktRepo.getWatchlistWatchedIds() } returns TraktRepository.WatchlistWatchedIds()
+
+        viewModel.switchTab(MarkRecordTab.WATCHLIST)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.items[0].episodeInfo).isEqualTo("S01E03")
+    }
 }

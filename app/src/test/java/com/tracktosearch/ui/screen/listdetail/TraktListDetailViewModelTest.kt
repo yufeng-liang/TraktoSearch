@@ -2,9 +2,12 @@ package com.tracktosearch.ui.screen.listdetail
 
 import androidx.lifecycle.SavedStateHandle
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.remote.tmdb.dto.TmdbMovieDetail
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktListItemResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktShow
+import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
@@ -233,5 +236,145 @@ class TraktListDetailViewModelTest {
         assertThat(state.hasMore).isFalse() // 0 < 20
         assertThat(state.isLoading).isFalse()
         assertThat(state.error).isNull()
+    }
+
+    // ==================== enhancement 字段传递测试 ====================
+    // 回归测试：tmdbId>0 时 enhanceMovieItem/enhanceShowItem 调用 TMDB，
+    // 必须把返回的中文名和海报 URL 正确映射到 ListDetailItem。
+    // 之前所有测试用 tmdbId=0 走短路逻辑（base.copy(isEnhanced=true)），从未验证 enhance 字段传递。
+    //
+    // 注意：电影分支和剧集分支走不同 TMDB 方法，字段映射规则也不同：
+    // - 电影：getMovieDetail → TmdbMovieDetail，title 直接覆盖（ListDetailItem 无 displayTitle 字段），
+    //   posterUrl = detail.poster_path（相对路径，未拼 IMAGE_BASE_URL）
+    // - 剧集：enrichTv → TvEnrichment，title = enrichment.chineseTitle，
+    //   posterUrl = enrichment.posterUrl（完整 URL）
+
+    /**
+     * 测试：电影列表 tmdbId>0 → enhanceMovieItem 调用 getMovieDetail，
+     * 返回的 title、release_date、poster_path 必须正确映射到 ListDetailItem。
+     *
+     * 注意：电影分支 posterUrl 存的是 TMDB 相对路径（detail.poster_path），
+     * 而非完整 URL（与剧集分支不同）。
+     */
+    @Test
+    fun `retry_电影tmdbId大于0_getMovieDetail返回详情_title和posterUrl被覆盖`() = runTest {
+        advanceUntilIdle()
+
+        val movieWithTmdb = listOf(
+            TraktListItemResponse(
+                rank = 1, id = 1, type = "movie",
+                movie = TraktMovie(
+                    title = "Inception", year = 2010,
+                    ids = TraktIds(trakt = 101, tmdb = 27205, imdb = "tt1375666")
+                )
+            )
+        )
+        coEvery { traktRepository.getListItems(testListId, 20, 1) } returns Result.success(movieWithTmdb)
+        coEvery { tmdbRepository.getMovieDetail(27205) } returns TmdbMovieDetail(
+            id = 27205,
+            title = "盗梦空间（中文名）",
+            original_title = "Inception",
+            poster_path = "/abc.jpg", // 相对路径
+            overview = "梦境层层",
+            release_date = "2010-07-16",
+            vote_average = 8.8
+        )
+
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.items).hasSize(1)
+        val item = state.items[0]
+        // Trakt 原始字段保留
+        assertThat(item.traktId).isEqualTo(101)
+        assertThat(item.tmdbId).isEqualTo(27205)
+        assertThat(item.imdbId).isEqualTo("tt1375666")
+        // enhance 后字段（注意电影分支 title 直接覆盖，无 displayTitle 字段）
+        assertThat(item.title).isEqualTo("盗梦空间（中文名）") // 来自 detail.title
+        assertThat(item.year).isEqualTo(2010) // 来自 release_date.take(4)
+        assertThat(item.posterUrl).isEqualTo("/abc.jpg") // 相对路径（detail.poster_path）
+        assertThat(item.isEnhanced).isTrue()
+        coVerify(exactly = 1) { tmdbRepository.getMovieDetail(27205) }
+    }
+
+    /**
+     * 测试：剧集列表 tmdbId>0 → enhanceShowItem 调用 enrichTv，
+     * 返回的 chineseTitle、year、posterUrl 必须正确映射到 ListDetailItem。
+     *
+     * 注意：剧集分支 posterUrl 是完整 URL（enrichment.posterUrl 已拼 IMAGE_BASE_URL），
+     * 与电影分支（相对路径）不同。
+     */
+    @Test
+    fun `retry_剧集tmdbId大于0_enrichTv返回中文名_title和posterUrl被覆盖`() = runTest {
+        advanceUntilIdle()
+
+        val showWithTmdb = listOf(
+            TraktListItemResponse(
+                rank = 1, id = 1, type = "show",
+                show = TraktShow(
+                    title = "Breaking Bad", year = 2008,
+                    ids = TraktIds(trakt = 201, tmdb = 1396, imdb = "tt0903747")
+                )
+            )
+        )
+        coEvery { traktRepository.getListItems(testListId, 20, 1) } returns Result.success(showWithTmdb)
+        coEvery { tmdbRepository.enrichTv(1396, "Breaking Bad", 2008) } returns
+            TmdbRepository.TvEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/breakingbad.jpg",
+                chineseTitle = "绝命毒师",
+                overview = "高中化学老师制毒",
+                genres = "犯罪,剧情",
+                year = 2008,
+                rating = 9.5
+            )
+
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.items).hasSize(1)
+        val item = state.items[0]
+        // Trakt 原始字段保留
+        assertThat(item.traktId).isEqualTo(201)
+        assertThat(item.tmdbId).isEqualTo(1396)
+        assertThat(item.imdbId).isEqualTo("tt0903747")
+        // enhance 后字段
+        assertThat(item.title).isEqualTo("绝命毒师") // 来自 enrichment.chineseTitle
+        assertThat(item.year).isEqualTo(2008)
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/breakingbad.jpg") // 完整 URL
+        assertThat(item.isEnhanced).isTrue()
+        coVerify(exactly = 1) { tmdbRepository.enrichTv(1396, "Breaking Bad", 2008) }
+    }
+
+    /**
+     * 测试：getMovieDetail 返回 null（TMDB 不可用）时，保留 base 原值，
+     * 仅标记 isEnhanced=true，不覆盖任何字段。
+     */
+    @Test
+    fun `retry_电影getMovieDetail返回null_保留base原值仅标记isEnhanced`() = runTest {
+        advanceUntilIdle()
+
+        val movieWithTmdb = listOf(
+            TraktListItemResponse(
+                rank = 1, id = 1, type = "movie",
+                movie = TraktMovie(
+                    title = "Inception", year = 2010,
+                    ids = TraktIds(trakt = 101, tmdb = 27205, imdb = "tt1375666")
+                )
+            )
+        )
+        coEvery { traktRepository.getListItems(testListId, 20, 1) } returns Result.success(movieWithTmdb)
+        coEvery { tmdbRepository.getMovieDetail(27205) } returns null
+
+        viewModel.retry()
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.items[0]
+        // base 原值保留
+        assertThat(item.title).isEqualTo("Inception")
+        assertThat(item.year).isEqualTo(2010)
+        assertThat(item.posterUrl).isNull()
+        assertThat(item.isEnhanced).isTrue()
     }
 }

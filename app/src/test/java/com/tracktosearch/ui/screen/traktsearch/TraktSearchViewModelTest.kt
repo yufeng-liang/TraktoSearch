@@ -347,4 +347,141 @@ class TraktSearchViewModelTest {
         assertThat(state.movieState.results[0].title).isEqualTo("盗梦空间")
         coVerify(atLeast = 1) { traktRepository.searchMovies("盗梦空间", any()) }
     }
+
+    // ==================== enrichment 字段传递测试 ====================
+    // 回归测试：tmdbId>0 时 enrichSearchResult 调用 enrichMovie/enrichTv，
+    // 必须把 enrichment.chineseTitle→displayTitle、posterUrl→posterUrl 正确映射到 UI item。
+    // 之前所有测试用 tmdb=0 走短路逻辑，从未验证 enrich 字段传递。
+
+    /**
+     * 测试：search 电影时 tmdbId>0 → 调用 enrichMovie 返回中文标题和海报 URL，
+     * TraktSearchUiItem 的 displayTitle 和 posterUrl 必须来自 enrichment（而非 Trakt 原始字段）。
+     *
+     * 回归场景：Trakt 原始标题英文，enrichMovie 返回中文标题，若字段映射错误，
+     * UI 上搜索结果标题显示英文而非中文。
+     */
+    @Test
+    fun `search_电影tmdbId大于0_enrichMovie返回中文标题和海报_字段正确映射`() = runTest {
+        viewModel = createViewModel()
+        val movieWithTmdb = TraktSearchResult(
+            type = "movie",
+            score = 10.0,
+            movie = TraktMovie(
+                title = "Inception", year = 2010,
+                ids = TraktIds(trakt = 101, tmdb = 27205, imdb = "tt1375666"),
+                rating = 8.8,
+                genres = listOf("科幻", "动作")
+            )
+        )
+        coEvery { traktRepository.searchMovies("Inception", any()) } returns
+                Result.success(listOf(movieWithTmdb) to 1)
+        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2010) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+                chineseTitle = "盗梦空间",
+                overview = "梦境层层",
+                genres = "科幻,动作",
+                year = 2010,
+                rating = 8.8
+            )
+
+        viewModel.search("Inception", MediaType.MOVIE)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value.movieState
+        assertThat(state.results).hasSize(1)
+        val item = state.results[0]
+        // Trakt 原始字段
+        assertThat(item.traktId).isEqualTo(101)
+        assertThat(item.tmdbId).isEqualTo(27205)
+        assertThat(item.title).isEqualTo("Inception")
+        assertThat(item.imdbId).isEqualTo("tt1375666")
+        assertThat(item.traktRating).isEqualTo(8.8)
+        // enrich 字段（bug 核心防护字段）
+        assertThat(item.displayTitle).isEqualTo("盗梦空间") // 必须来自 enrichment.chineseTitle
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        assertThat(item.genres).isEqualTo("科幻,动作")
+        coVerify(exactly = 1) { tmdbRepository.enrichMovie(27205, "Inception", 2010) }
+    }
+
+    /**
+     * 测试：search 剧集时 tmdbId>0 → 调用 enrichTv 返回中文标题和海报 URL，
+     * TraktSearchUiItem 的 displayTitle 和 posterUrl 必须来自 enrichment。
+     */
+    @Test
+    fun `search_剧集tmdbId大于0_enrichTv返回中文标题和海报_字段正确映射`() = runTest {
+        viewModel = createViewModel()
+        val showWithTmdb = TraktSearchResult(
+            type = "show",
+            score = 10.0,
+            show = TraktShow(
+                title = "Breaking Bad", year = 2008,
+                ids = TraktIds(trakt = 201, tmdb = 1396, imdb = "tt0903747"),
+                rating = 9.5
+            )
+        )
+        coEvery { traktRepository.searchShows("Breaking Bad", any()) } returns
+                Result.success(listOf(showWithTmdb) to 1)
+        coEvery { tmdbRepository.enrichTv(1396, "Breaking Bad", 2008) } returns
+            TmdbRepository.TvEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/breakingbad.jpg",
+                chineseTitle = "绝命毒师",
+                overview = "高中化学老师制毒",
+                genres = "犯罪,剧情",
+                year = 2008,
+                rating = 9.5
+            )
+
+        viewModel.search("Breaking Bad", MediaType.SHOW)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value.showState
+        assertThat(state.results).hasSize(1)
+        val item = state.results[0]
+        assertThat(item.traktId).isEqualTo(201)
+        assertThat(item.tmdbId).isEqualTo(1396)
+        assertThat(item.title).isEqualTo("Breaking Bad")
+        // enrich 字段
+        assertThat(item.displayTitle).isEqualTo("绝命毒师")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/breakingbad.jpg")
+        assertThat(item.genres).isEqualTo("犯罪,剧情")
+        coVerify(exactly = 1) { tmdbRepository.enrichTv(1396, "Breaking Bad", 2008) }
+    }
+
+    /**
+     * 测试：enrich 失败 fallback（posterUrl=null, chineseTitle=原始标题）时，
+     * TraktSearchUiItem 的 displayTitle 降级为原始标题、posterUrl=null。
+     */
+    @Test
+    fun `search_enrichMovie_fallback_displayTitle降级且posterUrl为null`() = runTest {
+        viewModel = createViewModel()
+        val movieWithTmdb = TraktSearchResult(
+            type = "movie",
+            score = 10.0,
+            movie = TraktMovie(
+                title = "Inception", year = 2010,
+                ids = TraktIds(trakt = 101, tmdb = 27205, imdb = "tt1375666")
+            )
+        )
+        coEvery { traktRepository.searchMovies("Inception", any()) } returns
+                Result.success(listOf(movieWithTmdb) to 1)
+        // fallback：TMDB 不可用
+        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2010) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = null,
+                chineseTitle = "Inception",
+                overview = "",
+                genres = "",
+                year = 2010,
+                rating = 0.0
+            )
+
+        viewModel.search("Inception", MediaType.MOVIE)
+        advanceUntilIdle()
+
+        val item = viewModel.uiState.value.movieState.results[0]
+        assertThat(item.displayTitle).isEqualTo("Inception")
+        assertThat(item.posterUrl).isNull()
+        assertThat(item.genres).isEqualTo("")
+    }
 }

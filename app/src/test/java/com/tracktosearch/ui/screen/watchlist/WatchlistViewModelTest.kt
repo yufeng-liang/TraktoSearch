@@ -127,12 +127,13 @@ class WatchlistViewModelTest {
     private fun makeWatchlistMovie(
         traktId: Int,
         title: String = "Test Movie",
-        imdbId: String = "tt123"
+        imdbId: String = "tt123",
+        tmdb: Int = 0
     ): TraktWatchlistMovieItem = TraktWatchlistMovieItem(
         listed_at = "2024-01-01T00:00:00Z",
         movie = TraktMovie(
             title = title, year = 2023,
-            ids = TraktIds(trakt = traktId, tmdb = 0, imdb = imdbId),
+            ids = TraktIds(trakt = traktId, tmdb = tmdb, imdb = imdbId),
             rating = 8.0
         )
     )
@@ -140,12 +141,13 @@ class WatchlistViewModelTest {
     private fun makeWatchlistShow(
         traktId: Int,
         title: String = "Test Show",
-        imdbId: String = "tt456"
+        imdbId: String = "tt456",
+        tmdb: Int = 0
     ): TraktWatchlistShowItem = TraktWatchlistShowItem(
         listed_at = "2024-01-01T00:00:00Z",
         show = TraktShow(
             title = title, year = 2023,
-            ids = TraktIds(trakt = traktId, tmdb = 0, imdb = imdbId),
+            ids = TraktIds(trakt = traktId, tmdb = tmdb, imdb = imdbId),
             rating = 8.0
         )
     )
@@ -410,5 +412,152 @@ class WatchlistViewModelTest {
         // 正常完成应触发完成事件
         assertThat(events).hasSize(1)
         collectJob.cancel()
+    }
+
+    // ==================== enrichment 字段传递测试 ====================
+    // 回归测试：tmdbId>0 时 ViewModel 调用 enrichMovie/enrichTv，
+    // 必须把 enrichment 返回的 chineseTitle→displayTitle、posterUrl→posterUrl 正确映射到 UI item。
+    // 之前测试统一用 tmdb=0 短路 enrich，导致「标题英文+海报不显示」bug 无法被测试覆盖。
+
+    /**
+     * 测试：loadMovies 收到 tmdbId>0 的电影时调用 enrichMovie，
+     * 返回的 chineseTitle 和 posterUrl 必须正确映射到 MediaUiItem 的 displayTitle 和 posterUrl。
+     *
+     * 回归场景：Trakt 原始标题为英文，enrichMovie 返回中文标题和海报 URL，
+     * 若 enrichMediaItem 字段映射错误（如 displayTitle=title 而非 chineseTitle），
+     * UI 上标题会显示英文而非中文。
+     */
+    @Test
+    fun `loadMovies_tmdbId大于0_enrichMovie返回中文标题和海报_字段正确映射`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", imdbId = "tt1375666", tmdb = 27205)) to 1)
+        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2023) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+                chineseTitle = "盗梦空间",
+                overview = "梦境层层",
+                genres = "科幻,动作",
+                year = 2010,
+                rating = 8.8
+            )
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.movies).hasSize(1)
+        val item = state.movies[0]
+        // Trakt 原始字段
+        assertThat(item.traktId).isEqualTo(1)
+        assertThat(item.tmdbId).isEqualTo(27205)
+        assertThat(item.title).isEqualTo("Inception") // title 保留 Trakt 原始
+        assertThat(item.imdbId).isEqualTo("tt1375666")
+        assertThat(item.traktRating).isEqualTo(8.0)
+        // enrich 字段（bug 核心防护字段）
+        assertThat(item.displayTitle).isEqualTo("盗梦空间") // 必须来自 enrichment.chineseTitle
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg") // 必须来自 enrichment.posterUrl
+        assertThat(item.year).isEqualTo(2010) // 来自 enrichment.year
+        assertThat(item.genres).isEqualTo("科幻,动作") // 来自 enrichment.genres
+        coVerify(exactly = 1) { tmdbRepository.enrichMovie(27205, "Inception", 2023) }
+    }
+
+    /**
+     * 测试：loadShows 收到 tmdbId>0 的剧集时调用 enrichTv，
+     * 返回的 chineseTitle 和 posterUrl 必须正确映射到 MediaUiItem。
+     */
+    @Test
+    fun `loadShows_tmdbId大于0_enrichTv返回中文标题和海报_字段正确映射`() = runTest {
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(2, title = "Breaking Bad", imdbId = "tt0903747", tmdb = 1396)) to 1)
+        coEvery { tmdbRepository.enrichTv(1396, "Breaking Bad", 2023) } returns
+            TmdbRepository.TvEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/breakingbad.jpg",
+                chineseTitle = "绝命毒师",
+                overview = "高中化学老师制毒",
+                genres = "犯罪,剧情",
+                year = 2008,
+                rating = 9.5
+            )
+
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.shows).hasSize(1)
+        val item = state.shows[0]
+        assertThat(item.traktId).isEqualTo(2)
+        assertThat(item.tmdbId).isEqualTo(1396)
+        assertThat(item.title).isEqualTo("Breaking Bad")
+        assertThat(item.imdbId).isEqualTo("tt0903747")
+        // enrich 字段
+        assertThat(item.displayTitle).isEqualTo("绝命毒师")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/breakingbad.jpg")
+        assertThat(item.year).isEqualTo(2008)
+        assertThat(item.genres).isEqualTo("犯罪,剧情")
+        coVerify(exactly = 1) { tmdbRepository.enrichTv(1396, "Breaking Bad", 2023) }
+    }
+
+    /**
+     * 测试：loadHistoryMovies 收到 tmdbId>0 的电影时调用 enrichMovie，
+     * 验证已看历史列表同样走 enrich 流程。
+     */
+    @Test
+    fun `loadHistoryMovies_tmdbId大于0_enrichMovie返回中文标题和海报_字段正确映射`() = runTest {
+        coEvery { traktRepository.getMovieHistory(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(3, title = "Interstellar", imdbId = "tt0816692", tmdb = 157336)) to 1)
+        coEvery { tmdbRepository.enrichMovie(157336, "Interstellar", 2023) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
+                chineseTitle = "星际穿越",
+                overview = "虫洞穿越",
+                genres = "科幻,冒险",
+                year = 2014,
+                rating = 9.0
+            )
+
+        viewModel.loadHistoryMovies()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.historyMovies).hasSize(1)
+        val item = state.historyMovies[0]
+        assertThat(item.displayTitle).isEqualTo("星际穿越")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/interstellar.jpg")
+        assertThat(item.year).isEqualTo(2014)
+        coVerify(exactly = 1) { tmdbRepository.enrichMovie(157336, "Interstellar", 2023) }
+    }
+
+    /**
+     * 测试：enrichMovie 返回 fallback（posterUrl=null, chineseTitle=原始标题）时，
+     * MediaUiItem 应保留 Trakt 原始 title 但 displayTitle 降级为原始标题、posterUrl=null。
+     * 验证 TMDB 不可用时 UI 能检测到（isTmdbUnavailable=true）。
+     */
+    @Test
+    fun `loadMovies_enrichMovie_fallback_posterUrl为null且displayTitle降级`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Inception", tmdb = 27205)) to 1)
+        // fallback：TMDB 不可用时
+        coEvery { tmdbRepository.enrichMovie(27205, "Inception", 2023) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = null,
+                chineseTitle = "Inception", // fallback 用原始标题
+                overview = "",
+                genres = "",
+                year = 2023,
+                rating = 0.0
+            )
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertThat(state.movies).hasSize(1)
+        val item = state.movies[0]
+        assertThat(item.displayTitle).isEqualTo("Inception")
+        assertThat(item.posterUrl).isNull()
+        assertThat(item.genres).isEqualTo("")
+        // isTmdbUnavailable 应检测到该条目 TMDB 不可用
+        // selectedMode=0(想看), selectedTab=0(movie)
+        assertThat(state.isTmdbUnavailable(0, 0)).isTrue()
     }
 }
