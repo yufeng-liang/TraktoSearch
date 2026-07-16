@@ -485,6 +485,7 @@
     <string name="detail_load_error">로딩에 실패했습니다. 다시 시도해주세요</string>
     <string name="detail_recommendations_title">관련 추천</string>
     <string name="detail_translating">번역 중…</string>
+    <string name="detail_translating_progress">번역 중 %1$s…</string>
     <string name="detail_translate_failed">번역 실패</string>
     <string name="detail_translate">번역</string>
     <string name="detail_translate_all">모두 번역</string>

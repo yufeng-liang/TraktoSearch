@@ -126,6 +126,7 @@ import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -1078,11 +1079,11 @@ fun DoubanHotCard(
                 }
             }
             if (rating != null) {
-                RatingBadge(
+                DoubanRatingBadge(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(2.dp)
+                        .padding(4.dp)
                 )
             }
             if (isResolving) {
@@ -1190,7 +1191,7 @@ private fun DoubanHotGridItem(
 ) {
     val context = LocalContext.current
     val ratingMatch = Regex("【(\\d+\\.?\\d*)】").find(item.title)
-    val rating = ratingMatch?.groupValues?.get(1)
+    val rating = ratingMatch?.groupValues?.get(1)?.toDoubleOrNull()
     val displayTitle = item.title
         .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
         .replace(Regex("^#\\d+\\s*"), "")
@@ -1238,23 +1239,12 @@ private fun DoubanHotGridItem(
                     }
                 }
                 if (rating != null) {
-                    Surface(
+                    DoubanRatingBadge(
+                        rating = rating,
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        color = Color(0xFF68BD5B)
-                    ) {
-                        Text(
-                            text = rating,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            ),
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
+                            .padding(4.dp)
+                    )
                 }
                 if (isResolving) {
                     Box(

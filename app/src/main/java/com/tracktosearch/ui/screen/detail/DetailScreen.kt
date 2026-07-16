@@ -549,8 +549,11 @@ fun DetailScreen(
                                             )
                                         }
                                         Text(
-                                            text = if (uiState.isTranslating) stringResource(R.string.detail_translating)
-                                            else stringResource(R.string.detail_translate_all),
+                                            text = if (uiState.isTranslating) {
+                                                uiState.translationProgress?.let {
+                                                    stringResource(R.string.detail_translating_progress, it)
+                                                } ?: stringResource(R.string.detail_translating)
+                                            } else stringResource(R.string.detail_translate_all),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )

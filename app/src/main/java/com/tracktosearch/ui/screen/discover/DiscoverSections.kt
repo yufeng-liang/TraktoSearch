@@ -490,6 +490,7 @@ internal fun DoubanRecommendSection(
                                     isInWatchlist = false,
                                     isWatched = false,
                                     tmdbId = 0,
+                                    isDoubanRating = true,
                                     onClick = { onItemClick(item) }
                                 )
                             }

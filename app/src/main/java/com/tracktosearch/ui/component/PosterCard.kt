@@ -152,7 +152,7 @@ fun PosterCard(
                     rating = rating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(2.dp)
+                        .padding(4.dp)
                 )
             }
             val showYear = !year.isNullOrBlank() && year != "0"

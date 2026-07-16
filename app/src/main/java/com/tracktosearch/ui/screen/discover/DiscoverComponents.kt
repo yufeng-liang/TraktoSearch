@@ -62,6 +62,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.YearBadge
 
@@ -78,6 +79,8 @@ internal fun MovieCard(
     isInWatchlist: Boolean = false,
     isWatched: Boolean = false,
     tmdbId: Int = 0,
+    /** 评分来源是否为豆瓣：true 显示绿色填充样式，false 显示带星星样式 */
+    isDoubanRating: Boolean = false,
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -211,12 +214,14 @@ internal fun MovieCard(
                 }
             }
             if (ratingValue != null) {
-                RatingBadge(
-                    rating = ratingValue,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(2.dp)
-                )
+                val badgeModifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+                if (isDoubanRating) {
+                    DoubanRatingBadge(rating = ratingValue, modifier = badgeModifier)
+                } else {
+                    RatingBadge(rating = ratingValue, modifier = badgeModifier)
+                }
             }
             if (isResolving) {
                 Box(

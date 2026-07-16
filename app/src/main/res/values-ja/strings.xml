@@ -485,6 +485,7 @@
     <string name="detail_load_error">読み込みに失敗しました。再試行してください</string>
     <string name="detail_recommendations_title">関連おすすめ</string>
     <string name="detail_translating">翻訳中…</string>
+    <string name="detail_translating_progress">翻訳中 %1$s…</string>
     <string name="detail_translate_failed">翻訳失敗</string>
     <string name="detail_translate">翻訳</string>
     <string name="detail_translate_all">すべて翻訳</string>

@@ -116,6 +116,8 @@ data class DetailUiState(
     val translatedComments: List<TraktComment> = emptyList(),
     val isTranslating: Boolean = false,
     val translatingCommentId: Int? = null,  // 正在翻译的单条评论ID
+    /** 批量翻译进度文案（如 "3/10"），null 表示未在翻译 */
+    val translationProgress: String? = null,
     val commentPage: Int = 1,              // 当前 Trakt 评论页码
     val tmdbCommentPage: Int = 1,          // 当前 TMDB 评论页码
     val hasMoreComments: Boolean = false,   // 是否还有更多评论
@@ -638,22 +640,40 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    /** 用户点击翻译按钮时调用，按需翻译全部评论 */
+    /** 用户点击翻译按钮时调用，按需翻译全部评论（流式更新，先翻完的先展示） */
     fun translateComments() {
         val comments = _uiState.value.comments
         if (comments.isEmpty()) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isTranslating = true)
+            _uiState.value = _uiState.value.copy(
+                isTranslating = true,
+                translationProgress = "0/${comments.size}"
+            )
+            // 用数组按原顺序收集译文，每收到一条就更新 UiState
+            val results = arrayOfNulls<TraktComment>(comments.size)
+            var completed = 0
             try {
-                val translated = commentTranslator.translateComments(comments)
+                commentTranslator.translateCommentsFlow(comments).collect { (index, translated) ->
+                    results[index] = translated
+                    completed++
+                    // 当前已完成的译文列表（保持原顺序，跳过未完成的 null）
+                    val current = results.mapNotNull { it }
+                    _uiState.value = _uiState.value.copy(
+                        translatedComments = current,
+                        translationProgress = "$completed/${comments.size}"
+                    )
+                }
                 _uiState.value = _uiState.value.copy(
-                    translatedComments = translated,
-                    isTranslating = false
+                    isTranslating = false,
+                    translationProgress = null
                 )
             } catch (e: Exception) {
                 Log.e("DetailVM", "Translation failed", e)
-                _uiState.value = _uiState.value.copy(isTranslating = false)
+                _uiState.value = _uiState.value.copy(
+                    isTranslating = false,
+                    translationProgress = null
+                )
             }
         }
     }

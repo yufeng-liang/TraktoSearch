@@ -353,6 +353,7 @@
     <string name="detail_load_error">加载失败，请重试</string>
     <string name="detail_recommendations_title">相关推荐</string>
     <string name="detail_translating">正在翻译…</string>
+    <string name="detail_translating_progress">正在翻译 %1$s…</string>
     <string name="detail_translate_failed">翻译失败</string>
     <string name="detail_translate">翻译</string>
     <string name="detail_translate_all">全部翻译</string>

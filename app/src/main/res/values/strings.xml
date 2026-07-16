@@ -353,6 +353,7 @@
     <string name="detail_load_error">Failed to load. Please retry.</string>
     <string name="detail_recommendations_title">Related Recommendations</string>
     <string name="detail_translating">Translating…</string>
+    <string name="detail_translating_progress">Translating %1$s…</string>
     <string name="detail_translate_failed">Translation failed</string>
     <string name="detail_translate">Translate</string>
     <string name="detail_translate_all">Translate All</string>
