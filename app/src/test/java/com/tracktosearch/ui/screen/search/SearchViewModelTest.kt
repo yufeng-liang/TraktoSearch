@@ -333,6 +333,40 @@ class SearchViewModelTest {
     }
 
     /**
+     * 测试点9a：removeHistory("痴迷", "person") → searchHistoryStorage.remove("痴迷", "person") 被调用
+     *
+     * 回归 Bug 5：删除人物"痴迷"时只删 person 类型，保留 movie 类型。
+     * ViewModel 必须把 type 透传给 storage，不能丢弃。
+     */
+    @Test
+    fun `removeHistory_带type_透传type到storage`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.removeHistory("痴迷", "person")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { searchHistoryStorage.remove("痴迷", "person") }
+    }
+
+    /**
+     * 测试点9b：addTraktHistory("痴迷", "movie") → searchHistoryStorage.add("痴迷", "movie") 被调用
+     *
+     * 回归 Bug 4：热门搜索点击后应记录历史（之前 onPopularClick 漏调 addTraktHistory）。
+     * ViewModel 的 addTraktHistory 必须把 type 透传给 storage。
+     */
+    @Test
+    fun `addTraktHistory_带type_透传type到storage`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.addTraktHistory("痴迷", "movie")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { searchHistoryStorage.add("痴迷", "movie") }
+    }
+
+    /**
      * 测试点10：getSuggestions("测") → 返回匹配的搜索历史
      *
      * getSuggestions 是同步方法，从 _uiState.value.searchHistory 过滤。

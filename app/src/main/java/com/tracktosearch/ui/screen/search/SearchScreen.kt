@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.search
 
 import android.location.Location
 import android.location.LocationManager
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -363,6 +364,7 @@ fun SearchScreen(
                         if (searchQuery.trim() == "13638719007") {
                             onSpiderTest?.invoke()
                         } else {
+                            Log.d("SearchNav", "onSearch: type=$searchSourceType, query=$searchQuery")
                             viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
                             onTraktSearch?.invoke(searchSourceType, searchQuery)
                         }
@@ -478,6 +480,7 @@ fun SearchScreen(
                         SearchSuggestionsInline(
                             suggestions = suggestions,
                             onSuggestionClick = { item ->
+                                Log.d("SearchNav", "onSuggestionClick: type=$searchSourceType, query=${item.keyword}, itemType=${item.type}")
                                 searchQuery = item.keyword
                                 onTraktSearch?.invoke(searchSourceType, item.keyword)
                                 focusManager.clearFocus()
@@ -489,17 +492,18 @@ fun SearchScreen(
                         SearchHistoryInline(
                             history = uiState.searchHistory,
                             onHistoryClick = { item ->
-                                searchQuery = item.keyword
                                 val st = when (item.type) {
                                     "movie" -> SearchSourceType.MOVIE
                                     "show" -> SearchSourceType.SHOW
                                     "person" -> SearchSourceType.PERSON
                                     else -> SearchSourceType.DISK
                                 }
+                                Log.d("SearchNav", "onHistoryClick: type=$st, query=${item.keyword}, itemType=${item.type}")
+                                searchQuery = item.keyword
                                 onTraktSearch?.invoke(st, item.keyword)
                                 focusManager.clearFocus()
                             },
-                            onHistoryDelete = { viewModel.removeHistory(it.keyword) },
+                            onHistoryDelete = { viewModel.removeHistory(it.keyword, it.type) },
                             onClearAll = { viewModel.clearHistory() }
                         )
                     }
@@ -507,8 +511,10 @@ fun SearchScreen(
                     PopularSearchesSection(
                         popularSearches = hotSearches,
                         onPopularClick = { keyword ->
+                            Log.d("SearchNav", "onPopularClick: type=$searchSourceType, query=$keyword")
                             searchQuery = keyword
-                            onTraktSearch?.invoke(SearchSourceType.DISK, keyword)
+                            viewModel.addTraktHistory(keyword, searchSourceType.name.lowercase())
+                            onTraktSearch?.invoke(searchSourceType, keyword)
                             focusManager.clearFocus()
                         }
                     )

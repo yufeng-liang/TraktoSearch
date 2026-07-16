@@ -61,13 +61,21 @@ class SearchHistoryStorage @Inject constructor(
         }
     }
 
-    suspend fun remove(keyword: String) {
+    suspend fun remove(keyword: String, type: String? = null) {
         context.searchHistoryDataStore.edit { prefs ->
             val current = (prefs[KEY_HISTORY] ?: "")
                 .split(SEPARATOR)
                 .filter { it.isNotBlank() }
             prefs[KEY_HISTORY] = current
-                .filter { !it.endsWith("::$keyword") && it != keyword }
+                .filter { entry ->
+                    if (type != null) {
+                        // 按 (type, keyword) 复合 key 精确匹配删除，保留同 keyword 不同 type 的记录
+                        entry != "$type::$keyword"
+                    } else {
+                        // type 为 null 时维持原行为：按 keyword 全删（兼容旧调用方）
+                        !entry.endsWith("::$keyword") && entry != keyword
+                    }
+                }
                 .joinToString(SEPARATOR)
         }
     }

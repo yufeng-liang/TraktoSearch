@@ -507,9 +507,9 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    fun removeHistory(keyword: String) {
+    fun removeHistory(keyword: String, type: String? = null) {
         viewModelScope.launch {
-            searchHistoryStorage.remove(keyword)
+            searchHistoryStorage.remove(keyword, type)
         }
     }
 

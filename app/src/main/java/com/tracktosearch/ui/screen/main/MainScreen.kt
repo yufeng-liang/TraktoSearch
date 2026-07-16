@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.main
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
@@ -302,6 +303,7 @@ fun MainScreen(
                                 initialKeyword = "",
                                 onSearchClick = onSearchClick,
                                 onTraktSearch = { type, query ->
+                                    Log.d("SearchNav", "MainScreen onTraktSearch: type=$type, query=$query")
                                     traktSearchType = type
                                     traktSearchQuery = query
                                     showTraktSearch = true
