@@ -22,6 +22,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLooper
 
 /**
  * DoubanTraktStatusConsistencyChecker cancel 链路单元测试。
@@ -265,19 +266,22 @@ class ConsistencyCheckerCancelTest {
     // ============================================================
 
     /**
-     * 轮询等待条件满足,默认超时 3 秒。
+     * 轮询等待条件满足,默认超时 60 秒(全量测试时 IO 线程负载高,需要更长等待)。
      *
      * ConsistencyChecker 的 appScope 使用 Dispatchers.IO(真实线程),
      * 无法用 runTest 的 advanceUntilIdle 控制,需用 Thread.sleep 轮询。
+     * 同时 idle 主 looper,避免 Robolectric 主线程挂起任务(WakeLock release 等)阻塞清理。
      */
     private fun waitForCondition(
-        timeoutMs: Long = 15000L,
+        timeoutMs: Long = 60000L,
         intervalMs: Long = 50L,
         condition: () -> Boolean
     ) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < deadline) {
             if (condition()) return
+            // idle 主 looper,让 Robolectric 主线程挂起任务(如 ShadowWakeLock release)执行
+            ShadowLooper.idleMainLooper()
             Thread.sleep(intervalMs)
         }
         throw AssertionError("条件在 ${timeoutMs}ms 内未满足")
