@@ -36,12 +36,17 @@ class MarkActionRecordDaoTest {
         mediaType: String = "movie",
         traktId: Int = 1,
         title: String = "Test Movie",
+        displayTitle: String = title,
+        posterUrl: String? = null,
+        episodeInfo: String? = null,
+        imdbId: String = "tt1",
+        year: Int? = 2024,
         actedAt: Long = 1000L
     ) = MarkActionRecordEntity(
-        traktId = traktId, tmdbId = 10, imdbId = "tt1",
-        mediaType = mediaType, title = title, displayTitle = title,
-        posterUrl = null, year = 2024, actionType = actionType,
-        actedAt = actedAt, episodeInfo = null
+        traktId = traktId, tmdbId = 10, imdbId = imdbId,
+        mediaType = mediaType, title = title, displayTitle = displayTitle,
+        posterUrl = posterUrl, year = year, actionType = actionType,
+        actedAt = actedAt, episodeInfo = episodeInfo
     )
 
     @Test
@@ -172,5 +177,115 @@ class MarkActionRecordDaoTest {
         dao.insert(sampleRecord(traktId = 2))
         dao.deleteAll()
         assertThat(dao.count()).isEqualTo(0)
+    }
+
+    // ==================== 字段内容回读测试（直击"标题英文+海报不显示"bug）====================
+
+    /**
+     * 验证 displayTitle(中文) 和 posterUrl(非 null) 写入后能正确回读。
+     * 这是"标记记录列表中影视标题显示英文且海报未显示"bug 的直接防护——
+     * 如果 Entity 字段映射或 DAO 查询漏掉了这两列，此测试会失败。
+     */
+    @Test
+    fun insert_全字段回读_displayTitle和posterUrl() = runTest {
+        dao.insert(sampleRecord(
+            traktId = 100,
+            title = "Inception",
+            displayTitle = "盗梦空间",
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            imdbId = "tt1375666",
+            year = 2010,
+            episodeInfo = null
+        ))
+        val result = dao.query(
+            actionTypes = emptyList(), actionTypesEmpty = true,
+            mediaTypes = emptyList(), mediaTypesEmpty = true,
+            startTime = 0, endTime = 0, titleQuery = null,
+            ascending = true, limit = 50, offset = 0
+        )
+        assertThat(result).hasSize(1)
+        val entity = result[0]
+        // title 保留原始英文（Trakt 标题）
+        assertThat(entity.title).isEqualTo("Inception")
+        // displayTitle 是中文标题（来自 TMDB enrichment）—— bug 核心字段
+        assertThat(entity.displayTitle).isEqualTo("盗梦空间")
+        // posterUrl 是完整 URL（来自 TMDB enrichment）—— bug 核心字段
+        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        // 其他字段也应正确回读
+        assertThat(entity.imdbId).isEqualTo("tt1375666")
+        assertThat(entity.year).isEqualTo(2010)
+        assertThat(entity.tmdbId).isEqualTo(10)
+        assertThat(entity.mediaType).isEqualTo("movie")
+    }
+
+    /**
+     * 验证 titleQuery 同时匹配 title 和 displayTitle 列。
+     * 插入 title="Inception" displayTitle="盗梦空间"，用中文关键词查询应命中 displayTitle。
+     */
+    @Test
+    fun query_titleQuery匹配displayTitle不匹配title() = runTest {
+        dao.insert(sampleRecord(
+            traktId = 1,
+            title = "Inception",
+            displayTitle = "盗梦空间"
+        ))
+        dao.insert(sampleRecord(
+            traktId = 2,
+            title = "Interstellar",
+            displayTitle = "星际穿越"
+        ))
+        // 用中文关键词查询，应只命中 displayTitle="盗梦空间"
+        val result = dao.query(
+            actionTypes = emptyList(), actionTypesEmpty = true,
+            mediaTypes = emptyList(), mediaTypesEmpty = true,
+            startTime = 0, endTime = 0, titleQuery = "%盗梦%",
+            ascending = true, limit = 50, offset = 0
+        )
+        assertThat(result).hasSize(1)
+        assertThat(result[0].traktId).isEqualTo(1)
+        assertThat(result[0].displayTitle).isEqualTo("盗梦空间")
+    }
+
+    /**
+     * 验证 episodeInfo 字段（"S01E03"）写入后能正确回读。
+     * 该字段仅取消单集已看时填，用于区分单集操作。
+     */
+    @Test
+    fun insert_episodeInfo回读() = runTest {
+        dao.insert(sampleRecord(
+            traktId = 100,
+            actionType = MarkActionType.UNMARK_WATCHED.value,
+            mediaType = "show",
+            episodeInfo = "S01E03"
+        ))
+        val result = dao.query(
+            actionTypes = emptyList(), actionTypesEmpty = true,
+            mediaTypes = emptyList(), mediaTypesEmpty = true,
+            startTime = 0, endTime = 0, titleQuery = null,
+            ascending = true, limit = 50, offset = 0
+        )
+        assertThat(result).hasSize(1)
+        assertThat(result[0].episodeInfo).isEqualTo("S01E03")
+        assertThat(result[0].actionType).isEqualTo(MarkActionType.UNMARK_WATCHED.value)
+    }
+
+    /**
+     * 验证批量插入 insertAll 方法。
+     */
+    @Test
+    fun insertAll_批量插入() = runTest {
+        dao.insertAll(listOf(
+            sampleRecord(traktId = 1, actedAt = 1000L),
+            sampleRecord(traktId = 2, actedAt = 2000L),
+            sampleRecord(traktId = 3, actedAt = 3000L)
+        ))
+        assertThat(dao.count()).isEqualTo(3)
+        val result = dao.query(
+            actionTypes = emptyList(), actionTypesEmpty = true,
+            mediaTypes = emptyList(), mediaTypesEmpty = true,
+            startTime = 0, endTime = 0, titleQuery = null,
+            ascending = true, limit = 50, offset = 0
+        )
+        assertThat(result.map { it.traktId }).containsExactly(1, 2, 3)
     }
 }

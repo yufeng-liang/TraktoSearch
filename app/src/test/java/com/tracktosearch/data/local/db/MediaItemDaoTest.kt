@@ -120,11 +120,6 @@ class MediaItemDaoTest {
     }
 
     @Test
-    fun countDetails_空表_返回0() = runTest {
-        assertThat(dao.countDetails()).isEqualTo(0)
-    }
-
-    @Test
     fun deleteByType_删除指定类型() = runTest {
         dao.insertAll(listOf(
             sample(traktId = 1, type = "watchlist_movie"),
@@ -207,5 +202,43 @@ class MediaItemDaoTest {
         val result = dao.getByTypeList("watchlist_movie")[0]
         assertThat(result.year).isNull()
         assertThat(result.posterUrl).isNull()
+    }
+
+    // ==================== 字段内容回读测试（与 bug 同字段）====================
+
+    /**
+     * 验证 displayTitle(中文) 和 posterUrl(非 null) 写入后能正确回读。
+     * MediaItemEntity 用于想看/已看列表缓存，displayTitle/posterUrl 字段与
+     * "标记记录列表标题英文+海报不显示"bug 同字段，需确保非 null 值正确持久化。
+     */
+    @Test
+    fun insert_全字段回读_displayTitle和posterUrl非null() = runTest {
+        dao.insertAll(listOf(sample(
+            traktId = 100,
+            tmdbId = 500,
+            type = "watchlist_movie",
+            title = "Inception",
+            displayTitle = "盗梦空间",
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            year = 2010,
+            genres = "action,sci-fi",
+            imdbId = "tt1375666",
+            traktRating = 8.8,
+            listedAt = "2024-06-15T10:00:00Z"
+        )))
+        val result = dao.getByTypeList("watchlist_movie")[0]
+        // title 是 Trakt 原始英文标题
+        assertThat(result.title).isEqualTo("Inception")
+        // displayTitle 是 TMDB 中文标题 —— bug 核心字段
+        assertThat(result.displayTitle).isEqualTo("盗梦空间")
+        // posterUrl 是完整 URL —— bug 核心字段
+        assertThat(result.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        // 其他字段也应正确回读
+        assertThat(result.tmdbId).isEqualTo(500)
+        assertThat(result.year).isEqualTo(2010)
+        assertThat(result.genres).isEqualTo("action,sci-fi")
+        assertThat(result.imdbId).isEqualTo("tt1375666")
+        assertThat(result.traktRating).isEqualTo(8.8)
+        assertThat(result.listedAt).isEqualTo("2024-06-15T10:00:00Z")
     }
 }

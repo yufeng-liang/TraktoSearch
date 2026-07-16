@@ -130,4 +130,71 @@ class MediaDetailDaoTest {
         dao.insert(sample(traktId = 1, overview = longOverview))
         assertThat(dao.getByTraktId(1)!!.overview).isEqualTo(longOverview)
     }
+
+    // ==================== 全字段回读测试（bug 根因表）====================
+
+    /**
+     * 验证 MediaDetailEntity 全字段写入后能正确回读。
+     * media_details 表是"标记记录列表标题英文+海报不显示"bug 的根因表——
+     * 如果此表字段（尤其 displayTitle/posterUrl）未正确写入或查询，会导致列表降级到 Trakt 英文标题。
+     */
+    @Test
+    fun insert_全字段回读_displayTitle和posterUrl非null() = runTest {
+        dao.insert(sample(
+            traktId = 100,
+            tmdbId = 500,
+            mediaType = "movie",
+            title = "Inception",
+            displayTitle = "盗梦空间",
+            overview = "一个关于梦境的故事",
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            backdropUrl = "https://image.tmdb.org/t/p/original/inception_bg.jpg",
+            year = 2010,
+            genres = "action,sci-fi",
+            rating = 8.8,
+            runtime = 148,
+            releaseDate = "2010-07-16"
+        ))
+        val result = dao.getByTraktId(100)!!
+        // title 是 Trakt 原始英文标题
+        assertThat(result.title).isEqualTo("Inception")
+        // displayTitle 是 TMDB 中文标题 —— bug 核心字段
+        assertThat(result.displayTitle).isEqualTo("盗梦空间")
+        // posterUrl 是完整 URL —— bug 核心字段
+        assertThat(result.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        assertThat(result.backdropUrl).isEqualTo("https://image.tmdb.org/t/p/original/inception_bg.jpg")
+        // 其他字段也应正确回读
+        assertThat(result.tmdbId).isEqualTo(500)
+        assertThat(result.mediaType).isEqualTo("movie")
+        assertThat(result.overview).isEqualTo("一个关于梦境的故事")
+        assertThat(result.year).isEqualTo(2010)
+        assertThat(result.genres).isEqualTo("action,sci-fi")
+        assertThat(result.rating).isEqualTo(8.8)
+        assertThat(result.runtime).isEqualTo(148)
+        assertThat(result.releaseDate).isEqualTo("2010-07-16")
+    }
+
+    /**
+     * 验证 show 类型（剧集）的全字段回读，确保 mediaType 差异不影响字段映射。
+     */
+    @Test
+    fun insert_剧集类型_全字段回读() = runTest {
+        dao.insert(sample(
+            traktId = 200,
+            tmdbId = 600,
+            mediaType = "show",
+            title = "Breaking Bad",
+            displayTitle = "绝命毒师",
+            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
+            genres = "drama,crime",
+            rating = 9.5,
+            runtime = 45,
+            releaseDate = "2008-01-20"
+        ))
+        val result = dao.getByTraktId(200)!!
+        assertThat(result.mediaType).isEqualTo("show")
+        assertThat(result.displayTitle).isEqualTo("绝命毒师")
+        assertThat(result.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/bb.jpg")
+        assertThat(result.rating).isEqualTo(9.5)
+    }
 }

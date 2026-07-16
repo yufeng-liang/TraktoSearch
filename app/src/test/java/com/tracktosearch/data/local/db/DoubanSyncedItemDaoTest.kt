@@ -71,6 +71,33 @@ class DoubanSyncedItemDaoTest {
         assertThat(result!!.title).isEqualTo("电影A")
     }
 
+    /**
+     * 验证 getByDoubanId 命中时全字段正确回读。
+     * DoubanSyncedItem 用于详情页预查 doubanId，字段完整性影响豆瓣同步流程。
+     */
+    @Test
+    fun getByDoubanId_命中_全字段回读() = runTest {
+        dao.insertAll(listOf(sample(
+            doubanId = "1234567",
+            imdbId = "tt1375666",
+            traktId = 100,
+            title = "盗梦空间",
+            status = "collect",
+            rating = 5,
+            mediaType = "movie",
+            syncedAt = 1700000000000L
+        )))
+        val result = dao.getByDoubanId("1234567")!!
+        assertThat(result.doubanId).isEqualTo("1234567")
+        assertThat(result.imdbId).isEqualTo("tt1375666")
+        assertThat(result.traktId).isEqualTo(100)
+        assertThat(result.title).isEqualTo("盗梦空间")
+        assertThat(result.status).isEqualTo("collect")
+        assertThat(result.rating).isEqualTo(5)
+        assertThat(result.mediaType).isEqualTo("movie")
+        assertThat(result.syncedAt).isEqualTo(1700000000000L)
+    }
+
     @Test
     fun getByDoubanId_未命中_返回null() = runTest {
         assertThat(dao.getByDoubanId("not_exists")).isNull()
@@ -98,7 +125,9 @@ class DoubanSyncedItemDaoTest {
         ))
         val result = dao.getByImdbId("tt0000001")
         assertThat(result).isNotNull()
-        // LIMIT 1 不保证顺序，但只返回一条
+        // LIMIT 1 只返回一条，且 doubanId 必须是两者之一
+        assertThat(result!!.doubanId).isAnyOf("d1", "d2")
+        assertThat(result.title).isAnyOf("A", "B")
     }
 
     @Test
