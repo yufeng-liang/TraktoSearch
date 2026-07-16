@@ -1,8 +1,13 @@
 package com.tracktosearch.ui.screen.markrecord
 
 import android.content.Context
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -16,13 +21,18 @@ import java.util.Locale
  *
  * 覆盖：
  * - [isRecordChanged]：public 纯函数，9 个状态矩阵分支
- * - [formatRelativeTime]：private 函数，通过反射测试 6 个时间分支
+ * - [formatRelativeTime]：private 函数，通过反射测试 6 个时间分支 + 4 个边界值
+ * - [ActionTypeChip]：private @Composable，通过 Compose UI 渲染测试文案映射
+ * - [CurrentStatusBadge]：private @Composable，通过 Compose UI 渲染测试状态判断
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
 class MarkRecordComponentsTest {
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
+
+    @get:Rule
+    val composeRule = createComposeRule()
 
     private fun item(
         actionType: String,
@@ -148,5 +158,143 @@ class MarkRecordComponentsTest {
         val result = formatRelativeTime(ts)
         val expected = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(ts))
         assertThat(result).isEqualTo(expected)
+    }
+
+    // ==================== formatRelativeTime 边界值（反射）====================
+
+    @Test
+    fun `formatRelativeTime_刚好60秒_返回1分钟前`() {
+        // minutes = 1，不满足 < 1，满足 < 60 → "1 minutes ago"
+        val ts = System.currentTimeMillis() - 60 * 1000L
+        val result = formatRelativeTime(ts)
+        assertThat(result).isEqualTo("1 minutes ago")
+    }
+
+    @Test
+    fun `formatRelativeTime_刚好60分钟_返回1小时前`() {
+        // minutes = 60，不满足 < 60；hours = 1，满足 < 24 → "1 hours ago"
+        val ts = System.currentTimeMillis() - 60 * 60 * 1000L
+        val result = formatRelativeTime(ts)
+        assertThat(result).isEqualTo("1 hours ago")
+    }
+
+    @Test
+    fun `formatRelativeTime_刚好24小时_返回1天前`() {
+        // hours = 24，不满足 < 24；days = 1，满足 < 30 → "1 days ago"
+        val ts = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+        val result = formatRelativeTime(ts)
+        assertThat(result).isEqualTo("1 days ago")
+    }
+
+    @Test
+    fun `formatRelativeTime_刚好30天_返回日期格式`() {
+        // days = 30，不满足 < 30 → 走 else 分支返回 yyyy-MM-dd
+        val ts = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+        val result = formatRelativeTime(ts)
+        val expected = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(ts))
+        assertThat(result).isEqualTo(expected)
+    }
+
+    // ==================== ActionTypeChip 文案映射（Compose UI 渲染）====================
+    // ActionTypeChip 是 @Composable private，颜色映射内联在 when 表达式中，
+    // 没有独立的 getActionTypeChipColor 函数可供反射，改用 Compose UI 渲染验证文案映射。
+
+    @Test
+    fun `ActionTypeChip_ADD_WATCHLIST渲染Added_to_Watchlist`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(item = item("ADD_WATCHLIST", null), onClick = {})
+            }
+        }
+        composeRule.onNodeWithText("Added to Watchlist").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ActionTypeChip_REMOVE_WATCHLIST渲染Removed_from_Watchlist`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(item = item("REMOVE_WATCHLIST", null), onClick = {})
+            }
+        }
+        composeRule.onNodeWithText("Removed from Watchlist").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ActionTypeChip_UNMARK_WATCHED渲染Unmarked_Watched`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(item = item("UNMARK_WATCHED", null), onClick = {})
+            }
+        }
+        composeRule.onNodeWithText("Unmarked Watched").assertIsDisplayed()
+    }
+
+    @Test
+    fun `ActionTypeChip_未知类型回退渲染默认Watched`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(item = item("UNKNOWN", null), onClick = {})
+            }
+        }
+        // else 分支使用 mark_records_action_watched ("Watched") + Color.Gray
+        composeRule.onNodeWithText("Watched").assertIsDisplayed()
+    }
+
+    // ==================== CurrentStatusBadge 状态判断（Compose UI 渲染）====================
+    // CurrentStatusBadge 是 @Composable private，状态判断内联在 when 表达式中，
+    // 改用 Compose UI 渲染验证不同 currentStatus 下的文案映射。
+
+    @Test
+    fun `CurrentStatusBadge_IN_WATCHLIST渲染Current_Watchlist`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(
+                    item = item("ADD_WATCHLIST", CurrentMarkStatus.IN_WATCHLIST),
+                    onClick = {}
+                )
+            }
+        }
+        composeRule.onNodeWithText("Current: Watchlist").assertIsDisplayed()
+    }
+
+    @Test
+    fun `CurrentStatusBadge_WATCHED渲染Current_Watched`() {
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(
+                    item = item("WATCHED", CurrentMarkStatus.WATCHED),
+                    onClick = {}
+                )
+            }
+        }
+        composeRule.onNodeWithText("Current: Watched").assertIsDisplayed()
+    }
+
+    @Test
+    fun `CurrentStatusBadge_NONE无变化渲染Current_No_mark`() {
+        // REMOVE_WATCHLIST + NONE → isRecordChanged=false → "Current: No mark"
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(
+                    item = item("REMOVE_WATCHLIST", CurrentMarkStatus.NONE),
+                    onClick = {}
+                )
+            }
+        }
+        composeRule.onNodeWithText("Current: No mark").assertIsDisplayed()
+    }
+
+    @Test
+    fun `CurrentStatusBadge_NONE有变化渲染Changed`() {
+        // ADD_WATCHLIST + NONE → isRecordChanged=true → "Changed"
+        composeRule.setContent {
+            MaterialTheme {
+                MarkRecordItemRow(
+                    item = item("ADD_WATCHLIST", CurrentMarkStatus.NONE),
+                    onClick = {}
+                )
+            }
+        }
+        composeRule.onNodeWithText("Changed").assertIsDisplayed()
     }
 }
