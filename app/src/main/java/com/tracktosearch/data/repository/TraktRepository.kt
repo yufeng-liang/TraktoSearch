@@ -1281,9 +1281,20 @@ class TraktRepository @Inject constructor(
             val response = traktApiService.addToWatchlist(request)
             if (response.isSuccessful) {
                 addToWatchlistCache(traktId, tmdbId, type)
-                // 失效想看列表缓存，确保下次刷新获取最新数据
+                // 副操作：从已看列表移除。失败时仅记录日志，不影响主操作的成功状态（想看标记已生效）
+                try {
+                    val removeResp = traktApiService.removeFromHistory(request)
+                    if (!removeResp.isSuccessful) {
+                        Log.w("TraktRepository", "addToWatchlist 副操作 removeFromHistory 失败: ${removeResp.code()}, traktId=$traktId")
+                    }
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    Log.w("TraktRepository", "addToWatchlist 副操作 removeFromHistory 异常: ${e.message}, traktId=$traktId")
+                }
+                // 失效想看列表和已看历史缓存，确保下次刷新获取最新数据
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                movieHistoryCache.clear()
+                showHistoryCache.clear()
                 // 写入标记操作流水（异步，失败不影响主操作）
                 insertMarkRecord(traktId, tmdbId, type, MarkActionType.ADD_WATCHLIST)
                 Result.success(response.body() ?: TraktSyncResponse())

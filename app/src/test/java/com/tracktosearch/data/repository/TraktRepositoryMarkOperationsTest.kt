@@ -519,20 +519,60 @@ class TraktRepositoryMarkOperationsTest {
         coVerify(exactly = 0) { markActionRecordDao.insert(any()) }
     }
 
-    // ==================== addToWatchlist ====================
+    // ==================== addToWatchlist（含对称副操作）====================
 
     @Test
-    fun addToWatchlist_成功_更新缓存并写流水() = runTest {
-        setWatchlistWatchedIds(emptyIds())
+    fun addToWatchlist_成功_调用副操作removeFromHistory() = runTest {
         coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
 
         val result = repository.addToWatchlist(100, MediaType.MOVIE, 200)
 
         assertThat(result.isSuccess).isTrue()
+        coVerify(exactly = 1) { traktApiService.addToWatchlist(any()) }
+        coVerify(exactly = 1) { traktApiService.removeFromHistory(any()) }
+    }
+
+    @Test
+    fun addToWatchlist_成功_更新缓存并写流水() = runTest {
+        // 初始：100 在已看中
+        setWatchlistWatchedIds(TraktRepository.WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(100),
+            movieWatchedTmdbIds = setOf(200)
+        ))
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
+
+        repository.addToWatchlist(100, MediaType.MOVIE, 200)
+
         val ids = getWatchlistWatchedIds()!!
+        // 已加到想看
         assertThat(ids.movieWatchlistTraktIds).contains(100)
-        assertThat(ids.movieWatchlistTmdbIds).contains(200)
+        // 从已看移除（对称互斥）
+        assertThat(ids.movieWatchedTraktIds).doesNotContain(100)
+        assertThat(ids.movieWatchedTmdbIds).doesNotContain(200)
+        // 写入流水
         coVerify(exactly = 1) { markActionRecordDao.insert(any()) }
+    }
+
+    @Test
+    fun addToWatchlist_副操作失败_主操作仍成功() = runTest {
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } returns errorResponse(500)
+
+        val result = repository.addToWatchlist(100, MediaType.MOVIE)
+
+        assertThat(result.isSuccess).isTrue()
+    }
+
+    @Test
+    fun addToWatchlist_副操作异常_主操作仍成功() = runTest {
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { traktApiService.removeFromHistory(any()) } throws java.io.IOException("Network error")
+
+        val result = repository.addToWatchlist(100, MediaType.MOVIE)
+
+        assertThat(result.isSuccess).isTrue()
     }
 
     @Test
