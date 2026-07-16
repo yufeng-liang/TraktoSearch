@@ -44,6 +44,49 @@ class MarkRecordComponentsTest {
         currentStatus = currentStatus
     )
 
+    // ==================== buildFullPosterUrl（测试点 D）====================
+    // 验证 posterUrl 兜底拼接逻辑：null/空 → null；完整 URL → 原样；相对路径 → 拼接 TMDB 基础 URL。
+    // 这是「海报不显示」bug 的 UI 层防护——如果 Repository 写入了相对路径，UI 层必须拼接为完整 URL。
+
+    @Test
+    fun `buildFullPosterUrl_null返回null`() {
+        assertThat(buildFullPosterUrl(null)).isNull()
+    }
+
+    @Test
+    fun `buildFullPosterUrl_空字符串返回null`() {
+        assertThat(buildFullPosterUrl("")).isNull()
+    }
+
+    @Test
+    fun `buildFullPosterUrl_空白字符串返回null`() {
+        assertThat(buildFullPosterUrl("   ")).isNull()
+    }
+
+    @Test
+    fun `buildFullPosterUrl_http完整URL原样返回`() {
+        val url = "https://image.tmdb.org/t/p/w500/inception.jpg"
+        assertThat(buildFullPosterUrl(url)).isEqualTo(url)
+    }
+
+    @Test
+    fun `buildFullPosterUrl_https完整URL原样返回`() {
+        val url = "https://image.tmdb.org/t/p/w500/bb.jpg"
+        assertThat(buildFullPosterUrl(url)).isEqualTo(url)
+    }
+
+    @Test
+    fun `buildFullPosterUrl_相对路径拼接TMDB基础URL`() {
+        val result = buildFullPosterUrl("/inception.jpg")
+        assertThat(result).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+    }
+
+    @Test
+    fun `buildFullPosterUrl_无斜杠相对路径也拼接`() {
+        val result = buildFullPosterUrl("inception.jpg")
+        assertThat(result).isEqualTo("https://image.tmdb.org/t/p/w500inception.jpg")
+    }
+
     // ==================== isRecordChanged ====================
 
     @Test

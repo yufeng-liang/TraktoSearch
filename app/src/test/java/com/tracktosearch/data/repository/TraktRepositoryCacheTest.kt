@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
-import com.tracktosearch.data.local.db.MediaDetailDao
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
 import io.mockk.mockk
@@ -39,7 +38,7 @@ class TraktRepositoryCacheTest {
     private lateinit var traktApiService: TraktApiService
     private lateinit var userProfileStorage: UserProfileStorage
     private lateinit var markActionRecordDao: MarkActionRecordDao
-    private lateinit var mediaDetailDao: MediaDetailDao
+    private lateinit var tmdbRepository: TmdbRepository
     private lateinit var repository: TraktRepository
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
@@ -49,11 +48,11 @@ class TraktRepositoryCacheTest {
         traktApiService = mockk(relaxed = true)
         userProfileStorage = mockk(relaxed = true)
         markActionRecordDao = mockk(relaxed = true)
-        mediaDetailDao = mockk(relaxed = true)
+        tmdbRepository = mockk(relaxed = true)
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            mediaDetailDao, Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, Json { ignoreUnknownKeys = true }, context
         )
     }
 

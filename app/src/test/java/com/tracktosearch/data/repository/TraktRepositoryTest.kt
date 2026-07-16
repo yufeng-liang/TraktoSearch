@@ -5,7 +5,6 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
-import com.tracktosearch.data.local.db.MediaDetailDao
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryEntry
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryEpisode
@@ -16,6 +15,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -45,7 +45,7 @@ class TraktRepositoryTest {
     private lateinit var traktApiService: TraktApiService
     private lateinit var userProfileStorage: UserProfileStorage
     private lateinit var markActionRecordDao: MarkActionRecordDao
-    private lateinit var mediaDetailDao: MediaDetailDao
+    private lateinit var tmdbRepository: TmdbRepository
     private lateinit var repository: TraktRepository
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
@@ -55,7 +55,7 @@ class TraktRepositoryTest {
         traktApiService = mockk(relaxed = true)
         userProfileStorage = mockk(relaxed = true)
         markActionRecordDao = mockk(relaxed = true)
-        mediaDetailDao = mockk(relaxed = true)
+        tmdbRepository = mockk(relaxed = true)
 
         // 默认 stub：API 返回空成功响应
         coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns emptySuccessResponse()
@@ -63,7 +63,7 @@ class TraktRepositoryTest {
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            mediaDetailDao, Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, Json { ignoreUnknownKeys = true }, context
         )
     }
 
@@ -232,5 +232,149 @@ class TraktRepositoryTest {
         // totalCount = 50 + 30 = 80
         assertThat(page.totalCount).isEqualTo(80)
         assertThat(page.currentPage).isEqualTo(1)
+    }
+
+    // ==================== fetchWatchHistory enrichment 字段验证（测试点 B）====================
+    // 这些测试验证 fetchWatchHistory 返回的 WatchHistoryItem 的 displayTitle/posterUrl/year/imdbId
+    // 来自 TmdbRepository.enrichMovie/enrichTv，而不是 Trakt 原始英文标题或空海报。
+    // 这是「已看历史列表标题本地化+海报URL」bug 的核心防护。
+
+    @Test
+    fun `fetchWatchHistory_movie记录displayTitle和posterUrl来自TmdbEnrichment`() = runTest {
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Inception", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
+        coEvery { tmdbRepository.enrichMovie(10, "Inception", 2024) } returns TmdbRepository.MovieEnrichment(
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            chineseTitle = "盗梦空间",
+            originalTitle = "Inception",
+            overview = "",
+            genres = "",
+            year = 2010,
+            rating = 8.8,
+            imdbId = "tt1375666"
+        )
+
+        val result = repository.fetchWatchHistory(1)
+        val item = result.getOrNull()!!.items[0]
+
+        // title 字段保留 Trakt 原始标题（用于 fallback）
+        assertThat(item.title).isEqualTo("Inception")
+        // displayTitle 来自 enrichment.chineseTitle（本地化标题）
+        assertThat(item.displayTitle).isEqualTo("盗梦空间")
+        // posterUrl 来自 enrichment（完整 URL）
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        // year 来自 enrichment（2010，而非 Trakt 的 2024）
+        assertThat(item.year).isEqualTo(2010)
+        // imdbId 来自 enrichment
+        assertThat(item.imdbId).isEqualTo("tt1375666")
+    }
+
+    @Test
+    fun `fetchWatchHistory_episode记录displayTitle和posterUrl来自TmdbEnrichment`() = runTest {
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns emptySuccessResponse()
+        val episodeEntry = TraktHistoryEntry(
+            watched_at = "2024-06-01T00:00:00.000Z",
+            episode = TraktHistoryEpisode(season = 1, number = 1, title = "Ep1", ids = TraktHistoryIds()),
+            show = TraktHistoryShow(title = "Breaking Bad", year = 2024, ids = TraktHistoryIds(trakt = 2, tmdb = 20, imdb = "tt2"))
+        )
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(episodeEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { tmdbRepository.enrichTv(20, "Breaking Bad", 2024) } returns TmdbRepository.TvEnrichment(
+            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
+            chineseTitle = "绝命毒师",
+            originalTitle = "Breaking Bad",
+            overview = "",
+            genres = "",
+            year = 2008,
+            rating = 9.5,
+            imdbId = "tt0903747"
+        )
+
+        val result = repository.fetchWatchHistory(1)
+        val item = result.getOrNull()!!.items[0]
+
+        assertThat(item.title).isEqualTo("Breaking Bad")
+        assertThat(item.displayTitle).isEqualTo("绝命毒师")
+        assertThat(item.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/bb.jpg")
+        assertThat(item.year).isEqualTo(2008)
+        assertThat(item.imdbId).isEqualTo("tt0903747")
+        assertThat(item.episodeInfo).isEqualTo("S1E1")
+    }
+
+    @Test
+    fun `fetchWatchHistory_enrichment返回空chineseTitle时displayTitle回退到TraktTitle`() = runTest {
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Inception", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
+        // enrichment 返回空 chineseTitle → displayTitle 应回退到 Trakt 原始标题
+        coEvery { tmdbRepository.enrichMovie(10, "Inception", 2024) } returns TmdbRepository.MovieEnrichment(
+            posterUrl = null,
+            chineseTitle = "",
+            originalTitle = "",
+            overview = "",
+            genres = "",
+            year = null,
+            rating = 0.0,
+            imdbId = null
+        )
+
+        val result = repository.fetchWatchHistory(1)
+        val item = result.getOrNull()!!.items[0]
+
+        // displayTitle = "".ifBlank { "Inception" } = "Inception"
+        assertThat(item.displayTitle).isEqualTo("Inception")
+        assertThat(item.posterUrl).isNull()
+    }
+
+    // ==================== fetchWatchHistory enrichment 失败降级（测试点 C）====================
+
+    @Test
+    fun `fetchWatchHistory_enrichment失败时displayTitle回退到TraktTitle不崩溃`() = runTest {
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Inception", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
+        // enrichment 抛异常 → displayTitle 应回退到 Trakt 原始标题，posterUrl 为 null
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } throws RuntimeException("TMDB API error")
+
+        val result = repository.fetchWatchHistory(1)
+        assertThat(result.isSuccess).isTrue()
+        val item = result.getOrNull()!!.items[0]
+        // 降级：displayTitle 回退到 Trakt 标题
+        assertThat(item.displayTitle).isEqualTo("Inception")
+        assertThat(item.posterUrl).isNull()
+    }
+
+    @Test
+    fun `fetchWatchHistory_tmdbId为0时不调用enrich_字段用Trakt原始值`() = runTest {
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Unknown Movie", year = 2023, ids = TraktIds(trakt = 1, tmdb = 0, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
+
+        val result = repository.fetchWatchHistory(1)
+        val item = result.getOrNull()!!.items[0]
+
+        // tmdbId=0 不触发 enrich
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
+        // 字段用 Trakt 原始值
+        assertThat(item.displayTitle).isEqualTo("Unknown Movie")
+        assertThat(item.title).isEqualTo("Unknown Movie")
+        assertThat(item.posterUrl).isNull()
     }
 }

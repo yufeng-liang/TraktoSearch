@@ -29,8 +29,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -219,7 +221,8 @@ class DetailViewModelSupplementTest {
         viewModel.translateComments()
         advanceUntilIdle()
 
-        coVerify(exactly = 0) { commentTranslator.translateComments(any()) }
+        // translateCommentsFlow 是非 suspend 函数，用 verify 验证
+        verify(exactly = 0) { commentTranslator.translateCommentsFlow(any()) }
     }
 
     @Test
@@ -228,30 +231,35 @@ class DetailViewModelSupplementTest {
             TraktComment(id = 1, comment = "hello"),
             TraktComment(id = 2, comment = "world")
         )
-        val translated = listOf(
-            TraktComment(id = 1, comment = "你好"),
-            TraktComment(id = 2, comment = "世界")
-        )
+        val translated0 = TraktComment(id = 1, comment = "你好")
+        val translated1 = TraktComment(id = 2, comment = "世界")
         setUiState { it.copy(comments = comments) }
-        coEvery { commentTranslator.translateComments(comments) } returns translated
+        // translateCommentsFlow 是非 suspend 函数返回 Flow，用 every + flowOf stub
+        every { commentTranslator.translateCommentsFlow(comments) } returns
+            flowOf(0 to translated0, 1 to translated1)
 
         viewModel.translateComments()
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.translatedComments).hasSize(2)
         assertThat(viewModel.uiState.value.translatedComments[0].comment).isEqualTo("你好")
+        assertThat(viewModel.uiState.value.translatedComments[1].comment).isEqualTo("世界")
         assertThat(viewModel.uiState.value.isTranslating).isFalse()
+        assertThat(viewModel.uiState.value.translationProgress).isNull()
     }
 
     @Test
     fun translateComments_异常时isTranslating置false() = runTest {
         setUiState { it.copy(comments = listOf(TraktComment(id = 1, comment = "test"))) }
-        coEvery { commentTranslator.translateComments(any()) } throws RuntimeException("API error")
+        // 用 flow {} 构造在 collect 时抛异常的 Flow
+        every { commentTranslator.translateCommentsFlow(any()) } returns
+            flow { throw RuntimeException("API error") }
 
         viewModel.translateComments()
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.isTranslating).isFalse()
+        assertThat(viewModel.uiState.value.translationProgress).isNull()
     }
 
     // ==================== translateSingleComment ====================

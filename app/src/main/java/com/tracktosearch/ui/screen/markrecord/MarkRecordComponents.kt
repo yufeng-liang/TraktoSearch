@@ -64,9 +64,7 @@ fun MarkRecordItemRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 小海报 48×72dp（兜底：如果是相对路径则拼接 TMDB 基础 URL）
-        val fullPosterUrl = item.posterUrl?.let { path ->
-            if (path.startsWith("http")) path else TmdbImageUrls.build(path)
-        }
+        val fullPosterUrl = buildFullPosterUrl(item.posterUrl)
         AsyncImage(
             model = fullPosterUrl,
             contentDescription = item.title,
@@ -118,6 +116,19 @@ fun MarkRecordItemRow(
             CurrentStatusBadge(item)
         }
     }
+}
+
+/**
+ * 将海报路径拼接为完整 URL。
+ * - null 或空字符串 → 返回 null（不加载图片）
+ * - 已是完整 http(s) URL → 原样返回
+ * - 相对路径（如 "/abc.jpg"）→ 拼接 TMDB 基础 URL
+ *
+ * 提取为纯函数便于单元测试覆盖兜底拼接逻辑。
+ */
+fun buildFullPosterUrl(path: String?): String? {
+    if (path.isNullOrBlank()) return null
+    return if (path.startsWith("http")) path else TmdbImageUrls.build(path)
 }
 
 /** 判断记录的操作类型与当前状态是否矛盾 */

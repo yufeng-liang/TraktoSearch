@@ -7,8 +7,6 @@ import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
-import com.tracktosearch.data.local.db.MediaDetailDao
-import com.tracktosearch.data.local.db.MediaDetailEntity
 import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import io.mockk.coEvery
@@ -47,7 +45,7 @@ class TraktRepositoryMarkOperationsTest {
     private lateinit var traktApiService: TraktApiService
     private lateinit var userProfileStorage: UserProfileStorage
     private lateinit var markActionRecordDao: MarkActionRecordDao
-    private lateinit var mediaDetailDao: MediaDetailDao
+    private lateinit var tmdbRepository: TmdbRepository
     private lateinit var repository: TraktRepository
 
     private val context: Context get() = ApplicationProvider.getApplicationContext()
@@ -57,11 +55,11 @@ class TraktRepositoryMarkOperationsTest {
         traktApiService = mockk(relaxed = true)
         userProfileStorage = mockk(relaxed = true)
         markActionRecordDao = mockk(relaxed = true)
-        mediaDetailDao = mockk(relaxed = true)
+        tmdbRepository = mockk(relaxed = true)
 
         repository = TraktRepository(
             traktApiService, userProfileStorage, markActionRecordDao,
-            mediaDetailDao, Json { ignoreUnknownKeys = true }, context
+            tmdbRepository, Json { ignoreUnknownKeys = true }, context
         )
     }
 
@@ -95,17 +93,38 @@ class TraktRepositoryMarkOperationsTest {
         code, "".toResponseBody(null)
     )
 
-    private fun mediaDetailEntity(
-        traktId: Int = 100,
-        title: String = "",
-        displayTitle: String = "",
+    private fun movieEnrichment(
+        chineseTitle: String = "",
+        originalTitle: String = "",
         posterUrl: String? = null,
-        year: Int? = null
-    ) = MediaDetailEntity(
-        traktId = traktId, tmdbId = 0, mediaType = "show",
-        title = title, displayTitle = displayTitle, overview = "",
-        posterUrl = posterUrl, backdropUrl = null, year = year,
-        genres = "", rating = 0.0, runtime = null, releaseDate = ""
+        year: Int? = null,
+        imdbId: String? = null
+    ) = TmdbRepository.MovieEnrichment(
+        posterUrl = posterUrl,
+        chineseTitle = chineseTitle,
+        originalTitle = originalTitle,
+        overview = "",
+        genres = "",
+        year = year,
+        rating = 0.0,
+        imdbId = imdbId
+    )
+
+    private fun tvEnrichment(
+        chineseTitle: String = "",
+        originalTitle: String = "",
+        posterUrl: String? = null,
+        year: Int? = null,
+        imdbId: String? = null
+    ) = TmdbRepository.TvEnrichment(
+        posterUrl = posterUrl,
+        chineseTitle = chineseTitle,
+        originalTitle = originalTitle,
+        overview = "",
+        genres = "",
+        year = year,
+        rating = 0.0,
+        imdbId = imdbId
     )
 
     // ==================== markEpisodeWatched ====================
@@ -234,48 +253,92 @@ class TraktRepositoryMarkOperationsTest {
     }
 
     @Test
-    fun unmarkEpisodeWatched_showTitle优先于DAO查询() = runTest {
+    fun unmarkEpisodeWatched_使用TmdbEnrichment填充title和displayTitle() = runTest {
+        // 新逻辑：title 来自 enrichment.originalTitle（空则回退 chineseTitle），
+        // displayTitle 来自 enrichment.chineseTitle（空则回退 showTitle）
         coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { mediaDetailDao.getByTraktId(100) } returns mediaDetailEntity(title = "DAO标题", displayTitle = "DAO显示标题")
+        coEvery { tmdbRepository.enrichTv(200, "传入剧名", null) } returns tvEnrichment(
+            chineseTitle = "中文剧名",
+            originalTitle = "OriginalName",
+            posterUrl = "https://image.tmdb.org/t/p/w500/poster.jpg",
+            year = 2023,
+            imdbId = "tt123"
+        )
         val recordSlot = slot<MarkActionRecordEntity>()
         coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
 
         repository.unmarkEpisodeWatched(
             episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTitle = "传入标题"
+            showTraktId = 100, showTmdbId = 200, showTitle = "传入剧名"
         )
 
-        assertThat(recordSlot.captured.title).isEqualTo("传入标题")
+        assertThat(recordSlot.captured.title).isEqualTo("OriginalName")
+        assertThat(recordSlot.captured.displayTitle).isEqualTo("中文剧名")
+        assertThat(recordSlot.captured.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/poster.jpg")
+        assertThat(recordSlot.captured.year).isEqualTo(2023)
+        assertThat(recordSlot.captured.imdbId).isEqualTo("tt123")
+        assertThat(recordSlot.captured.episodeInfo).isEqualTo("S1E1")
     }
 
     @Test
-    fun unmarkEpisodeWatched_showTitle为空时用DAO标题() = runTest {
+    fun unmarkEpisodeWatched_enrichment返回空chineseTitle时displayTitle降级为showTitle() = runTest {
         coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { mediaDetailDao.getByTraktId(100) } returns mediaDetailEntity(title = "DAO标题", displayTitle = "DAO显示标题")
+        coEvery { tmdbRepository.enrichTv(200, "传入剧名", null) } returns tvEnrichment(
+            chineseTitle = "",  // 空 → displayTitle 应回退到 showTitle
+            originalTitle = ""  // 空 → title 应回退到 chineseTitle（也空）→ title 为空
+        )
         val recordSlot = slot<MarkActionRecordEntity>()
         coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
 
         repository.unmarkEpisodeWatched(
             episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTitle = ""
+            showTraktId = 100, showTmdbId = 200, showTitle = "传入剧名"
         )
 
-        assertThat(recordSlot.captured.title).isEqualTo("DAO标题")
-    }
-
-    @Test
-    fun unmarkEpisodeWatched_showTitle和DAO都为空时标题为空() = runTest {
-        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
-        coEvery { mediaDetailDao.getByTraktId(100) } returns null
-        val recordSlot = slot<MarkActionRecordEntity>()
-        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
-
-        repository.unmarkEpisodeWatched(
-            episodeTraktId = 555, season = 1, episode = 1,
-            showTraktId = 100, showTitle = ""
-        )
-
+        // title = originalTitle.ifBlank { chineseTitle } = "".ifBlank { "" } = ""
         assertThat(recordSlot.captured.title).isEmpty()
+        // displayTitle = chineseTitle.ifBlank { showTitle } = "".ifBlank { "传入剧名" } = "传入剧名"
+        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
+    }
+
+    @Test
+    fun unmarkEpisodeWatched_enrichment失败时降级为showTitle不崩溃() = runTest {
+        // enrichment 抛异常时，title/displayTitle 保持为 showTitle（降级）
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichTv(any(), any(), any()) } throws RuntimeException("TMDB API error")
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        val result = repository.unmarkEpisodeWatched(
+            episodeTraktId = 555, season = 1, episode = 1,
+            showTraktId = 100, showTmdbId = 200, showTitle = "传入剧名"
+        )
+
+        // 主操作不受影响
+        assertThat(result.isSuccess).isTrue()
+        // 流水仍写入，字段降级为 showTitle
+        coVerify(exactly = 1) { markActionRecordDao.insert(any()) }
+        assertThat(recordSlot.captured.title).isEqualTo("传入剧名")
+        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
+        assertThat(recordSlot.captured.posterUrl).isNull()
+    }
+
+    @Test
+    fun unmarkEpisodeWatched_showTmdbId为0时不调用enrich_字段为showTitle() = runTest {
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.unmarkEpisodeWatched(
+            episodeTraktId = 555, season = 1, episode = 1,
+            showTraktId = 100, showTmdbId = 0, showTitle = "传入剧名"
+        )
+
+        // showTmdbId=0 不触发 enrich
+        coVerify(exactly = 0) { tmdbRepository.enrichTv(any(), any(), any()) }
+        assertThat(recordSlot.captured.title).isEqualTo("传入剧名")
+        assertThat(recordSlot.captured.displayTitle).isEqualTo("传入剧名")
+        assertThat(recordSlot.captured.posterUrl).isNull()
     }
 
     @Test
@@ -506,6 +569,150 @@ class TraktRepositoryMarkOperationsTest {
         val result = repository.addToWatchlist(100, MediaType.MOVIE)
 
         assertThat(result.isSuccess).isTrue()
+    }
+
+    // ==================== insertMarkRecord 字段验证（测试点 A）====================
+    // 这些测试验证 addToWatchlist/removeFromWatchlist/removeWatched 触发 insertMarkRecord 时，
+    // 写入 entity 的 displayTitle/posterUrl/year/imdbId 字段来自 TmdbRepository.enrichMovie/enrichTv，
+    // 而不是空值或 Trakt 原始英文标题。这是「标题本地化+海报URL」bug 的核心防护。
+
+    @Test
+    fun addToWatchlist_MOVIE_写流水字段来自TmdbEnrichment() = runTest {
+        setWatchlistWatchedIds(emptyIds())
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichMovie(200, "", null) } returns movieEnrichment(
+            chineseTitle = "盗梦空间",
+            originalTitle = "Inception",
+            posterUrl = "https://image.tmdb.org/t/p/w500/inception.jpg",
+            year = 2010,
+            imdbId = "tt1375666"
+        )
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.addToWatchlist(100, MediaType.MOVIE, 200)
+
+        val entity = recordSlot.captured
+        assertThat(entity.traktId).isEqualTo(100)
+        assertThat(entity.tmdbId).isEqualTo(200)
+        assertThat(entity.mediaType).isEqualTo("movie")
+        assertThat(entity.actionType).isEqualTo(MarkActionType.ADD_WATCHLIST.value)
+        // 核心断言：字段来自 enrichment 而非空值
+        assertThat(entity.title).isEqualTo("Inception")          // originalTitle
+        assertThat(entity.displayTitle).isEqualTo("盗梦空间")      // chineseTitle
+        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/inception.jpg")
+        assertThat(entity.year).isEqualTo(2010)
+        assertThat(entity.imdbId).isEqualTo("tt1375666")
+    }
+
+    @Test
+    fun addToWatchlist_SHOW_写流水字段来自TmdbEnrichment() = runTest {
+        setWatchlistWatchedIds(emptyIds())
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichTv(300, "", null) } returns tvEnrichment(
+            chineseTitle = "绝命毒师",
+            originalTitle = "Breaking Bad",
+            posterUrl = "https://image.tmdb.org/t/p/w500/bb.jpg",
+            year = 2008,
+            imdbId = "tt0903747"
+        )
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.addToWatchlist(100, MediaType.SHOW, 300)
+
+        val entity = recordSlot.captured
+        assertThat(entity.mediaType).isEqualTo("show")
+        assertThat(entity.title).isEqualTo("Breaking Bad")
+        assertThat(entity.displayTitle).isEqualTo("绝命毒师")
+        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/bb.jpg")
+        assertThat(entity.year).isEqualTo(2008)
+        assertThat(entity.imdbId).isEqualTo("tt0903747")
+    }
+
+    @Test
+    fun removeFromWatchlist_写流水字段来自TmdbEnrichment() = runTest {
+        setWatchlistWatchedIds(TraktRepository.WatchlistWatchedIds(
+            movieWatchlistTraktIds = setOf(100),
+            movieWatchlistTmdbIds = setOf(200)
+        ))
+        coEvery { traktApiService.removeFromWatchlist(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichMovie(200, "", null) } returns movieEnrichment(
+            chineseTitle = "星际穿越",
+            originalTitle = "Interstellar",
+            posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
+            year = 2014,
+            imdbId = "tt0816692"
+        )
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.removeFromWatchlist(100, MediaType.MOVIE, 200)
+
+        val entity = recordSlot.captured
+        assertThat(entity.actionType).isEqualTo(MarkActionType.REMOVE_WATCHLIST.value)
+        assertThat(entity.displayTitle).isEqualTo("星际穿越")
+        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/interstellar.jpg")
+    }
+
+    @Test
+    fun removeWatched_写流水字段来自TmdbEnrichment() = runTest {
+        setWatchlistWatchedIds(emptyIds())
+        coEvery { traktApiService.removeFromHistory(any()) } returns successSyncResponse()
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichMovie(200, "", null) } returns movieEnrichment(
+            chineseTitle = "阿凡达",
+            originalTitle = "Avatar",
+            posterUrl = "https://image.tmdb.org/t/p/w500/avatar.jpg",
+            year = 2009,
+            imdbId = "tt0499549"
+        )
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.removeWatched(100, MediaType.MOVIE, 200)
+
+        val entity = recordSlot.captured
+        assertThat(entity.actionType).isEqualTo(MarkActionType.UNMARK_WATCHED.value)
+        assertThat(entity.displayTitle).isEqualTo("阿凡达")
+        assertThat(entity.posterUrl).isEqualTo("https://image.tmdb.org/t/p/w500/avatar.jpg")
+    }
+
+    @Test
+    fun addToWatchlist_tmdbId为0时不调用enrich_字段为空() = runTest {
+        setWatchlistWatchedIds(emptyIds())
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        repository.addToWatchlist(100, MediaType.MOVIE)  // tmdbId 默认 0
+
+        coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }
+        val entity = recordSlot.captured
+        assertThat(entity.title).isEmpty()
+        assertThat(entity.displayTitle).isEmpty()
+        assertThat(entity.posterUrl).isNull()
+    }
+
+    // ==================== enrichment 失败降级（测试点 C）====================
+
+    @Test
+    fun addToWatchlist_enrichment失败时降级为空字段不崩溃() = runTest {
+        setWatchlistWatchedIds(emptyIds())
+        coEvery { traktApiService.addToWatchlist(any()) } returns successSyncResponse()
+        coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } throws RuntimeException("TMDB API error")
+        val recordSlot = slot<MarkActionRecordEntity>()
+        coEvery { markActionRecordDao.insert(capture(recordSlot)) } returns Unit
+
+        val result = repository.addToWatchlist(100, MediaType.MOVIE, 200)
+
+        // 主操作不受影响
+        assertThat(result.isSuccess).isTrue()
+        // 流水仍写入，字段降级为空
+        coVerify(exactly = 1) { markActionRecordDao.insert(any()) }
+        assertThat(recordSlot.captured.title).isEmpty()
+        assertThat(recordSlot.captured.displayTitle).isEmpty()
+        assertThat(recordSlot.captured.posterUrl).isNull()
     }
 
     // ==================== removeFromWatchlist ====================
