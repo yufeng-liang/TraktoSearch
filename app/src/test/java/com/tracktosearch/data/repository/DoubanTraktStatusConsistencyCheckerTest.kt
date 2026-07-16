@@ -534,4 +534,87 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(reset.isRunning).isFalse()
         assertThat(reset.phase).isEmpty()
     }
+
+    // ============================================================
+    // 测试点13+：Trakt 侧同时存在 watchlist + watched 冲突清理
+    // ============================================================
+
+    /**
+     * 测试点13：checkAndUnify() Trakt 同时存在 watchlist + watched → 冲突计数增加，
+     * 调用 batchRemoveFromWatchlist 清理（保留 watched，移除 watchlist）。
+     */
+    @Test
+    fun checkAndUnify_Trakt同时存在两个状态_调用batchRemoveFromWatchlist() = runTest {
+        val items = listOf(
+            // douban=collect + trakt 同时在 watched 和 watchlist → 冲突清理
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns items
+        // Trakt 侧：ID=1 同时在 watched 和 watchlist
+        val conflictIds = WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1),
+            movieWatchlistTraktIds = setOf(1)
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns conflictIds
+        coEvery { traktRepository.batchRemoveFromWatchlist(any(), any()) } returns Result.success(TraktSyncResponse())
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.conflictsFound).isGreaterThan(0)
+        // 调用 batchRemoveFromWatchlist 清理 watchlist（保留 watched）
+        coVerify(exactly = 1) { traktRepository.batchRemoveFromWatchlist(listOf(1), emptyList()) }
+        // 不再调用 batchMarkAsWatched（已 watched 不需要重复标记）
+        coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
+    }
+
+    /**
+     * 测试点14：checkAndUnify() Trakt 同时存在 + douban=wish → 冲突，douban 升级为 collect（已看优先）
+     */
+    @Test
+    fun checkAndUnify_Trakt同时存在_doubanWish_升级豆瓣为Collect() = runTest {
+        val items = listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "wish")
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns items
+        val conflictIds = WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1),
+            movieWatchlistTraktIds = setOf(1)
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns conflictIds
+        coEvery { traktRepository.batchRemoveFromWatchlist(any(), any()) } returns Result.success(TraktSyncResponse())
+        stubDoubanMarkSuccess()
+
+        val result = checker.checkAndUnify()
+
+        assertThat(result.isComplete).isTrue()
+        assertThat(result.conflictsFound).isGreaterThan(0)
+        // 清理 watchlist
+        coVerify(exactly = 1) { traktRepository.batchRemoveFromWatchlist(listOf(1), emptyList()) }
+        // 豆瓣升级为 collect（已看优先）
+        coVerify(exactly = 1) { doubanRepository.markInterest(eq("collect"), any(), any(), any()) }
+    }
+
+    /**
+     * 测试点15：checkAndUnify() Trakt 冲突清理失败 → 仅记录日志，不影响完成状态
+     */
+    @Test
+    fun checkAndUnify_Trakt冲突清理失败_仅记录日志() = runTest {
+        val items = listOf(
+            buildSyncedItem(doubanId = "db-1", traktId = 1, status = "collect")
+        )
+        coEvery { doubanSyncedItemDao.getAllSyncedItems() } returns items
+        val conflictIds = WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(1),
+            movieWatchlistTraktIds = setOf(1)
+        )
+        every { traktRepository.getWatchlistWatchedIds() } returns conflictIds
+        coEvery { traktRepository.batchRemoveFromWatchlist(any(), any()) } returns Result.failure(Exception("网络错误"))
+
+        val result = checker.checkAndUnify()
+
+        // 仍完成（失败仅记录日志）
+        assertThat(result.isComplete).isTrue()
+        coVerify(exactly = 1) { traktRepository.batchRemoveFromWatchlist(any(), any()) }
+    }
 }

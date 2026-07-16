@@ -152,11 +152,16 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         runCatching { traktRepository.loadWatchlistWatchedIds() }
         val watchedIds = traktRepository.getWatchlistWatchedIds()
 
-        val (traktNeedWatched, traktNeedWatchlist, doubanNeedUpdate, conflicts, skipped) =
-            classifyConflicts(allItems, watchedIds)
+        val classifyResult = classifyConflicts(allItems, watchedIds)
+        val traktNeedWatched = classifyResult.traktNeedWatched
+        val traktNeedWatchlist = classifyResult.traktNeedWatchlist
+        val doubanNeedUpdate = classifyResult.doubanNeedUpdate
+        val conflicts = classifyResult.conflicts
+        val skipped = classifyResult.skipped
+        val traktConflictRemoveFromWatchlist = classifyResult.traktConflictRemoveFromWatchlist
 
         // 1. 批量更新 Trakt 侧
-        val traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+        val traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist, traktConflictRemoveFromWatchlist)
 
         // 2. 逐条更新豆瓣侧
         val (doubanUpdated, errors) = batchUpdateDouban(doubanNeedUpdate)
@@ -441,6 +446,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         val traktNeedWatched = mutableListOf<Pair<Int, MediaType>>()
         val traktNeedWatchlist = mutableListOf<Pair<Int, MediaType>>()
         val doubanNeedUpdate = mutableListOf<DoubanStatusUpdate>()
+        val traktConflictRemoveFromWatchlist = mutableListOf<Pair<Int, MediaType>>()
         var conflicts = 0
         var skipped = 0
 
@@ -455,6 +461,18 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             val doubanIsWish = item.status == "wish"
             val traktIsWatched = watchedIds?.isWatched(traktId, null, mediaType) ?: false
             val traktIsInWatchlist = watchedIds?.isInWatchlist(traktId, null, mediaType) ?: false
+
+            // 优先检测 Trakt 侧同时存在 watchlist + watched 的冲突（按"已看优先"清理 watchlist）
+            if (traktIsWatched && traktIsInWatchlist) {
+                conflicts++
+                traktConflictRemoveFromWatchlist.add(traktId to mediaType)
+                // 若豆瓣是 wish，需升级为 collect（已看优先）
+                if (doubanIsWish) {
+                    doubanNeedUpdate.add(DoubanStatusUpdate(item.doubanId, "collect", item.doubanId, item.title))
+                }
+                // 冲突已归类，跳过后续 when 分类
+                continue
+            }
 
             when {
                 (doubanIsCollect && traktIsWatched) || (doubanIsWish && traktIsInWatchlist) -> {}
@@ -480,19 +498,22 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 }
             }
         }
-        return ClassifyResult(traktNeedWatched, traktNeedWatchlist, doubanNeedUpdate, conflicts, skipped)
+        return ClassifyResult(traktNeedWatched, traktNeedWatchlist, doubanNeedUpdate, conflicts, skipped, traktConflictRemoveFromWatchlist)
     }
 
     /** 批量更新 Trakt 侧 */
     private suspend fun batchUpdateTrakt(
         traktNeedWatched: List<Pair<Int, MediaType>>,
-        traktNeedWatchlist: List<Pair<Int, MediaType>>
+        traktNeedWatchlist: List<Pair<Int, MediaType>>,
+        traktConflictRemoveFromWatchlist: List<Pair<Int, MediaType>> = emptyList()
     ): Int {
         var traktUpdated = 0
         val movieWatched = traktNeedWatched.filter { it.second == MediaType.MOVIE }.map { it.first }
         val showWatched = traktNeedWatched.filter { it.second == MediaType.SHOW }.map { it.first }
         val movieWatchlist = traktNeedWatchlist.filter { it.second == MediaType.MOVIE }.map { it.first }
         val showWatchlist = traktNeedWatchlist.filter { it.second == MediaType.SHOW }.map { it.first }
+        val movieConflict = traktConflictRemoveFromWatchlist.filter { it.second == MediaType.MOVIE }.map { it.first }
+        val showConflict = traktConflictRemoveFromWatchlist.filter { it.second == MediaType.SHOW }.map { it.first }
 
         if (movieWatched.isNotEmpty() || showWatched.isNotEmpty()) {
             val watchedResult = traktRepository.batchMarkAsWatched(movieWatched, showWatched)
@@ -508,6 +529,15 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                 traktUpdated += movieWatchlist.size + showWatchlist.size
             } else {
                 Log.e(TAG, "Trakt 批量标记想看失败", watchlistResult.exceptionOrNull())
+            }
+        }
+        // 冲突清理：从 watchlist 移除已在 watched 中的 ID（保留 watched，已看优先）
+        if (movieConflict.isNotEmpty() || showConflict.isNotEmpty()) {
+            val conflictResult = traktRepository.batchRemoveFromWatchlist(movieConflict, showConflict)
+            if (conflictResult.isSuccess) {
+                traktUpdated += movieConflict.size + showConflict.size
+            } else {
+                Log.e(TAG, "Trakt 冲突清理 batchRemoveFromWatchlist 失败", conflictResult.exceptionOrNull())
             }
         }
         return traktUpdated
@@ -621,6 +651,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         val traktNeedWatchlist: List<Pair<Int, MediaType>>,
         val doubanNeedUpdate: List<DoubanStatusUpdate>,
         val conflicts: Int,
-        val skipped: Int
+        val skipped: Int,
+        // Trakt 侧同时存在 watchlist + watched 的冲突 ID（按"已看优先"从 watchlist 移除）
+        val traktConflictRemoveFromWatchlist: List<Pair<Int, MediaType>> = emptyList()
     )
 }
