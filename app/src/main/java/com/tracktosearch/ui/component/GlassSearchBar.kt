@@ -68,7 +68,7 @@ fun GlassSearchBar(
     val interactionSource = remember { MutableInteractionSource() }
     val isEditable = onValueChange != null
 
-    val containerColor = Color.LightGray.copy(alpha = 0.28f)
+    val containerColor = Color.LightGray.copy(alpha = 0.30f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val hintColor = contentColor.copy(alpha = 0.55f)
 

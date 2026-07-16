@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -101,16 +102,11 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -130,7 +126,6 @@ fun SettingsScreen(
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
     val currentDefaultTab by viewModel.defaultTab.collectAsStateWithLifecycle()
-    val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
     // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
@@ -231,15 +226,9 @@ fun SettingsScreen(
         doubanRetryViewModel.refreshRetryState()
         viewModel.loadCooldownStatusFromLocal()
     }
-    val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
-    val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
-    val customSources by viewModel.customSources.collectAsStateWithLifecycle()
-    val testResults by viewModel.testResults.collectAsStateWithLifecycle()
-    val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
     var showAccentColorDialog by remember { mutableStateOf(false) }
-    var showPanHubConfigDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDefaultTabDialog by remember { mutableStateOf(false) }
     var showChangelogDialog by remember { mutableStateOf(false) }
@@ -250,8 +239,6 @@ fun SettingsScreen(
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
     var showDiscoverSectionsDialog by remember { mutableStateOf(false) }
     var showDetailSectionsDialog by remember { mutableStateOf(false) }
-    var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
-    var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
 
     LaunchedEffect(exportImportState.message) {
         exportImportState.message?.let {
@@ -319,7 +306,6 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
-    val settingsHazeState = remember { HazeState() }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val settingsCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -351,8 +337,7 @@ fun SettingsScreen(
             LazyColumn(
                 state = settingsListState,
                 modifier = modifier
-                    .fillMaxSize()
-                    .hazeSource(state = settingsHazeState),
+                    .fillMaxSize(),
                 contentPadding = PaddingValues(
                     top = 65.dp + statusBarHeight,
                     bottom = 80.dp
@@ -361,7 +346,7 @@ fun SettingsScreen(
             // 观看统计（第一位，独占整行卡片，无类目 Header）
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
             item(key = "statistics_entry") {
-                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
+                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
                     with(sharedTransitionScope) {
                         Modifier.sharedBounds(
                             sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
@@ -459,75 +444,9 @@ fun SettingsScreen(
                 }
             }
 
-            // 搜索源
+            // 搜索源（State 收集下沉到 SearchSourcesItem，开关切换/测试结果更新只重组本 item）
             item(key = "group_search") {
-                SettingsGroupCard(title = stringResource(R.string.settings_search)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SearchSourceCard(
-                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                            name = "PanSou",
-                            checked = pansouEnabled,
-                            onCheckedChange = { viewModel.setPansouEnabled(it) },
-                            containerColor = Color.Transparent
-                        )
-                        SearchSourceCard(
-                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                            name = "Panhub",
-                            checked = panhubEnabled,
-                            onCheckedChange = { viewModel.setPanhubEnabled(it) },
-                            onConfigClick = { showPanHubConfigDialog = true },
-                            configContentDescription = stringResource(R.string.settings_panhub_config),
-                            containerColor = Color.Transparent
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        SearchSourceCard(
-                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                            name = "Zreso",
-                            checked = zresoEnabled,
-                            onCheckedChange = { viewModel.setZresoEnabled(it) },
-                            containerColor = Color.Transparent
-                        )
-                        SearchSourceAddCard(
-                            modifier = Modifier.weight(1f).heightIn(min = 60.dp),
-                            title = stringResource(R.string.settings_add_source),
-                            onClick = {
-                                showEditCustomSource = CustomSearchSource(
-                                    id = java.util.UUID.randomUUID().toString(),
-                                    name = "",
-                                    baseUrl = "",
-                                    apiPath = "api/search",
-                                    keywordParam = "kw",
-                                    cloudTypesParam = "cloud_types",
-                                    cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
-                                    srcParam = "src",
-                                    srcValue = "all"
-                                )
-                            },
-                            containerColor = Color.Transparent
-                        )
-                    }
-                    // 自定义搜索源列表项
-                    customSources.forEachIndexed { index, source ->
-                        val testResult = testResults[source.id]
-                        CustomSearchSourceItem(
-                            source = source,
-                            testResult = testResult,
-                            onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
-                            onEdit = { showEditCustomSource = source },
-                            onDelete = { showDeleteCustomSource = source },
-                            onTest = { viewModel.testCustomSource(source) }
-                        )
-                        if (index < customSources.size - 1) GroupDivider()
-                    }
-                }
+                SearchSourcesItem(viewModel = viewModel)
             }
 
             // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
@@ -580,134 +499,123 @@ fun SettingsScreen(
                                 )
                             }
 
-                            val dataItems = buildList<@Composable () -> Unit> {
-                                add {
-                                    DataFlowGridItem(
-                                        onExport = {
-                                            if (!exportImportState.isExporting) {
-                                                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
-                                                exportJsonLauncher.launch("trakt-export-$timestamp.json")
-                                            }
-                                        },
-                                        onImportImdb = {
-                                            if (!exportImportState.isImporting) {
-                                                importImdbLauncher.launch("text/*")
-                                            }
-                                        },
-                                        onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
-                                        onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() },
-                                        containerColor = Color.Transparent
-                                    )
-                                }
-                                add {
-                                    SettingsItemCard(
-                                        icon = Icons.Rounded.Sync,
-                                        title = stringResource(R.string.settings_douban_resync),
-                                        subtitle = stringResource(R.string.settings_douban_resync_desc),
-                                        onClick = {
-                                            // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
-                                            if (doubanLoggedIn) {
-                                                // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
-                                                scope.launch { viewModel.refreshCooldownStatus() }
-                                                showSyncModePicker = true
-                                            } else {
-                                                showDoubanLoginPrompt = true
-                                            }
-                                        },
-                                        trailing = {
-                                            // 冷却期状态标签(右对齐):从未同步不显示,冷却中显示剩余天数,可同步显示可同步
-                                            cooldownStatus?.let { status ->
-                                                if (!status.neverSynced) {
-                                                    Surface(
-                                                        shape = MaterialTheme.shapes.small,
-                                                        color = if (status.isCoolingDown)
-                                                            MaterialTheme.colorScheme.tertiaryContainer
-                                                        else MaterialTheme.colorScheme.secondaryContainer
-                                                    ) {
-                                                        Text(
-                                                            text = if (status.isCoolingDown)
-                                                                stringResource(R.string.cooldown_remaining_days, status.remainingDays)
-                                                            else stringResource(R.string.cooldown_available),
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = if (status.isCoolingDown)
-                                                                MaterialTheme.colorScheme.onTertiaryContainer
-                                                            else MaterialTheme.colorScheme.onSecondaryContainer,
-                                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        },
-                                        containerColor = Color.Transparent
-                                    )
-                                }
-                                if (doubanRetryState.hasFailures) {
-                                    add {
-                                        SettingsItemCard(
-                                            icon = Icons.Rounded.Replay,
-                                            title = stringResource(R.string.settings_douban_retry_failures),
-                                            subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
-                                            onClick = {
-                                                // 重试失败项:弹重试选择对话框
-                                                showDoubanRetryDialog = true
-                                            },
-                                            containerColor = Color.Transparent
-                                        )
+                            // 数据流通 2x2 卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
+                            DataFlowGridItem(
+                                onExport = {
+                                    if (!exportImportState.isExporting) {
+                                        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                        exportJsonLauncher.launch("trakt-export-$timestamp.json")
                                     }
-                                    add {
-                                        SettingsItemCard(
-                                            icon = Icons.Rounded.BrokenImage,
-                                            title = stringResource(R.string.settings_douban_view_failures),
-                                            subtitle = stringResource(
-                                                R.string.settings_douban_view_failures_desc,
-                                                doubanRetryState.totalFailures
-                                            ),
-                                            onClick = { onDoubanFailures() },
-                                            containerColor = Color.Transparent
-                                        )
+                                },
+                                onImportImdb = {
+                                    if (!exportImportState.isImporting) {
+                                        importImdbLauncher.launch("text/*")
                                     }
-                                }
-                                // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
-                                if (!isDoubanSyncRunning) {
-                                    add {
-                                        SettingsItemCard(
-                                            icon = Icons.Rounded.SyncAlt,
-                                            title = stringResource(R.string.settings_douban_status_consistency),
-                                            subtitle = consistencyCheckState.let { result ->
-                                                if (result.isComplete) {
-                                                    stringResource(
-                                                        R.string.settings_douban_status_consistency_done,
-                                                        result.conflictsFound,
-                                                        result.traktUpdated,
-                                                        result.doubanUpdated
-                                                    )
-                                                } else if (result.isRunning) {
-                                                    stringResource(R.string.settings_douban_status_consistency_checking)
-                                                } else {
-                                                    stringResource(R.string.settings_douban_status_consistency_desc)
-                                                }
-                                            },
-                                            onClick = {
-                                                // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
-                                                if (viewModel.isCheckRunning()) {
-                                                    showConsistencyDialog = true
-                                                } else {
-                                                    // 异步读取上次检查时间并格式化，然后弹二次确认
-                                                    scope.launch {
-                                                        val lastMs = viewModel.getLastConsistencyCheckAt()
-                                                        lastCheckTimeText = formatLastCheckTime(lastMs, context)
-                                                        showConsistencyConfirm = true
-                                                    }
-                                                }
-                                            },
-                                            containerColor = Color.Transparent
-                                        )
+                                },
+                                onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
+                                onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() },
+                                containerColor = Color.Transparent
+                            )
+                            GroupDivider()
+                            SettingsItemCard(
+                                icon = Icons.Rounded.Sync,
+                                title = stringResource(R.string.settings_douban_resync),
+                                subtitle = stringResource(R.string.settings_douban_resync_desc),
+                                onClick = {
+                                    // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
+                                    if (doubanLoggedIn) {
+                                        // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
+                                        scope.launch { viewModel.refreshCooldownStatus() }
+                                        showSyncModePicker = true
+                                    } else {
+                                        showDoubanLoginPrompt = true
                                     }
-                                }
+                                },
+                                trailing = {
+                                    // 冷却期状态标签(右对齐):从未同步不显示,冷却中显示剩余天数,可同步显示可同步
+                                    cooldownStatus?.let { status ->
+                                        if (!status.neverSynced) {
+                                            Surface(
+                                                shape = MaterialTheme.shapes.small,
+                                                color = if (status.isCoolingDown)
+                                                    MaterialTheme.colorScheme.tertiaryContainer
+                                                else MaterialTheme.colorScheme.secondaryContainer
+                                            ) {
+                                                Text(
+                                                    text = if (status.isCoolingDown)
+                                                        stringResource(R.string.cooldown_remaining_days, status.remainingDays)
+                                                    else stringResource(R.string.cooldown_available),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (status.isCoolingDown)
+                                                        MaterialTheme.colorScheme.onTertiaryContainer
+                                                    else MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                containerColor = Color.Transparent
+                            )
+                            if (doubanRetryState.hasFailures) {
+                                GroupDivider()
+                                SettingsItemCard(
+                                    icon = Icons.Rounded.Replay,
+                                    title = stringResource(R.string.settings_douban_retry_failures),
+                                    subtitle = stringResource(R.string.douban_retry_subtitle, doubanRetryState.totalFailures),
+                                    onClick = {
+                                        // 重试失败项:弹重试选择对话框
+                                        showDoubanRetryDialog = true
+                                    },
+                                    containerColor = Color.Transparent
+                                )
+                                GroupDivider()
+                                SettingsItemCard(
+                                    icon = Icons.Rounded.BrokenImage,
+                                    title = stringResource(R.string.settings_douban_view_failures),
+                                    subtitle = stringResource(
+                                        R.string.settings_douban_view_failures_desc,
+                                        doubanRetryState.totalFailures
+                                    ),
+                                    onClick = { onDoubanFailures() },
+                                    containerColor = Color.Transparent
+                                )
                             }
-                            dataItems.forEachIndexed { index, item ->
-                                item()
-                                if (index < dataItems.size - 1) GroupDivider()
+                            // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
+                            if (!isDoubanSyncRunning) {
+                                GroupDivider()
+                                SettingsItemCard(
+                                    icon = Icons.Rounded.SyncAlt,
+                                    title = stringResource(R.string.settings_douban_status_consistency),
+                                    subtitle = consistencyCheckState.let { result ->
+                                        if (result.isComplete) {
+                                            stringResource(
+                                                R.string.settings_douban_status_consistency_done,
+                                                result.conflictsFound,
+                                                result.traktUpdated,
+                                                result.doubanUpdated
+                                            )
+                                        } else if (result.isRunning) {
+                                            stringResource(R.string.settings_douban_status_consistency_checking)
+                                        } else {
+                                            stringResource(R.string.settings_douban_status_consistency_desc)
+                                        }
+                                    },
+                                    onClick = {
+                                        // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
+                                        if (viewModel.isCheckRunning()) {
+                                            showConsistencyDialog = true
+                                        } else {
+                                            // 异步读取上次检查时间并格式化，然后弹二次确认
+                                            scope.launch {
+                                                val lastMs = viewModel.getLastConsistencyCheckAt()
+                                                lastCheckTimeText = formatLastCheckTime(lastMs, context)
+                                                showConsistencyConfirm = true
+                                            }
+                                        }
+                                    },
+                                    containerColor = Color.Transparent
+                                )
                             }
 
                             // 云端同步进行中:显示进度条
@@ -815,16 +723,11 @@ fun SettingsScreen(
                 }
             }
         }
-            // Haze 模糊标题栏（含状态栏）
+            // 标题栏（含状态栏）：纯色背景，避免 Haze 实时模糊导致滑动卡顿
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(
-                        state = settingsHazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                    .clickable(enabled = false, onClick = {})
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
                 Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
@@ -1056,60 +959,6 @@ fun SettingsScreen(
         )
     }
 
-    // 自定义搜索源编辑弹窗
-    showEditCustomSource?.let { source ->
-        CustomSourceEditDialog(
-            source = source,
-            isNew = customSources.none { it.id == source.id },
-            onSave = {
-                if (customSources.none { s -> s.id == it.id }) {
-                    viewModel.addCustomSource(it)
-                } else {
-                    viewModel.updateCustomSource(it)
-                }
-                showEditCustomSource = null
-            },
-            onDismiss = { showEditCustomSource = null }
-        )
-    }
-
-    // 删除确认弹窗
-    showDeleteCustomSource?.let { source ->
-        AlertDialog(
-            onDismissRequest = { showDeleteCustomSource = null },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.settings_delete_source)) },
-            text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteCustomSource(source.id)
-                    showDeleteCustomSource = null
-                }) {
-                    Text(stringResource(R.string.cd_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteCustomSource = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            }
-        )
-    }
-
-    // PanHub 配置弹窗
-    if (showPanHubConfigDialog) {
-        PanHubConfigDialog(
-            config = panHubConfig,
-            enabled = panhubEnabled,
-            onEnabledChange = { viewModel.setPanhubEnabled(it) },
-            onConcurrencyChange = { viewModel.setPanHubConcurrency(it) },
-            onTimeoutMsChange = { viewModel.setPanHubTimeoutMs(it) },
-            onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
-            onEnabledChannelsChange = { viewModel.setPanHubEnabledChannels(it) },
-            onDismiss = { showPanHubConfigDialog = false }
-        )
-    }
-
     // 豆瓣重试入口:有失败项时弹选择对话框(重试上次失败/导入 JSON/导出失败记录)
     if (showDoubanRetryDialog) {
         DoubanRetryDialog(
@@ -1272,6 +1121,146 @@ fun SettingsScreen(
                     Text(stringResource(R.string.common_cancel))
                 }
             }
+        )
+    }
+}
+
+/**
+ * 搜索源分组 item：3 个内置源开关 + 自定义源列表 + 添加入口。
+ * State 收集局部化到本函数，开关切换/测试结果/配置变更只重组本 item，不波及 LazyColumn 其他 item。
+ */
+@Composable
+private fun SearchSourcesItem(viewModel: SettingsViewModel) {
+    val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
+    val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
+    val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
+    val customSources by viewModel.customSources.collectAsStateWithLifecycle()
+    val testResults by viewModel.testResults.collectAsStateWithLifecycle()
+    val panHubConfig by viewModel.panHubConfig.collectAsStateWithLifecycle()
+
+    var showPanHubConfigDialog by remember { mutableStateOf(false) }
+    var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
+    var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
+
+    SettingsGroupCard(title = stringResource(R.string.settings_search)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SearchSourceCard(
+                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                name = "PanSou",
+                checked = pansouEnabled,
+                onCheckedChange = { viewModel.setPansouEnabled(it) },
+                containerColor = Color.Transparent
+            )
+            SearchSourceCard(
+                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                name = "Panhub",
+                checked = panhubEnabled,
+                onCheckedChange = { viewModel.setPanhubEnabled(it) },
+                onConfigClick = { showPanHubConfigDialog = true },
+                configContentDescription = stringResource(R.string.settings_panhub_config),
+                containerColor = Color.Transparent
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SearchSourceCard(
+                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                name = "Zreso",
+                checked = zresoEnabled,
+                onCheckedChange = { viewModel.setZresoEnabled(it) },
+                containerColor = Color.Transparent
+            )
+            SearchSourceAddCard(
+                modifier = Modifier.weight(1f).heightIn(min = 60.dp),
+                title = stringResource(R.string.settings_add_source),
+                onClick = {
+                    showEditCustomSource = CustomSearchSource(
+                        id = java.util.UUID.randomUUID().toString(),
+                        name = "",
+                        baseUrl = "",
+                        apiPath = "api/search",
+                        keywordParam = "kw",
+                        cloudTypesParam = "cloud_types",
+                        cloudTypesValue = "quark,baidu,aliyun,xunlei,uc,115",
+                        srcParam = "src",
+                        srcValue = "all"
+                    )
+                },
+                containerColor = Color.Transparent
+            )
+        }
+        // 自定义搜索源列表项
+        customSources.forEachIndexed { index, source ->
+            val testResult = testResults[source.id]
+            CustomSearchSourceItem(
+                source = source,
+                testResult = testResult,
+                onToggle = { viewModel.setCustomSourceEnabled(source.id, it) },
+                onEdit = { showEditCustomSource = source },
+                onDelete = { showDeleteCustomSource = source },
+                onTest = { viewModel.testCustomSource(source) }
+            )
+            if (index < customSources.size - 1) GroupDivider()
+        }
+    }
+
+    // 自定义搜索源编辑弹窗
+    showEditCustomSource?.let { source ->
+        CustomSourceEditDialog(
+            source = source,
+            isNew = customSources.none { it.id == source.id },
+            onSave = {
+                if (customSources.none { s -> s.id == it.id }) {
+                    viewModel.addCustomSource(it)
+                } else {
+                    viewModel.updateCustomSource(it)
+                }
+                showEditCustomSource = null
+            },
+            onDismiss = { showEditCustomSource = null }
+        )
+    }
+
+    // 删除确认弹窗
+    showDeleteCustomSource?.let { source ->
+        AlertDialog(
+            onDismissRequest = { showDeleteCustomSource = null },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(stringResource(R.string.settings_delete_source)) },
+            text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteCustomSource(source.id)
+                    showDeleteCustomSource = null
+                }) {
+                    Text(stringResource(R.string.cd_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteCustomSource = null }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        )
+    }
+
+    // PanHub 配置弹窗
+    if (showPanHubConfigDialog) {
+        PanHubConfigDialog(
+            config = panHubConfig,
+            enabled = panhubEnabled,
+            onEnabledChange = { viewModel.setPanhubEnabled(it) },
+            onConcurrencyChange = { viewModel.setPanHubConcurrency(it) },
+            onTimeoutMsChange = { viewModel.setPanHubTimeoutMs(it) },
+            onEnabledPluginsChange = { viewModel.setPanHubEnabledPlugins(it) },
+            onEnabledChannelsChange = { viewModel.setPanHubEnabledChannels(it) },
+            onDismiss = { showPanHubConfigDialog = false }
         )
     }
 }
