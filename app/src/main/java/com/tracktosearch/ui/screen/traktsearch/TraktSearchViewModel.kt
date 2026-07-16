@@ -140,9 +140,10 @@ class TraktSearchViewModel @Inject constructor(
         val current = _uiState.value
         val anySearched = current.movieState.hasSearched || current.showState.hasSearched ||
                 current.personState.hasSearched || current.diskState.hasSearched
-        // 已有搜索结果且查询词相同，不重置（从详情页返回时保持状态）
-        // 查询词不同则是新的搜索，需要重置
-        if (anySearched && current.query == query) return
+        // 已有搜索结果且查询词和类型都相同，不重置（从详情页返回时保持状态）
+        // 注意：type 不同时不能早返回，否则切 type 同 query 的场景（如 MOVIE/痴迷 → PERSON/痴迷）
+        // 会被错误跳过，导致 selectedTab 不切换、新 type 搜索不触发
+        if (anySearched && current.query == query && current.selectedTab == type) return
 
         // 同步 selectedTab 为传入的 type（修复 inline 模式下初始类型错误的问题）
         if (_uiState.value.selectedTab != type) {

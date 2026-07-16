@@ -348,6 +348,76 @@ class TraktSearchViewModelTest {
         coVerify(atLeast = 1) { traktRepository.searchMovies("盗梦空间", any()) }
     }
 
+    /**
+     * 测试点9a：initSearch 同 query 不同 type → 切 tab 并触发新 type 搜索（Bug 2/3 回归）
+     *
+     * 回归场景：用户先搜 MOVIE/痴迷，返回搜索页切 type=SHOW 再搜"痴迷"。
+     * inline 模式下 ViewModel 复用同一实例（Hilt 绑定到 MAIN NavBackStackEntry，
+     * key() 不影响 ViewModelStoreOwner），LaunchedEffect 重新触发 initSearch。
+     *
+     * 原始 bug：initSearch 早返回条件 `anySearched && current.query == query`
+     * 只比对 query 不对 type，导致 type 变化但 query 相同时直接 return，
+     * selectedTab 不切换、新 type 搜索不触发，UI 仍显示旧 type 的结果。
+     *
+     * 修复后：早返回条件加 `current.selectedTab == type`，type 不同时不早返回，
+     * 走切 tab + 搜索逻辑。
+     */
+    @Test
+    fun `initSearch_同query不同type_切tab并触发新type搜索`() = runTest {
+        viewModel = createViewModel()
+        // 第一次：搜索 MOVIE/盗梦空间
+        coEvery { traktRepository.searchMovies("盗梦空间", any()) } returns
+                Result.success(listOf(movieResultA) to 1)
+        viewModel.initSearch("盗梦空间", MediaType.MOVIE)
+        advanceUntilIdle()
+
+        // 验证第一次搜索成功
+        var state = viewModel.uiState.value
+        assertThat(state.selectedTab).isEqualTo(MediaType.MOVIE)
+        assertThat(state.movieState.hasSearched).isTrue()
+
+        // 第二次：同 query 不同 type（SHOW）
+        coEvery { traktRepository.searchShows("盗梦空间", any()) } returns
+                Result.success(listOf(showResultA) to 1)
+        viewModel.initSearch("盗梦空间", MediaType.SHOW)
+        advanceUntilIdle()
+
+        // 验证 selectedTab 切到 SHOW，SHOW 搜索被触发
+        state = viewModel.uiState.value
+        assertThat(state.selectedTab).isEqualTo(MediaType.SHOW)
+        assertThat(state.showState.hasSearched).isTrue()
+        assertThat(state.showState.results).hasSize(1)
+        assertThat(state.showState.results[0].title).isEqualTo("绝命毒师")
+        coVerify(atLeast = 1) { traktRepository.searchShows("盗梦空间", any()) }
+    }
+
+    /**
+     * 测试点9b：initSearch 同 query 同 type（已搜索）→ 早返回保持状态（详情页返回场景）
+     *
+     * 保护场景：用户搜索后进详情页，返回时 TraktSearchScreen 重新组合，
+     * LaunchedEffect 重新触发 initSearch。此时 query 和 type 都相同，
+     * 应早返回保持状态（滚动位置、搜索结果不丢失）。
+     */
+    @Test
+    fun `initSearch_同query同type已搜索_早返回保持状态`() = runTest {
+        viewModel = createViewModel()
+        coEvery { traktRepository.searchMovies("盗梦空间", any()) } returns
+                Result.success(listOf(movieResultA) to 1)
+        viewModel.initSearch("盗梦空间", MediaType.MOVIE)
+        advanceUntilIdle()
+
+        // 第二次：同 query 同 type（模拟详情页返回）
+        viewModel.initSearch("盗梦空间", MediaType.MOVIE)
+        advanceUntilIdle()
+
+        // 验证状态保持，searchMovies 不被重复调用
+        val state = viewModel.uiState.value
+        assertThat(state.selectedTab).isEqualTo(MediaType.MOVIE)
+        assertThat(state.movieState.hasSearched).isTrue()
+        // searchMovies 只被调用 1 次（第一次搜索），第二次 initSearch 早返回
+        coVerify(exactly = 1) { traktRepository.searchMovies("盗梦空间", any()) }
+    }
+
     // ==================== enrichment 字段传递测试 ====================
     // 回归测试：tmdbId>0 时 enrichSearchResult 调用 enrichMovie/enrichTv，
     // 必须把 enrichment.chineseTitle→displayTitle、posterUrl→posterUrl 正确映射到 UI item。

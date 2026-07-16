@@ -303,7 +303,6 @@ fun MainScreen(
                                 initialKeyword = "",
                                 onSearchClick = onSearchClick,
                                 onTraktSearch = { type, query ->
-                                    Log.d("SearchNav", "MainScreen onTraktSearch: type=$type, query=$query")
                                     traktSearchType = type
                                     traktSearchQuery = query
                                     showTraktSearch = true
