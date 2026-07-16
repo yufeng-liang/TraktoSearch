@@ -36,6 +36,7 @@ import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -139,6 +140,13 @@ class DiscoverViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(DiscoverUiState())
     val uiState: StateFlow<DiscoverUiState> = _uiState.asStateFlow()
+
+    /**
+     * 当前 ID 转换协程。点击新卡片时取消上一次，避免并发转换导致：
+     * - 两次导航（旧协程完成后跳旧详情页，新协程完成后跳新详情页）
+     * - 共享 resolvingXxxId 状态被旧协程的 finally 错误清空
+     */
+    private var resolveJob: Job? = null
 
     /** 全局想看/已看 ID 缓存，登录后加载一次 */
     private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
@@ -884,6 +892,8 @@ class DiscoverViewModel @Inject constructor(
         title: String,
         onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit
     ) {
+        // 取消上一次未完成的转换，避免并发导航与状态错乱
+        resolveJob?.cancel()
         // 优先从全局想看/已看缓存查找
         val wlCached = _watchlistWatchedIds.value?.traktIdByTmdb(tmdbId, MediaType.MOVIE)
         if (wlCached != null && wlCached > 0) {
@@ -905,7 +915,7 @@ class DiscoverViewModel @Inject constructor(
             viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
             return
         }
-        viewModelScope.launch {
+        resolveJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
             try {
                 val traktResult = traktRepository.searchByTmdb(tmdbId, MediaType.MOVIE)
@@ -924,7 +934,10 @@ class DiscoverViewModel @Inject constructor(
             } catch (_: Exception) {
                 // 忽略
             } finally {
-                _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
+                // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
+                if (_uiState.value.resolvingTmdbId == tmdbId) {
+                    _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
+                }
             }
         }
     }
@@ -954,6 +967,8 @@ class DiscoverViewModel @Inject constructor(
     ) {
         val tmdbId = show.ids.tmdb
         if (tmdbId > 0) {
+            // 取消上一次未完成的转换，避免并发导航与状态错乱
+            resolveJob?.cancel()
             // 优先从全局想看/已看缓存查找
             val wlCached = _watchlistWatchedIds.value?.traktIdByTmdb(tmdbId, MediaType.SHOW)
             if (wlCached != null && wlCached > 0) {
@@ -975,7 +990,7 @@ class DiscoverViewModel @Inject constructor(
                 viewModelScope.launch { _toastEvent.emit(R.string.card_resolve_not_found) }
                 return
             }
-            viewModelScope.launch {
+            resolveJob = viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(resolvingTmdbId = tmdbId)
                 try {
                     val traktResult = traktRepository.searchByTmdb(tmdbId, MediaType.SHOW)
@@ -992,7 +1007,10 @@ class DiscoverViewModel @Inject constructor(
                 } catch (_: Exception) {
                     // 忽略
                 } finally {
-                    _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
+                    // 仅当仍是自己设置的 tmdbId 时才清空，避免清空新协程设的值
+                    if (_uiState.value.resolvingTmdbId == tmdbId) {
+                        _uiState.value = _uiState.value.copy(resolvingTmdbId = null)
+                    }
                 }
             }
         }
@@ -1010,6 +1028,8 @@ class DiscoverViewModel @Inject constructor(
         item: DoubanHotItem,
         onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit
     ) {
+        // 取消上一次未完成的转换，避免并发导航与状态错乱
+        resolveJob?.cancel()
         // 提取标题（去除 【评分】 和 #序号 前缀）
         val cleanTitle = item.title
             .replace(Regex("【\\d+\\.?\\d*】\\s*"), "")
@@ -1047,7 +1067,7 @@ class DiscoverViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        resolveJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(resolvingItemId = item.id)
             try {
                 // 1. 用 TMDB 搜索（优先从豆瓣标题缓存获取）
@@ -1116,6 +1136,11 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingItemId = null)
                 _toastEvent.emit(R.string.card_resolve_error)
+            } finally {
+                // 仅当仍是自己设置的 item.id 时才清空，避免清空新协程设的值
+                if (_uiState.value.resolvingItemId == item.id) {
+                    _uiState.value = _uiState.value.copy(resolvingItemId = null)
+                }
             }
         }
     }
@@ -1126,6 +1151,8 @@ class DiscoverViewModel @Inject constructor(
         isMovieTab: Boolean,
         onNavigate: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit
     ) {
+        // 取消上一次未完成的转换，避免并发导航与状态错乱
+        resolveJob?.cancel()
         val cleanTitle = item.title.trim()
         val mediaType = if (isMovieTab) MediaType.MOVIE else MediaType.SHOW
 
@@ -1155,7 +1182,7 @@ class DiscoverViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
+        resolveJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(resolvingRecommendItemId = item.id)
             try {
                 // 1. 用 TMDB 搜索（优先从缓存获取）
@@ -1220,6 +1247,11 @@ class DiscoverViewModel @Inject constructor(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
                 _toastEvent.emit(R.string.card_resolve_error)
+            } finally {
+                // 仅当仍是自己设置的 item.id 时才清空，避免清空新协程设的值
+                if (_uiState.value.resolvingRecommendItemId == item.id) {
+                    _uiState.value = _uiState.value.copy(resolvingRecommendItemId = null)
+                }
             }
         }
     }

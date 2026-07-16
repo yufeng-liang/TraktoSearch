@@ -255,9 +255,6 @@ fun WatchlistScreen(
         }
     }
 
-    // 保存每个 (mode, tab) 组合的滚动位置
-    val savedScrollPositions = remember { mutableMapOf<String, Pair<Int, Int>>() }
-
     // 切换模式时触发加载
     LaunchedEffect(selectedMode) {
         when (selectedMode) {
@@ -322,12 +319,21 @@ fun WatchlistScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
-    val singleModeGridState = rememberLazyGridState()
-    val historyModeGridState = rememberLazyGridState()
+    // 为4种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
+    // 避免切 tab 时列表位置互相影响
+    val movieGridState = rememberLazyGridState()        // mode=0, tab=0 想看电影
+    val showGridState = rememberLazyGridState()         // mode=0, tab=1 想看电视剧
+    val historyMovieGridState = rememberLazyGridState() // mode=1, tab=0 已看电影
+    val historyShowGridState = rememberLazyGridState()  // mode=1, tab=1 已看电视剧
     val scrollToTopProvider = LocalScrollToTopProvider.current
 
-    // 根据 selectedMode 选择对应的 gridState
-    val currentGridState = if (selectedMode == 0) singleModeGridState else historyModeGridState
+    // 根据 selectedMode 和 selectedTab 选择对应的 gridState
+    val currentGridState = when {
+        selectedMode == 0 && selectedTab == 0 -> movieGridState
+        selectedMode == 0 && selectedTab == 1 -> showGridState
+        selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
+        else -> historyShowGridState
+    }
 
     DisposableEffect(selectedMode) {
         scrollToTopProvider.register {
@@ -353,29 +359,10 @@ fun WatchlistScreen(
         isRemoving = false
     }
 
-    // 监听 tab 切换，保存/恢复滚动位置 + 退出多选
-    var prevTabKey by remember { mutableStateOf("${selectedMode}_${selectedTab}") }
-    var firstTabSwitch by remember { mutableStateOf(true) }
+    // 监听 tab/mode 切换：退出多选模式。
+    // 滚动位置由4个独立 gridState 自动保存，无需手动恢复。
+    // 不再触发 EMPHASIS 入场动画——不同 tab 卡片 id 不同，alpha 从0淡入会导致闪白。
     LaunchedEffect(selectedMode, selectedTab) {
-        if (firstTabSwitch) {
-            firstTabSwitch = false
-        } else {
-            enterMode = EnterMode.EMPHASIS
-            delay(500)
-            enterMode = EnterMode.DEFAULT
-        }
-        val currentKey = "${selectedMode}_${selectedTab}"
-        // 保存旧 tab 的位置
-        savedScrollPositions[prevTabKey] = Pair(
-            currentGridState.firstVisibleItemIndex,
-            currentGridState.firstVisibleItemScrollOffset
-        )
-        // 恢复新 tab 的位置
-        savedScrollPositions[currentKey]?.let { (index, offset) ->
-            currentGridState.scrollToItem(index, offset)
-        }
-        prevTabKey = currentKey
-        // 退出多选模式
         isMultiSelectMode = false
         isRemoving = false
     }
