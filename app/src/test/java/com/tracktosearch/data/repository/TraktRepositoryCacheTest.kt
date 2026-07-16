@@ -217,6 +217,65 @@ class TraktRepositoryCacheTest {
         assertThat(ids.showWatchedTraktIds).contains(600)
     }
 
+    // ==================== addToWatchlistCache（对称互斥）====================
+
+    @Test
+    fun `addToWatchlistCache_MOVIE_加想看同时从已看移除`() {
+        // 初始：100 在已看中
+        setWatchlistWatchedIds(WatchlistWatchedIds(
+            movieWatchedTraktIds = setOf(100),
+            movieWatchedTmdbIds = setOf(1000)
+        ))
+        invokePrivate("addToWatchlistCache", 100, 1000, MediaType.MOVIE)
+
+        val ids = getWatchlistWatchedIds()!!
+        // 已加到想看
+        assertThat(ids.movieWatchlistTraktIds).contains(100)
+        assertThat(ids.movieWatchlistTmdbIds).contains(1000)
+        // 从已看移除（对称互斥）
+        assertThat(ids.movieWatchedTraktIds).doesNotContain(100)
+        assertThat(ids.movieWatchedTmdbIds).doesNotContain(1000)
+    }
+
+    @Test
+    fun `addToWatchlistCache_SHOW_加想看同时从已看移除`() {
+        setWatchlistWatchedIds(WatchlistWatchedIds(
+            showWatchedTraktIds = setOf(200),
+            showWatchedTmdbIds = setOf(2000)
+        ))
+        invokePrivate("addToWatchlistCache", 200, 2000, MediaType.SHOW)
+
+        val ids = getWatchlistWatchedIds()!!
+        assertThat(ids.showWatchlistTraktIds).contains(200)
+        assertThat(ids.showWatchedTraktIds).doesNotContain(200)
+    }
+
+    @Test
+    fun `addToWatchlistCache_不在已看中时仅加想看不移除`() {
+        setWatchlistWatchedIds(WatchlistWatchedIds())
+        invokePrivate("addToWatchlistCache", 100, 1000, MediaType.MOVIE)
+
+        val ids = getWatchlistWatchedIds()!!
+        assertThat(ids.movieWatchlistTraktIds).contains(100)
+        // 已看本就为空，不减
+        assertThat(ids.movieWatchedTraktIds).isEmpty()
+    }
+
+    @Test
+    fun `addToWatchlistCache_不影响其他类型的集合`() {
+        setWatchlistWatchedIds(WatchlistWatchedIds(
+            showWatchlistTraktIds = setOf(500),
+            showWatchedTraktIds = setOf(600)
+        ))
+        invokePrivate("addToWatchlistCache", 100, 1000, MediaType.MOVIE)
+
+        val ids = getWatchlistWatchedIds()!!
+        assertThat(ids.movieWatchlistTraktIds).contains(100)
+        // show 集合不受影响
+        assertThat(ids.showWatchlistTraktIds).contains(500)
+        assertThat(ids.showWatchedTraktIds).contains(600)
+    }
+
     // ==================== removeFromWatchedCache（核心一致性）====================
 
     @Test

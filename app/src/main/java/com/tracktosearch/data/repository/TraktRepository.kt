@@ -218,11 +218,17 @@ class TraktRepository @Inject constructor(
                 watchlistWatchedIds = when (type) {
                     MediaType.MOVIE -> current.copy(
                         movieWatchlistTraktIds = current.movieWatchlistTraktIds + traktId,
-                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds
+                        movieWatchlistTmdbIds = if (tmdbId > 0) current.movieWatchlistTmdbIds + tmdbId else current.movieWatchlistTmdbIds,
+                        // 标记想看后从已看缓存移除（对称于 addToWatchedCache）
+                        movieWatchedTraktIds = current.movieWatchedTraktIds - traktId,
+                        movieWatchedTmdbIds = if (tmdbId > 0) current.movieWatchedTmdbIds - tmdbId else current.movieWatchedTmdbIds
                     )
                     MediaType.SHOW -> current.copy(
                         showWatchlistTraktIds = current.showWatchlistTraktIds + traktId,
-                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds
+                        showWatchlistTmdbIds = if (tmdbId > 0) current.showWatchlistTmdbIds + tmdbId else current.showWatchlistTmdbIds,
+                        // 标记想看后从已看缓存移除（对称于 addToWatchedCache）
+                        showWatchedTraktIds = current.showWatchedTraktIds - traktId,
+                        showWatchedTmdbIds = if (tmdbId > 0) current.showWatchedTmdbIds - tmdbId else current.showWatchedTmdbIds
                     )
                     else -> current
                 }
