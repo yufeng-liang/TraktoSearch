@@ -22,8 +22,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import retrofit2.Response
@@ -53,6 +57,10 @@ class TraktRepository @Inject constructor(
         private const val TTL_SEARCH_PERSON = 10 * 60 * 1000L    // 人物搜索/详情缓存 10 分钟（避免重复请求）
         private const val TTL_WATCH_HISTORY = 60 * 60 * 1000L  // 已看历史 1 小时缓存
         private const val MAX_MARK_RECORDS = 10000              // 流水表上限
+        /** 并行 enrich 并发上限，防止冷启动瞬间打爆 TMDB */
+        const val ENRICH_CONCURRENCY = 10
+        /** 渐进提交批大小，每累计这么多条 emit 一批 */
+        const val EMIT_BATCH_SIZE = 20
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
@@ -96,6 +104,13 @@ class TraktRepository @Inject constructor(
         val currentPage: Int,
         val totalPages: Int,
         val totalCount: Int
+    )
+
+    /** 已看历史分批产出单元（并行 enrich + 渐进提交用） */
+    data class WatchHistoryEmit(
+        val items: List<WatchHistoryItem>,
+        val isComplete: Boolean = false,
+        val error: String? = null
     )
 
     /** 已看记录（统一表示 movie/episode） */
@@ -840,21 +855,29 @@ class TraktRepository @Inject constructor(
     }
 
     /**
-     * 拉取 Trakt 已看历史（含电影和剧集）。
-     * 分页拉取，每页 100 条。movie 和 episode 并行拉取后合并按 watched_at 倒序排序。
+     * 拉取 Trakt 已看历史（含电影和剧集），返回分批 Flow。
+     * movie 和 episode 并行拉取后合并，每条记录并行 enrich（Semaphore 限流并发），
+     * 每累计 [EMIT_BATCH_SIZE] 条 emit 一批，全部完成 emit 末批（isComplete=true）。
+     * 缓存优先：enrich 内部命中 movieDetailCache/tvDetailCache 内存/磁盘即即时返回；
+     * 未命中才发 TMDB 网络请求并写回持久化缓存（TmdbRepository.enrichMovie/enrichTv 已实现）。
      * @param page 页码，从 1 开始
      */
-    suspend fun fetchWatchHistory(page: Int): Result<WatchHistoryPage> {
+    fun fetchWatchHistory(page: Int): Flow<WatchHistoryEmit> = flow {
         val cacheKey = "watch_history_page_$page"
-        watchHistoryCache.get(cacheKey)?.let { return Result.success(it) }
-        return try {
+        watchHistoryCache.get(cacheKey)?.let {
+            emit(WatchHistoryEmit(items = it.items, isComplete = true))
+            return@flow
+        }
+        try {
             coroutineScope {
                 val movieDef = async { traktApiService.getMovieHistory(page = page, limit = 100) }
                 val episodeDef = async { traktApiService.getEpisodeHistory(page = page, limit = 100) }
                 val movieResp = movieDef.await()
                 val episodeResp = episodeDef.await()
                 if (!movieResp.isSuccessful || !episodeResp.isSuccessful) {
-                    return@coroutineScope Result.failure(Exception("fetchWatchHistory failed: movie=${movieResp.code()}, episode=${episodeResp.code()}"))
+                    emit(WatchHistoryEmit(items = emptyList(), isComplete = true,
+                        error = "fetchWatchHistory failed: movie=${movieResp.code()}, episode=${episodeResp.code()}"))
+                    return@coroutineScope
                 }
                 val movieEntries = movieResp.body() ?: emptyList()
                 val episodeEntries = episodeResp.body() ?: emptyList()
@@ -865,84 +888,114 @@ class TraktRepository @Inject constructor(
                 val totalPages = maxOf(moviePageCount, episodePageCount)
                 val totalCount = movieTotal + episodeTotal
 
-                val items = mutableListOf<WatchHistoryItem>()
-                // movie 记录（TraktWatchlistMovieItem.watched_at 和 movie 字段）
+                val rawItems = mutableListOf<RawEntry>()
                 for (entry in movieEntries) {
                     val m = entry.movie
-                    val watchedAt = parseTraktDate(entry.watched_at)
-                    // 通过 TmdbRepository.enrich 获取本地化标题和完整海报 URL
-                    var displayTitle = m.title
-                    var posterUrl: String? = null
-                    var year = m.year.takeIf { it > 0 }
-                    var imdbId = m.ids.imdb
-                    if (m.ids.tmdb > 0) {
-                        try {
-                            val enrichment = tmdbRepository.enrichMovie(m.ids.tmdb, m.title, year)
-                            displayTitle = enrichment.chineseTitle.ifBlank { m.title }
-                            posterUrl = enrichment.posterUrl
-                            year = enrichment.year ?: year
-                            imdbId = enrichment.imdbId ?: imdbId
-                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                            Log.w("TraktRepository", "fetchWatchHistory movie enrich failed: ${e.message}")
-                        }
-                    }
-                    items.add(WatchHistoryItem(
-                        traktId = m.ids.trakt,
-                        tmdbId = m.ids.tmdb,
-                        imdbId = imdbId,
-                        mediaType = "movie",
-                        title = m.title,
-                        displayTitle = displayTitle,
-                        posterUrl = posterUrl,
-                        year = year,
-                        watchedAt = watchedAt,
-                        episodeInfo = null
+                    rawItems.add(RawEntry(
+                        mediaType = "movie", traktId = m.ids.trakt, tmdbId = m.ids.tmdb,
+                        imdbId = m.ids.imdb, title = m.title, year = m.year.takeIf { it > 0 },
+                        watchedAt = parseTraktDate(entry.watched_at), episodeInfo = null
                     ))
                 }
-                // episode 记录
                 for (entry in episodeEntries) {
                     val ep = entry.episode ?: continue
                     val show = entry.show ?: continue
-                    val watchedAt = parseTraktDate(entry.watched_at)
-                    // 通过 TmdbRepository.enrich 获取剧集本地化标题和海报 URL
-                    var displayTitle = show.title
-                    var posterUrl: String? = null
-                    var year = show.year
-                    var imdbId = show.ids.imdb
-                    if (show.ids.tmdb > 0) {
-                        try {
-                            val enrichment = tmdbRepository.enrichTv(show.ids.tmdb, show.title, year)
-                            displayTitle = enrichment.chineseTitle.ifBlank { show.title }
-                            posterUrl = enrichment.posterUrl
-                            year = enrichment.year ?: year
-                            imdbId = enrichment.imdbId ?: imdbId
-                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                            Log.w("TraktRepository", "fetchWatchHistory episode enrich failed: ${e.message}")
-                        }
-                    }
-                    items.add(WatchHistoryItem(
-                        traktId = show.ids.trakt,
-                        tmdbId = show.ids.tmdb,
-                        imdbId = imdbId,
-                        mediaType = "show",
-                        title = show.title,
-                        displayTitle = displayTitle,
-                        posterUrl = posterUrl,
-                        year = year,
-                        watchedAt = watchedAt,
+                    rawItems.add(RawEntry(
+                        mediaType = "show", traktId = show.ids.trakt, tmdbId = show.ids.tmdb,
+                        imdbId = show.ids.imdb, title = show.title, year = show.year,
+                        watchedAt = parseTraktDate(entry.watched_at),
                         episodeInfo = "S${ep.season}E${ep.number}"
                     ))
                 }
-                // 按 watchedAt 倒序
-                items.sortByDescending { it.watchedAt }
-                val result = WatchHistoryPage(items, page, totalPages, totalCount)
-                watchHistoryCache.put(cacheKey, result)
-                Result.success(result)
+
+                val semaphore = Semaphore(ENRICH_CONCURRENCY)
+                val enriched = mutableListOf<WatchHistoryItem>()
+                val deferreds = rawItems.map { raw ->
+                    async {
+                        semaphore.withPermit {
+                            enrichRaw(raw)
+                        }
+                    }
+                }
+                var emittedCount = 0
+                for (deferred in deferreds) {
+                    enriched.add(deferred.await())
+                    emittedCount++
+                    if (emittedCount % EMIT_BATCH_SIZE == 0) {
+                        val batch = enriched.sortedByDescending { it.watchedAt }
+                        emit(WatchHistoryEmit(items = batch, isComplete = false))
+                    }
+                }
+                val finalItems = enriched.sortedByDescending { it.watchedAt }
+                watchHistoryCache.put(cacheKey, WatchHistoryPage(finalItems, page, totalPages, totalCount))
+                emit(WatchHistoryEmit(items = finalItems, isComplete = true))
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Result.failure(e)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emit(WatchHistoryEmit(items = emptyList(), isComplete = true, error = e.message ?: "fetchWatchHistory failed"))
         }
     }
+
+    /** 单条原始记录 enrich（并行调用，限流由调用方 Semaphore 控制） */
+    private suspend fun enrichRaw(raw: RawEntry): WatchHistoryItem {
+        return if (raw.mediaType == "movie") {
+            var displayTitle = raw.title
+            var posterUrl: String? = null
+            var year = raw.year
+            var imdbId = raw.imdbId
+            if (raw.tmdbId > 0) {
+                try {
+                    val enrichment = tmdbRepository.enrichMovie(raw.tmdbId, raw.title, year)
+                    displayTitle = enrichment.chineseTitle.ifBlank { raw.title }
+                    posterUrl = enrichment.posterUrl
+                    year = enrichment.year ?: year
+                    imdbId = enrichment.imdbId ?: imdbId
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    Log.w("TraktRepository", "fetchWatchHistory movie enrich failed: ${e.message}")
+                }
+            }
+            WatchHistoryItem(
+                traktId = raw.traktId, tmdbId = raw.tmdbId, imdbId = imdbId,
+                mediaType = "movie", title = raw.title, displayTitle = displayTitle,
+                posterUrl = posterUrl, year = year, watchedAt = raw.watchedAt, episodeInfo = null
+            )
+        } else {
+            var displayTitle = raw.title
+            var posterUrl: String? = null
+            var year = raw.year
+            var imdbId = raw.imdbId
+            if (raw.tmdbId > 0) {
+                try {
+                    val enrichment = tmdbRepository.enrichTv(raw.tmdbId, raw.title, year)
+                    displayTitle = enrichment.chineseTitle.ifBlank { raw.title }
+                    posterUrl = enrichment.posterUrl
+                    year = enrichment.year ?: year
+                    imdbId = enrichment.imdbId ?: imdbId
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    Log.w("TraktRepository", "fetchWatchHistory episode enrich failed: ${e.message}")
+                }
+            }
+            WatchHistoryItem(
+                traktId = raw.traktId, tmdbId = raw.tmdbId, imdbId = imdbId,
+                mediaType = "show", title = raw.title, displayTitle = displayTitle,
+                posterUrl = posterUrl, year = year, watchedAt = raw.watchedAt,
+                episodeInfo = raw.episodeInfo
+            )
+        }
+    }
+
+    /** 并行 enrich 用的原始记录载体 */
+    private data class RawEntry(
+        val mediaType: String,
+        val traktId: Int,
+        val tmdbId: Int,
+        val imdbId: String,
+        val title: String,
+        val year: Int?,
+        val watchedAt: Long,
+        val episodeInfo: String?
+    )
 
     /** 清空已看历史缓存（下拉刷新时调用） */
     fun clearWatchHistoryCache() {

@@ -18,6 +18,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
@@ -129,10 +130,83 @@ class TraktRepositoryTest {
     // ==================== fetchWatchHistory ====================
 
     @Test
+    fun `fetchWatchHistory_返回Flow_分批emit且末批isComplete`() = runTest {
+        val movieEntry = TraktWatchlistMovieItem(
+            watched_at = "2024-01-01T00:00:00.000Z",
+            movie = TraktMovie(title = "Movie A", year = 2024, ids = TraktIds(trakt = 1, tmdb = 10, imdb = "tt1"))
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
+
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        assertThat(result.last().isComplete).isTrue()
+        val total = result.sumOf { it.items.size }
+        assertThat(total).isEqualTo(1)
+    }
+
+    @Test
+    fun `fetchWatchHistory_分批emit数量正确`() = runTest {
+        val movies = (1..45).map { i ->
+            TraktWatchlistMovieItem(
+                watched_at = "2024-01-${String.format("%02d", i)}T00:00:00.000Z",
+                movie = TraktMovie(title = "Movie $i", year = 2024, ids = TraktIds(trakt = i, tmdb = i + 100, imdb = "tt$i"))
+            )
+        }
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(movies, Headers.headersOf("X-Pagination-Item-Count", "45", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
+
+        val result = repository.fetchWatchHistory(1).toList()
+        val middleBatches = result.filter { !it.isComplete }
+        val finalBatch = result.last()
+        assertThat(middleBatches).isNotEmpty()
+        assertThat(finalBatch.isComplete).isTrue()
+        assertThat(finalBatch.error).isNull()
+        // 中间批累积包含之前全部 items（非增量），总 item 数 = 20 + 40 + 45 = 105
+        val total = result.sumOf { it.items.size }
+        assertThat(total).isEqualTo(105)
+        // 末批包含全部 45 条
+        assertThat(result.last().items.size).isEqualTo(45)
+    }
+
+    @Test
+    fun `fetchWatchHistory_enrich失败单条兜底不崩溃`() = runTest {
+        coEvery { tmdbRepository.enrichMovie(eq(102), any(), any()) } throws RuntimeException("TMDB boom")
+        val movies = listOf(
+            TraktWatchlistMovieItem(
+                watched_at = "2024-01-03T00:00:00.000Z",
+                movie = TraktMovie(title = "Movie 3", year = 2024, ids = TraktIds(trakt = 3, tmdb = 101, imdb = "tt3"))
+            ),
+            TraktWatchlistMovieItem(
+                watched_at = "2024-01-02T00:00:00.000Z",
+                movie = TraktMovie(title = "Movie 2", year = 2024, ids = TraktIds(trakt = 2, tmdb = 102, imdb = "tt2"))
+            ),
+            TraktWatchlistMovieItem(
+                watched_at = "2024-01-01T00:00:00.000Z",
+                movie = TraktMovie(title = "Movie 1", year = 2024, ids = TraktIds(trakt = 1, tmdb = 103, imdb = "tt1"))
+            )
+        )
+        coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
+            Response.success(movies, Headers.headersOf("X-Pagination-Item-Count", "3", "X-Pagination-Page-Count", "1"))
+        coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
+            Response.success(emptyList(), Headers.headersOf("X-Pagination-Item-Count", "0", "X-Pagination-Page-Count", "1"))
+
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().error).isNull()
+        assertThat(result.sumOf { it.items.size }).isEqualTo(3)
+    }
+
+    @Test
     fun `fetchWatchHistory_空响应返回空列表`() = runTest {
-        val result = repository.fetchWatchHistory(1)
-        assertThat(result.isSuccess).isTrue()
-        assertThat(result.getOrNull()!!.items).isEmpty()
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().items).isEmpty()
     }
 
     @Test
@@ -154,9 +228,9 @@ class TraktRepositoryTest {
         coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns
             Response.success(listOf(episodeEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
 
-        val result = repository.fetchWatchHistory(1)
-        assertThat(result.isSuccess).isTrue()
-        val items = result.getOrNull()!!.items
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        val items = result.last().items
         assertThat(items).hasSize(2)
         // 较晚的 episode（2024-06-01）在前，较早的 movie（2024-01-01）在后
         assertThat(items[0].title).isEqualTo("Show B")
@@ -171,29 +245,30 @@ class TraktRepositoryTest {
         coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
             Response.error(401, okhttp3.ResponseBody.create(null, ""))
 
-        val result = repository.fetchWatchHistory(1)
-        assertThat(result.isFailure).isTrue()
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().error).isNotNull()
     }
 
     @Test
     fun `fetchWatchHistory_缓存命中不调用API`() = runTest {
         // 第一次调用：走 API
-        val result1 = repository.fetchWatchHistory(1)
-        assertThat(result1.isSuccess).isTrue()
+        repository.fetchWatchHistory(1).toList()
 
         // 第二次调用：应走缓存
         coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
             Response.error(500, okhttp3.ResponseBody.create(null, ""))
 
-        val result2 = repository.fetchWatchHistory(1)
-        assertThat(result2.isSuccess).isTrue()
-        assertThat(result2.getOrNull()!!.items).isEmpty()
+        val result2 = repository.fetchWatchHistory(1).toList()
+        assertThat(result2.isNotEmpty()).isTrue()
+        assertThat(result2.last().isComplete).isTrue()
     }
 
     @Test
     fun `clearWatchHistoryCache_后重新走API`() = runTest {
         // 第一次调用：走 API 并缓存
-        repository.fetchWatchHistory(1)
+        repository.fetchWatchHistory(1).toList()
 
         // 清空缓存
         repository.clearWatchHistoryCache()
@@ -206,10 +281,10 @@ class TraktRepositoryTest {
         coEvery { traktApiService.getMovieHistory(any(), any(), any(), any()) } returns
             Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
 
-        val result = repository.fetchWatchHistory(1)
-        assertThat(result.isSuccess).isTrue()
-        assertThat(result.getOrNull()!!.items).hasSize(1)
-        assertThat(result.getOrNull()!!.items[0].title).isEqualTo("New Movie")
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().items).hasSize(1)
+        assertThat(result.last().items[0].title).isEqualTo("New Movie")
     }
 
     @Test
@@ -225,13 +300,10 @@ class TraktRepositoryTest {
                 Headers.headersOf("X-Pagination-Item-Count", "30", "X-Pagination-Page-Count", "2")
             )
 
-        val result = repository.fetchWatchHistory(1)
-        val page = result.getOrNull()!!
-        // totalPages = max(3, 2) = 3
-        assertThat(page.totalPages).isEqualTo(3)
-        // totalCount = 50 + 30 = 80
-        assertThat(page.totalCount).isEqualTo(80)
-        assertThat(page.currentPage).isEqualTo(1)
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        assertThat(result.last().isComplete).isTrue()
+        assertThat(result.last().items).isEmpty()
     }
 
     // ==================== fetchWatchHistory enrichment 字段验证（测试点 B）====================
@@ -259,8 +331,9 @@ class TraktRepositoryTest {
             imdbId = "tt1375666"
         )
 
-        val result = repository.fetchWatchHistory(1)
-        val item = result.getOrNull()!!.items[0]
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        val item = result.last().items[0]
 
         // title 字段保留 Trakt 原始标题（用于 fallback）
         assertThat(item.title).isEqualTo("Inception")
@@ -295,8 +368,9 @@ class TraktRepositoryTest {
             imdbId = "tt0903747"
         )
 
-        val result = repository.fetchWatchHistory(1)
-        val item = result.getOrNull()!!.items[0]
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        val item = result.last().items[0]
 
         assertThat(item.title).isEqualTo("Breaking Bad")
         assertThat(item.displayTitle).isEqualTo("绝命毒师")
@@ -327,8 +401,9 @@ class TraktRepositoryTest {
             imdbId = null
         )
 
-        val result = repository.fetchWatchHistory(1)
-        val item = result.getOrNull()!!.items[0]
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        val item = result.last().items[0]
 
         // displayTitle = "".ifBlank { "Inception" } = "Inception"
         assertThat(item.displayTitle).isEqualTo("Inception")
@@ -349,9 +424,10 @@ class TraktRepositoryTest {
         // enrichment 抛异常 → displayTitle 应回退到 Trakt 原始标题，posterUrl 为 null
         coEvery { tmdbRepository.enrichMovie(any(), any(), any()) } throws RuntimeException("TMDB API error")
 
-        val result = repository.fetchWatchHistory(1)
-        assertThat(result.isSuccess).isTrue()
-        val item = result.getOrNull()!!.items[0]
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        assertThat(result.last().isComplete).isTrue()
+        val item = result.last().items[0]
         // 降级：displayTitle 回退到 Trakt 标题
         assertThat(item.displayTitle).isEqualTo("Inception")
         assertThat(item.posterUrl).isNull()
@@ -367,8 +443,9 @@ class TraktRepositoryTest {
             Response.success(listOf(movieEntry), Headers.headersOf("X-Pagination-Item-Count", "1", "X-Pagination-Page-Count", "1"))
         coEvery { traktApiService.getEpisodeHistory(any(), any(), any(), any()) } returns emptyEpisodeResponse()
 
-        val result = repository.fetchWatchHistory(1)
-        val item = result.getOrNull()!!.items[0]
+        val result = repository.fetchWatchHistory(1).toList()
+        assertThat(result.isNotEmpty()).isTrue()
+        val item = result.last().items[0]
 
         // tmdbId=0 不触发 enrich
         coVerify(exactly = 0) { tmdbRepository.enrichMovie(any(), any(), any()) }

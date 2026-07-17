@@ -14,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -180,12 +181,28 @@ class MarkRecordViewModel @Inject constructor(
         val state = _uiState.value
         try {
             val newItems: List<MarkRecordItem> = when (state.currentTab) {
-                MarkRecordTab.WATCHED -> loadFromTraktHistory(page)
+                MarkRecordTab.WATCHED -> {
+                    loadFromTraktHistory(page) { firstBatch ->
+                        _uiState.update { it.copy(items = firstBatch, isLoading = false) }
+                    }
+                }
                 MarkRecordTab.ALL -> {
                     val localItems = loadFromDao(page, state)
                     // ALL Tab 合并 local 自建表 + Trakt 已看历史；Trakt 失败不影响 local 展示
                     val traktItems = if (page == 1) {
-                        try { loadFromTraktHistory(1) } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                        try {
+                            loadFromTraktHistory(1) { firstBatch ->
+                                val stateForUi = _uiState.value
+                                val localItemsForUi = loadFromDao(1, stateForUi)
+                                _uiState.update {
+                                    it.copy(
+                                        items = (localItemsForUi + firstBatch)
+                                            .sortedByDescending { mr -> mr.actedAt }.take(pageSize),
+                                        isLoading = false
+                                    )
+                                }
+                            }
+                        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
                     } else emptyList()
                     (localItems + traktItems).sortedByDescending { it.actedAt }.take(pageSize)
                 }
@@ -229,11 +246,22 @@ class MarkRecordViewModel @Inject constructor(
         return records.map { it.toMarkRecordItem() }
     }
 
-    private suspend fun loadFromTraktHistory(page: Int): List<MarkRecordItem> {
-        val result = traktRepository.fetchWatchHistory(page)
-        if (!result.isSuccess) throw result.exceptionOrNull() ?: Exception("fetchWatchHistory failed")
-        val historyPage = result.getOrNull()!!
-        return historyPage.items.map { it.toMarkRecordItem() }
+    private suspend fun loadFromTraktHistory(
+        page: Int,
+        onFirstBatch: suspend (List<MarkRecordItem>) -> Unit
+    ): List<MarkRecordItem> {
+        var completed: List<MarkRecordItem>? = null
+        traktRepository.fetchWatchHistory(page).collect { emit ->
+            if (completed != null) return@collect
+            if (emit.error != null) throw Exception(emit.error)
+            val mapped = emit.items.map { it.toMarkRecordItem() }
+            if (emit.isComplete) {
+                completed = mapped
+            } else {
+                onFirstBatch(mapped)
+            }
+        }
+        return completed ?: emptyList()
     }
 
     private fun computeTimeRange(state: MarkRecordUiState): Pair<Long, Long> {
