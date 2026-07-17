@@ -102,6 +102,7 @@
 ## 常见陷阱与经验
 
 - Gitee Release 相关陷阱（APK 上传用 curl.exe、body 纯文本后 PATCH、PATCH 用 curl.exe 避卡死）已固化在 `gitee-release` 技能中，发布时自动遵循，无需手动记忆
+- Git worktree 建新分支时 `local.properties` 不在版本库（被 gitignore），需手动 `cp parent-project/local.properties worktree-path/local.properties`，否则编译失败说 SDK 未找到
 
 ## Git 规范
 
