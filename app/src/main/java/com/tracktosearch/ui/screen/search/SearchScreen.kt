@@ -806,16 +806,23 @@ private fun SearchHistoryInline(
                     targetValue = if (isPressed) 0.96f else 1f,
                     label = "history_chip_scale"
                 )
-                Surface(
+                Box(
                     modifier = Modifier
                         .scale(scale)
+                        .shadow(
+                            elevation = DesignToken.ElevationCard,
+                            shape = DesignToken.Tag,
+                        )
+                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), DesignToken.Tag)
+                        .clip(DesignToken.Tag)
+                        .background(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        )
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
                             onClick = { onHistoryClick(item) }
-                        ),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
@@ -906,7 +913,8 @@ private fun SearchSuggestionsInline(
 @Composable
 private fun PopularSearchesSection(
     popularSearches: List<String>,
-    onPopularClick: (String) -> Unit
+    onPopularClick: (String) -> Unit,
+    selectedKeyword: String? = null
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -922,22 +930,55 @@ private fun PopularSearchesSection(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             popularSearches.forEach { keyword ->
+                val isSelected = keyword == selectedKeyword
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.96f else 1f,
                     label = "popular_chip_scale"
                 )
-                Surface(
+                val bgColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                }
+                val borderColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                }
+                val textColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+                val iconTint = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                val shadowColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                } else {
+                    Color.Black.copy(alpha = 0.1f)
+                }
+                Box(
                     modifier = Modifier
                         .scale(scale)
+                        .shadow(
+                            elevation = DesignToken.ElevationCard,
+                            shape = DesignToken.Tag,
+                            ambientColor = shadowColor,
+                            spotColor = shadowColor,
+                        )
+                        .border(1.dp, borderColor, DesignToken.Tag)
+                        .clip(DesignToken.Tag)
+                        .background(color = bgColor)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
                             onClick = { onPopularClick(keyword) }
-                        ),
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
@@ -947,12 +988,12 @@ private fun PopularSearchesSection(
                             Icons.Rounded.Search,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = iconTint
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = keyword,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = textColor,
                             style = MaterialTheme.typography.bodySmall,
                             maxLines = 1
                         )
