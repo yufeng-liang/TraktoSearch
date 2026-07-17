@@ -667,7 +667,7 @@ fun WatchlistScreen(
                                 val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
                                 val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
     
-                                // 毛玻璃搜索栏
+                                // 毛玻璃搜索栏（顶部覆盖层已统一做 haze，搜索框不再单独加）
                                 GlassSearchBar(
                                     placeholder = if (searchQuery.isBlank()) {
                                         when (selectedMode) {
@@ -675,7 +675,6 @@ fun WatchlistScreen(
                                             else -> stringResource(R.string.watchlist_search_history)
                                         }
                                     } else stringResource(R.string.search_placeholder_watchlist),
-                                    hazeState = hazeState,
                                     modifier = Modifier.weight(1f),
                                     value = searchQuery,
                                     onValueChange = { searchQuery = it },
