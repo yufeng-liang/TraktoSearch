@@ -22,8 +22,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import retrofit2.Response
@@ -53,6 +57,10 @@ class TraktRepository @Inject constructor(
         private const val TTL_SEARCH_PERSON = 10 * 60 * 1000L    // 人物搜索/详情缓存 10 分钟（避免重复请求）
         private const val TTL_WATCH_HISTORY = 60 * 60 * 1000L  // 已看历史 1 小时缓存
         private const val MAX_MARK_RECORDS = 10000              // 流水表上限
+        /** 并行 enrich 并发上限，防止冷启动瞬间打爆 TMDB */
+        const val ENRICH_CONCURRENCY = 10
+        /** 渐进提交批大小，每累计这么多条 emit 一批 */
+        const val EMIT_BATCH_SIZE = 20
     }
 
     /** 全局想看/已看 ID 缓存，登录后加载一次，退出登录时清除 */
@@ -96,6 +104,13 @@ class TraktRepository @Inject constructor(
         val currentPage: Int,
         val totalPages: Int,
         val totalCount: Int
+    )
+
+    /** 已看历史分批产出单元（并行 enrich + 渐进提交用） */
+    data class WatchHistoryEmit(
+        val items: List<WatchHistoryItem>,
+        val isComplete: Boolean = false,
+        val error: String? = null
     )
 
     /** 已看记录（统一表示 movie/episode） */
