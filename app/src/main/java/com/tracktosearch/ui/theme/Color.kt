@@ -48,5 +48,15 @@ enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dar
 val CinemaBackground = Color(0xFF0F0F1A)
 val CinemaSurface = Color(0xFF1A1A2E)
 val CinemaCard = Color(0xFF242442)
+
+// ====== 玻璃棱镜固定色（不随主题变化） ======
+val Void = Color(0xFF0A0A14)        // 主背景，比 CinemaBackground 更深
+val Slate = Color(0xFF161628)       // 卡片/表面
+val Frost = Color(0xFF1E1E3A)       // 搜索栏玻璃底色
+// Glass 效果色（用于 Modifier.drawBehind / brush）
+// GlassHighlight = white.copy(alpha = 0.08f) — 在使用处直接写
+// GlassBorder = white.copy(alpha = 0.12f) — 在使用处直接写
+// GlassRefraction = white.copy(alpha = 0.06f) — 在使用处直接写
+
 val RatingGold = Color(0xFFF4A460)
 val RatingGoldDim = Color(0xFFF4A460).copy(alpha = 0.7f)
