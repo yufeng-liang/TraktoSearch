@@ -141,6 +141,32 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.ui.graphics.Brush
+import com.tracktosearch.ui.theme.DesignToken
+import com.tracktosearch.ui.theme.Frost
+import com.tracktosearch.ui.theme.Slate
+
+/**
+ * 玻璃棱镜高光渐变：从顶部 white@8% 渐变到透明，模拟玻璃反射
+ */
+@Composable
+private fun glassHighlightBrush(): Brush = Brush.verticalGradient(
+    0.0f to Color.White.copy(alpha = 0.08f),
+    0.5f to Color.White.copy(alpha = 0.02f),
+    1.0f to Color.Transparent,
+)
+
+/**
+ * 玻璃棱镜底部折射线渐变
+ */
+@Composable
+private fun glassRefractionBrush(): Brush = Brush.horizontalGradient(
+    0.0f to Color.Transparent,
+    0.2f to Color.White.copy(alpha = 0.06f),
+    0.5f to Color.White.copy(alpha = 0.10f),
+    0.8f to Color.White.copy(alpha = 0.06f),
+    1.0f to Color.Transparent,
+)
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -283,7 +309,7 @@ fun SearchScreen(
     val titleAreaHeight = 110.dp
     val searchBoxHeight = 72.dp
     val searchBoxCenterY = screenHeight / 2 - 148.dp
-    val cloudIconSize = 230.dp
+    val cloudIconSize = 120.dp
     val contentTopOffset = searchBoxHeight + 25.dp
 
     val targetSearchBoxY by animateDpAsState(
@@ -342,19 +368,38 @@ fun SearchScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth(animatedWidthFraction.value)
-                    .clip(RoundedCornerShape(28.dp))
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        shape = RoundedCornerShape(28.dp)
+                    .clip(DesignToken.SearchBar)
+                    .background(
+                        Brush.linearGradient(
+                            0.0f to Frost,
+                            1.0f to Slate,
+                        )
                     )
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
+                    .border(1.dp, Color.White.copy(alpha = 0.12f), DesignToken.SearchBar)
+                    .shadow(
+                        elevation = DesignToken.ElevationFloating,
+                        shape = DesignToken.SearchBar,
+                        ambientColor = Color.Black.copy(alpha = 0.5f),
+                        spotColor = Color.Black.copy(alpha = 0.35f),
                     )
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                     .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
+                // 高光层：顶部 50% 渐变白色
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .background(glassHighlightBrush())
+                )
+                // 底部折射线
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 20.dp)
+                        .background(glassRefractionBrush())
+                )
                 SearchBarTop(
                     searchQuery = searchQuery,
                     onQueryChange = { searchQuery = it },
@@ -602,7 +647,7 @@ private fun SearchBarTop(
                                     }
                                 ),
                                 fontSize = 15.sp,
-                                color = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50),
+                                color = MaterialTheme.colorScheme.primary,
                                 maxLines = 1
                             )
                             Icon(
