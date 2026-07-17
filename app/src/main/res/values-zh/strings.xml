@@ -1354,9 +1354,12 @@
     <string name="mark_records_action_remove_watchlist">移除想看</string>
     <string name="mark_records_action_unmark_watched">取消已看</string>
     <string name="mark_records_action_watched">标记已看</string>
-    <string name="mark_records_current_in_watchlist">当前:想看</string>
-    <string name="mark_records_current_watched">当前:已看</string>
-    <string name="mark_records_current_none">当前:无标记</string>
+    <string name="mark_records_pill_watched">标记已看</string>
+    <string name="mark_records_pill_watchlist">标记想看</string>
+    <string name="mark_records_pill_remove">标记移除</string>
+    <string name="mark_records_current_in_watchlist">当前想看</string>
+    <string name="mark_records_current_watched">当前已看</string>
+    <string name="mark_records_current_none">当前已移除</string>
     <string name="mark_records_current_changed">已变更</string>
     <string name="mark_records_time_just_now">刚刚</string>
     <string name="mark_records_time_minutes_ago">%1$d 分钟前</string>

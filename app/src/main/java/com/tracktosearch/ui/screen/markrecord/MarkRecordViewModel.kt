@@ -7,6 +7,7 @@ import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -65,7 +66,8 @@ data class MarkRecordUiState(
 @HiltViewModel
 class MarkRecordViewModel @Inject constructor(
     private val markActionRecordDao: MarkActionRecordDao,
-    private val traktRepository: TraktRepository
+    private val traktRepository: TraktRepository,
+    val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MarkRecordUiState(isLoading = true))
@@ -122,6 +124,7 @@ class MarkRecordViewModel @Inject constructor(
         _uiState.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             loadPage(state.currentPage + 1)
+            updateCurrentStatusMap()
         }
     }
 
@@ -164,7 +167,13 @@ class MarkRecordViewModel @Inject constructor(
                 else -> CurrentMarkStatus.NONE
             }
         }
-        _uiState.update { it.copy(currentStatusMap = map) }
+        _uiState.update { state ->
+            state.copy(
+                currentStatusMap = map,
+                // 将当前状态写回列表项，供当前状态徽标与移除分类暗化使用
+                items = state.items.map { it.copy(currentStatus = map[it.traktId]) }
+            )
+        }
     }
 
     private suspend fun loadPage(page: Int) {

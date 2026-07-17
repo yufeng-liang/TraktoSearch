@@ -1385,12 +1385,15 @@
     <string name="mark_records_retry">再試行</string>
     <string name="mark_records_current_in_watchlist">現在:ウォッチリスト</string>
     <string name="mark_records_current_watched">現在:視聴済み</string>
-    <string name="mark_records_current_none">現在:なし</string>
+    <string name="mark_records_current_none">現在:削除済み</string>
     <string name="mark_records_current_changed">変更済み</string>
     <string name="mark_records_action_add_watchlist">ウォッチリストに追加</string>
     <string name="mark_records_action_remove_watchlist">ウォッチリストから削除</string>
     <string name="mark_records_action_unmark_watched">視聴済み解除</string>
     <string name="mark_records_action_watched">視聴済み</string>
+    <string name="mark_records_pill_watched">視聴済み</string>
+    <string name="mark_records_pill_watchlist">ウォッチリスト</string>
+    <string name="mark_records_pill_remove">削除</string>
     <string name="mark_records_settings_entry">マーク記録</string>
     <string name="mark_records_settings_entry_desc">ウォッチリスト/視聴済み/削除の操作履歴を表示</string>
     <string name="mark_records_reset">リセット</string>

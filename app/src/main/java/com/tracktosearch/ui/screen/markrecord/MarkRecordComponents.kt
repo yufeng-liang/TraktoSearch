@@ -1,8 +1,10 @@
 package com.tracktosearch.ui.screen.markrecord
 
 import android.content.Context
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,20 +25,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.core.graphics.drawable.toBitmap
+import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.data.util.PosterColorExtractor
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,71 +59,132 @@ import java.util.Locale
 @Composable
 fun MarkRecordItemRow(
     item: MarkRecordItem,
+    posterColorExtractor: PosterColorExtractor,
     onClick: () -> Unit
 ) {
-    val isChanged = isRecordChanged(item)
-    val rowAlpha = if (isChanged) 0.6f else 1f
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    // 移除分类（已无标记）的卡片：保留海报沉浸色,叠加暗化遮罩并降透明度
+    val isRemoved = item.currentStatus == CurrentMarkStatus.NONE
+    var dominantColor by remember { mutableStateOf<Color?>(null) }
 
-    Row(
+    // 根据主色亮度自适应文字颜色（深色主色用白字）
+    val onColor = dominantColor?.let { c ->
+        if (c.luminance() > 0.5f) Color.Black.copy(alpha = 0.92f) else Color.White
+    } ?: Color.White
+
+    // 卡片沉浸渐变：主色 1.0 → 主色 0.7 alpha
+    val backgroundBrush: Brush = dominantColor?.let { color ->
+        Brush.horizontalGradient(colors = listOf(color, color.copy(alpha = 0.7f)))
+    } ?: Brush.horizontalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.surfaceVariant,
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        )
+    )
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(rowAlpha)
+            .clip(RoundedCornerShape(16.dp))
+            .background(backgroundBrush)
+            .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        // 小海报 48×72dp（兜底：如果是相对路径则拼接 TMDB 基础 URL）
-        val fullPosterUrl = buildFullPosterUrl(item.posterUrl)
-        AsyncImage(
-            model = fullPosterUrl,
-            contentDescription = item.title,
-            modifier = Modifier
-                .size(width = 48.dp, height = 72.dp)
-                .clip(RoundedCornerShape(4.dp))
-        )
-        Spacer(Modifier.width(12.dp))
-        // 信息区
-        Column(modifier = Modifier.weight(1f)) {
-            // 标题 + 年份
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = item.displayTitle.ifBlank { item.title }.ifBlank { stringResource(R.string.mark_records_empty_all) },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 海报 64×96dp
+            val fullPosterUrl = buildFullPosterUrl(item.posterUrl)
+            if (fullPosterUrl != null) {
+                AsyncImage(
+                    model = remember(fullPosterUrl) {
+                        ImageRequest.Builder(context)
+                            .data(fullPosterUrl)
+                            .size(150)
+                            .crossfade(false)
+                            .listener(
+                                onSuccess = { _, result ->
+                                    scope.launch {
+                                        val bitmap = result.drawable.toBitmap()
+                                        val argb = posterColorExtractor.extractDominantColor(fullPosterUrl, bitmap)
+                                        if (argb != 0L) dominantColor = Color(argb)
+                                    }
+                                }
+                            )
+                            .build()
+                    },
+                    contentDescription = item.displayTitle.ifBlank { item.title },
+                    modifier = Modifier
+                        .size(width = 64.dp, height = 96.dp)
+                        .clip(RoundedCornerShape(8.dp)),
+                    contentScale = ContentScale.Crop
                 )
-                item.year?.let {
-                    Spacer(Modifier.width(4.dp))
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(width = 64.dp, height = 96.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
                     Text(
-                        text = "($it)",
-                        style = MaterialTheme.typography.bodySmall,
+                        "?",
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            // episodeInfo
-            item.episodeInfo?.let {
+
+            Spacer(Modifier.width(8.dp))
+
+            // 信息列
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // 标题（可多行）
                 Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = item.displayTitle.ifBlank { item.title }.ifBlank { stringResource(R.string.mark_records_empty_all) },
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                    fontWeight = FontWeight.Medium,
+                    color = onColor,
+                    lineHeight = 18.sp
                 )
+                // 年份（标题下一行）
+                item.year?.let {
+                    Text(
+                        text = it.toString(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onColor.copy(alpha = 0.8f)
+                    )
+                }
+                // 操作胶囊 + 相对时间（胶囊右侧）
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ActionTypeChip(item.actionType)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = formatRelativeTime(item.actedAt, context),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onColor.copy(alpha = 0.85f)
+                    )
+                }
+                // 当前状态（胶囊下一行）
+                CurrentStatusBadge(item)
             }
-            Spacer(Modifier.size(4.dp))
-            // 操作类型 chip + 相对时间
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ActionTypeChip(item.actionType)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = formatRelativeTime(item.actedAt, context),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Spacer(Modifier.size(4.dp))
-            // 当前状态徽标
-            CurrentStatusBadge(item)
+        }
+
+        // 移除分类：叠暗色遮罩
+        if (isRemoved) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.35f))
+            )
         }
     }
 }
@@ -145,39 +216,42 @@ fun isRecordChanged(item: MarkRecordItem): Boolean {
 
 @Composable
 private fun ActionTypeChip(actionType: String) {
-    val (textRes, color) = when (actionType) {
-        "ADD_WATCHLIST" -> R.string.mark_records_action_add_watchlist to Color(0xFF2196F3)
-        "REMOVE_WATCHLIST" -> R.string.mark_records_action_remove_watchlist to Color(0xFFF44336)
-        "UNMARK_WATCHED" -> R.string.mark_records_action_unmark_watched to Color(0xFFFF9800)
-        "WATCHED" -> R.string.mark_records_action_watched to Color(0xFF4CAF50)
-        else -> R.string.mark_records_action_watched to Color.Gray
+    val (textRes, bgColor) = when (actionType) {
+        "ADD_WATCHLIST" -> R.string.mark_records_pill_watchlist to Color(0xFF2196F3)
+        "REMOVE_WATCHLIST", "UNMARK_WATCHED" -> R.string.mark_records_pill_remove to Color(0xFFF44336)
+        "WATCHED" -> R.string.mark_records_pill_watched to Color(0xFF4CAF50)
+        else -> R.string.mark_records_pill_watched to Color(0xFF4CAF50)
     }
-    AssistChip(
-        onClick = {},
-        label = { Text(stringResource(textRes), fontSize = 11.sp) },
-        colors = AssistChipDefaults.assistChipColors(
-            containerColor = color.copy(alpha = 0.15f),
-            labelColor = color
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(bgColor)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = stringResource(textRes),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+            maxLines = 1
         )
-    )
+    }
 }
 
 @Composable
 private fun CurrentStatusBadge(item: MarkRecordItem) {
     val status = item.currentStatus ?: return
     val (textRes, color) = when (status) {
-        CurrentMarkStatus.IN_WATCHLIST -> R.string.mark_records_current_in_watchlist to Color(0xFF4CAF50)
-        CurrentMarkStatus.WATCHED -> R.string.mark_records_current_watched to Color(0xFF4CAF50)
-        CurrentMarkStatus.NONE -> {
-            if (isRecordChanged(item)) R.string.mark_records_current_changed to Color.Gray
-            else R.string.mark_records_current_none to Color.Gray
-        }
+        CurrentMarkStatus.IN_WATCHLIST -> R.string.mark_records_current_in_watchlist to Color(0xFF90CAF9)
+        CurrentMarkStatus.WATCHED -> R.string.mark_records_current_watched to Color(0xFFA5D6A7)
+        CurrentMarkStatus.NONE -> R.string.mark_records_current_none to Color(0xFFEF9A9A)
     }
     Text(
         text = stringResource(textRes),
         style = MaterialTheme.typography.labelSmall,
         color = color,
-        fontSize = 11.sp
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Medium
     )
 }
 

@@ -1354,9 +1354,12 @@ Config:
     <string name="mark_records_action_remove_watchlist">Removed from Watchlist</string>
     <string name="mark_records_action_unmark_watched">Unmarked Watched</string>
     <string name="mark_records_action_watched">Watched</string>
+    <string name="mark_records_pill_watched">Watched</string>
+    <string name="mark_records_pill_watchlist">Watchlist</string>
+    <string name="mark_records_pill_remove">Removed</string>
     <string name="mark_records_current_in_watchlist">Current: Watchlist</string>
     <string name="mark_records_current_watched">Current: Watched</string>
-    <string name="mark_records_current_none">Current: No mark</string>
+    <string name="mark_records_current_none">Current: Removed</string>
     <string name="mark_records_current_changed">Changed</string>
     <string name="mark_records_time_just_now">Just now</string>
     <string name="mark_records_time_minutes_ago">%1$d minutes ago</string>

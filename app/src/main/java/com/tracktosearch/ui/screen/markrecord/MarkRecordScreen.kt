@@ -2,18 +2,26 @@ package com.tracktosearch.ui.screen.markrecord
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -21,8 +29,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,15 +65,16 @@ fun MarkRecordScreen(
     viewModel: MarkRecordViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
     var showFilterSheet by remember { mutableStateOf(false) }
+    var searchExpanded by remember { mutableStateOf(false) }
 
-    // 滚动到底部前 20 条时加载下一页
+    // 滚动到底部前若干条时加载下一页
     LaunchedEffect(listState, uiState.items) {
         snapshotFlow {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val total = listState.layoutInfo.totalItemsCount
-            lastVisible >= total - 20
+            lastVisible >= total - 10
         }.distinctUntilChanged().filter { it }.collect {
             viewModel.loadNextPage()
         }
@@ -73,28 +83,71 @@ fun MarkRecordScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.mark_records_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
+                title = {
+                    if (searchExpanded) {
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.updateSearchQuery(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text(stringResource(R.string.mark_records_search_hint)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(999.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                imeAction = ImeAction.Search
+                            )
                         )
+                    } else {
+                        Text(stringResource(R.string.mark_records_title))
+                    }
+                },
+                navigationIcon = {
+                    if (searchExpanded) {
+                        IconButton(onClick = {
+                            searchExpanded = false
+                            viewModel.updateSearchQuery("")
+                        }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(Icons.Rounded.FilterList, contentDescription = null)
+                    if (searchExpanded) {
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        }
+                    } else {
+                        IconButton(onClick = { searchExpanded = true }) {
+                            Icon(Icons.Rounded.Search, contentDescription = null)
+                        }
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        }
                     }
                 }
             )
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Tab
-            ScrollableTabRow(
-                selectedTabIndex = uiState.currentTab.ordinal,
-                edgePadding = 0.dp
+            // Tab - 居中分散一行
+            PrimaryTabRow(
+                selectedTabIndex = uiState.currentTab.ordinal
             ) {
                 MarkRecordTab.entries.forEach { tab ->
                     Tab(
@@ -111,18 +164,6 @@ fun MarkRecordScreen(
                     )
                 }
             }
-            // 搜索框
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.updateSearchQuery(it) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(stringResource(R.string.mark_records_search_hint)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None,
-                    imeAction = ImeAction.Search
-                )
-            )
             // 内容
             Box(modifier = Modifier.fillMaxSize()) {
                 when {
@@ -160,10 +201,18 @@ fun MarkRecordScreen(
                         }
                     }
                     else -> {
-                        LazyColumn(state = listState) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(2),
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
                             items(uiState.items, key = { "${it.traktId}_${it.actedAt}_${it.actionType}" }) { item ->
                                 MarkRecordItemRow(
                                     item = item,
+                                    posterColorExtractor = viewModel.posterColorExtractor,
                                     onClick = {
                                         val onClick = if (item.mediaType == "movie") onMovieClick else onShowClick
                                         onClick(item.traktId, item.tmdbId, item.displayTitle.ifBlank { item.title }, item.imdbId, 0.0)
@@ -171,7 +220,7 @@ fun MarkRecordScreen(
                                 )
                             }
                             if (uiState.isLoadingMore) {
-                                item {
+                                item(span = { GridItemSpan(2) }) {
                                     Box(
                                         modifier = Modifier.fillMaxWidth().padding(16.dp),
                                         contentAlignment = Alignment.Center
