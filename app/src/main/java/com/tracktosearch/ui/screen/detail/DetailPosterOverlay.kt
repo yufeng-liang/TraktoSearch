@@ -44,18 +44,12 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.util.showToast
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
 
 // ==================== 海报大图查看 ====================
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun PosterFullscreenOverlay(
     posterUrl: String,
@@ -75,8 +69,6 @@ internal fun PosterFullscreenOverlay(
         isSaved = queryExistingFile(context, filename, relativePath) != null
     }
 
-    // 海报大图 overlay 的 Haze 状态
-    val posterHazeState = remember { HazeState() }
     val zoomState = rememberZoomState()
 
     BackHandler(enabled = true) {
@@ -91,7 +83,6 @@ internal fun PosterFullscreenOverlay(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.92f))
-            .hazeSource(state = posterHazeState)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -142,6 +133,7 @@ internal fun PosterFullscreenOverlay(
         )
 
         // 顶部操作栏（在图片之上，也需要拦截点击）
+        // 原 Haze 毛玻璃已移除以降低持续渲染开销，改用半透明黑色背景
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -155,18 +147,15 @@ internal fun PosterFullscreenOverlay(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 关闭按钮（毛玻璃效果）
+            // 关闭按钮（半透明黑色背景）
             IconButton(onClick = onDismiss) {
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .hazeEffect(
-                            state = posterHazeState,
-                            style = HazeMaterials.thin()
-                        ) {
-                            blurRadius = 18.dp
-                            noiseFactor = 0f
-                        }
+                        .background(
+                            color = Color.Black.copy(alpha = 0.40f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
                         .border(
                             width = 1.dp,
                             color = Color.White.copy(alpha = 0.35f),
@@ -183,7 +172,7 @@ internal fun PosterFullscreenOverlay(
                 }
             }
 
-            // 保存按钮（已保存时显示勾选图标）
+            // 保存按钮（已保存时显示勾选图标，半透明黑色背景）
             IconButton(onClick = {
                 if (isSaved == true) {
                     context.showToast(savedToAlbumToast)
@@ -196,13 +185,10 @@ internal fun PosterFullscreenOverlay(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
-                        .hazeEffect(
-                            state = posterHazeState,
-                            style = HazeMaterials.thin()
-                        ) {
-                            blurRadius = 18.dp
-                            noiseFactor = 0f
-                        }
+                        .background(
+                            color = Color.Black.copy(alpha = 0.40f),
+                            shape = RoundedCornerShape(20.dp)
+                        )
                         .border(
                             width = 1.dp,
                             color = Color.White.copy(alpha = 0.35f),

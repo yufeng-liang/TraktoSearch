@@ -151,10 +151,7 @@ import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -373,7 +370,7 @@ class DoubanFailuresViewModel @Inject constructor(
  * - 卡片点击 → onItemClick(doubanId)
  * - 卡片长按 → 弹 AlertDialog 菜单(标注类型/删除)
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun DoubanFailuresScreen(
     onBack: () -> Unit,
@@ -725,15 +722,13 @@ fun DoubanFailuresScreen(
                 }
             }
 
-            // Haze 模糊覆盖层:状态栏 + 标题栏 + 搜索框 + 切换条 + 分类 Tab
+            // 吸顶覆盖层:状态栏 + 标题栏 + 搜索框 + 切换条 + 分类 Tab
+            // 原 Haze 毛玻璃已移除以降低持续渲染开销，仅保留快速回顶按钮的 Haze
+            // alpha 提至 0.92 保证无毛玻璃时的可读性
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
             ) {
                 Column {
                     // 状态栏 Spacer
@@ -947,6 +942,7 @@ fun DoubanFailuresScreen(
             }
 
             // 多选操作栏(顶部滑入,参考 WatchlistScreen)
+            // 原 Haze 毛玻璃已移除以降低持续渲染开销，改用高 alpha 纯色背景
             AnimatedVisibility(
                 visible = isMultiSelectMode,
                 enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
@@ -956,11 +952,7 @@ fun DoubanFailuresScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeMaterials.thin()
-                        )
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
                 ) {
                     // 状态栏 Spacer
                     Spacer(modifier = Modifier.statusBarsPadding())

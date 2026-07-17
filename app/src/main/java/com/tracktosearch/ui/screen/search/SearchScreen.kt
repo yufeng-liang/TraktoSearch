@@ -115,7 +115,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.airbnb.lottie.compose.LottieAnimation
 import com.airbnb.lottie.compose.LottieCompositionSpec
-import com.airbnb.lottie.compose.LottieConstants
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CloudPermissionStorage
@@ -392,10 +391,11 @@ fun SearchScreen(
                         .fillMaxHeight(0.28f)
                         .graphicsLayer { clip = false }
                 ) {
+                    // 权限弹窗装饰图：原 Lottie 无限循环改为静态首帧，避免弹窗显示期间持续渲染发热
                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
                     LottieAnimation(
                         composition = composition,
-                        iterations = LottieConstants.IterateForever,
+                        progress = { 0f },
                         modifier = Modifier
                             .size(160.dp)
                             .offset(x = (-20).dp, y = (-23).dp)

@@ -96,14 +96,11 @@ import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DetailScreen(
     traktId: Int,
@@ -728,7 +725,7 @@ fun DetailScreen(
             }
             } // CompositionLocalProvider
 
-            // 返回按钮（半透明背景 + Haze 模糊增强）
+            // 返回按钮（半透明背景，原 Haze 模糊已移除以降低持续渲染开销，仅保留快速回顶按钮的 Haze）
             Box(
                 modifier = Modifier
                     .statusBarsPadding()
@@ -736,19 +733,9 @@ fun DetailScreen(
                     .align(Alignment.TopStart)
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = detailHazeState,
-                        style = HazeStyle(
-                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                            blurRadius = 20.dp,
-                            noiseFactor = 0f,
-                            tint = null
-                        )
-                    )
-                    // 半透明背景作为主视觉效果（Haze 在部分设备上效果不明显时兜底）
-                    // alpha 0.45:降低白色强度,让海报主色调更沉浸
+                    // alpha 0.50:无 Haze 时提高对比度保证可见性
                     .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
                         shape = CircleShape
                     )
                     .border(
@@ -771,7 +758,7 @@ fun DetailScreen(
                 )
             }
 
-            // 分享按钮 + 豆瓣同步重试按钮（半透明背景 + Haze 模糊增强）
+            // 分享按钮 + 豆瓣同步重试按钮（半透明背景，原 Haze 已移除以降低持续渲染开销）
             val context = LocalContext.current
             val shareLinksLabel = stringResource(R.string.detail_share_links)
             Row(
@@ -789,17 +776,9 @@ fun DetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .hazeEffect(
-                                state = detailHazeState,
-                                style = HazeStyle(
-                                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                    blurRadius = 20.dp,
-                                    noiseFactor = 0f,
-                                    tint = null
-                                )
-                            )
+                            // alpha 0.50:无 Haze 时提高对比度保证可见性
                             .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
                                 shape = CircleShape
                             )
                             .border(
@@ -840,17 +819,9 @@ fun DetailScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .hazeEffect(
-                            state = detailHazeState,
-                            style = HazeStyle(
-                                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                blurRadius = 20.dp,
-                                noiseFactor = 0f,
-                                tint = null
-                            )
-                        )
+                        // alpha 0.50:无 Haze 时提高对比度保证可见性
                         .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
                             shape = CircleShape
                         )
                         .border(

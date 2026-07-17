@@ -24,6 +24,10 @@ import com.airbnb.lottie.compose.rememberLottieComposition
  * 白云彩蛋组件 — 替换搜索页的静态白云图标
  *
  * 平时显示天气/节日主题 Lottie 动画，点击触发彩蛋回调。
+ *
+ * 性能优化：通过 [LocalIsCurrentTab] 检测当前是否为用户可见的 Tab。
+ * 非当前 Tab 时（如用户在发现页/我的页浏览），停止 Lottie 无限循环动画，
+ * 固定显示第一帧，避免后台持续渲染导致 CPU/GPU 高负载发热。
  */
 @Composable
 fun CloudEasterEgg(
@@ -36,6 +40,8 @@ fun CloudEasterEgg(
     val isNightAlternate by themeManager.isNightAlternate.collectAsStateWithLifecycle()
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    // 当前 Tab 才播放 Lottie 动画，非当前 Tab 静态显示避免后台发热
+    val isCurrentTab = LocalIsCurrentTab.current
 
     // 按下缩放反馈
     val scale by animateFloatAsState(
@@ -47,18 +53,20 @@ fun CloudEasterEgg(
     // 获取当前应显示的主题
     val displayTheme = themeManager.getCurrentDisplayTheme()
 
-    // 加载 Lottie 动画
+    // 加载 Lottie 动画（composition 加载本身是异步的，无 CPU 负担）
     val composition by rememberLottieComposition(
         LottieCompositionSpec.RawRes(displayTheme.rawRes)
     )
+    // 仅当前 Tab 时启用无限循环动画；非当前 Tab 时 progress 固定为 0f（静态第一帧）
     val progress by animateLottieCompositionAsState(
         composition = composition,
-        iterations = LottieConstants.IterateForever
+        iterations = if (isCurrentTab) LottieConstants.IterateForever else 1,
+        isPlaying = isCurrentTab
     )
 
     LottieAnimation(
         composition = composition,
-        progress = { progress },
+        progress = { if (isCurrentTab) progress else 0f },
         modifier = modifier
             .size(size)
             .scale(scale)
