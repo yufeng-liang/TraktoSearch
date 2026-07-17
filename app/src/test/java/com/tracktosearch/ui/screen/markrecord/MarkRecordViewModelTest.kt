@@ -12,6 +12,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -386,6 +387,29 @@ class MarkRecordViewModelTest {
 
         assertThat(viewModel.uiState.value.error).isNotNull()
         assertThat(viewModel.uiState.value.error).contains("network error")
+    }
+
+    @Test
+    fun `WATCHED_Tab_首批emit即isLoadingFalse`() = runTest {
+        val item1 = TraktRepository.WatchHistoryItem(
+            traktId = 1, tmdbId = 10, imdbId = "tt1",
+            mediaType = "movie", title = "Test", displayTitle = "Test",
+            posterUrl = null, year = 2024, watchedAt = 10000L, episodeInfo = null
+        )
+        val item2 = TraktRepository.WatchHistoryItem(
+            traktId = 2, tmdbId = 20, imdbId = "tt2",
+            mediaType = "movie", title = "Test2", displayTitle = "Test2",
+            posterUrl = null, year = 2024, watchedAt = 5000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flow {
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item1), isComplete = false))
+            emit(TraktRepository.WatchHistoryEmit(items = listOf(item1, item2), isComplete = true))
+        }
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.isLoading).isFalse()
+        assertThat(viewModel.uiState.value.items.size).isEqualTo(2)
     }
 
     // ==================== ALL Tab 合并逻辑 ====================
