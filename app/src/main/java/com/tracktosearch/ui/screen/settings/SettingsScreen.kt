@@ -1278,7 +1278,7 @@ private fun MarkRecordsEntryCard(onClick: () -> Unit) {
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = cardSurfaceColor()
     ) {
         Row(
             modifier = Modifier

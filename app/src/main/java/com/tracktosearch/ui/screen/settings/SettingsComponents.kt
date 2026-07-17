@@ -103,7 +103,7 @@ fun ColumnScope.GroupDivider(modifier: Modifier = Modifier) {
  * 因此浅色模式用完整 surfaceVariant 提升对比度，深色模式保持 0.3 半透明效果。
  */
 @Composable
-private fun cardSurfaceColor(): Color {
+internal fun cardSurfaceColor(): Color {
     val isLight = MaterialTheme.colorScheme.surface.luminance() > 0.5f
     return MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isLight) 1.0f else 0.3f)
 }
