@@ -2,6 +2,7 @@ package com.tracktosearch.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
@@ -40,5 +41,29 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp
-    )
+    ),
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = DesignToken.TypeSize.HeadlineSmall,
+        lineHeight = (DesignToken.TypeSize.HeadlineSmall * 1.3),
+    ),
+    bodySmall = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Normal,
+        fontSize = DesignToken.TypeSize.BodySmall,
+        lineHeight = (DesignToken.TypeSize.BodySmall * 1.5),
+    ),
+    labelLarge = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = DesignToken.TypeSize.LabelLarge,
+        lineHeight = (DesignToken.TypeSize.LabelLarge * 1.4),
+    ),
+    labelMedium = TextStyle(
+        fontFamily = FontFamily.Default,
+        fontWeight = FontWeight.Medium,
+        fontSize = DesignToken.TypeSize.LabelMedium,
+        lineHeight = (DesignToken.TypeSize.LabelMedium * 1.4),
+    ),
 )
