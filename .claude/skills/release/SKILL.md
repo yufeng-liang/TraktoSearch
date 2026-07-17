@@ -47,26 +47,9 @@ license: MIT
 
 ### 4. 生成用户友好的更新日志
 
-- `git log {last_tag}..HEAD --pretty=format:"%s"`
-- 分类 `### 新功能` / `### 改进` / `### 修复`（对应 feat/fix/refactor 等）
-- 用户友好：技术细节省略，适当用 emoji（✨ 新功能、🔧 改进、🐛 修复）
-- 格式：
-  ```
-  ## v{version} 更新内容
-
-  ### 新功能
-
-  - xxx
-
-  ### 改进
-
-  - xxx
-
-  ### 修复
-
-  - xxx
-  ```
-- 写入 `changelog.md`（GitHub 直接用；Gitee 侧由子 skill 转 JSON PATCH）
+- 调用 `changelog-generator` 技能，基于上次 tag 到 HEAD 的 git commits 自动生成用户友好更新日志（分类新功能/改进/修复，适当用 emoji）
+- 输出写入 `changelog.md`（GitHub 直接用；Gitee 侧由子 skill 转 JSON PATCH）
+- 标题格式：`## v{version} 更新内容`
 
 ### 5. 推送代码与 tag
 
