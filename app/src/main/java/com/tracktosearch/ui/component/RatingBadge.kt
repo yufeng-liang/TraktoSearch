@@ -14,9 +14,9 @@ import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.theme.RatingGold
 import com.tracktosearch.ui.theme.RatingGoldDim
 
-/** 评分徽章统一规格：外边距 4dp、内边距 horizontal=4dp/vertical=2dp、圆角 4dp */
+/** 评分徽章统一规格：外边距 4dp、内边距 horizontal=4dp/vertical=0dp、圆角 4dp */
 private val RatingCorner = RoundedCornerShape(4.dp)
-private val RatingPadding = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+private val RatingPadding = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
 private val RatingFontSize = 11.sp
 
 /**
