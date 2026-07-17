@@ -12,6 +12,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -362,7 +363,9 @@ class MarkRecordViewModelTest {
         val page = TraktRepository.WatchHistoryPage(
             items = listOf(historyItem), currentPage = 1, totalPages = 1, totalCount = 1
         )
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(page)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = page.items, isComplete = true)
+        )
 
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
@@ -374,7 +377,9 @@ class MarkRecordViewModelTest {
 
     @Test
     fun `WATCHED_Tab_Trakt失败设置error`() = runTest {
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.failure(RuntimeException("network error"))
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true, error = "network error")
+        )
 
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
@@ -397,8 +402,8 @@ class MarkRecordViewModelTest {
             title = "Trakt", displayTitle = "Trakt", posterUrl = null,
             year = 2024, watchedAt = 5000L, episodeInfo = null
         )
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(listOf(traktItem), 1, 1, 1)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(traktItem), isComplete = true)
         )
 
         // init 已用空 mock 加载过，需 refresh 重新加载
@@ -416,7 +421,9 @@ class MarkRecordViewModelTest {
         coEvery {
             dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns listOf(sampleEntity(MarkActionType.ADD_WATCHLIST.value, 1, 1000L))
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.failure(RuntimeException("fail"))
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true, error = "fail")
+        )
 
         // init 已用空 mock 加载过，需 refresh 重新加载
         viewModel.refresh()
@@ -501,8 +508,8 @@ class MarkRecordViewModelTest {
                 posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
             )
         }
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(items, 1, 2, 100)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = items, isComplete = true)
         )
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
@@ -519,8 +526,8 @@ class MarkRecordViewModelTest {
                 posterUrl = null, year = 2024, watchedAt = 10000L - i, episodeInfo = null
             )
         }
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(items, 1, 1, 30)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = items, isComplete = true)
         )
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
@@ -544,11 +551,11 @@ class MarkRecordViewModelTest {
                 posterUrl = null, year = 2024, watchedAt = 5000L - i, episodeInfo = null
             )
         }
-        coEvery { traktRepo.fetchWatchHistory(1) } returns Result.success(
-            TraktRepository.WatchHistoryPage(page1Items, 1, 2, 60)
+        coEvery { traktRepo.fetchWatchHistory(1) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = page1Items, isComplete = true)
         )
-        coEvery { traktRepo.fetchWatchHistory(2) } returns Result.success(
-            TraktRepository.WatchHistoryPage(page2Items, 2, 2, 60)
+        coEvery { traktRepo.fetchWatchHistory(2) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = page2Items, isComplete = true)
         )
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
@@ -566,7 +573,9 @@ class MarkRecordViewModelTest {
     @Test
     fun `WATCHED_Tab_retry后重新加载`() = runTest {
         // 第一次失败
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.failure(RuntimeException("network error"))
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = emptyList(), isComplete = true, error = "network error")
+        )
         viewModel.switchTab(MarkRecordTab.WATCHED)
         advanceUntilIdle()
         assertThat(viewModel.uiState.value.error).isNotNull()
@@ -578,8 +587,8 @@ class MarkRecordViewModelTest {
             title = "Trakt Movie", displayTitle = "Trakt Movie", posterUrl = null,
             year = 2023, watchedAt = 1000L, episodeInfo = null
         )
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(listOf(item), 1, 1, 1)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(item), isComplete = true)
         )
         viewModel.retry()
         advanceUntilIdle()
@@ -601,8 +610,8 @@ class MarkRecordViewModelTest {
             title = "Test", displayTitle = "Test", posterUrl = null,
             year = 2024, watchedAt = 5000L, episodeInfo = null
         )
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(listOf(traktItem), 1, 1, 1)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(traktItem), isComplete = true)
         )
         viewModel.refresh()
         advanceUntilIdle()
@@ -747,8 +756,8 @@ class MarkRecordViewModelTest {
             posterUrl = "https://image.tmdb.org/t/p/w500/interstellar.jpg",
             year = 2014, watchedAt = 1000L, episodeInfo = null
         )
-        coEvery { traktRepo.fetchWatchHistory(any()) } returns Result.success(
-            TraktRepository.WatchHistoryPage(listOf(historyItem), 1, 1, 1)
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(historyItem), isComplete = true)
         )
 
         viewModel.switchTab(MarkRecordTab.WATCHED)

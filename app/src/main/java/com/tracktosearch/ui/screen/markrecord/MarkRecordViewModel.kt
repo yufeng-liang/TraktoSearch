@@ -13,6 +13,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -221,10 +222,10 @@ class MarkRecordViewModel @Inject constructor(
     }
 
     private suspend fun loadFromTraktHistory(page: Int): List<MarkRecordItem> {
-        val result = traktRepository.fetchWatchHistory(page)
-        if (!result.isSuccess) throw result.exceptionOrNull() ?: Exception("fetchWatchHistory failed")
-        val historyPage = result.getOrNull()!!
-        return historyPage.items.map { it.toMarkRecordItem() }
+        val emits = traktRepository.fetchWatchHistory(page).toList()
+        val last = emits.last()
+        if (last.error != null) throw Exception(last.error)
+        return last.items.map { it.toMarkRecordItem() }
     }
 
     private fun computeTimeRange(state: MarkRecordUiState): Pair<Long, Long> {
