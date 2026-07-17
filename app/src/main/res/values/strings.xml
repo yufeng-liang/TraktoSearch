@@ -1173,6 +1173,8 @@ Config:
     <string name="discover_douban_recommend_tv">TV Shows</string>
     <string name="discover_douban_recommend_login_prompt">Log in to Douban for personalized recommendations</string>
     <string name="discover_douban_recommend_login_button">Log in to Douban</string>
+    <string name="discover_trakt_recommendations_login_prompt">Log in to Trakt for personalized recommendations</string>
+    <string name="discover_trakt_recommendations_login_button">Log in to Trakt</string>
     <string name="discover_view_all">View all (%d)</string>
     <string name="discover_trakt_trending_movies">Trakt Trending Movies</string>
     <string name="discover_trakt_trending_shows">Trakt Trending Shows</string>

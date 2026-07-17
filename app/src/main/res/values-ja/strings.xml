@@ -1049,6 +1049,8 @@
     <string name="discover_douban_recommend_tv">テレビ番組</string>
     <string name="discover_douban_recommend_login_prompt">豆瓣にログインしてパーソナライズされたおすすめを入手</string>
     <string name="discover_douban_recommend_login_button">豆瓣にログイン</string>
+    <string name="discover_trakt_recommendations_login_prompt">Traktにログインしてパーソナライズされたおすすめを入手</string>
+    <string name="discover_trakt_recommendations_login_button">Traktにログイン</string>
     <string name="discover_view_all">すべて(%d) ></string>
     <string name="discover_trakt_trending_movies">Trakt トレンド映画</string>
     <string name="discover_trakt_trending_shows">Trakt トレンドテレビ番組</string>

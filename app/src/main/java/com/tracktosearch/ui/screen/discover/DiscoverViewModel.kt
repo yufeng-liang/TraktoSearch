@@ -99,6 +99,10 @@ data class DiscoverUiState(
     val traktAnticipatedError: String? = null,
     val traktShowRecommendationsError: String? = null,
     val trendingListsError: String? = null,
+    // 两个 Trakt 推荐栏目是否对当前用户可见（访客模式下显示登录解锁卡片而非降级内容）
+    // 默认 true：保持已登录用户行为不变；loadXxx 入口检测到未登录时置为 false
+    val traktRecommendationsLoggedIn: Boolean = true,
+    val traktShowRecommendationsLoggedIn: Boolean = true,
     val resolvingItemId: Int? = null,
     val resolvingTmdbId: Int? = null,
     val isLoading: Boolean = false,
@@ -189,6 +193,13 @@ class DiscoverViewModel @Inject constructor(
     /** 加载全局想看/已看 ID 缓存 */
     private fun loadWatchlistWatchedIds() {
         viewModelScope.launch {
+            // 访客模式（无 token）：直接返回空对象，避免发 4 个 /sync/* 请求全部 401
+            // 已登录用户：走 Repository 完整链路（持久化缓存优先，未命中才发请求）
+            val token = tokenStorage.accessToken.first()
+            if (token.isNullOrEmpty()) {
+                _watchlistWatchedIds.value = TraktRepository.WatchlistWatchedIds()
+                return@launch
+            }
             traktRepository.loadWatchlistWatchedIds()
             _watchlistWatchedIds.value = traktRepository.getWatchlistWatchedIds()
         }
@@ -642,8 +653,23 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadTraktRecommendations() {
-        _uiState.value = _uiState.value.copy(isLoadingRecommendations = true, recommendationsError = null)
+        // 访客模式（无 token）：不发 /recommendations/movies 请求（会 401），直接显示登录解锁卡片
         viewModelScope.launch {
+            val token = tokenStorage.accessToken.first()
+            if (token.isNullOrEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    traktRecommendationsLoggedIn = false,
+                    isLoadingRecommendations = false,
+                    traktRecommendations = emptyList(),
+                    recommendationsError = null
+                )
+                return@launch
+            }
+            _uiState.value = _uiState.value.copy(
+                isLoadingRecommendations = true,
+                recommendationsError = null,
+                traktRecommendationsLoggedIn = true
+            )
             try {
                 // 已登录用 Trakt 个性化推荐，失败则降级为 TMDB 高分电影
                 val result = traktRepository.getRecommendations(limit = 10)
@@ -679,6 +705,10 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
+                // 访客模式：为你推荐剧集栏目显示登录解锁卡片，不调 /recommendations/shows
+                _uiState.value = _uiState.value.copy(
+                    traktShowRecommendationsLoggedIn = isLoggedIn
+                )
                 val deferredTrendingMovies = async { traktRepository.getTrendingMovies(limit = 10) }
                 val deferredTrendingShows = async { traktRepository.getTrendingShows(limit = 10) }
                 val deferredAnticipatedMovies = async { traktRepository.getAnticipatedMovies(limit = 10) }
@@ -725,14 +755,10 @@ class DiscoverViewModel @Inject constructor(
                         }
                     }
                 } ?: (if (!isLoggedIn) {
-                    // 未登录时用热门剧集作为推荐降级
-                    enhancedTrendingShows.map { trending ->
-                        com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
-                            show = trending.show
-                        )
-                    }
+                    // 未登录：不降级填充，留空让 UI 显示登录解锁卡片（避免与"Trakt 热门剧集"栏目重复）
+                    emptyList()
                 } else {
-                    // 已登录但请求失败时，也降级为热门剧集
+                    // 已登录但请求失败时，降级为热门剧集
                     enhancedTrendingShows.map { trending ->
                         com.tracktosearch.data.remote.trakt.dto.TraktRecommendationShowResponse(
                             show = trending.show

@@ -321,6 +321,7 @@ fun MainScreen(
                         onListClick = onListClick,
                         onFilterDiscoverClick = onFilterDiscoverClick,
                         onDoubanLoginClick = onNavigateToDoubanLogin,
+                        onTraktLoginClick = onNavigateToLogin,
                         modifier = Modifier.fillMaxSize()
                     )
                     2 -> {

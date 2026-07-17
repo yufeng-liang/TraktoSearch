@@ -1159,6 +1159,8 @@
     <string name="discover_douban_recommend_tv">电视剧</string>
     <string name="discover_douban_recommend_login_prompt">登录豆瓣解锁个性化推荐</string>
     <string name="discover_douban_recommend_login_button">去登录豆瓣</string>
+    <string name="discover_trakt_recommendations_login_prompt">登录 Trakt 解锁个性化推荐</string>
+    <string name="discover_trakt_recommendations_login_button">去登录 Trakt</string>
     <string name="discover_view_all">查看全部(%d)</string>
     <string name="discover_trakt_trending_movies">Trakt 热门电影</string>
     <string name="discover_trakt_trending_shows">Trakt 热门剧集</string>

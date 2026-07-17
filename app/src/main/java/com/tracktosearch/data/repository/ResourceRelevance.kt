@@ -93,10 +93,16 @@ class RuleBasedRelevanceScorer : ResourceRelevanceScorer {
      * - 目标作为"定界片段"出现（前后为标点/数字/空格/括号/首尾，而非汉字/字母） → +40
      *   例："5025-情书"、"[夸克网盘]情书："、"Q 情书（199..." 命中；"两世情书""夜港情书""给阿嬷的情书" 不命中
      * - 否则按字符 bigram 余弦：≥0.9 → +25，0.7~0.9 → +12，<0.7 → 0
+     *
+     * 大小写不敏感：TMDB originalTitle 通常是首字母大写形式（如 "Socias por Accidente"），
+     * 而网盘资源标题多为小写（如 "Socias por accidente 2026"）。若不统一大小写，
+     * isDelimitedSegment 会因 indexOf 找不到而失败、cosineBigram 也会因大小写不同的 bigram
+     * 而降级，导致 titleScore 从 +40 跌到 +12，原本高相关的资源被误隐藏。
+     * 在入口统一 lowercase 后，下游 isDelimitedSegment/cosineBigram/bigrams 都不需要改。
      */
     private fun segmentMatchScore(name: String, target: String): Int {
-        val n = name.trim()
-        val t = target.trim()
+        val n = name.trim().lowercase()
+        val t = target.trim().lowercase()
         if (t.isEmpty()) return 0
         if (n == t) return 50
         if (isDelimitedSegment(n, t)) return 40

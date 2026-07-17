@@ -96,6 +96,7 @@ fun DiscoverScreen(
     onListClick: (listId: Int, listName: String) -> Unit = { _, _ -> },
     onFilterDiscoverClick: () -> Unit = {},
     onDoubanLoginClick: () -> Unit = {},
+    onTraktLoginClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: DiscoverViewModel = hiltViewModel()
 ) {
@@ -416,6 +417,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingRecommendations,
                                     error = uiState.recommendationsError,
                                     resolvingItemId = uiState.resolvingTmdbId,
+                                    isLoggedIn = uiState.traktRecommendationsLoggedIn,
                                     watchlistWatchedIds = watchlistWatchedIds,
                                     onItemClick = { movie ->
                                         viewModel.navigateTraktMovie(movie) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
@@ -423,7 +425,8 @@ fun DiscoverScreen(
                                         }
                                     },
                                     onRetry = { viewModel.loadTraktRecommendations() },
-                                    onViewAll = { showRecommendationsAll = true }
+                                    onViewAll = { showRecommendationsAll = true },
+                                    onLoginClick = onTraktLoginClick
                                 )
                             }
                         }
@@ -501,6 +504,7 @@ fun DiscoverScreen(
                                     isLoading = uiState.isLoadingTrakt,
                                     resolvingItemId = uiState.resolvingTmdbId,
                                     totalCount = uiState.traktShowRecommendations.size,
+                                    isLoggedIn = uiState.traktShowRecommendationsLoggedIn,
                                     watchlistWatchedIds = watchlistWatchedIds,
                                     error = uiState.traktShowRecommendationsError,
                                     onItemClick = { show ->
@@ -509,7 +513,8 @@ fun DiscoverScreen(
                                         }
                                     },
                                     onViewAll = { showShowRecsAll = true },
-                                    onRetry = { viewModel.loadTraktData() }
+                                    onRetry = { viewModel.loadTraktData() },
+                                    onLoginClick = onTraktLoginClick
                                 )
                             }
                         }

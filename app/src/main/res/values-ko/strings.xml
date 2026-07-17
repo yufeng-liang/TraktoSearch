@@ -1049,6 +1049,8 @@
     <string name="discover_douban_recommend_tv">TV 프로그램</string>
     <string name="discover_douban_recommend_login_prompt">더우반에 로그인하여 맞춤 추천 받기</string>
     <string name="discover_douban_recommend_login_button">더우반 로그인</string>
+    <string name="discover_trakt_recommendations_login_prompt">Trakt에 로그인하여 맞춤 추천 받기</string>
+    <string name="discover_trakt_recommendations_login_button">Trakt 로그인</string>
     <string name="discover_view_all">전체(%d) ></string>
     <string name="discover_trakt_trending_movies">Trakt 트렌딩 영화</string>
     <string name="discover_trakt_trending_shows">Trakt 트렌딩 TV 프로그램</string>

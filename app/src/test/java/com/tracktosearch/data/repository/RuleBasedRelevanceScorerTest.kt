@@ -273,6 +273,51 @@ class RuleBasedRelevanceScorerTest {
         assertThat(score).isEqualTo(40)
     }
 
+    // ============ 原名（originalTitle）跨语言/大小写场景 ============
+    //
+    // 复现 bug：墨西哥电影《Socias por accidente》(2026) 中文名"不期而遇的姐妹"，
+    // TMDB originalTitle 通常返回 "Socias por Accidente"（A 大写），
+    // 而网盘资源标题多为小写 "Socias por accidente 2026"。
+    // 评分器对大小写敏感，导致 isDelimitedSegment 失败、cosineBigram 降到 0.7~0.9，
+    // titleScore 从 +40 跌到 +12，总分 12+15=27 < 45 → 被错误隐藏。
+
+    /** 目标影视：Socias por accidente (2026)，西语原名电影 */
+    private val querySocias = ResourceQuery(
+        title = "不期而遇的姐妹",
+        originalTitle = "Socias por Accidente", // TMDB 返回的首字母大写形式
+        year = 2026,
+        country = "墨西哥",
+        mediaType = MediaType.MOVIE
+    )
+
+    @Test
+    fun originalTitle_caseMismatch_withYear_isHighRelevance() {
+        // 资源标题小写 + 年份：定界片段本应命中（+40），年份 +15 → 55
+        val score = scorer.score(item("Socias por accidente 2026"), querySocias)
+        assertThat(score).isAtLeast(45)
+    }
+
+    @Test
+    fun originalTitle_caseMismatch_withYearAndQuality_isHighRelevance() {
+        // 资源标题小写 + 年份 + 画质：+40 +15 +10 → 65
+        val score = scorer.score(item("Socias por accidente 2026 1080p"), querySocias)
+        assertThat(score).isAtLeast(45)
+    }
+
+    @Test
+    fun originalTitle_caseMismatch_paranYear_isHighRelevance() {
+        // 资源标题小写 + 括号年份：+40 +15 → 55
+        val score = scorer.score(item("Socias por accidente (2026)"), querySocias)
+        assertThat(score).isAtLeast(45)
+    }
+
+    @Test
+    fun originalTitle_exactCase_withYear_isHighRelevance() {
+        // 基线：大小写完全一致时应高相关（+40 +15 = 55）
+        val score = scorer.score(item("Socias por Accidente 2026"), querySocias)
+        assertThat(score).isAtLeast(45)
+    }
+
     // ============ 阈值常量 ============
 
     @Test

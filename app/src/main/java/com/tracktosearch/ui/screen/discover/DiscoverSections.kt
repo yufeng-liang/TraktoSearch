@@ -122,10 +122,12 @@ internal fun TraktRecommendationSection(
     isLoading: Boolean,
     error: String?,
     resolvingItemId: Int?,
+    isLoggedIn: Boolean = true,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     onItemClick: (TraktMovie) -> Unit,
     onRetry: () -> Unit,
-    onViewAll: () -> Unit
+    onViewAll: () -> Unit,
+    onLoginClick: () -> Unit = {}
 ) {
     Column {
         SectionHeader(
@@ -134,6 +136,9 @@ internal fun TraktRecommendationSection(
             onActionClick = if (movies.isNotEmpty()) onViewAll else null
         )
         when {
+            !isLoggedIn -> {
+                LoginUnlockCard(onLoginClick = onLoginClick)
+            }
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
@@ -341,20 +346,24 @@ internal fun TraktAnticipatedSection(
     }
 }
 
-/** 为你推荐剧集栏目（仅登录用户可见） */
+/** 为你推荐剧集栏目（访客模式显示登录解锁卡片，登录后展示个性化推荐） */
 @Composable
 internal fun TraktShowRecommendationSection(
     items: List<TraktRecommendationShowResponse>,
     isLoading: Boolean,
     resolvingItemId: Int?,
     totalCount: Int,
+    isLoggedIn: Boolean = true,
     watchlistWatchedIds: TraktRepository.WatchlistWatchedIds? = null,
     error: String? = null,
     onItemClick: (TraktShow) -> Unit,
     onViewAll: () -> Unit,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    onLoginClick: () -> Unit = {}
 ) {
-    if (items.isEmpty() && !isLoading && error == null) return // 未登录时无数据不显示
+    // 未登录：显示登录解锁卡片（不早返回）
+    // 已登录但无数据且无错误且非加载中：隐藏栏目（保持原行为）
+    if (isLoggedIn && items.isEmpty() && !isLoading && error == null) return
     Column {
         SectionHeader(
             title = stringResource(R.string.discover_trakt_recommendations_shows),
@@ -362,6 +371,9 @@ internal fun TraktShowRecommendationSection(
             onActionClick = if (totalCount > 0) onViewAll else null
         )
         when {
+            !isLoggedIn -> {
+                LoginUnlockCard(onLoginClick = onLoginClick)
+            }
             isLoading -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(5) { DoubanHotCardSkeleton() }
@@ -388,6 +400,59 @@ internal fun TraktShowRecommendationSection(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * 通用「登录解锁」引导卡片（Trakt 推荐栏目用）。
+ *
+ * 与豆瓣「猜你喜欢」的绿色卡片区分：采用紫蓝色渐变，避免视觉重复。
+ * 卡片样式（圆角、按压回弹、文案层级）与豆瓣登录卡片保持一致。
+ */
+@Composable
+internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "login_unlock_scale"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(scale)
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF3949AB), Color(0xFF7986CB))
+                )
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onLoginClick
+            )
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.discover_trakt_recommendations_login_prompt),
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color.White.copy(alpha = 0.9f)
+            )
+            Text(
+                text = stringResource(R.string.discover_trakt_recommendations_login_button),
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold
+                ),
+                color = Color.White
+            )
         }
     }
 }
