@@ -1134,16 +1134,26 @@ class DoubanSyncManager @Inject constructor(
         // 按 selectedReasons 过滤,转回 DoubanMarkItem 用于复用 syncBatchToTrakt
         val filteredFailures = failures.filter { it.failureReason in selectedReasons }
 
+        // 数据一致性修复:清理已同步表中的失败项。
+        // 这些失败项的 doubanId 已经在 douban_synced_items 表中(曾经同步成功过,常见于
+        // 从云端拉取 synced_items 后与本地 failures 表重合),不需要重试。
+        // 从 douban_sync_failures 表删除,避免下次重试时 pending 为空导致统计全为 0。
+        val (alreadySyncedFailures, toRetryFailures) = filteredFailures.partition { it.doubanId in syncedIds }
+        for (failure in alreadySyncedFailures) {
+            doubanSyncFailureDao.deleteByDoubanId(failure.doubanId)
+        }
+
         // 按 status 分组重试(wish/collect 分别走)
         val allStillFailed = mutableListOf<DoubanSyncFailure>()
         val allRetrySuccess = mutableListOf<String>()  // 重试成功的 doubanId
         var totalSuccess = 0
+        var totalSkipped = alreadySyncedFailures.size  // 已同步表跳过的失败项
         var totalCacheHit = 0
         val recentFailuresBuffer = ArrayDeque<DoubanSyncFailure>()
 
         for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
             if (cancelled) break
-            val statusFailures = filteredFailures.filter { it.status == status }
+            val statusFailures = toRetryFailures.filter { it.status == status }
             if (statusFailures.isEmpty()) continue
 
             val phaseName = if (status == DoubanMarkStatus.WISH) "重试想看失败项" else "重试看过失败项"
@@ -1189,6 +1199,7 @@ class DoubanSyncManager @Inject constructor(
             allStillFailed.addAll(result.failed)
             totalSuccess += result.success
             totalCacheHit += result.cacheHit
+            totalSkipped += result.skipped
         }
 
         // 从 douban_sync_failures 表删除重试成功的项
@@ -1210,7 +1221,7 @@ class DoubanSyncManager @Inject constructor(
             total = _progress.value.total,
             successCount = totalSuccess,
             failedCount = allStillFailed.size,
-            skippedCount = allRetrySuccess.size,  // 重试模式下,跳过数 = 重试成功数
+            skippedCount = totalSkipped,
             cacheHitCount = totalCacheHit,
             failedItems = allStillFailed,
             phase = if (cancelled) "已取消" else "重试完成",

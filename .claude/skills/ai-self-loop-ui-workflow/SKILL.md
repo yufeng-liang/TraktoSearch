@@ -21,7 +21,7 @@ description: Use when a UI design has been approved via brainstorming's web prot
 
 ## 何时使用
 
-- 触发前提：头脑风暴网页原型已展示、用户**已批准实施**
+- 触发前提：需要将网页设计稿实施为compose UI或头脑风暴网页原型已展示、用户**已批准实施**
 - 任务：把批准的网页设计稿转写为 Compose 代码并精准复刻
 - 不适用：纯逻辑修改、无需视觉对照的改动
 
