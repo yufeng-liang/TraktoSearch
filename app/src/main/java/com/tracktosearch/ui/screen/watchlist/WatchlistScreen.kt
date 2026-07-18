@@ -851,7 +851,7 @@ fun WatchlistScreen(
                                         .fillMaxWidth()
                                         .clickable { showSyncDialog = true },
                                     color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                        else MaterialTheme.colorScheme.primaryContainer
+                                        else MaterialTheme.colorScheme.primary
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -863,11 +863,11 @@ fun WatchlistScreen(
                                             imageVector = if (syncProgress.isRunning) Icons.Rounded.Sync else Icons.Rounded.CheckCircle,
                                             contentDescription = null,
                                             tint = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onPrimaryContainer,
+                                                else Color.White,
                                             modifier = Modifier
                                                 .size(18.dp)
                                                 .then(
-                                                    if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = spinRotation }
+                                                    if (syncProgress.isRunning) Modifier.graphicsLayer { rotationZ = -spinRotation }
                                                     else Modifier
                                                 )
                                         )
@@ -885,7 +885,7 @@ fun WatchlistScreen(
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else MaterialTheme.colorScheme.onPrimaryContainer
+                                                    else Color.White
                                             )
                                             if (syncProgress.isRunning && syncProgress.total > 0) {
                                                 Spacer(modifier = Modifier.height(4.dp))
@@ -924,7 +924,7 @@ fun WatchlistScreen(
                                         .fillMaxWidth()
                                         .clickable { showConsistencyDialog = true },
                                     color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                        else MaterialTheme.colorScheme.tertiaryContainer
+                                        else MaterialTheme.colorScheme.primary
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -937,11 +937,11 @@ fun WatchlistScreen(
                                                 else Icons.Rounded.CheckCircle,
                                             contentDescription = null,
                                             tint = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                else MaterialTheme.colorScheme.onTertiaryContainer,
+                                                else Color.White,
                                             modifier = Modifier
                                                 .size(18.dp)
                                                 .then(
-                                                    if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = checkSpinRotation }
+                                                    if (checkProgress.isRunning) Modifier.graphicsLayer { rotationZ = -checkSpinRotation }
                                                     else Modifier
                                                 )
                                         )
@@ -959,7 +959,7 @@ fun WatchlistScreen(
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
-                                                    else MaterialTheme.colorScheme.onTertiaryContainer
+                                                    else Color.White
                                             )
                                             if (checkProgress.isRunning && checkProgress.total > 0) {
                                                 Spacer(modifier = Modifier.height(4.dp))

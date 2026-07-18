@@ -9,9 +9,9 @@ LOCAL_XML="/tmp/ui-dump.xml"
 
 echo "=== 结构校验开始 ==="
 
-# 1. dump UI 树
-$ADB -s $DEVICE shell uiautomator dump $XML_PATH
-$ADB -s $DEVICE pull $XML_PATH $LOCAL_XML
+# 1. dump UI 树（双斜杠防止 Git Bash 路径转换）
+$ADB -s $DEVICE shell uiautomator dump //sdcard//ui.xml
+$ADB -s $DEVICE pull //sdcard//ui.xml $LOCAL_XML
 
 if [ ! -f "$LOCAL_XML" ]; then
     echo "FAIL: 无法拉取 uiautomator dump"

@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -142,6 +143,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.ui.theme.Frost
 import com.tracktosearch.ui.theme.Slate
@@ -149,24 +151,26 @@ import com.tracktosearch.ui.theme.Slate
 /**
  * 玻璃棱镜高光渐变：从顶部 white@8% 渐变到透明，模拟玻璃反射
  */
-@Composable
-private fun glassHighlightBrush(): Brush = Brush.verticalGradient(
-    0.0f to Color.White.copy(alpha = 0.08f),
-    0.5f to Color.White.copy(alpha = 0.02f),
-    1.0f to Color.Transparent,
-)
+private fun glassHighlightBrush(isDark: Boolean): Brush {
+    return Brush.verticalGradient(
+        0.0f to Color.White.copy(alpha = if (isDark) 0.08f else 0.06f),
+        0.5f to Color.White.copy(alpha = if (isDark) 0.02f else 0.02f),
+        1.0f to Color.Transparent,
+    )
+}
 
 /**
  * 玻璃棱镜底部折射线渐变
  */
-@Composable
-private fun glassRefractionBrush(): Brush = Brush.horizontalGradient(
-    0.0f to Color.Transparent,
-    0.2f to Color.White.copy(alpha = 0.06f),
-    0.5f to Color.White.copy(alpha = 0.10f),
-    0.8f to Color.White.copy(alpha = 0.06f),
-    1.0f to Color.Transparent,
-)
+private fun glassRefractionBrush(isDark: Boolean): Brush {
+    return Brush.horizontalGradient(
+        0.0f to Color.Transparent,
+        0.2f to Color.Black.copy(alpha = if (isDark) 0.06f else 0.04f),
+        0.5f to Color.Black.copy(alpha = if (isDark) 0.10f else 0.06f),
+        0.8f to Color.Black.copy(alpha = if (isDark) 0.06f else 0.04f),
+        1.0f to Color.Transparent,
+    )
+}
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -182,6 +186,16 @@ interface CloudThemeProvider {
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
 
+/**
+ * 基于 MaterialTheme.colorScheme.background 亮度判断暗色模式，
+ * 兼容 app 自定义 themeMode（dark/light/system）+ 动态壁纸配色
+ */
+@Composable
+private fun isAppDarkTheme(): Boolean {
+    val bgLuminance = MaterialTheme.colorScheme.background.luminance()
+    return bgLuminance < 0.5f
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SearchScreen(
@@ -196,6 +210,7 @@ fun SearchScreen(
     modifier: Modifier = Modifier,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
+    val isDark = isAppDarkTheme()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hotSearches by viewModel.hotSearches.collectAsStateWithLifecycle()
     // 页面重新可见时(ON_RESUME)，若热门搜索为空则重新加载(新片榜重试后可拿到数据)
@@ -371,16 +386,20 @@ fun SearchScreen(
                     .clip(DesignToken.SearchBar)
                     .background(
                         Brush.linearGradient(
-                            0.0f to Frost,
-                            1.0f to Slate,
+                            0.0f to if (isDark) Frost else Color.White,
+                            1.0f to if (isDark) Slate else Color(0xFFF5F5F5),
                         )
                     )
-                    .border(1.dp, Color.White.copy(alpha = 0.12f), DesignToken.SearchBar)
+                    .border(
+                        1.dp,
+                        if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
+                        DesignToken.SearchBar
+                    )
                     .shadow(
                         elevation = DesignToken.ElevationFloating,
                         shape = DesignToken.SearchBar,
-                        ambientColor = Color.Black.copy(alpha = 0.5f),
-                        spotColor = Color.Black.copy(alpha = 0.35f),
+                        ambientColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.15f),
+                        spotColor = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.1f),
                     )
                     .padding(horizontal = 4.dp, vertical = 4.dp)
             ) {
@@ -389,7 +408,7 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp)
-                        .background(glassHighlightBrush())
+                        .background(glassHighlightBrush(isDark))
                 )
                 // 底部折射线
                 Box(
@@ -398,7 +417,7 @@ fun SearchScreen(
                         .height(1.dp)
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 20.dp)
-                        .background(glassRefractionBrush())
+                        .background(glassRefractionBrush(isDark))
                 )
                 SearchBarTop(
                     searchQuery = searchQuery,
@@ -545,7 +564,9 @@ fun SearchScreen(
                                 focusManager.clearFocus()
                             },
                             onHistoryDelete = { viewModel.removeHistory(it.keyword, it.type) },
-                            onClearAll = { viewModel.clearHistory() }
+                            onClearAll = { viewModel.clearHistory() },
+                            selectedKeyword = searchQuery,
+                            isDark = isDark
                         )
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -556,7 +577,9 @@ fun SearchScreen(
                             viewModel.addTraktHistory(keyword, searchSourceType.name.lowercase())
                             onTraktSearch?.invoke(searchSourceType, keyword)
                             focusManager.clearFocus()
-                        }
+                        },
+                        selectedKeyword = searchQuery,
+                        isDark = isDark
                     )
                 }
                 Spacer(modifier = Modifier.height(24.dp))
@@ -758,7 +781,9 @@ private fun SearchHistoryInline(
     history: List<SearchHistoryItem>,
     onHistoryClick: (SearchHistoryItem) -> Unit,
     onHistoryDelete: (SearchHistoryItem) -> Unit,
-    onClearAll: () -> Unit
+    onClearAll: () -> Unit,
+    selectedKeyword: String? = null,
+    isDark: Boolean = false
 ) {
     val typeColorMap = mapOf(
         "disk" to Color(0xFF26A69A),
@@ -800,24 +825,50 @@ private fun SearchHistoryInline(
         ) {
             items(history, key = { "${it.type}_${it.keyword}" }) { item ->
                 val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                val isSelected = item.keyword == selectedKeyword
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(
                     targetValue = if (isPressed) 0.96f else 1f,
                     label = "history_chip_scale"
                 )
+                val bgColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                }
+                val borderColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+                }
+                val textColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+                val iconTint = if (isSelected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                val shadowColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                } else {
+                    Color.Black.copy(alpha = 0.1f)
+                }
                 Box(
                     modifier = Modifier
                         .scale(scale)
                         .shadow(
-                            elevation = DesignToken.ElevationCard,
+                            elevation = if (isDark) 4.dp else 2.dp,
                             shape = DesignToken.Tag,
+                            ambientColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f),
+                            spotColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.20f else 0.06f),
                         )
-                        .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f), DesignToken.Tag)
+                        .border(1.dp, borderColor, DesignToken.Tag)
                         .clip(DesignToken.Tag)
-                        .background(
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        )
+                        .background(color = bgColor)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
@@ -832,20 +883,20 @@ private fun SearchHistoryInline(
                             Icons.Rounded.History,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = iconTint
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = typeNameMap[item.type] ?: item.type,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                            color = tagColor,
+                            color = if (isSelected) MaterialTheme.colorScheme.primary else tagColor,
                             maxLines = 1
                         )
                         Spacer(modifier = Modifier.width(5.dp))
                         Text(
                             text = item.keyword,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = textColor,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -858,7 +909,7 @@ private fun SearchHistoryInline(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.search_history_delete),
                                 modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = iconTint
                             )
                         }
                     }
@@ -914,7 +965,8 @@ private fun SearchSuggestionsInline(
 private fun PopularSearchesSection(
     popularSearches: List<String>,
     onPopularClick: (String) -> Unit,
-    selectedKeyword: String? = null
+    selectedKeyword: String? = null,
+    isDark: Boolean = false
 ) {
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -966,10 +1018,10 @@ private fun PopularSearchesSection(
                     modifier = Modifier
                         .scale(scale)
                         .shadow(
-                            elevation = DesignToken.ElevationCard,
+                            elevation = if (isDark) 4.dp else 2.dp,
                             shape = DesignToken.Tag,
-                            ambientColor = shadowColor,
-                            spotColor = shadowColor,
+                            ambientColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.25f else 0.08f),
+                            spotColor = if (isSelected) shadowColor else Color.Black.copy(alpha = if (isDark) 0.20f else 0.06f),
                         )
                         .border(1.dp, borderColor, DesignToken.Tag)
                         .clip(DesignToken.Tag)
@@ -980,6 +1032,18 @@ private fun PopularSearchesSection(
                             onClick = { onPopularClick(keyword) }
                         )
                 ) {
+                    // 顶部高光层
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    0.0f to Color.White.copy(alpha = if (isDark) 0.06f else 0.12f),
+                                    0.3f to Color.White.copy(alpha = if (isDark) 0.02f else 0.04f),
+                                    1.0f to Color.Transparent,
+                                )
+                            )
+                    )
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
                         verticalAlignment = Alignment.CenterVertically

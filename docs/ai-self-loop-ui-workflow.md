@@ -61,6 +61,36 @@ sleep 4 && H:/android/Sdk/platform-tools/adb.exe -s emulator-5554 exec-out scree
 bash scripts/verify-ui.sh
 ```
 
+### 发送截图到邮箱（远程审查）
+
+当用户不在电脑前（如通过 Telegram 远程对话），用 SMTP 发送截图：
+
+```bash
+# QQ 邮箱 SMTP 发送（附件截图）
+SMTP_HOST=smtp.qq.com SMTP_PORT=465 SMTP_SSL=true \
+SMTP_USERNAME=1577865546@qq.com SMTP_PASSWORD=<授权码> \
+SMTP_FROM=1577865546@qq.com \
+py "C:/Users/15778/.agents/skills/email-smtp-send/scripts/smtp_send.py" send \
+  --to 1577865546@qq.com \
+  --subject "搜索页截图" \
+  --body "AI 自看自查截图。" \
+  --attach shot.png
+```
+
+- 技能来源：`npx skills add tiangong-ai/skills@email-smtp-send -g -y`
+- SMTP 授权码在 QQ 邮箱设置 → 账户 → POP3/IMAP/SMTP 生成
+- `py` 命令（Windows Python Launcher），不要用 `python3`
+
+### 亮暗色模式切换
+
+```bash
+# 切亮色模式
+H:/android/Sdk/platform-tools/adb.exe -s emulator-5554 shell cmd uimode night no
+
+# 切暗色模式
+H:/android/Sdk/platform-tools/adb.exe -s emulator-5554 shell cmd uimode night yes
+```
+
 ## 用户明确倾向
 
 不想换框架，只想让 AI 能边做边看实际截图自改，使结果达到网页设计稿水平。
