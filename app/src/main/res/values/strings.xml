@@ -645,7 +645,7 @@ Config:
     <string name="help_douban_writeback_b1">On the Douban sync-failure item detail page, you can directly write &quot;Want to watch&quot;/&quot;Watched&quot;/&quot;Remove mark&quot; back to Douban.</string>
     <string name="help_douban_writeback_b3">Switching Wish/Collected persists the new status to the failure list. Removing the mark deletes the failure item (with a second confirmation).</string>
     <string name="help_consistency_check">Status Consistency Check</string>
-    <string name="help_consistency_intro">Douban and Trakt statuses may diverge. The check unifies both sides by the rule &quot;Watched takes priority over Want-to-watch&quot;: the watched status overrides wishlist, and the side that is watched is written back to the other, so no mark is ever lost. The table below lists how every mismatch is handled.</string>
+    <string name="help_consistency_intro">Douban and Trakt statuses may diverge. The check unifies both sides by the rule &quot;Watched takes priority over Want-to-watch&quot;: the watched status overrides wishlist, and the side that is watched is written back to the other, so no mark is ever lost. It also cleans up legacy items that are both in Want-to-watch and Watched on Trakt (leftover from old data), automatically removing their Want-to-watch mark. The table below lists how every mismatch is handled.</string>
     <string name="help_consistency_col_douban">Douban</string>
     <string name="help_consistency_col_trakt">Trakt</string>
     <string name="help_consistency_col_result">Result</string>

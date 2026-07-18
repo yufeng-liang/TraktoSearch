@@ -96,6 +96,18 @@ class TraktRepository @Inject constructor(
             MediaType.SHOW -> showTmdbToTrakt[tmdbId]
             else -> null
         }
+
+        /**
+         * 找出同时处于「想看」与「已看」的 Trakt ID 交集（按「已看优先」原则应从想看移除）。
+         *
+         * 只比对 Trakt 侧 traktId 集合，不依赖豆瓣映射，可覆盖非豆瓣来源的纯 Trakt 数据。
+         * 返回电影、剧集两组冲突 traktId 集合（历史旧数据可能同时存在于两个状态）。
+         */
+        fun watchlistWatchedConflicts(): Pair<Set<Int>, Set<Int>> {
+            val movieConflicts = movieWatchlistTraktIds intersect movieWatchedTraktIds
+            val showConflicts = showWatchlistTraktIds intersect showWatchedTraktIds
+            return movieConflicts to showConflicts
+        }
     }
 
     /** Trakt /sync/history 分页结果 */

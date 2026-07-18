@@ -883,7 +883,7 @@
     <string name="help_douban_writeback_b1">豆瓣同期失敗アイテム詳細ページで、「見たい/見た/マーク解除」を直接豆瓣に書き戻せます。</string>
     <string name="help_douban_writeback_b3">見たい↔見たの切り替えは失敗リストに保存。マーク解除は失敗アイテムを削除します(確認ダイアログ付き)。</string>
     <string name="help_consistency_check">状態整合性チェック</string>
-    <string name="help_consistency_intro">豆瓣とTraktの状態が不一致になることがあります。チェックは「見た方を見たいより優先」の原則で両方を統一します。見た状態が見たいを上書きし、見た側をもう片方に書き戻すため、マークが失われることはありません。以下の表はすべての不一致の処理方法です。</string>
+    <string name="help_consistency_intro">豆瓣とTraktの状態が不一致になることがあります。チェックは「見た方を見たいより優先」の原則で両方を統一します。見た状態が見たいを上書きし、見た側をもう片方に書き戻すため、マークが失われることはありません。また、Trakt側で「見たい」と「見た」の両方に存在する古いデータの項目を整理し、見たいマークを自動的に削除します。以下の表はすべての不一致の処理方法です。</string>
     <string name="help_consistency_col_douban">豆瓣</string>
     <string name="help_consistency_col_trakt">Trakt</string>
     <string name="help_consistency_col_result">統一後</string>

@@ -645,7 +645,7 @@
     <string name="help_douban_writeback_b1">在豆瓣同步失败条目详情页,可直接把「想看 / 已看 / 取消标记」写回豆瓣。</string>
     <string name="help_douban_writeback_b3">想看↔已看切换后新状态持久化到失败列表;取消标记会删除该失败条目(需二次确认)。</string>
     <string name="help_consistency_check">状态一致性检查</string>
-    <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边:已看状态覆盖想看状态,并以已看方为准回写另一方,标记永不丢失。下表列出所有不一致情况的处理方式。</string>
+    <string name="help_consistency_intro">豆瓣与 Trakt 的影视状态可能不一致。检查按「已看过优先于想看」原则统一两边:已看状态覆盖想看状态,并以已看方为准回写另一方,标记永不丢失。检查还会清理 Trakt 侧同时处于「想看」与「已看」的历史条目(旧数据遗留),自动移除其想看标记。下表列出所有不一致情况的处理方式。</string>
     <string name="help_consistency_col_douban">豆瓣状态</string>
     <string name="help_consistency_col_trakt">Trakt 状态</string>
     <string name="help_consistency_col_result">统一后</string>
