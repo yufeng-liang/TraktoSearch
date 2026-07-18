@@ -595,6 +595,8 @@
     <string name="settings_view_statistics">시청 통계</string>
     <string name="settings_douban_resync">더우반 재동기화</string>
     <string name="settings_douban_resync_desc">동기화 모드를 선택하고 더우반 상태 변화 처리</string>
+    <string name="settings_douban_resync_running">동기화 중…</string>
+    <string name="settings_douban_resync_running_desc">더우반 데이터 동기화 중, 클릭하여 진행 상황 보기</string>
     <string name="settings_douban_not_logged_in_title">더우반 미로그인</string>
     <string name="settings_douban_not_logged_in_message">더우반 재동기화에는 로그인이 필요합니다. 로그인 페이지로 이동하시겠습니까?</string>
     <string name="settings_douban_not_logged_in_login">로그인으로</string>

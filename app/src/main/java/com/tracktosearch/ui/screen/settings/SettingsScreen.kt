@@ -97,7 +97,9 @@ import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.douban.CloudSyncEvent
 import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
 import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
+import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
+import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -152,6 +154,7 @@ fun SettingsScreen(
     var showDoubanLoginPrompt by remember { mutableStateOf(false) }
     var showDoubanRetryDialog by remember { mutableStateOf(false) }
     var showSyncModePicker by remember { mutableStateOf(false) }
+    var showSyncProgressDialog by remember { mutableStateOf(false) }
     // 冷却期内点击增量同步时的引导对话框
     var showCooldownGuidance by remember { mutableStateOf(false) }
     var pendingCooldownMode by remember { mutableStateOf<com.tracktosearch.data.repository.SyncMode?>(null) }
@@ -519,14 +522,22 @@ fun SettingsScreen(
                             GroupDivider()
                             SettingsItemCard(
                                 icon = Icons.Rounded.Sync,
-                                title = stringResource(R.string.settings_douban_resync),
-                                subtitle = stringResource(R.string.settings_douban_resync_desc),
+                                title = stringResource(
+                                    if (isDoubanSyncRunning) R.string.settings_douban_resync_running
+                                    else R.string.settings_douban_resync
+                                ),
+                                subtitle = stringResource(
+                                    if (isDoubanSyncRunning) R.string.settings_douban_resync_running_desc
+                                    else R.string.settings_douban_resync_desc
+                                ),
                                 onClick = {
-                                    // 重新同步:先检查豆瓣登录态,未登录弹确认框引导登录
                                     if (doubanLoggedIn) {
-                                        // 弹出模式选择前刷新冷却期状态(确保跨设备 lastFullSyncAt 最新)
-                                        scope.launch { viewModel.refreshCooldownStatus() }
-                                        showSyncModePicker = true
+                                        if (isDoubanSyncRunning) {
+                                            showSyncProgressDialog = true
+                                        } else {
+                                            scope.launch { viewModel.refreshCooldownStatus() }
+                                            showSyncModePicker = true
+                                        }
                                     } else {
                                         showDoubanLoginPrompt = true
                                     }
@@ -1049,6 +1060,15 @@ fun SettingsScreen(
                     pendingCooldownMode = null
                 }) { Text(stringResource(R.string.cooldown_skip)) }
             }
+        )
+    }
+
+    // 同步进行中时点卡片:弹出同步进度弹窗
+    if (showSyncProgressDialog) {
+        val doubanSyncViewModel: DoubanSyncViewModel = hiltViewModel()
+        DoubanSyncDialog(
+            onDismiss = { showSyncProgressDialog = false },
+            viewModel = doubanSyncViewModel
         )
     }
 

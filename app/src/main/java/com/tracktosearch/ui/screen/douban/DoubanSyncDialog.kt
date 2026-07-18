@@ -134,11 +134,17 @@ fun DoubanSyncDialog(
         }
     }
 
-    // 失败项分组折叠状态(默认可恢复展开,不可恢复折叠)
+    // 失败项分组折叠状态(默认可恢复展开,不可恢复展开)
     var recoverableExpanded by remember { mutableStateOf(true) }
-    var nonRecoverableExpanded by remember { mutableStateOf(false) }
-    // 二级分组(按失败原因)折叠状态,默认全展开
-    var subExpandedMap by remember { mutableStateOf<Map<FailureReason, Boolean>>(emptyMap()) }
+    var nonRecoverableExpanded by remember { mutableStateOf(true) }
+    // 二级分组(按失败原因)折叠状态
+    // 不可恢复原因(NO_IMDB_ID/TRAKT_NOT_FOUND)默认折叠
+    val defaultSubExpanded = remember {
+        FailureReason.entries.associateWith { reason ->
+            reason !in setOf(FailureReason.NO_IMDB_ID, FailureReason.TRAKT_NOT_FOUND)
+        }
+    }
+    var subExpandedMap by remember { mutableStateOf(defaultSubExpanded) }
     // null=未导出,true=成功,false=失败
     var exportResult by remember { mutableStateOf<Boolean?>(null) }
     var exportedCount by remember { mutableStateOf(0) }

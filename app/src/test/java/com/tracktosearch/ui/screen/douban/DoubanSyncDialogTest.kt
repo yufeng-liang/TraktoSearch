@@ -9,8 +9,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.repository.DoubanFailureExporter
+import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.FailureReason
+import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -181,5 +184,91 @@ class DoubanSyncDialogTest {
         setContent()
         // douban_sync_summary_format = "Success %1$d · Skipped %2$d · Cached %3$d · Failed %4$d"
         composeRule.onNodeWithText("Success 50 · Skipped 5 · Cached 10 · Failed 5").assertIsDisplayed()
+    }
+
+    // ==================== 失败项展示 ====================
+
+    @Test
+    fun `完成状态_不可恢复组默认展开`() {
+        val items = listOf(
+            DoubanSyncFailure("db-1", "No IMDb Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.NO_IMDB_ID, 1000L, 1000L, 1, null, false, null),
+            DoubanSyncFailure("db-2", "Trakt Not Found Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_NOT_FOUND, 1000L, 1000L, 1, null, false, null)
+        )
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                phase = "Done",
+                successCount = 0, failedCount = 2,
+                skippedCount = 0, cacheHitCount = 0,
+                failedItems = items
+            )
+        )
+        setContent()
+        // 不可恢复组标题默认展开 → 显示
+        composeRule.onNodeWithText("Non-recoverable (2)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `完成状态_可恢复组默认展开`() {
+        val items = listOf(
+            DoubanSyncFailure("db-3", "Detail Fetch Failed Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.DETAIL_FETCH_FAILED, 1000L, 1000L, 1, null, false, null),
+            DoubanSyncFailure("db-4", "Write Timeout Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_WRITE_TIMEOUT, 1000L, 1000L, 1, null, false, null)
+        )
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                phase = "Done",
+                successCount = 0, failedCount = 2,
+                skippedCount = 0, cacheHitCount = 0,
+                failedItems = items
+            )
+        )
+        setContent()
+        // 可恢复组标题默认展开 → 显示
+        composeRule.onNodeWithText("Recoverable (2)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `完成状态_NO_IMDB_ID子组默认折叠_条目不可见`() {
+        val items = listOf(
+            DoubanSyncFailure("db-noimdb", "No IMDb Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.NO_IMDB_ID, 1000L, 1000L, 1, null, false, null)
+        )
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                phase = "Done",
+                successCount = 0, failedCount = 1,
+                skippedCount = 0, cacheHitCount = 0,
+                failedItems = items
+            )
+        )
+        setContent()
+        // NO_IMDB_ID 子组默认折叠 → 条目不显示
+        composeRule.onNodeWithText("No IMDb Movie").assertDoesNotExist()
+    }
+
+    @Test
+    fun `完成状态_TRAKT_NOT_FOUND子组默认折叠_条目不可见`() {
+        val items = listOf(
+            DoubanSyncFailure("db-tnf", "Trakt Not Found Movie", null, null, null, "2024-01-01",
+                "url", DoubanMarkStatus.WISH, FailureReason.TRAKT_NOT_FOUND, 1000L, 1000L, 1, null, false, null)
+        )
+        emit(
+            DoubanSyncProgress(
+                isComplete = true,
+                phase = "Done",
+                successCount = 0, failedCount = 1,
+                skippedCount = 0, cacheHitCount = 0,
+                failedItems = items
+            )
+        )
+        setContent()
+        // TRAKT_NOT_FOUND 子组默认折叠 → 条目不显示
+        composeRule.onNodeWithText("Trakt Not Found Movie").assertDoesNotExist()
     }
 }

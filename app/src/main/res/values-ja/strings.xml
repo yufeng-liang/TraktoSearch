@@ -595,6 +595,8 @@
     <string name="settings_view_statistics">視聴統計</string>
     <string name="settings_douban_resync">豆瓣を再同期</string>
     <string name="settings_douban_resync_desc">同期モードを選択し、豆瓣の状態変化を処理</string>
+    <string name="settings_douban_resync_running">同期中…</string>
+    <string name="settings_douban_resync_running_desc">豆瓣データを同期中、クリックして進捗を表示</string>
     <string name="settings_douban_not_logged_in_title">豆瓣に未ログイン</string>
     <string name="settings_douban_not_logged_in_message">豆瓣の再同期にはログインが必要です。ログインページへ移動しますか?</string>
     <string name="settings_douban_not_logged_in_login">ログインへ</string>

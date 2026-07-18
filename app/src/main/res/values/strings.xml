@@ -724,6 +724,8 @@ Config:
     <string name="mark_records_settings_entry_desc">View your watchlist/watched/removed action history</string>
     <string name="settings_douban_resync">Re-sync from Douban</string>
     <string name="settings_douban_resync_desc">Choose sync mode to handle Douban status changes</string>
+    <string name="settings_douban_resync_running">Syncing…</string>
+    <string name="settings_douban_resync_running_desc">Syncing Douban data, click to view progress</string>
     <string name="settings_douban_not_logged_in_title">Not logged in to Douban</string>
     <string name="settings_douban_not_logged_in_message">Re-syncing from Douban requires you to be logged in. Go to the login page now?</string>
     <string name="settings_douban_not_logged_in_login">Go to login</string>

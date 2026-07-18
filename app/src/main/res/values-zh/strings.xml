@@ -724,6 +724,8 @@
     <string name="mark_records_settings_entry_desc">查看你的想看/已看/移除操作历史</string>
     <string name="settings_douban_resync">重新同步豆瓣</string>
     <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
+    <string name="settings_douban_resync_running">同步进行中…</string>
+    <string name="settings_douban_resync_running_desc">正在同步豆瓣数据,点击查看进度</string>
     <string name="settings_douban_not_logged_in_title">未登录豆瓣</string>
     <string name="settings_douban_not_logged_in_message">重新同步豆瓣需要先登录豆瓣,是否前往登录?</string>
     <string name="settings_douban_not_logged_in_login">前往登录</string>

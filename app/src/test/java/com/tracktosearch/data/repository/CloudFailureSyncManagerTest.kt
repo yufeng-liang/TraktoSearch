@@ -370,6 +370,20 @@ class CloudFailureSyncManagerTest {
         assertThat(result).isEqualTo(UploadResult.Failed)
     }
 
+    @Test
+    fun uploadIfHasFailures_上传成功_记录PulledUploadedAt() = runTest {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user-1", "cookie")
+        val entity = buildFailureEntity(failedAt = 2000L, updatedAt = 2000L)
+        coEvery { doubanSyncFailureDao.getAll() } returns listOf(entity)
+        coEvery { giteeApi.getFileContent(any(), any(), any(), any()) } returns mockNotFoundResponse()
+        coEvery { giteeApi.createFileContent(any(), any(), any(), any()) } returns mockSuccessUpdateResponse()
+
+        manager.uploadIfHasFailures()
+
+        // 验证上传成功后记录了云端版本时间戳
+        coVerify { cloudFailurePullMetaStorage.recordPulledUploadedAt(any()) }
+    }
+
     // ============================================================
     // checkCloudFailures 测试
     // ============================================================

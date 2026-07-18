@@ -221,6 +221,8 @@ class CloudFailureSyncManager @Inject constructor(
                 giteeContentsApi.createFileContent(OWNER, REPO, path, request)
             }
             if (putResp.isSuccessful) {
+                // 记录本次上传的云端版本,避免后续下载时因云端时间戳更新而提示覆盖
+                cloudFailurePullMetaStorage.recordPulledUploadedAt(payload.uploadedAt)
                 Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"}, uploadedAt=${payload.uploadedAt})")
                 UploadResult.Uploaded
             } else {
