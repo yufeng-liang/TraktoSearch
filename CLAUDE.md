@@ -5,7 +5,7 @@
 - 面向用户的输出、解释说明、注释均使用中文
 - 代码注释使用中文，Git commit message 使用中文
 - ViewModel 中的 error 信息用英文（非 UI 展示文字）
-- 命令行默认使用bash（已添加环境路径）
+- 命令行默认使用bash（已添加环境路径），Python命令用py执行
 - 需要网络搜索的用anysearch mcp，这是专为agent打造的ai搜索基础设施
 
 ## 项目架构概览
@@ -87,6 +87,7 @@
 - 完成任务后简要总结改动内容
 - 有不确定的地方主动用 brainstorming 技能问清楚（添加新功能时必须调用头脑风暴技能）
 - 头脑风暴的可视化伴侣：涉及 UI 设计时，使用 PureShowWidget 内联展示设计效果（SVG/HTML）；前端新页面设计用 web-dev 技能生成实时预览（自动启动本地 HTTP 服务器并通过 OpenPreview 提供预览链接）
+- 网页原型经用户批准实施后，调用 `ai-self-loop-ui-workflow` 技能，用 AI 自持模拟器截图闭环（installDebug + adb screencap + 读截图对照）把设计稿精准复刻为 Compose 代码，无需用户开 AS
 - 安装软件，程序后自动清理临时文件
 - 增加/修改/删除功能后，及时更新 App 内帮助与说明页，确保帮助与说明与实际情况一致
 - 发布流程由 `release` 技能统一编排（自动调用 `github-release` 与 `gitee-release` 子技能），说"发布/release/打包发布"即触发，无需再参考其他文档
@@ -101,7 +102,6 @@
 
 ## 常见陷阱与经验
 
-- Gitee Release 相关陷阱（APK 上传用 curl.exe、body 纯文本后 PATCH、PATCH 用 curl.exe 避卡死）已固化在 `gitee-release` 技能中，发布时自动遵循，无需手动记忆
 - Git worktree 建新分支时 `local.properties` 不在版本库（被 gitignore），需手动 `cp parent-project/local.properties worktree-path/local.properties`，否则编译失败说 SDK 未找到
 
 ## Git 规范
@@ -114,6 +114,6 @@
 - 不硬编码密码、密钥等敏感信息
 - 配置文件中的敏感信息需提醒用户注意保护
 
-## 想清楚再写
+## 不确定就主动问
 
 不要瞎猜，把权衡讲出来。假设要明说，不确定就问。多种理解都摆出来，别悄悄选一个。有更简单的做法直说，该反对时反对。
