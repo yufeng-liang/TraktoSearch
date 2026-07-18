@@ -12,7 +12,6 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
 import com.tracktosearch.MainActivity
 import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
@@ -102,6 +101,7 @@ class ConsistencyCheckService : Service() {
         return START_NOT_STICKY
     }
 
+    /** 构建进度通知（委托 LiveUpdateNotificationBuilder，Android 16+ 自动升级 Live Update） */
     private fun buildNotification(current: Int, total: Int, phase: String): Notification {
         val contentIntent = PendingIntent.getActivity(
             this, 0,
@@ -113,23 +113,17 @@ class ConsistencyCheckService : Service() {
             Intent(this, ConsistencyCheckService::class.java).setAction(ACTION_CANCEL),
             PendingIntent.FLAG_IMMUTABLE
         )
-
-        val title = getString(com.tracktosearch.R.string.consistency_check_title)
-        val cancelText = getString(com.tracktosearch.R.string.consistency_check_cancel)
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(com.tracktosearch.R.drawable.ic_sync)
-            .setContentTitle(title)
-            .setContentText("$phase ($current/$total)")
-            .setContentIntent(contentIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, cancelText, cancelIntent)
-            .setOngoing(true)
-
-        if (total > 0) {
-            builder.setProgress(total, current, false)
-        } else {
-            builder.setProgress(0, 0, true)
-        }
-        return builder.build()
+        return LiveUpdateNotificationBuilder.build(
+            context = this,
+            channelId = CHANNEL_ID,
+            title = getString(com.tracktosearch.R.string.consistency_check_title),
+            phase = phase,
+            current = current,
+            total = total,
+            contentIntent = contentIntent,
+            cancelIntent = cancelIntent,
+            cancelText = getString(com.tracktosearch.R.string.consistency_check_cancel),
+        )
     }
 
     private fun createNotificationChannel() {
