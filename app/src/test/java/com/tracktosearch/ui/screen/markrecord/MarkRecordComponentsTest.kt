@@ -7,6 +7,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.data.util.PosterColorExtractor
+import io.mockk.mockk
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -33,6 +35,9 @@ class MarkRecordComponentsTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    // 测试不校验海报取色行为，用宽松 mock 满足构造参数即可
+    private val posterColorExtractor: PosterColorExtractor = mockk(relaxed = true)
 
     private fun item(
         actionType: String,
@@ -243,40 +248,40 @@ class MarkRecordComponentsTest {
     // 没有独立的 getActionTypeChipColor 函数可供反射，改用 Compose UI 渲染验证文案映射。
 
     @Test
-    fun `ActionTypeChip_ADD_WATCHLIST渲染Added_to_Watchlist`() {
+    fun `ActionTypeChip_ADD_WATCHLIST渲染Watchlist`() {
         composeRule.setContent {
             MaterialTheme {
-                MarkRecordItemRow(item = item("ADD_WATCHLIST", null), onClick = {})
+                MarkRecordItemRow(item = item("ADD_WATCHLIST", null), posterColorExtractor = posterColorExtractor, onClick = {})
             }
         }
-        composeRule.onNodeWithText("Added to Watchlist").assertIsDisplayed()
+        composeRule.onNodeWithText("Watchlist").assertIsDisplayed()
     }
 
     @Test
-    fun `ActionTypeChip_REMOVE_WATCHLIST渲染Removed_from_Watchlist`() {
+    fun `ActionTypeChip_REMOVE_WATCHLIST渲染Removed`() {
         composeRule.setContent {
             MaterialTheme {
-                MarkRecordItemRow(item = item("REMOVE_WATCHLIST", null), onClick = {})
+                MarkRecordItemRow(item = item("REMOVE_WATCHLIST", null), posterColorExtractor = posterColorExtractor, onClick = {})
             }
         }
-        composeRule.onNodeWithText("Removed from Watchlist").assertIsDisplayed()
+        composeRule.onNodeWithText("Removed").assertIsDisplayed()
     }
 
     @Test
-    fun `ActionTypeChip_UNMARK_WATCHED渲染Unmarked_Watched`() {
+    fun `ActionTypeChip_UNMARK_WATCHED渲染Removed`() {
         composeRule.setContent {
             MaterialTheme {
-                MarkRecordItemRow(item = item("UNMARK_WATCHED", null), onClick = {})
+                MarkRecordItemRow(item = item("UNMARK_WATCHED", null), posterColorExtractor = posterColorExtractor, onClick = {})
             }
         }
-        composeRule.onNodeWithText("Unmarked Watched").assertIsDisplayed()
+        composeRule.onNodeWithText("Removed").assertIsDisplayed()
     }
 
     @Test
     fun `ActionTypeChip_未知类型回退渲染默认Watched`() {
         composeRule.setContent {
             MaterialTheme {
-                MarkRecordItemRow(item = item("UNKNOWN", null), onClick = {})
+                MarkRecordItemRow(item = item("UNKNOWN", null), posterColorExtractor = posterColorExtractor, onClick = {})
             }
         }
         // else 分支使用 mark_records_action_watched ("Watched") + Color.Gray
@@ -293,6 +298,7 @@ class MarkRecordComponentsTest {
             MaterialTheme {
                 MarkRecordItemRow(
                     item = item("ADD_WATCHLIST", CurrentMarkStatus.IN_WATCHLIST),
+                    posterColorExtractor = posterColorExtractor,
                     onClick = {}
                 )
             }
@@ -306,6 +312,7 @@ class MarkRecordComponentsTest {
             MaterialTheme {
                 MarkRecordItemRow(
                     item = item("WATCHED", CurrentMarkStatus.WATCHED),
+                    posterColorExtractor = posterColorExtractor,
                     onClick = {}
                 )
             }
@@ -314,30 +321,32 @@ class MarkRecordComponentsTest {
     }
 
     @Test
-    fun `CurrentStatusBadge_NONE无变化渲染Current_No_mark`() {
-        // REMOVE_WATCHLIST + NONE → isRecordChanged=false → "Current: No mark"
+    fun `CurrentStatusBadge_NONE渲染Current_Removed`() {
+        // REMOVE_WATCHLIST + NONE → currentStatus=NONE → "Current: Removed"
         composeRule.setContent {
             MaterialTheme {
                 MarkRecordItemRow(
                     item = item("REMOVE_WATCHLIST", CurrentMarkStatus.NONE),
+                    posterColorExtractor = posterColorExtractor,
                     onClick = {}
                 )
             }
         }
-        composeRule.onNodeWithText("Current: No mark").assertIsDisplayed()
+        composeRule.onNodeWithText("Current: Removed").assertIsDisplayed()
     }
 
     @Test
-    fun `CurrentStatusBadge_NONE有变化渲染Changed`() {
-        // ADD_WATCHLIST + NONE → isRecordChanged=true → "Changed"
+    fun `CurrentStatusBadge_ADD_WATCHLIST_NONE渲染Current_Removed`() {
+        // ADD_WATCHLIST + NONE → currentStatus=NONE → "Current: Removed"
         composeRule.setContent {
             MaterialTheme {
                 MarkRecordItemRow(
                     item = item("ADD_WATCHLIST", CurrentMarkStatus.NONE),
+                    posterColorExtractor = posterColorExtractor,
                     onClick = {}
                 )
             }
         }
-        composeRule.onNodeWithText("Changed").assertIsDisplayed()
+        composeRule.onNodeWithText("Current: Removed").assertIsDisplayed()
     }
 }

@@ -39,7 +39,7 @@ class MarkRecordViewModelTest {
         coEvery {
             dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns emptyList()
-        viewModel = MarkRecordViewModel(dao, traktRepo)
+        viewModel = MarkRecordViewModel(dao, traktRepo, mockk(relaxed = true))
     }
 
     @After
@@ -646,7 +646,7 @@ class MarkRecordViewModelTest {
     // ==================== 状态徽标一致性 ====================
 
     @Test
-    fun `loadNextPage后新item不在currentStatusMap中`() = runTest {
+    fun `loadNextPage后新item也在currentStatusMap中`() = runTest {
         // 第一页 50 条（traktId 0-49），第二页 10 条（traktId 50-59）
         val page1 = List(50) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, it, 1000L + it) }
         val page2 = List(10) { sampleEntity(MarkActionType.ADD_WATCHLIST.value, 50 + it, 1000L + 50 + it) }
@@ -667,15 +667,16 @@ class MarkRecordViewModelTest {
 
         viewModel.loadNextPage()
         advanceUntilIdle()
-        // 第二页的 item (traktId 50-59) 不在 currentStatusMap 中
-        // 因为 updateCurrentStatusMap 只在 loadFirstPage 调用，loadNextPage 不调用
+        // 第二页的 item (traktId 50-59) 同样进入 currentStatusMap，并填充 NONE 占位
         (50..59).forEach { id ->
-            assertThat(viewModel.uiState.value.currentStatusMap).doesNotContainKey(id)
+            assertThat(viewModel.uiState.value.currentStatusMap).containsKey(id)
+            assertThat(viewModel.uiState.value.currentStatusMap[id]).isEqualTo(CurrentMarkStatus.NONE)
         }
-        // currentStatus 字段也为 null（转换函数始终设为 null）
+        // 全部 60 条均在 map 中
+        assertThat(viewModel.uiState.value.currentStatusMap).hasSize(60)
         val newItems = viewModel.uiState.value.items.filter { it.traktId in 50..59 }
         assertThat(newItems).hasSize(10)
-        assertThat(newItems.all { it.currentStatus == null }).isTrue()
+        assertThat(newItems.all { it.currentStatus == CurrentMarkStatus.NONE }).isTrue()
     }
 
     // ==================== 边界情况 ====================
