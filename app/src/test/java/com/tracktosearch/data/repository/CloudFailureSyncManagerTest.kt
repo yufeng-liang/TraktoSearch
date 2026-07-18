@@ -56,13 +56,14 @@ class CloudFailureSyncManagerTest {
     private val giteeApi = mockk<GiteeContentsApi>(relaxed = true)
     private val doubanSyncFailureDao = mockk<DoubanSyncFailureDao>(relaxed = true)
     private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
+    private val cloudFailurePullMetaStorage = mockk<com.tracktosearch.data.local.CloudFailurePullMetaStorage>(relaxed = true)
     private val json = Json { ignoreUnknownKeys = true }
-    private val manager = CloudFailureSyncManager(giteeApi, doubanSyncFailureDao, doubanAuthStorage, json)
+    private val manager = CloudFailureSyncManager(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailurePullMetaStorage, json)
 
     @Before
     fun setUp() {
         // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
-        clearMocks(giteeApi, doubanSyncFailureDao, doubanAuthStorage)
+        clearMocks(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailurePullMetaStorage)
     }
 
     // ============================================================

@@ -12,6 +12,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.CloudFailurePullMetaStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.CooldownStatus
@@ -96,6 +97,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val cloudPersonalSyncManager: CloudPersonalSyncManager,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
+    private val cloudFailurePullMetaStorage: CloudFailurePullMetaStorage,
     private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
@@ -552,6 +554,10 @@ class SettingsViewModel @Inject constructor(
     /** 清除豆瓣凭据（退出登录） */
     fun clearDoubanCredentials() {
         doubanAuthStorage.clearCredentials()
+        // 清除失败数据云端拉取版本记录（与账号绑定，换账号后不应残留导致误判）
+        viewModelScope.launch {
+            runCatching { cloudFailurePullMetaStorage.clear() }
+        }
     }
 
     /**

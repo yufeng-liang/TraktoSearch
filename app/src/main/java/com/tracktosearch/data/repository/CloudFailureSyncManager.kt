@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import android.util.Log
+import com.tracktosearch.data.local.CloudFailurePullMetaStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.cloud.AesCrypto
@@ -34,6 +35,7 @@ class CloudFailureSyncManager @Inject constructor(
     private val giteeContentsApi: GiteeContentsApi,
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
     private val doubanAuthStorage: DoubanAuthStorage,
+    private val cloudFailurePullMetaStorage: CloudFailurePullMetaStorage,
     private val json: Json
 ) {
 
@@ -302,9 +304,13 @@ class CloudFailureSyncManager @Inject constructor(
 
             if (payload.failures.isEmpty()) return@withContext DownloadResult.CloudEmpty
 
-            // 时间戳比较:云端 uploadedAt vs 本地最新 max(failedAt, updatedAt)
+            // 时间戳比较:云端 uploadedAt vs 本地最新 max(entity failedAt/updatedAt, 上次拉取的云端 uploadedAt)
+            // 加入 lastPulledUploadedAt 是为了识别"已拉取过该云端版本",避免覆盖后再次拉取仍判定云端较新
+            // （云端 uploadedAt 是上传时刻,总是晚于失败条目本身的 failedAt/updatedAt）
             val localEntities = doubanSyncFailureDao.getAll()
-            val localNewest = localEntities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
+            val entityNewest = localEntities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
+            val lastPulled = cloudFailurePullMetaStorage.getLastPulledUploadedAt()
+            val localNewest = maxOf(entityNewest, lastPulled)
 
             if (localNewest > 0L && payload.uploadedAt <= localNewest) {
                 // 本地有数据且本地更新或相等 → 忽略云端,以本地显示为准
@@ -345,6 +351,8 @@ class CloudFailureSyncManager @Inject constructor(
             }
 
             doubanSyncFailureDao.replaceAll(entities)
+            // 记录本次拉取覆盖的云端版本,避免下次拉取仍判定云端较新
+            cloudFailurePullMetaStorage.recordPulledUploadedAt(payload.uploadedAt)
             Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
             DownloadResult.Success(count = entities.size, cloudTime = payload.uploadedAt, localTime = localNewest)
         } catch (e: Exception) {
@@ -355,11 +363,17 @@ class CloudFailureSyncManager @Inject constructor(
 
     /**
      * 确认用云端数据覆盖本地失败项(对应 [DownloadResult.OverwritePending] 的用户确认分支)。
+     * @param cloudUploadedAt 本次覆盖的云端版本时间戳(来自 [DownloadResult.OverwritePending.cloudTime]),
+     *                        落库后记录,避免下次拉取仍判定云端较新
      * @return 实际写入的条数
      */
-    suspend fun commitCloudMerge(entities: List<com.tracktosearch.data.local.db.DoubanSyncFailureEntity>): Int =
+    suspend fun commitCloudMerge(
+        entities: List<com.tracktosearch.data.local.db.DoubanSyncFailureEntity>,
+        cloudUploadedAt: Long
+    ): Int =
         withContext(Dispatchers.IO) {
             doubanSyncFailureDao.replaceAll(entities)
+            cloudFailurePullMetaStorage.recordPulledUploadedAt(cloudUploadedAt)
             entities.size
         }
 }

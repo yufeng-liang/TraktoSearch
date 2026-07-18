@@ -211,7 +211,7 @@ class DoubanRetryViewModel @Inject constructor(
         }
         viewModelScope.launch {
             _cloudSyncLoading.value = true
-            cloudFailureSyncManager.commitCloudMerge(entities)
+            cloudFailureSyncManager.commitCloudMerge(entities, info.cloudTime)
             refreshRetryState()
             _cloudSyncLoading.value = false
             _cloudSyncDialog.value = null
