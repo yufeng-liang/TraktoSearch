@@ -391,7 +391,14 @@ fun DoubanFailuresScreen(
     // 0=想看(WISH), 1=已看(COLLECT)
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     // 0=电影, 1=电视剧, 2=综艺, 3=纪录片, 4=未分类
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    // 想看/已看各自维护独立的媒体类型 tab 状态,切换想看/已看时互不影响
+    var selectedTabWish by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTabCollect by rememberSaveable { mutableIntStateOf(0) }
+    // 当前模式对应的媒体类型 tab（读取按 selectedMode 分流,写入回对应模式的状态）
+    val selectedTab = if (selectedMode == 0) selectedTabWish else selectedTabCollect
+    val setSelectedTab: (Int) -> Unit = { tab ->
+        if (selectedMode == 0) selectedTabWish = tab else selectedTabCollect = tab
+    }
     // 多选模式状态
     var isMultiSelectMode by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
@@ -891,7 +898,7 @@ fun DoubanFailuresScreen(
                             selected = selectedTab == 0,
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
-                                selectedTab = 0
+                                setSelectedTab(0)
                             },
                             text = {
                                 Text("${stringResource(R.string.watchlist_tab_movies)}($movieCount)")
@@ -901,7 +908,7 @@ fun DoubanFailuresScreen(
                             selected = selectedTab == 1,
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
-                                selectedTab = 1
+                                setSelectedTab(1)
                             },
                             text = {
                                 Text("${stringResource(R.string.watchlist_tab_shows)}($showCount)")
@@ -911,7 +918,7 @@ fun DoubanFailuresScreen(
                             selected = selectedTab == 2,
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
-                                selectedTab = 2
+                                setSelectedTab(2)
                             },
                             text = {
                                 Text("${stringResource(R.string.screen_douban_failures_tab_variety)}($varietyCount)")
@@ -921,7 +928,7 @@ fun DoubanFailuresScreen(
                             selected = selectedTab == 3,
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
-                                selectedTab = 3
+                                setSelectedTab(3)
                             },
                             text = {
                                 Text("${stringResource(R.string.screen_douban_failures_tab_documentary)}($documentaryCount)")
@@ -931,7 +938,7 @@ fun DoubanFailuresScreen(
                             selected = selectedTab == 4,
                             onClick = {
                                 view.performHaptic(HapticType.CLICK)
-                                selectedTab = 4
+                                setSelectedTab(4)
                             },
                             text = {
                                 Text("${stringResource(R.string.screen_douban_failures_tab_uncategorized)}($uncategorizedCount)")
