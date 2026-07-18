@@ -1363,6 +1363,9 @@
     <string name="mark_records_current_in_watchlist">当前想看</string>
     <string name="mark_records_current_watched">当前已看</string>
     <string name="mark_records_current_none">当前已移除</string>
+    <string name="mark_records_current_in_watchlist_short">想看</string>
+    <string name="mark_records_current_watched_short">已看</string>
+    <string name="mark_records_current_none_short">已移除</string>
     <string name="mark_records_current_changed">已变更</string>
     <string name="mark_records_time_just_now">刚刚</string>
     <string name="mark_records_time_minutes_ago">%1$d 分钟前</string>
@@ -1378,6 +1381,8 @@
     <string name="mark_records_date_preset_30d">近 30 天</string>
     <string name="mark_records_date_preset_all">全部</string>
     <string name="mark_records_date_preset_custom">自定义</string>
+    <string name="mark_records_filter_start_date">开始日期</string>
+    <string name="mark_records_filter_end_date">结束日期</string>
     <string name="mark_records_media_movie">电影</string>
     <string name="mark_records_media_show">剧集</string>
     <string name="mark_records_reset">重置</string>

@@ -8,19 +8,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +45,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -90,7 +99,7 @@ fun MarkRecordItemRow(
             .background(backgroundBrush)
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -118,14 +127,16 @@ fun MarkRecordItemRow(
                     },
                     contentDescription = item.displayTitle.ifBlank { item.title },
                     modifier = Modifier
-                        .size(width = 64.dp, height = 96.dp)
+                        .fillMaxWidth(0.4f)
+                        .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
             } else {
                 Box(
                     modifier = Modifier
-                        .size(width = 64.dp, height = 96.dp)
+                        .fillMaxWidth(0.4f)
+                        .aspectRatio(2f / 3f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
@@ -138,43 +149,47 @@ fun MarkRecordItemRow(
                 }
             }
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
 
             // 信息列
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                // 标题（可多行）
+                // 标题 + 年份，最多两行
+                val titleText = buildString {
+                    append(item.displayTitle.ifBlank { item.title }.ifBlank { stringResource(R.string.mark_records_empty_all) })
+                    item.year?.let { append(" · $it") }
+                }
                 Text(
-                    text = item.displayTitle.ifBlank { item.title }.ifBlank { stringResource(R.string.mark_records_empty_all) },
+                    text = titleText,
                     style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                     fontWeight = FontWeight.Medium,
                     color = onColor,
-                    lineHeight = 18.sp
+                    lineHeight = 18.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
-                // 年份（标题下一行）
-                item.year?.let {
-                    Text(
-                        text = it.toString(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = onColor.copy(alpha = 0.8f)
-                    )
-                }
-                // 操作胶囊 + 相对时间（胶囊右侧）
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                // 操作胶囊 + 当前状态徽标（仅状态变更时显示）
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     ActionTypeChip(item.actionType)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = formatRelativeTime(item.actedAt, context),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = onColor.copy(alpha = 0.85f)
-                    )
+                    if (isRecordChanged(item)) {
+                        CurrentStatusBadge(item)
+                    }
                 }
-                // 当前状态（胶囊下一行）
-                CurrentStatusBadge(item)
+                // 相对时间单独一行，避免挤压折行
+                Text(
+                    text = formatRelativeTime(item.actedAt, context),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = onColor.copy(alpha = 0.85f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 
@@ -241,17 +256,60 @@ private fun ActionTypeChip(actionType: String) {
 @Composable
 private fun CurrentStatusBadge(item: MarkRecordItem) {
     val status = item.currentStatus ?: return
-    val (textRes, color) = when (status) {
-        CurrentMarkStatus.IN_WATCHLIST -> R.string.mark_records_current_in_watchlist to Color(0xFF90CAF9)
-        CurrentMarkStatus.WATCHED -> R.string.mark_records_current_watched to Color(0xFFA5D6A7)
-        CurrentMarkStatus.NONE -> R.string.mark_records_current_none to Color(0xFFEF9A9A)
+    val (textRes, accentColor) = when (status) {
+        CurrentMarkStatus.IN_WATCHLIST -> R.string.mark_records_current_in_watchlist_short to Color(0xFF42A5F5)
+        CurrentMarkStatus.WATCHED -> R.string.mark_records_current_watched_short to Color(0xFF66BB6A)
+        CurrentMarkStatus.NONE -> R.string.mark_records_current_none_short to Color(0xFFEF5350)
     }
-    Text(
-        text = stringResource(textRes),
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-        fontSize = 10.sp,
-        fontWeight = FontWeight.Medium
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(5.dp)
+                .background(accentColor, CircleShape)
+        )
+        Text(
+            text = stringResource(textRes),
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier
+                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(4.dp))
+                .padding(horizontal = 3.dp, vertical = 1.dp)
+        )
+    }
+}
+
+/**
+ * 与 Watchlist 筛选弹窗保持一致的 FilterChip。
+ */
+@Composable
+private fun MarkRecordFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = label,
+        modifier = modifier,
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            selected = selected,
+            enabled = true,
+            borderColor = MaterialTheme.colorScheme.outline,
+            selectedBorderColor = MaterialTheme.colorScheme.primary,
+        ),
     )
 }
 
@@ -271,6 +329,7 @@ private fun formatRelativeTime(timestampMs: Long, context: Context): String {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterSheetContent(
     mediaTypes: Set<String>,
@@ -284,6 +343,9 @@ fun FilterSheetContent(
     var selectedPreset by remember { mutableStateOf(datePreset) }
     var selectedRange by remember { mutableStateOf(dateRange) }
     var selectedAscending by remember { mutableStateOf(ascending) }
+    var showStartDatePicker by remember { mutableStateOf(false) }
+    var showEndDatePicker by remember { mutableStateOf(false) }
+    val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         // 媒体类型
@@ -293,14 +355,14 @@ fun FilterSheetContent(
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
+            MarkRecordFilterChip(
                 selected = "movie" in selectedMediaTypes,
                 onClick = {
                     selectedMediaTypes = if ("movie" in selectedMediaTypes) selectedMediaTypes - "movie" else selectedMediaTypes + "movie"
                 },
                 label = { Text(stringResource(R.string.mark_records_media_movie)) }
             )
-            FilterChip(
+            MarkRecordFilterChip(
                 selected = "show" in selectedMediaTypes,
                 onClick = {
                     selectedMediaTypes = if ("show" in selectedMediaTypes) selectedMediaTypes - "show" else selectedMediaTypes + "show"
@@ -317,7 +379,7 @@ fun FilterSheetContent(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DatePreset.entries.forEach { preset ->
-                FilterChip(
+                MarkRecordFilterChip(
                     selected = selectedPreset == preset,
                     onClick = { selectedPreset = preset },
                     label = { Text(stringResource(when (preset) {
@@ -330,12 +392,33 @@ fun FilterSheetContent(
             }
         }
         if (selectedPreset == DatePreset.CUSTOM) {
-            Text(
-                stringResource(R.string.mark_records_date_preset_custom),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val start = selectedRange?.first
+                OutlinedButton(
+                    onClick = { showStartDatePicker = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = start?.let { dateFormatter.format(Date(it)) }
+                            ?: stringResource(R.string.mark_records_filter_start_date)
+                    )
+                }
+                val end = selectedRange?.second
+                OutlinedButton(
+                    onClick = { showEndDatePicker = true },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = end?.let { dateFormatter.format(Date(it)) }
+                            ?: stringResource(R.string.mark_records_filter_end_date)
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(16.dp))
         // 排序
@@ -345,12 +428,12 @@ fun FilterSheetContent(
             modifier = Modifier.padding(bottom = 8.dp)
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
+            MarkRecordFilterChip(
                 selected = !selectedAscending,
                 onClick = { selectedAscending = false },
                 label = { Text(stringResource(R.string.mark_records_sort_desc)) }
             )
-            FilterChip(
+            MarkRecordFilterChip(
                 selected = selectedAscending,
                 onClick = { selectedAscending = true },
                 label = { Text(stringResource(R.string.mark_records_sort_asc)) }
@@ -366,10 +449,61 @@ fun FilterSheetContent(
                 Text(stringResource(R.string.mark_records_reset))
             }
             Button(onClick = {
-                onConfirm(selectedMediaTypes, selectedPreset, selectedRange, selectedAscending)
+                val range = if (selectedPreset == DatePreset.CUSTOM) selectedRange else null
+                onConfirm(selectedMediaTypes, selectedPreset, range, selectedAscending)
             }) {
                 Text(stringResource(R.string.mark_records_confirm))
             }
         }
+    }
+
+    if (showStartDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedRange?.first
+        )
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            selectedRange = selectedRange?.copy(first = millis)
+                                ?: (millis to (selectedRange?.second ?: millis))
+                        }
+                        showStartDatePicker = false
+                    }
+                ) { Text(stringResource(android.R.string.ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        ) { DatePicker(state = pickerState) }
+    }
+
+    if (showEndDatePicker) {
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = selectedRange?.second
+        )
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pickerState.selectedDateMillis?.let { millis ->
+                            selectedRange = selectedRange?.copy(second = millis)
+                                ?: ((selectedRange?.first ?: millis) to millis)
+                        }
+                        showEndDatePicker = false
+                    }
+                ) { Text(stringResource(android.R.string.ok)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            }
+        ) { DatePicker(state = pickerState) }
     }
 }

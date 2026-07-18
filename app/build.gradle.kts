@@ -63,11 +63,15 @@ android {
         getByName("debug") {
             // 使用默认 debug 签名
         }
-        create("release") {
-            storeFile = file(properties.getProperty("release.store.file", ""))
-            storePassword = properties.getProperty("release.store.password", "")
-            keyAlias = properties.getProperty("release.key.alias", "")
-            keyPassword = properties.getProperty("release.key.password", "")
+        // 仅在配置了 release 签名信息时创建，避免空属性导致配置阶段报错
+        val releaseStoreFile = properties.getProperty("release.store.file", "")
+        if (releaseStoreFile.isNotBlank()) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = properties.getProperty("release.store.password", "")
+                keyAlias = properties.getProperty("release.key.alias", "")
+                keyPassword = properties.getProperty("release.key.password", "")
+            }
         }
     }
 
@@ -79,7 +83,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            if (signingConfigs.findByName("release") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

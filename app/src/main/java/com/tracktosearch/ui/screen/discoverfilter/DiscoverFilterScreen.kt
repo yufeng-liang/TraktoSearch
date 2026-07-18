@@ -637,8 +637,8 @@ private fun DiscoverFilterListItem(
     val backgroundBrush: Brush? = dominantColor?.let { color ->
         Brush.horizontalGradient(
             colors = listOf(
-                color.copy(alpha = 0.65f),
-                MaterialTheme.colorScheme.surfaceVariant
+                color,
+                color.copy(alpha = 0.7f)
             )
         )
     }

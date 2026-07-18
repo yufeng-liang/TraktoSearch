@@ -205,9 +205,9 @@ fun MarkRecordScreen(
                             columns = GridCells.Fixed(2),
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             items(uiState.items, key = { "${it.traktId}_${it.actedAt}_${it.actionType}" }) { item ->
                                 MarkRecordItemRow(

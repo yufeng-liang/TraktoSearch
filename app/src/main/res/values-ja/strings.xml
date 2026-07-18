@@ -1381,6 +1381,8 @@
     <string name="mark_records_date_preset_30d">過去30日間</string>
     <string name="mark_records_date_preset_all">すべて</string>
     <string name="mark_records_date_preset_custom">カスタム</string>
+    <string name="mark_records_filter_start_date">開始日</string>
+    <string name="mark_records_filter_end_date">終了日</string>
     <string name="mark_records_empty_all">マーク記録がありません</string>
     <string name="mark_records_empty_watchlist">ウォッチリスト操作記録がありません</string>
     <string name="mark_records_empty_watched">視聴記録がありません</string>
@@ -1389,6 +1391,9 @@
     <string name="mark_records_current_in_watchlist">現在:ウォッチリスト</string>
     <string name="mark_records_current_watched">現在:視聴済み</string>
     <string name="mark_records_current_none">現在:削除済み</string>
+    <string name="mark_records_current_in_watchlist_short">ウォッチリスト</string>
+    <string name="mark_records_current_watched_short">視聴済み</string>
+    <string name="mark_records_current_none_short">削除済み</string>
     <string name="mark_records_current_changed">変更済み</string>
     <string name="mark_records_action_add_watchlist">ウォッチリストに追加</string>
     <string name="mark_records_action_remove_watchlist">ウォッチリストから削除</string>

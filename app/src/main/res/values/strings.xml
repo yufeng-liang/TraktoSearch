@@ -1363,6 +1363,9 @@ Config:
     <string name="mark_records_current_in_watchlist">Current: Watchlist</string>
     <string name="mark_records_current_watched">Current: Watched</string>
     <string name="mark_records_current_none">Current: Removed</string>
+    <string name="mark_records_current_in_watchlist_short">Watchlist</string>
+    <string name="mark_records_current_watched_short">Watched</string>
+    <string name="mark_records_current_none_short">Removed</string>
     <string name="mark_records_current_changed">Changed</string>
     <string name="mark_records_time_just_now">Just now</string>
     <string name="mark_records_time_minutes_ago">%1$d minutes ago</string>
@@ -1378,6 +1381,8 @@ Config:
     <string name="mark_records_date_preset_30d">Last 30 Days</string>
     <string name="mark_records_date_preset_all">All</string>
     <string name="mark_records_date_preset_custom">Custom</string>
+    <string name="mark_records_filter_start_date">Start Date</string>
+    <string name="mark_records_filter_end_date">End Date</string>
     <string name="mark_records_media_movie">Movie</string>
     <string name="mark_records_media_show">TV Show</string>
     <string name="mark_records_reset">Reset</string>
