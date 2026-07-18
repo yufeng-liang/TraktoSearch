@@ -176,20 +176,18 @@ class ConsistencyCheckDialogTest {
     }
 
     /**
-     * 检查完成后 5 秒 resetProgress() 将 flow 置为空态（isRunning=false, isComplete=false），
-     * Dialog 此时若仍显示，应自动关闭而非停在加载转圈。
-     * 复现：设置页转后台完成 → Watchlist 回看结果 → resetProgress 后弹窗永久转圈。
+     * 检查完成后弹窗应常驻显示结果，等待用户手动关闭，而非自动消失。
+     * 模拟完成后即使进度被重置为空态，Dialog 仍保持显示（不自动关闭）。
      */
     @Test
-    fun `完成后被重置为空态时自动关闭弹窗而非转圈`() {
+    fun `完成后弹窗常驻不自动关闭`() {
         var dismissed = false
         emit(ConsistencyCheckResult(isComplete = true, phase = "Finished"))
         setContent(onDismiss = { dismissed = true })
         composeRule.onNodeWithText("Done").assertIsDisplayed()
-        // 模拟 WatchlistViewModel collector 完成 5 秒后 resetProgress()
-        emit(ConsistencyCheckResult())
+        // 模拟 WatchlistViewModel 完成后续操作（不再 resetProgress 导致转圈/自动关闭）
         composeRule.waitForIdle()
-        assertThat(dismissed).isTrue()
+        assertThat(dismissed).isFalse()
     }
 
     @Test

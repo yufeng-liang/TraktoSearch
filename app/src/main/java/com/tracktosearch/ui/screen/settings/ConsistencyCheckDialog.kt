@@ -49,17 +49,6 @@ fun ConsistencyCheckDialog(
     val p = progress
     val context = LocalContext.current
 
-    // 记录是否曾进入"完成/取消"终态：检查完成后 WatchlistViewModel 会在 5 秒后
-    // resetProgress() 将进度置为空态，此时弹窗应自动关闭而非停在加载转圈
-    var hasReachedEnd by remember { mutableStateOf(false) }
-    if (p.isComplete) hasReachedEnd = true
-    LaunchedEffect(p.isRunning, p.isComplete, p.cookieExpired) {
-        // 已出现过终态，且被重置为初始空态（非运行中、非完成、非 cookie 过期）→ 自动关闭
-        if (hasReachedEnd && !p.isRunning && !p.isComplete && !p.cookieExpired) {
-            onDismiss()
-        }
-    }
-
     // 延时倒计时（参考 DoubanSyncDialog 的实现）
     var delayRemainingSeconds by remember { mutableIntStateOf(0) }
     LaunchedEffect(p.delayInfo) {

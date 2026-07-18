@@ -143,6 +143,16 @@ class WatchlistViewModel @Inject constructor(
     private val _consistencyCheckCompleteEvent = MutableSharedFlow<Unit>()
     val consistencyCheckCompleteEvent = _consistencyCheckCompleteEvent.asSharedFlow()
 
+    /**
+     * 用户手动关闭一致性检查结果弹窗后调用：
+     * 清除横幅与进度，避免结果常驻、也避免下次进入页面时收到旧 isComplete 重复弹窗。
+     * （结果弹窗常驻显示，由用户主动关闭而非自动消失）
+     */
+    fun clearConsistencyCheckResult() {
+        _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
+        statusConsistencyChecker.resetProgress()
+    }
+
     /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
     private val _needFirstSyncGuide = MutableStateFlow(false)
     val needFirstSyncGuide: StateFlow<Boolean> = _needFirstSyncGuide.asStateFlow()
@@ -257,20 +267,24 @@ class WatchlistViewModel @Inject constructor(
                 }
             }
         }
-        // 监听状态一致性检查进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
+        // 监听状态一致性检查进度：isRunning 时显示横幅，完成时自动弹出结果弹窗（常驻，用户手动关）
+        var checkCompleteHandled = false
         viewModelScope.launch {
             statusConsistencyChecker.checkProgress.collect { progress: ConsistencyCheckResult ->
                 if (progress.isRunning || progress.isComplete) {
                     _uiState.value = _uiState.value.copy(consistencyCheckProgress = progress)
+                    if (progress.isRunning) {
+                        // 新检查开始，允许本次完成再次自动弹窗
+                        checkCompleteHandled = false
+                    }
                     if (progress.isComplete) {
                         // 取消时不自动弹窗（用户已在设置页的 ConsistencyCheckDialog 看到取消结果）
-                        if (!progress.isCancelled) {
+                        if (!progress.isCancelled && !checkCompleteHandled) {
                             _consistencyCheckCompleteEvent.emit(Unit)
+                            checkCompleteHandled = true
                         }
-                        delay(5000)
-                        _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
-                        // 重置 checkProgress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗
-                        statusConsistencyChecker.resetProgress()
+                        // 不重置 checkProgress、不自动关闭：结果弹窗常驻，用户手动关闭；
+                        // 横幅保留完成态，可随时点开回看结果
                     }
                 }
             }

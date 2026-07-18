@@ -551,6 +551,11 @@ class SettingsViewModel @Inject constructor(
         statusConsistencyChecker.cancel()
     }
 
+    /** 用户手动关闭一致性检查结果弹窗后调用：清除进度，避免旧 isComplete 残留 */
+    fun clearConsistencyCheckResult() {
+        statusConsistencyChecker.resetProgress()
+    }
+
     /** 清除豆瓣凭据（退出登录） */
     fun clearDoubanCredentials() {
         doubanAuthStorage.clearCredentials()

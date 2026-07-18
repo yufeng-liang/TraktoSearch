@@ -1097,7 +1097,11 @@ fun SettingsScreen(
             onDismiss = {
                 val p = consistencyCheckState
                 // 检查运行中不允许通过点击外部关闭（需点「转后台」或「取消」）
-                if (!p.isRunning) showConsistencyDialog = false
+                if (!p.isRunning) {
+                    showConsistencyDialog = false
+                    // 用户主动关闭结果弹窗 → 清除进度（结果常驻，手动关闭而非自动消失）
+                    viewModel.clearConsistencyCheckResult()
+                }
             },
             onBackground = { showConsistencyDialog = false }
         )

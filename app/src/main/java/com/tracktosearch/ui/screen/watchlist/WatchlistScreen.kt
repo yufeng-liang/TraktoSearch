@@ -1223,6 +1223,8 @@ fun WatchlistScreen(
                         val p = uiState.consistencyCheckProgress
                         if (p == null || !p.isRunning) {
                             showConsistencyDialog = false
+                            // 用户主动关闭结果弹窗 → 清除横幅与进度（结果常驻，手动关闭而非自动消失）
+                            viewModel.clearConsistencyCheckResult()
                         }
                     },
                     onBackground = { showConsistencyDialog = false }
