@@ -2,21 +2,24 @@ package com.tracktosearch.ui.screen.search
 
 import android.location.Location
 import android.location.LocationManager
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +27,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -42,6 +46,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -90,13 +95,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -107,6 +120,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -119,6 +133,7 @@ import com.airbnb.lottie.compose.LottieCompositionSpec
 import com.airbnb.lottie.compose.rememberLottieComposition
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CloudPermissionStorage
+import com.tracktosearch.ui.theme.DesignToken
 import com.tracktosearch.data.local.SearchHistoryItem
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
@@ -142,33 +157,203 @@ import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.luminance
-import com.tracktosearch.ui.theme.DesignToken
-import com.tracktosearch.ui.theme.Frost
-import com.tracktosearch.ui.theme.Slate
+import kotlinx.coroutines.delay
+
+// ========== 拟态效果辅助函数 ==========
 
 /**
- * 玻璃棱镜高光渐变：从顶部 white@8% 渐变到透明，模拟玻璃反射
+ * 内联拟态阴影：右下暗阴影 + 左上亮高光（需在 BoxScope 内使用）
  */
-private fun glassHighlightBrush(isDark: Boolean): Brush {
-    return Brush.verticalGradient(
-        0.0f to Color.White.copy(alpha = if (isDark) 0.08f else 0.06f),
-        0.5f to Color.White.copy(alpha = if (isDark) 0.02f else 0.02f),
-        1.0f to Color.Transparent,
+@Composable
+private fun BoxScope.NeumorphicShadows(
+    isDark: Boolean,
+    shape: Shape,
+    elevation: Dp,
+    darkAlpha: Float,
+    lightAlpha: Float,
+) {
+    val darkColor = if (isDark) Color(0xFF000000) else Color(0xFF3E4E7A)
+    val lightColor = if (isDark) Color(0xFF404068) else Color.White
+    val offset = elevation * 0.65f
+    val blur = elevation * 1.2f
+
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .offset(x = offset, y = offset)
+            .shadow(blur, shape, ambientColor = darkColor.copy(alpha = darkAlpha), spotColor = darkColor.copy(alpha = darkAlpha))
+            .background(Color.Transparent, shape)
+    )
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .offset(x = -offset * 0.6f, y = -offset * 0.6f)
+            .shadow(blur * 0.7f, shape, ambientColor = lightColor.copy(alpha = lightAlpha), spotColor = lightColor.copy(alpha = lightAlpha))
+            .background(Color.Transparent, shape)
     )
 }
 
+@Composable
+private fun FloatingOrbs(isDark: Boolean) {
+    val anim1 = remember { Animatable(0f) }
+    val anim2 = remember { Animatable(0f) }
+    val anim3 = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        launch {
+            while (true) {
+                anim1.animateTo(
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 20000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
+                )
+            }
+        }
+        launch {
+            while (true) {
+                anim2.animateTo(
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 25000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
+                )
+            }
+        }
+        launch {
+            while (true) {
+                anim3.animateTo(
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 22000, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
+                )
+            }
+        }
+    }
+    val t1 = anim1.value
+    val t2 = anim2.value
+    val t3 = anim3.value
+
+    // radialGradient 天然圆形渐变，无矩形伪影，GPU 开销低
+    val orb1Colors = if (isDark) {
+        listOf(Color(0xFF5C6BC0).copy(alpha = 0.42f), Color(0xFF5C6BC0).copy(alpha = 0f))
+    } else {
+        listOf(Color(0xFF7986CB).copy(alpha = 0.48f), Color(0xFF7986CB).copy(alpha = 0f))
+    }
+    val orb2Colors = if (isDark) {
+        listOf(Color(0xFFEC407A).copy(alpha = 0.35f), Color(0xFFEC407A).copy(alpha = 0f))
+    } else {
+        listOf(Color(0xFFF48FB1).copy(alpha = 0.42f), Color(0xFFF48FB1).copy(alpha = 0f))
+    }
+    val orb3Colors = if (isDark) {
+        listOf(Color(0xFF26A69A).copy(alpha = 0.32f), Color(0xFF26A69A).copy(alpha = 0f))
+    } else {
+        listOf(Color(0xFF80CBC4).copy(alpha = 0.40f), Color(0xFF80CBC4).copy(alpha = 0f))
+    }
+    val orb4Colors = if (isDark) {
+        listOf(Color(0xFFFFB74D).copy(alpha = 0.28f), Color(0xFFFFB74D).copy(alpha = 0f))
+    } else {
+        listOf(Color(0xFFFFE0B2).copy(alpha = 0.35f), Color(0xFFFFE0B2).copy(alpha = 0f))
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .size(300.dp)
+                .offset(
+                    x = (140 + kotlin.math.sin(t1 * Math.PI * 2).toFloat() * 100).dp,
+                    y = (-60 + kotlin.math.cos(t1 * Math.PI * 2).toFloat() * 50).dp
+                )
+                .background(Brush.radialGradient(orb1Colors), RoundedCornerShape(50))
+        )
+        Box(
+            modifier = Modifier
+                .size(260.dp)
+                .offset(
+                    x = (-110 + kotlin.math.cos(t2 * Math.PI * 2).toFloat() * 70).dp,
+                    y = (290 + kotlin.math.sin(t2 * Math.PI * 2).toFloat() * 100).dp
+                )
+                .background(Brush.radialGradient(orb2Colors), RoundedCornerShape(50))
+        )
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .offset(
+                    x = (50 + kotlin.math.sin(t3 * Math.PI * 2 + 1).toFloat() * 80).dp,
+                    y = (150 + kotlin.math.cos(t3 * Math.PI * 2 + 1).toFloat() * 80).dp
+                )
+                .background(Brush.radialGradient(orb3Colors), RoundedCornerShape(50))
+        )
+        Box(
+            modifier = Modifier
+                .size(220.dp)
+                .offset(
+                    x = (250 + kotlin.math.cos(t1 * Math.PI * 2 + 2).toFloat() * 60).dp,
+                    y = (420 + kotlin.math.sin(t1 * Math.PI * 2 + 2).toFloat() * 70).dp
+                )
+                .background(Brush.radialGradient(orb4Colors), RoundedCornerShape(50))
+        )
+    }
+}
+
 /**
- * 玻璃棱镜底部折射线渐变
+ * 拟态毛玻璃表面 - 使用偏移阴影层+顶部高光实现3D凸起效果
  */
-private fun glassRefractionBrush(isDark: Boolean): Brush {
-    return Brush.horizontalGradient(
-        0.0f to Color.Transparent,
-        0.2f to Color.Black.copy(alpha = if (isDark) 0.06f else 0.04f),
-        0.5f to Color.Black.copy(alpha = if (isDark) 0.10f else 0.06f),
-        0.8f to Color.Black.copy(alpha = if (isDark) 0.06f else 0.04f),
-        1.0f to Color.Transparent,
+@Composable
+private fun NeumorphicFrostedSurface(
+    modifier: Modifier = Modifier,
+    isDark: Boolean,
+    shape: Shape = RoundedCornerShape(32.dp),
+    elevation: Dp = 14.dp,
+    backgroundColor: Color = if (isDark) Color(0xFF1E1E3A).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.65f),
+    borderColor: Color = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.8f),
+    darkShadowAlpha: Float = if (isDark) 0.5f else 0.22f,
+    lightShadowAlpha: Float = if (isDark) 0.10f else 0.8f,
+    hazeState: HazeState? = null,
+    content: @Composable () -> Unit
+) {
+    val hazeModifier = if (hazeState != null) {
+        Modifier.hazeEffect(state = hazeState, style = HazeMaterials.thin())
+    } else Modifier
+
+    Box(modifier = modifier) {
+        NeumorphicShadows(
+            isDark = isDark,
+            shape = shape,
+            elevation = elevation,
+            darkAlpha = darkShadowAlpha,
+            lightAlpha = lightShadowAlpha
+        )
+        Box(
+            modifier = Modifier
+                .wrapContentSize()
+                .then(hazeModifier)
+                .clip(shape)
+                .background(backgroundColor, shape)
+                .border(1.dp, borderColor, shape)
+        ) {
+            content()
+        }
+    }
+}
+
+/**
+ * 玻璃顶部高光
+ */
+@Composable
+private fun GlassHighlight(modifier: Modifier = Modifier, isDark: Boolean) {
+    Box(
+        modifier = modifier
+            .background(
+                Brush.verticalGradient(
+                    0.0f to Color.White.copy(alpha = if (isDark) 0.10f else 0.5f),
+                    0.4f to Color.White.copy(alpha = if (isDark) 0.03f else 0.15f),
+                    1.0f to Color.Transparent
+                )
+            )
     )
 }
 
@@ -297,7 +482,7 @@ fun SearchScreen(
             )
         } else {
             animatedWidthFraction.animateTo(
-                targetValue = 0.88f,
+                targetValue = 0.75f,
                 animationSpec = tween(300, easing = FastOutSlowInEasing)
             )
         }
@@ -332,30 +517,47 @@ fun SearchScreen(
         label = "search_box_y"
     )
 
+    val bgGradient = if (isDark) {
+        Brush.linearGradient(
+            0.0f to Color(0xFF13132A),
+            0.5f to Color(0xFF181835),
+            1.0f to Color(0xFF1A1530)
+        )
+    } else {
+        Brush.linearGradient(
+            0.0f to Color(0xFFF0F4FF),
+            0.4f to Color(0xFFE8F0FF),
+            1.0f to Color(0xFFF5E8FF)
+        )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
+            .background(bgGradient)
             .hazeSource(state = hazeState)
     ) {
-        // 标题区（固定顶部，不随搜索框移动）
+        FloatingOrbs(isDark = isDark)
+
+        // 标题区（固定顶部，不随搜索框移动，padding状态栏避开系统栏）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 20.dp, vertical = 12.dp)
         ) {
             Column(modifier = Modifier.align(Alignment.CenterStart)) {
                 Text(
                     text = stringResource(R.string.search_title),
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
+                    color = if (isDark) Color.White else Color(0xFF263238),
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = stringResource(R.string.search_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
                 )
             }
         }
@@ -372,7 +574,7 @@ fun SearchScreen(
                 )
         )
 
-        // 搜索框（带动画垂直位置）
+        // 搜索框（带动画垂直位置）- 拟态毛玻璃效果
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -380,64 +582,48 @@ fun SearchScreen(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animatedWidthFraction.value)
-                    .clip(DesignToken.SearchBar)
-                    .background(
-                        Brush.linearGradient(
-                            0.0f to if (isDark) Frost else Color.White,
-                            1.0f to if (isDark) Slate else Color(0xFFF5F5F5),
-                        )
-                    )
-                    .border(
-                        1.dp,
-                        if (isDark) Color.White.copy(alpha = 0.12f) else Color.Black.copy(alpha = 0.08f),
-                        DesignToken.SearchBar
-                    )
-                    .shadow(
-                        elevation = DesignToken.ElevationFloating,
-                        shape = DesignToken.SearchBar,
-                        ambientColor = if (isDark) Color.Black.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.15f),
-                        spotColor = if (isDark) Color.Black.copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.1f),
-                    )
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            NeumorphicFrostedSurface(
+                modifier = Modifier.fillMaxWidth(animatedWidthFraction.value),
+                isDark = isDark,
+                shape = RoundedCornerShape(32.dp),
+                elevation = 14.dp,
+                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
+                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
+                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
+                lightShadowAlpha = if (isDark) 0.12f else 0.9f,
+                hazeState = hazeState
             ) {
-                // 高光层：顶部 50% 渐变白色
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .background(glassHighlightBrush(isDark))
-                )
-                // 底部折射线
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = 20.dp)
-                        .background(glassRefractionBrush(isDark))
-                )
-                SearchBarTop(
-                    searchQuery = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    onSearch = {
-                        if (searchQuery.trim() == "13638719007") {
-                            onSpiderTest?.invoke()
-                        } else {
-                            viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
-                            onTraktSearch?.invoke(searchSourceType, searchQuery)
-                        }
-                        focusManager.clearFocus()
-                    },
-                    onClear = { searchQuery = "" },
-                    onBack = if (isActive) onBack else null,
-                    focusRequester = focusRequester,
-                    onFocusChanged = { isSearchFocused = it },
-                    searchSourceType = searchSourceType,
-                    onSearchSourceTypeChange = onSearchSourceTypeChange
-                )
+                Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+                    GlassHighlight(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                            .padding(horizontal = 8.dp)
+                            .align(Alignment.TopCenter),
+                        isDark = isDark
+                    )
+                    SearchBarTopNew(
+                        searchQuery = searchQuery,
+                        onQueryChange = { searchQuery = it },
+                        onSearch = {
+                            if (searchQuery.trim() == "13638719007") {
+                                onSpiderTest?.invoke()
+                            } else {
+                                viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
+                                onTraktSearch?.invoke(searchSourceType, searchQuery)
+                            }
+                            focusManager.clearFocus()
+                        },
+                        onClear = { searchQuery = "" },
+                        onBack = if (isActive) onBack else null,
+                        focusRequester = focusRequester,
+                        onFocusChanged = { isSearchFocused = it },
+                        searchSourceType = searchSourceType,
+                        onSearchSourceTypeChange = onSearchSourceTypeChange,
+                        isDark = isDark,
+                        view = view
+                    )
+                }
             }
         }
 
@@ -453,9 +639,7 @@ fun SearchScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .fillMaxHeight(0.28f)
-                        .graphicsLayer { clip = false }
                 ) {
-                    // 权限弹窗装饰图：原 Lottie 无限循环改为静态首帧，避免弹窗显示期间持续渲染发热
                     val composition by rememberLottieComposition(LottieCompositionSpec.RawRes(R.raw.easter_cat))
                     LottieAnimation(
                         composition = composition,
@@ -463,7 +647,6 @@ fun SearchScreen(
                         modifier = Modifier
                             .size(160.dp)
                             .offset(x = (-20).dp, y = (-23).dp)
-                            .graphicsLayer { clip = false }
                     )
                     Column(
                         modifier = Modifier
@@ -550,7 +733,7 @@ fun SearchScreen(
                     }
                 } else {
                     if (uiState.searchHistory.isNotEmpty()) {
-                        SearchHistoryInline(
+                        SearchHistoryTwoRow(
                             history = uiState.searchHistory,
                             onHistoryClick = { item ->
                                 val st = when (item.type) {
@@ -566,11 +749,12 @@ fun SearchScreen(
                             onHistoryDelete = { viewModel.removeHistory(it.keyword, it.type) },
                             onClearAll = { viewModel.clearHistory() },
                             selectedKeyword = searchQuery,
-                            isDark = isDark
+                            isDark = isDark,
+                            hazeState = hazeState
                         )
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                    PopularSearchesSection(
+                    Spacer(modifier = Modifier.height(18.dp))
+                    PopularSearchesSectionNew(
                         popularSearches = hotSearches,
                         onPopularClick = { keyword ->
                             searchQuery = keyword
@@ -579,10 +763,11 @@ fun SearchScreen(
                             focusManager.clearFocus()
                         },
                         selectedKeyword = searchQuery,
-                        isDark = isDark
+                        isDark = isDark,
+                        hazeState = hazeState
                     )
                 }
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
 
@@ -912,6 +1097,471 @@ private fun SearchHistoryInline(
                                 tint = iconTint
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchBarTopNew(
+    searchQuery: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onClear: () -> Unit,
+    onBack: (() -> Unit)?,
+    focusRequester: FocusRequester,
+    onFocusChanged: (Boolean) -> Unit,
+    searchSourceType: SearchSourceType = SearchSourceType.DISK,
+    onSearchSourceTypeChange: ((SearchSourceType) -> Unit)? = null,
+    isDark: Boolean = false,
+    view: android.view.View
+) {
+    var showTypeDropdown by remember { mutableStateOf(false) }
+    val typeColorMap = mapOf(
+        SearchSourceType.DISK to Color(0xFF26A69A),
+        SearchSourceType.MOVIE to Color(0xFF7986CB),
+        SearchSourceType.SHOW to Color(0xFFFFD54F),
+        SearchSourceType.PERSON to Color(0xFFF48FB1)
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (onBack != null) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0))
+            }
+            Spacer(modifier = Modifier.width(2.dp))
+        }
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = onQueryChange,
+            modifier = Modifier
+                .weight(1f)
+                .focusRequester(focusRequester)
+                .onFocusChanged { focusState ->
+                    onFocusChanged(focusState.isFocused)
+                },
+            placeholder = {
+                Text(
+                    text = stringResource(
+                        when (searchSourceType) {
+                            SearchSourceType.MOVIE -> R.string.search_placeholder_movie
+                            SearchSourceType.SHOW -> R.string.search_placeholder_show
+                            SearchSourceType.PERSON -> R.string.search_placeholder_person
+                            SearchSourceType.DISK -> R.string.search_placeholder
+                        }
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Visible,
+                    color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                )
+            },
+            leadingIcon = {
+                if (onSearchSourceTypeChange != null) {
+                    Box {
+                        TextButton(
+                            onClick = { showTypeDropdown = true },
+                            contentPadding = PaddingValues(start = 4.dp, top = 0.dp, end = 2.dp, bottom = 0.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    when (searchSourceType) {
+                                        SearchSourceType.DISK -> R.string.search_type_disk
+                                        SearchSourceType.MOVIE -> R.string.search_type_movie
+                                        SearchSourceType.SHOW -> R.string.search_type_show
+                                        SearchSourceType.PERSON -> R.string.search_type_person
+                                    }
+                                ),
+                                fontSize = 15.sp,
+                                color = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0),
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1
+                            )
+                            Icon(
+                                Icons.Rounded.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = typeColorMap[searchSourceType] ?: Color(0xFF4CAF50)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showTypeDropdown,
+                            onDismissRequest = { showTypeDropdown = false },
+                            containerColor = if (isDark) Color(0xFF242442) else Color(0xFFF5F7FA)
+                        ) {
+                            val orderedTypes = listOf(SearchSourceType.MOVIE, SearchSourceType.SHOW, SearchSourceType.PERSON, SearchSourceType.DISK)
+                            orderedTypes.forEach { type ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                stringResource(
+                                                    when (type) {
+                                                        SearchSourceType.DISK -> R.string.search_type_disk
+                                                        SearchSourceType.MOVIE -> R.string.search_type_movie
+                                                        SearchSourceType.SHOW -> R.string.search_type_show
+                                                        SearchSourceType.PERSON -> R.string.search_type_person
+                                                    }
+                                                ),
+                                                color = typeColorMap[type] ?: Color(0xFF4CAF50)
+                                            )
+                                            if (type == searchSourceType) {
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            }
+                                        }
+                                    },
+                                    onClick = {
+                                        showTypeDropdown = false
+                                        if (type != searchSourceType) {
+                                            onSearchSourceTypeChange.invoke(type)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(24.dp),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                errorContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                disabledIndicatorColor = Color.Transparent,
+                errorIndicatorColor = Color.Transparent,
+                focusedTextColor = if (isDark) Color.White else Color(0xFF263238),
+                unfocusedTextColor = if (isDark) Color.White else Color(0xFF263238),
+                cursorColor = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { onSearch() }),
+            trailingIcon = {
+                if (searchQuery.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(44.dp)
+                            .shadow(
+                                elevation = 6.dp,
+                                shape = RoundedCornerShape(22.dp),
+                                ambientColor = Color(0xFF3C50A0).copy(alpha = 0.4f),
+                                spotColor = Color(0xFF3C50A0).copy(alpha = 0.4f)
+                            )
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
+                                    1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = Color.White
+                        )
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        IconButton(
+                            onClick = onClear,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.search_clear_input),
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .shadow(
+                                    elevation = 5.dp,
+                                    shape = RoundedCornerShape(20.dp),
+                                    ambientColor = Color(0xFF3C50A0).copy(alpha = 0.4f),
+                                    spotColor = Color(0xFF3C50A0).copy(alpha = 0.4f)
+                                )
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
+                                        1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
+                                    )
+                                )
+                                .clickable { view.performHaptic(HapticType.CLICK); onSearch() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        )
+        if (onBack != null) {
+            Spacer(modifier = Modifier.width(44.dp))
+        }
+    }
+}
+
+@Composable
+private fun NeumorphicChip(
+    onClick: () -> Unit,
+    isSelected: Boolean,
+    isDark: Boolean,
+    content: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        label = "chip_scale"
+    )
+    val bgColor = if (isSelected) {
+        if (isDark) Color(0xFF3949AB).copy(alpha = 0.25f) else Color(0xFF5C6BC0).copy(alpha = 0.12f)
+    } else {
+        if (isDark) Color(0xFF222244).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.55f)
+    }
+    val borderColor = if (isSelected) {
+        if (isDark) Color(0xFF5C6BC0).copy(alpha = 0.4f) else Color(0xFF5C6BC0).copy(alpha = 0.25f)
+    } else {
+        if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.7f)
+    }
+    val elevation = 7.dp
+    val chipShape = RoundedCornerShape(26.dp)
+
+    Box(modifier = Modifier.scale(scale)) {
+        NeumorphicShadows(
+            isDark = isDark,
+            shape = chipShape,
+            elevation = elevation,
+            darkAlpha = if (isDark) 0.42f else 0.18f,
+            lightAlpha = if (isDark) 0.09f else 0.65f
+        )
+        Box(
+            modifier = Modifier
+                .clip(chipShape)
+                .background(bgColor, chipShape)
+                .border(1.dp, borderColor, chipShape)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                )
+        ) {
+            Box(modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.White.copy(alpha = if (isDark) 0.06f else 0.25f),
+                        0.5f to Color.White.copy(alpha = if (isDark) 0.02f else 0.08f),
+                        1.0f to Color.Transparent
+                    ),
+                    chipShape
+                )
+            )
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SearchHistoryTwoRow(
+    history: List<SearchHistoryItem>,
+    onHistoryClick: (SearchHistoryItem) -> Unit,
+    onHistoryDelete: (SearchHistoryItem) -> Unit,
+    onClearAll: () -> Unit,
+    selectedKeyword: String? = null,
+    isDark: Boolean = false,
+    hazeState: HazeState
+) {
+    val typeColorMap = mapOf(
+        "disk" to Color(0xFF26A69A),
+        "movie" to Color(0xFF7986CB),
+        "show" to Color(0xFFFFD54F),
+        "person" to Color(0xFFF48FB1)
+    )
+    val chunked = remember(history) {
+        val mid = (history.size + 1) / 2
+        listOf(history.take(mid), history.drop(mid))
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = stringResource(R.string.search_history_title),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (isDark) Color.White else Color(0xFF37474F),
+                fontWeight = FontWeight.SemiBold
+            )
+            TextButton(onClick = onClearAll, contentPadding = PaddingValues(0.dp)) {
+                Text(
+                    text = stringResource(R.string.search_history_clear_all),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                )
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            chunked.forEach { rowItems ->
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    items(rowItems, key = { "${it.type}_${it.keyword}" }) { item ->
+                        val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                        val isSelected = item.keyword == selectedKeyword
+                        val textColor = if (isSelected) {
+                            if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                        } else {
+                            if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
+                        }
+                        val iconTint = if (isSelected) {
+                            if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                        } else {
+                            if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
+                        }
+                        NeumorphicChip(
+                            onClick = { onHistoryClick(item) },
+                            isSelected = isSelected,
+                            isDark = isDark
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Rounded.History,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = iconTint
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = when (item.type) {
+                                        "disk" -> stringResource(R.string.search_type_disk)
+                                        "movie" -> stringResource(R.string.search_type_movie)
+                                        "show" -> stringResource(R.string.search_type_show)
+                                        "person" -> stringResource(R.string.search_type_person)
+                                        else -> item.type
+                                    },
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = if (isSelected) (if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)) else tagColor,
+                                    maxLines = 1,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = item.keyword,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = textColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                IconButton(
+                                    onClick = { onHistoryDelete(item) },
+                                    modifier = Modifier.size(18.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = stringResource(R.string.search_history_delete),
+                                        modifier = Modifier.size(14.dp),
+                                        tint = iconTint
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PopularSearchesSectionNew(
+    popularSearches: List<String>,
+    onPopularClick: (String) -> Unit,
+    selectedKeyword: String? = null,
+    isDark: Boolean = false,
+    hazeState: HazeState
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(R.string.hot_search),
+            style = MaterialTheme.typography.titleSmall,
+            color = if (isDark) Color.White else Color(0xFF37474F),
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(bottom = 10.dp)
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            popularSearches.forEach { keyword ->
+                val isSelected = keyword == selectedKeyword
+                val textColor = if (isSelected) {
+                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                } else {
+                    if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
+                }
+                val iconTint = if (isSelected) {
+                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                } else {
+                    if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
+                }
+                NeumorphicChip(
+                    onClick = { onPopularClick(keyword) },
+                    isSelected = isSelected,
+                    isDark = isDark
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 17.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = iconTint
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = keyword,
+                            color = textColor,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        )
                     }
                 }
             }
