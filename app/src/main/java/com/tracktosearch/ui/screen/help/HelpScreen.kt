@@ -163,6 +163,7 @@ fun HelpScreen(
                         HelpBullet(stringResource(R.string.help_notification_b2))
                         HelpBullet(stringResource(R.string.help_notification_b3))
                         HelpBullet(stringResource(R.string.help_notification_b4))
+                        HelpBullet(stringResource(R.string.help_notification_b5))
                     }
                 }
 

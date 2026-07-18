@@ -872,6 +872,7 @@
     <string name="help_notification_b2">Android 13 이상은 알림 권한 부여 필요</string>
     <string name="help_notification_b3">알림은 Trakt 관심목록을 기반으로 합니다</string>
     <string name="help_notification_b4">권한이 거부되면 스위치가 자동으로 꺼집니다</string>
+    <string name="help_notification_b5">Douban 동기화, 일관성 검사 등 백그라운드 작업의 진행 알림은 Android 16 이상에서 라이브 업데이트(Live Update)로 상단에 표시되며 상태 표시줄에 현재 단계가 나타납니다</string>
 
     <!-- VPN -->
     <string name="help_vpn">VPN 안내</string>

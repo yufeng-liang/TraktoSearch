@@ -872,6 +872,7 @@
     <string name="help_notification_b2">Android 13以上は通知権限の付与が必要</string>
     <string name="help_notification_b3">リマインダーはTraktの見たいリストに基づきます</string>
     <string name="help_notification_b4">権限が拒否された場合、スイッチは自動的にオフになります</string>
+    <string name="help_notification_b5">Douban 同期や整合性チェックなどのバックグラウンドタスクの進捗通知は、Android 16 以降ではライブアップデート（Live Update）として上部に表示され、ステータスバーに現在の段階が表示されます</string>
 
     <!-- VPN -->
     <string name="help_vpn">VPNについて</string>

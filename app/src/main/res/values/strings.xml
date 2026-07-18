@@ -512,6 +512,7 @@
     <string name="help_notification_b2">Notification permission required on Android 13+</string>
     <string name="help_notification_b3">Reminders are based on your Trakt watchlist</string>
     <string name="help_notification_b4">Toggle auto-disables if permission denied</string>
+    <string name="help_notification_b5">Progress notifications for background tasks like Douban sync and consistency check appear as a promoted Live Update on Android 16+, with the current phase shown in the status bar</string>
     <string name="help_data_export_title">Export</string>
     <string name="help_data_export_b1">Export as JSON (includes watchlist and watched history, suitable for backup/migration)</string>
     <string name="help_data_import_title">Import</string>
