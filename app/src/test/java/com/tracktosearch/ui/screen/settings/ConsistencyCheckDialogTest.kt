@@ -175,6 +175,23 @@ class ConsistencyCheckDialogTest {
         composeRule.onNodeWithText("豆瓣登录已过期，请重新登录").assertIsDisplayed()
     }
 
+    /**
+     * 检查完成后 5 秒 resetProgress() 将 flow 置为空态（isRunning=false, isComplete=false），
+     * Dialog 此时若仍显示，应自动关闭而非停在加载转圈。
+     * 复现：设置页转后台完成 → Watchlist 回看结果 → resetProgress 后弹窗永久转圈。
+     */
+    @Test
+    fun `完成后被重置为空态时自动关闭弹窗而非转圈`() {
+        var dismissed = false
+        emit(ConsistencyCheckResult(isComplete = true, phase = "Finished"))
+        setContent(onDismiss = { dismissed = true })
+        composeRule.onNodeWithText("Done").assertIsDisplayed()
+        // 模拟 WatchlistViewModel collector 完成 5 秒后 resetProgress()
+        emit(ConsistencyCheckResult())
+        composeRule.waitForIdle()
+        assertThat(dismissed).isTrue()
+    }
+
     @Test
     fun `完成状态显示统计文案`() {
         emit(
