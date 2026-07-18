@@ -46,13 +46,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -95,7 +95,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
@@ -104,11 +103,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -121,6 +116,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -142,7 +138,11 @@ import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.DoubanRatingBadge
+import com.tracktosearch.ui.component.GlassHighlight
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.EntryPoint
@@ -158,40 +158,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import kotlinx.coroutines.delay
-
-// ========== 拟态效果辅助函数 ==========
-
-/**
- * 内联拟态阴影：右下暗阴影 + 左上亮高光（需在 BoxScope 内使用）
- */
-@Composable
-private fun BoxScope.NeumorphicShadows(
-    isDark: Boolean,
-    shape: Shape,
-    elevation: Dp,
-    darkAlpha: Float,
-    lightAlpha: Float,
-) {
-    val darkColor = if (isDark) Color(0xFF000000) else Color(0xFF3E4E7A)
-    val lightColor = if (isDark) Color(0xFF404068) else Color.White
-    val offset = elevation * 0.65f
-    val blur = elevation * 1.2f
-
-    Box(
-        modifier = Modifier
-            .matchParentSize()
-            .offset(x = offset, y = offset)
-            .shadow(blur, shape, ambientColor = darkColor.copy(alpha = darkAlpha), spotColor = darkColor.copy(alpha = darkAlpha))
-            .background(Color.Transparent, shape)
-    )
-    Box(
-        modifier = Modifier
-            .matchParentSize()
-            .offset(x = -offset * 0.6f, y = -offset * 0.6f)
-            .shadow(blur * 0.7f, shape, ambientColor = lightColor.copy(alpha = lightAlpha), spotColor = lightColor.copy(alpha = lightAlpha))
-            .background(Color.Transparent, shape)
-    )
-}
 
 @Composable
 private fun FloatingOrbs(isDark: Boolean) {
@@ -299,64 +265,6 @@ private fun FloatingOrbs(isDark: Boolean) {
     }
 }
 
-/**
- * 拟态毛玻璃表面 - 使用偏移阴影层+顶部高光实现3D凸起效果
- */
-@Composable
-private fun NeumorphicFrostedSurface(
-    modifier: Modifier = Modifier,
-    isDark: Boolean,
-    shape: Shape = RoundedCornerShape(32.dp),
-    elevation: Dp = 14.dp,
-    backgroundColor: Color = if (isDark) Color(0xFF1E1E3A).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.65f),
-    borderColor: Color = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.8f),
-    darkShadowAlpha: Float = if (isDark) 0.5f else 0.22f,
-    lightShadowAlpha: Float = if (isDark) 0.10f else 0.8f,
-    hazeState: HazeState? = null,
-    content: @Composable () -> Unit
-) {
-    val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState, style = HazeMaterials.thin())
-    } else Modifier
-
-    Box(modifier = modifier) {
-        NeumorphicShadows(
-            isDark = isDark,
-            shape = shape,
-            elevation = elevation,
-            darkAlpha = darkShadowAlpha,
-            lightAlpha = lightShadowAlpha
-        )
-        Box(
-            modifier = Modifier
-                .wrapContentSize()
-                .then(hazeModifier)
-                .clip(shape)
-                .background(backgroundColor, shape)
-                .border(1.dp, borderColor, shape)
-        ) {
-            content()
-        }
-    }
-}
-
-/**
- * 玻璃顶部高光
- */
-@Composable
-private fun GlassHighlight(modifier: Modifier = Modifier, isDark: Boolean) {
-    Box(
-        modifier = modifier
-            .background(
-                Brush.verticalGradient(
-                    0.0f to Color.White.copy(alpha = if (isDark) 0.10f else 0.5f),
-                    0.4f to Color.White.copy(alpha = if (isDark) 0.03f else 0.15f),
-                    1.0f to Color.Transparent
-                )
-            )
-    )
-}
-
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface ViewedStorageProvider {
@@ -370,16 +278,6 @@ interface CloudThemeProvider {
 }
 
 enum class SearchSourceType { DISK, MOVIE, SHOW, PERSON }
-
-/**
- * 基于 MaterialTheme.colorScheme.background 亮度判断暗色模式，
- * 兼容 app 自定义 themeMode（dark/light/system）+ 动态壁纸配色
- */
-@Composable
-private fun isAppDarkTheme(): Boolean {
-    val bgLuminance = MaterialTheme.colorScheme.background.luminance()
-    return bgLuminance < 0.5f
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -587,6 +485,8 @@ fun SearchScreen(
                 isDark = isDark,
                 shape = RoundedCornerShape(32.dp),
                 elevation = 14.dp,
+                blurRadius = 28.dp,
+                shadowOffset = 10.dp,
                 backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
                 borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
                 darkShadowAlpha = if (isDark) 0.65f else 0.28f,
@@ -594,14 +494,6 @@ fun SearchScreen(
                 hazeState = hazeState
             ) {
                 Box(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                    GlassHighlight(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp)
-                            .padding(horizontal = 8.dp)
-                            .align(Alignment.TopCenter),
-                        isDark = isDark
-                    )
                     SearchBarTopNew(
                         searchQuery = searchQuery,
                         onQueryChange = { searchQuery = it },
@@ -1250,32 +1142,13 @@ private fun SearchBarTopNew(
             keyboardActions = KeyboardActions(onSearch = { onSearch() }),
             trailingIcon = {
                 if (searchQuery.isEmpty()) {
-                    Box(
-                        modifier = Modifier
-                            .padding(end = 8.dp)
-                            .size(44.dp)
-                            .shadow(
-                                elevation = 6.dp,
-                                shape = RoundedCornerShape(22.dp),
-                                ambientColor = Color(0xFF3C50A0).copy(alpha = 0.4f),
-                                spotColor = Color(0xFF3C50A0).copy(alpha = 0.4f)
-                            )
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
-                                    1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Search,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp),
-                            tint = Color.White
-                        )
-                    }
+                    SearchActionButton(
+                        onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                        size = 44.dp,
+                        iconSize = 20.dp,
+                        isDark = isDark,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
                 } else {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1292,32 +1165,12 @@ private fun SearchBarTopNew(
                                 tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
                             )
                         }
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .shadow(
-                                    elevation = 5.dp,
-                                    shape = RoundedCornerShape(20.dp),
-                                    ambientColor = Color(0xFF3C50A0).copy(alpha = 0.4f),
-                                    spotColor = Color(0xFF3C50A0).copy(alpha = 0.4f)
-                                )
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
-                                        1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
-                                    )
-                                )
-                                .clickable { view.performHaptic(HapticType.CLICK); onSearch() },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = Color.White
-                            )
-                        }
+                        SearchActionButton(
+                            onClick = { view.performHaptic(HapticType.CLICK); onSearch() },
+                            size = 40.dp,
+                            iconSize = 18.dp,
+                            isDark = isDark
+                        )
                     }
                 }
             }
@@ -1328,11 +1181,55 @@ private fun SearchBarTopNew(
     }
 }
 
+/**
+ * C方案搜索按钮：圆形拟态阴影（右下暗投影 + 左上高光）
+ */
+@Composable
+private fun SearchActionButton(
+    onClick: () -> Unit,
+    size: Dp,
+    iconSize: Dp,
+    isDark: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .neumorphicShadow(
+                shape = CircleShape,
+                isDark = isDark,
+                elevation = 5.dp,
+                darkAlpha = if (isDark) 0.35f else 0.40f,
+                lightAlpha = if (isDark) 0.08f else 0.40f,
+                blurRadius = 12.dp,
+                shadowOffset = 5.dp
+            )
+            .clip(CircleShape)
+            .background(
+                Brush.linearGradient(
+                    0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
+                    1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
+                )
+            )
+            .clickable { onClick() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Rounded.Search,
+            contentDescription = null,
+            modifier = Modifier.size(iconSize),
+            tint = Color.White
+        )
+    }
+}
+
 @Composable
 private fun NeumorphicChip(
     onClick: () -> Unit,
     isSelected: Boolean,
     isDark: Boolean,
+    blurRadius: Dp = 12.dp,
+    shadowOffset: Dp = 4.dp,
     content: @Composable () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1351,41 +1248,32 @@ private fun NeumorphicChip(
     } else {
         if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.7f)
     }
-    val elevation = 7.dp
-    val chipShape = RoundedCornerShape(26.dp)
+    val elevation = 5.dp
+    val chipShape = RoundedCornerShape(22.dp)
 
-    Box(modifier = Modifier.scale(scale)) {
-        NeumorphicShadows(
-            isDark = isDark,
-            shape = chipShape,
-            elevation = elevation,
-            darkAlpha = if (isDark) 0.42f else 0.18f,
-            lightAlpha = if (isDark) 0.09f else 0.65f
-        )
-        Box(
-            modifier = Modifier
-                .clip(chipShape)
-                .background(bgColor, chipShape)
-                .border(1.dp, borderColor, chipShape)
-                .clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick
-                )
-        ) {
-            Box(modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.0f to Color.White.copy(alpha = if (isDark) 0.06f else 0.25f),
-                        0.5f to Color.White.copy(alpha = if (isDark) 0.02f else 0.08f),
-                        1.0f to Color.Transparent
-                    ),
-                    chipShape
-                )
+    Box(
+        modifier = Modifier
+            .scale(scale)
+            .neumorphicShadow(
+                shape = chipShape,
+                isDark = isDark,
+                elevation = elevation,
+                darkAlpha = if (isDark) 0.30f else 0.12f,
+                lightAlpha = if (isDark) 0.06f else 0.60f,
+                blurRadius = blurRadius,
+                shadowOffset = shadowOffset
             )
-            content()
-        }
+            .clip(chipShape)
+            .background(bgColor, chipShape)
+            .border(1.dp, borderColor, chipShape)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
+    ) {
+        GlassHighlight(isDark = isDark, shape = chipShape)
+        content()
     }
 }
 

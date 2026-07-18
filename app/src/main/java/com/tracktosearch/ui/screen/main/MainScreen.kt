@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
@@ -51,7 +52,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
@@ -77,7 +77,10 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.LocalIsCurrentTab
+import com.tracktosearch.ui.component.NeumorphicActiveTab
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.OnboardingOverlay
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
@@ -94,10 +97,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -369,57 +370,61 @@ fun MainScreen(
                 } // CompositionLocalProvider
             }
 
-            // 悬浮底部导航（4 Tab 毛玻璃 + 选中背景高亮动效）
-            val navBarWidth = (screenWidthDp * 0.80).dp
+            // 悬浮底部导航（C 方案：毛玻璃 + 强拟态双向阴影 + 选中凹陷药丸）
+            val navBarWidthFraction = 0.92f
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-            val navBarShape = RoundedCornerShape(28.dp)
-            Box(
+            val navBarShape = RoundedCornerShape(31.dp)
+            val isDark = isAppDarkTheme()
+            NeumorphicFrostedSurface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = navBarHeight + 8.dp)
                     .offset(y = fabOffset)
-                    .width(navBarWidth)
-                    .height(64.dp)
-                    .shadow(elevation = 16.dp, shape = navBarShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin()
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = navBarShape
-                    )
+                    .fillMaxWidth(navBarWidthFraction)
+                    .height(62.dp),
+                isDark = isDark,
+                shape = navBarShape,
+                elevation = 14.dp,
+                blurRadius = 28.dp,
+                shadowOffset = 10.dp,
+                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
+                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
+                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
+                lightShadowAlpha = if (isDark) 0.12f else 0.9f,
+                hazeState = hazeState
             ) {
-                // 滑动高亮指示器（药丸形背景，先绘制在底层）
                 val tabCount = tabs.size
                 val rowPadding = 8.dp
+                val navBarWidth = screenWidthDp.dp * navBarWidthFraction
                 val tabWidth = (navBarWidth - rowPadding * 2) / tabCount
                 val indicatorOffsetX by animateDpAsState(
                     targetValue = rowPadding + tabWidth * selectedTab,
                     animationSpec = tween(durationMillis = 200),
                     label = "indicatorOffset"
                 )
+
+                // 选中项凹陷药丸（绘制在 Tab 图标下方）
                 Box(
                     modifier = Modifier
                         .offset(x = indicatorOffsetX)
                         .align(Alignment.CenterStart)
-                        .padding(vertical = 8.dp)
                         .width(tabWidth)
                         .height(48.dp)
-                        .padding(horizontal = 6.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                )
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    NeumorphicActiveTab(
+                        modifier = Modifier.fillMaxSize(),
+                        isDark = isDark,
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                }
 
-                // Tab 内容（绘制在指示器上方）
+                // Tab 内容（绘制在药丸上方）
                 Row(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 8.dp),
+                        .padding(horizontal = rowPadding),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     tabs.forEachIndexed { index, tab ->
