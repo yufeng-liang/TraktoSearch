@@ -590,7 +590,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
         verticalArrangement = Arrangement.Center
     ) {
         if (avatarUrl != null) {
-            // 登录后"我的"tab 显示用户头像（选中态加主色边框）
+            // 登录后"我的"tab 显示用户头像
             AsyncImage(
                 model = ImageRequest.Builder(context).data(avatarUrl).crossfade(true).build(),
                 contentDescription = stringResource(labelRes),
@@ -598,13 +598,6 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                     .size(24.dp)
                     .offset(y = 3.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .then(
-                        if (selected) Modifier.border(
-                            width = 1.5.dp,
-                            color = selectedColor,
-                            shape = RoundedCornerShape(12.dp)
-                        ) else Modifier
-                    )
             )
         } else {
             Icon(

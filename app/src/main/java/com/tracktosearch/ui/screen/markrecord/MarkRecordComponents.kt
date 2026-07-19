@@ -9,8 +9,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -102,8 +104,10 @@ fun MarkRecordItemRow(
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.Top
         ) {
             // 海报 64×96dp
             val fullPosterUrl = buildFullPosterUrl(item.posterUrl)
@@ -155,41 +159,59 @@ fun MarkRecordItemRow(
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                    .fillMaxHeight(),
             ) {
-                // 标题 + 年份，最多两行
-                val titleText = buildString {
-                    append(item.displayTitle.ifBlank { item.title }.ifBlank { stringResource(R.string.mark_records_empty_all) })
-                    item.year?.let { append(" · $it") }
-                }
-                Text(
-                    text = titleText,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
-                    fontWeight = FontWeight.Medium,
-                    color = onColor,
-                    lineHeight = 18.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                // 操作胶囊 + 当前状态徽标（仅状态变更时显示）
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    ActionTypeChip(item.actionType)
-                    if (isRecordChanged(item)) {
-                        CurrentStatusBadge(item)
+                // 标题区（顶部）
+                Column {
+                    // 标题
+                    Text(
+                        text = item.displayTitle.ifBlank { item.title }
+                            .ifBlank { stringResource(R.string.mark_records_empty_all) },
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
+                        fontWeight = FontWeight.Medium,
+                        color = onColor,
+                        lineHeight = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    // 年份 + 当前状态徽标（仅状态变更时显示），徽标右对齐
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        item.year?.let { year ->
+                            Text(
+                                text = year.toString(),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                                color = onColor.copy(alpha = 0.7f),
+                                maxLines = 1
+                            )
+                        }
+                        if (isRecordChanged(item)) {
+                            Spacer(Modifier.weight(1f))
+                            CurrentStatusBadge(item)
+                        }
                     }
                 }
-                // 相对时间单独一行，避免挤压折行
-                Text(
-                    text = formatRelativeTime(item.actedAt, context),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = onColor.copy(alpha = 0.85f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+
+                Spacer(Modifier.weight(1f))
+
+                // 底部行：相对时间 + 操作胶囊（右对齐）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = formatRelativeTime(item.actedAt, context),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onColor.copy(alpha = 0.85f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(4.dp))
+                    ActionTypeChip(item.actionType)
+                }
             }
         }
 
@@ -239,9 +261,9 @@ private fun ActionTypeChip(actionType: String) {
     }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(999.dp))
+            .clip(RoundedCornerShape(6.dp))
             .background(bgColor)
-            .padding(horizontal = 8.dp, vertical = 3.dp)
+            .padding(horizontal = 5.dp, vertical = 3.dp)
     ) {
         Text(
             text = stringResource(textRes),
