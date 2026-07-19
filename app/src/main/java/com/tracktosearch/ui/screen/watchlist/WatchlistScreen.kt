@@ -54,6 +54,7 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -67,6 +68,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Visibility
@@ -141,19 +143,20 @@ import com.tracktosearch.R
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
-import com.tracktosearch.ui.component.GlassSearchBar
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberShimmerBrush
+import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
@@ -693,7 +696,7 @@ fun WatchlistScreen(
                                     )
                                 }
                             }
-                            // 搜索栏 + 胶囊切换条
+                            // 搜索栏 + 筛选按钮 + 想看/已看切换条
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -702,150 +705,106 @@ fun WatchlistScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                // 测量切换条文字宽度，动态计算搜索框宽度
-                                val watchlistLabel = stringResource(R.string.watchlist_mode_watchlist)
-                                val watchedLabel = stringResource(R.string.watchlist_mode_watched)
-                                val isWatchlist = selectedMode == 0
-                                val tabPadding = 14.dp
-                                val textMeasurer = rememberTextMeasurer()
-                                val watchlistTextWidthPx = remember(watchlistLabel) {
-                                    textMeasurer.measure(
-                                        text = watchlistLabel,
-                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                    ).size.width
-                                }
-                                val watchedTextWidthPx = remember(watchedLabel) {
-                                    textMeasurer.measure(
-                                        text = watchedLabel,
-                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                                    ).size.width
-                                }
-                                val capsuleDensity = LocalDensity.current
-                                val watchlistTabWidthDp = with(capsuleDensity) { watchlistTextWidthPx.toDp() + tabPadding * 2 }
-                                val watchedTabWidthDp = with(capsuleDensity) { watchedTextWidthPx.toDp() + tabPadding * 2 }
-                                val capsuleWidth = watchlistTabWidthDp + watchedTabWidthDp
-    
-                                // 毛玻璃搜索栏（顶部覆盖层已统一做 haze，搜索框不再单独加）
-                                GlassSearchBar(
-                                    placeholder = if (searchQuery.isBlank()) {
-                                        when (selectedMode) {
-                                            0 -> stringResource(R.string.watchlist_search_watchlist)
-                                            else -> stringResource(R.string.watchlist_search_history)
-                                        }
-                                    } else stringResource(R.string.search_placeholder_watchlist),
-                                    modifier = Modifier.weight(1f),
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                                    keyboardActions = KeyboardActions(
-                                        onSearch = {
-                                            focusManager.clearFocus()
-                                            if (searchQuery.isNotBlank() && selectedMode == 0) {
-                                                val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
-                                                if (noResults) {
-                                                    onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                // 拟态玻璃搜索栏
+                                val searchHintColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                                val searchPlaceholder = if (searchQuery.isBlank()) {
+                                    when (selectedMode) {
+                                        0 -> stringResource(R.string.watchlist_search_watchlist)
+                                        else -> stringResource(R.string.watchlist_search_history)
+                                    }
+                                } else stringResource(R.string.search_placeholder_watchlist)
+                                NeumorphicFrostedSurface(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp),
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(21.dp),
+                                    backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
+                                    borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                                    elevation = 4.dp,
+                                    blurRadius = 16.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin()
+                                ) {
+                                    BasicTextField(
+                                        value = searchQuery,
+                                        onValueChange = { searchQuery = it },
+                                        singleLine = true,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp),
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                        keyboardActions = KeyboardActions(
+                                            onSearch = {
+                                                focusManager.clearFocus()
+                                                if (searchQuery.isNotBlank() && selectedMode == 0) {
+                                                    val noResults = if (selectedTab == 0) filteredMovies.isEmpty() else filteredShows.isEmpty()
+                                                    if (noResults) {
+                                                        onTraktSearch(if (selectedTab == 0) "movie" else "show", searchQuery)
+                                                    }
+                                                }
+                                            }
+                                        ),
+                                        decorationBox = { innerTextField ->
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Search,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .padding(horizontal = 8.dp),
+                                                    contentAlignment = Alignment.CenterStart
+                                                ) {
+                                                    if (searchQuery.isEmpty()) {
+                                                        Text(
+                                                            text = searchPlaceholder,
+                                                            color = searchHintColor,
+                                                            fontSize = 14.sp
+                                                        )
+                                                    }
+                                                    innerTextField()
+                                                }
+                                                if (searchQuery.isNotEmpty()) {
+                                                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
+                                                        Icon(
+                                                            Icons.Rounded.Close,
+                                                            contentDescription = stringResource(R.string.content_desc_clear),
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
                                                 }
                                             }
                                         }
-                                    ),
-                                    focusRequester = focusRequester,
-                                    trailingIcon = {
-                                        if (searchQuery.isNotEmpty()) {
-                                            IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
-                                                Icon(
-                                                    Icons.Rounded.Close,
-                                                    contentDescription = stringResource(R.string.content_desc_clear),
-                                                    modifier = Modifier.size(19.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                )
-                                // 筛选按钮（有筛选条件生效时图标变 primary 色）
-                                IconButton(onClick = { showFilterSheet = true }) {
-                                    Icon(
-                                        Icons.Rounded.Tune,
-                                        contentDescription = stringResource(R.string.filter_title),
-                                        tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else LocalContentColor.current,
-                                        modifier = Modifier.size(32.dp)
                                     )
                                 }
-    
-                                // 大胶囊切换条：想看 / 已看
-                                val tabHeight = 45.dp
-                                val indicatorOffset by animateDpAsState(
-                                    targetValue = if (isWatchlist) 0.dp else watchlistTabWidthDp,
-                                    animationSpec = tween(200),
-                                    label = "modeIndicator"
-                                )
-                                val indicatorWidth by animateDpAsState(
-                                    targetValue = if (isWatchlist) watchlistTabWidthDp else watchedTabWidthDp,
-                                    animationSpec = tween(200),
-                                    label = "modeIndicatorWidth"
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .height(tabHeight)
-                                        .width(capsuleWidth)
-                                        .clip(RoundedCornerShape(25.dp))
-                                        .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(25.dp))
-                                        .background(Color.Transparent)
+                                // 拟态玻璃筛选按钮
+                                NeumorphicIconButton(
+                                    onClick = { showFilterSheet = true },
+                                    isDark = isDark
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .offset(x = indicatorOffset)
-                                            .width(indicatorWidth)
-                                            .fillMaxHeight()
-                                            .clip(RoundedCornerShape(25.dp))
-                                            .background(MaterialTheme.colorScheme.primary)
+                                    Icon(
+                                        imageVector = Icons.Rounded.Tune,
+                                        contentDescription = stringResource(R.string.filter_title),
+                                        tint = if (hasActiveFilters) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.size(22.dp)
                                     )
-                                    Row(modifier = Modifier.fillMaxSize()) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(watchlistTabWidthDp)
-                                                .fillMaxHeight()
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) {
-                                                    view.performHaptic(HapticType.CLICK)
-                                                    selectedMode = 0
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = watchlistLabel,
-                                                style = TextStyle(
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = if (isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            )
-                                        }
-                                        Box(
-                                            modifier = Modifier
-                                                .width(watchedTabWidthDp)
-                                                .fillMaxHeight()
-                                                .clickable(
-                                                    interactionSource = remember { MutableInteractionSource() },
-                                                    indication = null
-                                                ) {
-                                                    view.performHaptic(HapticType.CLICK)
-                                                    selectedMode = 1
-                                                },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = watchedLabel,
-                                                style = TextStyle(
-                                                    fontSize = 16.sp,
-                                                    fontWeight = FontWeight.Medium,
-                                                    color = if (!isWatchlist) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                                )
-                                            )
-                                        }
-                                    }
                                 }
+                                // 想看/已看胶囊切换（与发现页同款）
+                                CapsuleTabSelector(
+                                    tabs = listOf(
+                                        stringResource(R.string.watchlist_mode_watchlist),
+                                        stringResource(R.string.watchlist_mode_watched)
+                                    ),
+                                    selectedIndex = selectedMode,
+                                    onTabSelected = { selectedMode = it }
+                                )
                             }
     
                             // 分类 Tab（下划线样式）
