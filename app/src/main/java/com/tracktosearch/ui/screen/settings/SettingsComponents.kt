@@ -46,9 +46,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
  * 设置分组卡片：半透明圆角卡片，顶部显示 12sp 大写加粗分组标题。
@@ -497,6 +502,49 @@ internal fun StatisticsCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+/**
+ * 设置页 Section 容器：标题（13sp Medium 主色）+ 玻璃卡片
+ * 统一 6 个分组的标题+卡片样式，避免重复代码
+ */
+@OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
+fun SettingsSectionCard(
+    title: String,
+    modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = isAppDarkTheme()
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 0.3.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 6.dp)
+        )
+        NeumorphicFrostedSurface(
+            modifier = Modifier.fillMaxWidth(),
+            isDark = isDark,
+            shape = RoundedCornerShape(20.dp),
+            backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                              else Color.White.copy(alpha = 0.55f),
+            borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                          else Color.White.copy(alpha = 0.75f),
+            elevation = 4.dp,
+            blurRadius = 16.dp,
+            hazeState = hazeState,
+            hazeStyle = HazeMaterials.thin()
+        ) {
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp),
+                content = content
+            )
         }
     }
 }
