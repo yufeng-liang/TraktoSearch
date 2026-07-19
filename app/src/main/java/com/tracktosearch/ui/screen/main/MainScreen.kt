@@ -384,14 +384,15 @@ fun MainScreen(
                     .height(62.dp),
                 isDark = isDark,
                 shape = navBarShape,
-                elevation = 14.dp,
-                blurRadius = 28.dp,
-                shadowOffset = 10.dp,
-                backgroundColor = if (isDark) Color(0xFF222244).copy(alpha = 0.7f) else Color.White.copy(alpha = 0.65f),
-                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.8f),
-                darkShadowAlpha = if (isDark) 0.65f else 0.28f,
-                lightShadowAlpha = if (isDark) 0.12f else 0.9f,
-                hazeState = hazeState
+                elevation = 8.dp,
+                blurRadius = 20.dp,
+                shadowOffset = 6.dp,
+                backgroundColor = Color.Transparent,
+                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.45f),
+                darkShadowAlpha = if (isDark) 0.35f else 0.10f,
+                lightShadowAlpha = 0f,
+                hazeState = hazeState,
+                hazeStyle = dev.chrisbanes.haze.materials.HazeMaterials.thin()
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp

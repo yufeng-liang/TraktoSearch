@@ -23,6 +23,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -411,7 +412,7 @@ fun SearchScreen(
     val contentTopOffset = searchBoxHeight + 25.dp
 
     val targetSearchBoxY by animateDpAsState(
-        targetValue = if (isSearchFocused || searchQuery.isNotEmpty()) titleAreaHeight else searchBoxCenterY,
+        targetValue = if (isSearchFocused || searchQuery.isNotEmpty()) titleAreaHeight + 18.dp else searchBoxCenterY,
         label = "search_box_y"
     )
 
@@ -726,7 +727,8 @@ private fun SearchBarTop(
                         }
                     ),
                     maxLines = 1,
-                    overflow = TextOverflow.Visible
+                    overflow = TextOverflow.Visible,
+                    color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
                 )
             },
             leadingIcon = {
@@ -1022,7 +1024,7 @@ private fun SearchBarTopNew(
         modifier = Modifier
             .fillMaxWidth()
             .height(56.dp)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (onBack != null) {
@@ -1060,7 +1062,7 @@ private fun SearchBarTopNew(
                     Box {
                         TextButton(
                             onClick = { showTypeDropdown = true },
-                            contentPadding = PaddingValues(start = 4.dp, top = 0.dp, end = 2.dp, bottom = 0.dp),
+                            contentPadding = PaddingValues(start = 2.dp, top = 0.dp, end = 2.dp, bottom = 0.dp),
                             modifier = Modifier.height(36.dp)
                         ) {
                             Text(
@@ -1147,12 +1149,12 @@ private fun SearchBarTopNew(
                         size = 44.dp,
                         iconSize = 20.dp,
                         isDark = isDark,
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 2.dp)
                     )
                 } else {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 4.dp)
+                        modifier = Modifier.padding(end = 2.dp)
                     ) {
                         IconButton(
                             onClick = onClear,
@@ -1198,17 +1200,19 @@ private fun SearchActionButton(
             .neumorphicShadow(
                 shape = CircleShape,
                 isDark = isDark,
-                elevation = 5.dp,
-                darkAlpha = if (isDark) 0.35f else 0.40f,
-                lightAlpha = if (isDark) 0.08f else 0.40f,
-                blurRadius = 12.dp,
-                shadowOffset = 5.dp
+                elevation = 6.dp,
+                darkAlpha = if (isDark) 0.45f else 0.55f,
+                lightAlpha = if (isDark) 0.10f else 0.70f,
+                blurRadius = 14.dp,
+                shadowOffset = 6.dp,
+                darkColor = Color(0xFF3C50A0),
+                lightColor = Color.White
             )
             .clip(CircleShape)
             .background(
                 Brush.linearGradient(
-                    0.0f to if (isDark) Color(0xFF7986CB) else Color(0xFF7986CB),
-                    1.0f to if (isDark) Color(0xFF3949AB) else Color(0xFF5C6BC0)
+                    0.0f to MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                    1.0f to MaterialTheme.colorScheme.primary
                 )
             )
             .clickable { onClick() },
@@ -1315,7 +1319,7 @@ private fun SearchHistoryTwoRow(
                 Text(
                     text = stringResource(R.string.search_history_clear_all),
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                    color = MaterialTheme.colorScheme.primary
                 )
             }
         }
@@ -1343,7 +1347,7 @@ private fun SearchHistoryTwoRow(
                             isDark = isDark
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
+                                modifier = Modifier.padding(start = 15.dp, top = 9.dp, end = 10.dp, bottom = 9.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -1374,10 +1378,12 @@ private fun SearchHistoryTwoRow(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
-                                Spacer(modifier = Modifier.width(5.dp))
-                                IconButton(
-                                    onClick = { onHistoryDelete(item) },
-                                    modifier = Modifier.size(18.dp)
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clickable { onHistoryDelete(item) },
+                                    contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         Icons.Rounded.Close,

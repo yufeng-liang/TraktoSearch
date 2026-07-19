@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -478,7 +479,8 @@ fun TraktSearchScreen(
                                             MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
                                             MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
                                             MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
-                                        }
+                                        },
+                                        color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
                                     )
                                 },
                                 trailingIcon = {

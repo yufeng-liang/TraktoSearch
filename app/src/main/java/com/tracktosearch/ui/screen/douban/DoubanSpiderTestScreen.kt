@@ -12,6 +12,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -658,7 +659,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateMarkDoubanId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_mark_douban_id)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_mark_douban_id), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
@@ -842,7 +843,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateRatingDoubanId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_douban_id)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_douban_id), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
@@ -877,7 +878,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateRatingComment,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_comment_hint)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_comment_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1109,7 +1110,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateSearchImdbId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_search_imdb_hint)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_search_imdb_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp

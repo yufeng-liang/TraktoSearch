@@ -20,9 +20,61 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+
+/**
+ * C方案拟态外阴影：dropShadow 画右下暗投影（位于组件外部，不受clip影响）
+ */
+fun Modifier.neumorphicOuterShadow(
+    shape: Shape,
+    isDark: Boolean,
+    elevation: Dp,
+    darkAlpha: Float,
+    blurRadius: Dp? = null,
+    shadowOffset: Dp? = null,
+    darkColor: Color? = null
+): Modifier {
+    val blur = blurRadius ?: elevation
+    val offset = shadowOffset ?: (elevation * 0.7f)
+    val darkShadowColor = (darkColor ?: if (isDark) Color.Black else Color(0xFF6478B4))
+        .copy(alpha = darkAlpha)
+    return this.dropShadow(
+        shape = shape,
+        shadow = Shadow(
+            radius = blur,
+            color = darkShadowColor,
+            offset = DpOffset(offset, offset)
+        )
+    )
+}
+
+/**
+ * C方案拟态内阴影：innerShadow 画左上高光（位于组件内部，需在clip之后）
+ */
+fun Modifier.neumorphicInnerShadow(
+    shape: Shape,
+    isDark: Boolean,
+    elevation: Dp,
+    lightAlpha: Float,
+    blurRadius: Dp? = null,
+    shadowOffset: Dp? = null,
+    lightColor: Color? = null
+): Modifier {
+    val blur = blurRadius ?: elevation
+    val offset = shadowOffset ?: (elevation * 0.7f)
+    val lightShadowColor = (lightColor ?: Color.White).copy(alpha = lightAlpha)
+    return this.innerShadow(
+        shape = shape,
+        shadow = Shadow(
+            radius = blur * 0.35f,
+            color = lightShadowColor,
+            offset = DpOffset(-offset * 0.6f, -offset * 0.6f)
+        )
+    )
+}
 
 /**
  * C方案拟态双向阴影：dropShadow 画右下暗阴影 + innerShadow 画左上高光
@@ -34,32 +86,28 @@ fun Modifier.neumorphicShadow(
     darkAlpha: Float,
     lightAlpha: Float,
     blurRadius: Dp? = null,
-    shadowOffset: Dp? = null
+    shadowOffset: Dp? = null,
+    darkColor: Color? = null,
+    lightColor: Color? = null
 ): Modifier {
-    val blur = blurRadius ?: elevation
-    val offset = shadowOffset ?: (elevation * 0.7f)
-    val darkColor = if (isDark) {
-        Color.Black.copy(alpha = darkAlpha)
-    } else {
-        Color(0xFF6478B4).copy(alpha = darkAlpha)
-    }
-    val lightColor = Color.White.copy(alpha = lightAlpha)
     return this
-        .dropShadow(
+        .neumorphicOuterShadow(
             shape = shape,
-            shadow = Shadow(
-                radius = blur,
-                color = darkColor,
-                offset = DpOffset(offset, offset)
-            )
+            isDark = isDark,
+            elevation = elevation,
+            darkAlpha = darkAlpha,
+            blurRadius = blurRadius,
+            shadowOffset = shadowOffset,
+            darkColor = darkColor
         )
-        .innerShadow(
+        .neumorphicInnerShadow(
             shape = shape,
-            shadow = Shadow(
-                radius = blur * 0.35f,
-                color = lightColor,
-                offset = DpOffset(-offset * 0.6f, -offset * 0.6f)
-            )
+            isDark = isDark,
+            elevation = elevation,
+            lightAlpha = lightAlpha,
+            blurRadius = blurRadius,
+            shadowOffset = shadowOffset,
+            lightColor = lightColor
         )
 }
 
@@ -102,12 +150,12 @@ fun NeumorphicActiveTab(
     }
     val lightColor = Color.White.copy(alpha = if (isDark) 0.06f else 0.90f)
     val backgroundModifier = if (isDark) {
-        Modifier.background(Color(0xFF3949AB).copy(alpha = 0.20f), shape)
+        Modifier.background(Color(0xFF3949AB).copy(alpha = 0.18f), shape)
     } else {
         Modifier.background(
             Brush.linearGradient(
-                0.0f to Color(0xFFDCE4FF).copy(alpha = 0.90f),
-                1.0f to Color.White.copy(alpha = 0.90f)
+                0.0f to Color(0xFFDCE4FF).copy(alpha = 0.65f),
+                1.0f to Color.White.copy(alpha = 0.65f)
             ),
             shape
         )
@@ -136,7 +184,8 @@ fun NeumorphicActiveTab(
 }
 
 /**
- * C方案拟态毛玻璃表面：双向阴影 + 毛玻璃 + 顶部高光
+ * C方案拟态毛玻璃表面：外阴影 + clip + 毛玻璃 + 内阴影 + 顶部高光
+ * 注意：clip 必须在 hazeEffect 之前，否则毛玻璃效果是矩形的，不会被裁成圆角
  */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -152,25 +201,33 @@ fun NeumorphicFrostedSurface(
     darkShadowAlpha: Float = if (isDark) 0.5f else 0.18f,
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.70f,
     hazeState: HazeState? = null,
+    hazeStyle: HazeStyle = HazeMaterials.thin(),
     content: @Composable () -> Unit
 ) {
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState, style = HazeMaterials.thin())
+        Modifier.hazeEffect(state = hazeState, style = hazeStyle)
     } else Modifier
 
     Box(
         modifier = modifier
-            .neumorphicShadow(
+            .neumorphicOuterShadow(
                 shape = shape,
                 isDark = isDark,
                 elevation = elevation,
                 darkAlpha = darkShadowAlpha,
+                blurRadius = blurRadius,
+                shadowOffset = shadowOffset
+            )
+            .clip(shape)
+            .then(hazeModifier)
+            .neumorphicInnerShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = elevation,
                 lightAlpha = lightShadowAlpha,
                 blurRadius = blurRadius,
                 shadowOffset = shadowOffset
             )
-            .then(hazeModifier)
-            .clip(shape)
             .background(backgroundColor, shape)
             .border(1.dp, borderColor, shape)
     ) {

@@ -75,6 +75,7 @@
 - 优先使用项目已有的约定和模式，修改前先了解现有架构
 - 项目依赖统一用 gradle/libs.versions.toml 管理
 - AlertDialog 的containerColor 统一为 surfaceVariant
+- **新建页面标准模板**：标题栏 + Tab 行使用 `Box` + `hazeSource`/`hazeEffect` 毛玻璃粘性吸顶效果，小白条沉浸通过 `Scaffold(contentWindowInsets = WindowInsets(0,0,0,0))`（或用 `Box` 代替 Scaffold 天然不消耗 inset）实现——不加 `navigationBarsPadding` 或手动导航栏边距，确保内容延展到导航栏背后
 - 当涉及库/API文档与API的编写与使用、代码生成、配置步骤，始终使用Context7 MCP，而无需我明确要求。
 - **遇到逆向/对接第三方接口、找实现方案类问题**：先到 GitHub 与主流技术博客（CSDN、掘金等）检索是否已有现成实现，**多来源交叉验证**后再动手编码或逆向确认。优先复用社区验证过的端点/字段/参数，少走弯路，避免凭猜测先写一套再返工。
 
