@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -152,14 +151,16 @@ fun MarkRecordItemRow(
 
             Spacer(Modifier.width(6.dp))
 
-            // 信息列
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+            // 信息列：用 Box 按海报高度定位，标题区顶部对齐、底部行底部对齐
+            Box(
+                modifier = Modifier.weight(1f)
             ) {
                 // 标题区（顶部）
-                Column {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                ) {
                     // 标题
                     Text(
                         text = item.displayTitle.ifBlank { item.title }
@@ -191,11 +192,11 @@ fun MarkRecordItemRow(
                     }
                 }
 
-                Spacer(Modifier.weight(1f))
-
                 // 底部行：相对时间 + 操作胶囊（右对齐）
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
