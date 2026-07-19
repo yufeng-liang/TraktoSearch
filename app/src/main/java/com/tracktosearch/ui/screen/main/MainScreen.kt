@@ -80,6 +80,7 @@ import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.NeumorphicActiveTab
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.OnboardingOverlay
+import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
@@ -97,6 +98,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.delay
@@ -248,13 +251,24 @@ fun MainScreen(
         TabData(Icons.Rounded.Settings, R.string.tab_settings)
     )
 
-    Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) { innerPadding ->
+    Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .nestedScroll(nestedScrollConnection)
         ) {
+            // 跨页面共享背景（渐变 + 彩色光晕，光晕在宽画布上连续运动）
+            PageBackground(
+                currentPage = selectedTab,
+                pageCount = 4,
+                isDark = isAppDarkTheme(),
+                modifier = Modifier.fillMaxSize()
+            )
+
             HorizontalPager(
                 state = pagerState,
                 userScrollEnabled = false,
@@ -375,6 +389,8 @@ fun MainScreen(
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
+            // 底部导航毛玻璃：与发现页吸顶标题栏同款（半透明背景 + thin 模糊）
+            val navBackgroundColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f) else Color(0xFFF0F4FF).copy(alpha = 0.55f)
             NeumorphicFrostedSurface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -385,11 +401,11 @@ fun MainScreen(
                 isDark = isDark,
                 shape = navBarShape,
                 elevation = 8.dp,
-                blurRadius = 20.dp,
+                blurRadius = 22.dp,
                 shadowOffset = 6.dp,
-                backgroundColor = Color.Transparent,
-                borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.45f),
-                darkShadowAlpha = if (isDark) 0.35f else 0.10f,
+                backgroundColor = navBackgroundColor,
+                borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
+                darkShadowAlpha = if (isDark) 0.38f else 0.16f,
                 lightShadowAlpha = 0f,
                 hazeState = hazeState,
                 hazeStyle = dev.chrisbanes.haze.materials.HazeMaterials.thin()

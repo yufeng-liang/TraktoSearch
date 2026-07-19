@@ -1,72 +1,72 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Surface
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.theme.RatingGold
-import com.tracktosearch.ui.theme.RatingGoldDim
 
-/** 评分徽章统一规格：外边距 4dp、内边距 horizontal=4dp/vertical=0dp、圆角 4dp */
-private val RatingCorner = RoundedCornerShape(4.dp)
-private val RatingPadding = Modifier.padding(horizontal = 4.dp, vertical = 0.dp)
-private val RatingFontSize = 11.sp
+/** 评分徽章统一规格：内边距更扁、圆角 6dp */
+private val RatingCorner = RoundedCornerShape(6.dp)
+private val RatingFontSize = 10.sp
 
 /**
- * 评分徽章（带星星样式，用于 Trakt/TMDB 等平台评分）
+ * 评分徽章（统一黑底金字 + 圆角星星图标样式）。
  *
- * 高分（>= 8.0）使用高亮金色，中分（6.0 - 7.9）使用暗金色，低分（< 6.0）使用半透明灰底。
+ * 用于 Trakt/TMDB/豆瓣 等所有平台评分，风格统一。
  *
  * @param rating 评分值
  * @param modifier 外部传入的修饰符（通常包含 align + padding(4.dp) 定位到右上角）
  */
 @Composable
 fun RatingBadge(rating: Double, modifier: Modifier = Modifier) {
-    val background = when {
-        rating >= 8.0 -> RatingGold.copy(alpha = 0.9f)
-        rating >= 6.0 -> RatingGoldDim
-        else -> Color.White.copy(alpha = 0.2f)
-    }
-    val textColor = if (rating >= 6.0) Color.Black else Color.White
-    Text(
-        text = "★ %.1f".format(rating),
-        color = textColor,
-        fontSize = RatingFontSize,
-        fontWeight = FontWeight.Bold,
+    val background = Brush.linearGradient(
+        0f to Color(0xFF000000).copy(alpha = 0.88f),
+        1f to Color(0xFF1E1914).copy(alpha = 0.92f)
+    )
+    Row(
         modifier = modifier
             .background(background, RatingCorner)
-            .then(RatingPadding)
-    )
+            .padding(horizontal = 3.dp, vertical = 0.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.Star,
+            contentDescription = null,
+            modifier = Modifier.size(9.dp),
+            tint = RatingGold
+        )
+        Text(
+            text = "%.1f".format(rating),
+            color = RatingGold,
+            fontSize = RatingFontSize,
+            fontWeight = FontWeight.ExtraBold
+        )
+    }
 }
 
 /**
- * 豆瓣评分徽章（绿色底部填充样式，用于豆瓣评分）
- *
- * 固定绿色背景 + 白色文字，与 [RatingBadge] 边距/圆角完全一致，仅颜色和文本格式不同。
+ * 豆瓣评分徽章（与 [RatingBadge] 统一为黑底金字 + 圆角星星样式）。
  *
  * @param rating 评分值
  * @param modifier 外部传入的修饰符（通常包含 align + padding(4.dp) 定位到右上角）
  */
 @Composable
 fun DoubanRatingBadge(rating: Double, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RatingCorner,
-        color = Color(0xFF68BD5B)
-    ) {
-        Text(
-            text = "%.1f".format(rating),
-            color = Color.White,
-            fontSize = RatingFontSize,
-            fontWeight = FontWeight.Bold,
-            modifier = RatingPadding
-        )
-    }
+    RatingBadge(rating = rating, modifier = modifier)
 }

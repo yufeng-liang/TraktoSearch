@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -31,9 +32,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -55,6 +60,8 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.DoubanHotCardSkeleton
 import com.tracktosearch.ui.component.SectionHeader
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.data.repository.MediaType
 
 @Composable
@@ -415,18 +422,32 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
+        targetValue = if (isPressed) 0.97f else 1f,
         label = "login_unlock_scale"
+    )
+    val isDark = isAppDarkTheme()
+    val shape = RoundedCornerShape(20.dp)
+    val gradient = Brush.linearGradient(
+        listOf(Color(0xFF3949AB), Color(0xFF7986CB))
     )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .scale(scale)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF3949AB), Color(0xFF7986CB))
-                )
+            .neumorphicOuterShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = 6.dp,
+                darkAlpha = if (isDark) 0.35f else 0.18f,
+                blurRadius = 16.dp,
+                shadowOffset = 5.dp
+            )
+            .clip(shape)
+            .background(gradient)
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.30f),
+                shape = shape
             )
             .clickable(
                 interactionSource = interactionSource,
@@ -436,6 +457,18 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
+        // 顶部高光
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(shape)
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.20f),
+                        0.5f to Color.Transparent
+                    )
+                )
+        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -483,19 +516,22 @@ internal fun DoubanRecommendSection(
         ) {
             Text(
                 text = stringResource(R.string.discover_douban_recommend),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onBackground
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isAppDarkTheme()) Color.White else Color(0xFF1A1A2E)
             )
-            CapsuleTabSelector(
-                tabs = listOf(
-                    stringResource(R.string.discover_douban_recommend_movie),
-                    stringResource(R.string.discover_douban_recommend_tv)
-                ),
-                selectedIndex = if (state is DoubanRecommendState.Success && state.currentTab == RecommendTab.TV) 1 else 0,
-                onTabSelected = { index ->
-                    onTabSelected(if (index == 0) RecommendTab.MOVIE else RecommendTab.TV)
-                }
-            )
+            if (state is DoubanRecommendState.Success) {
+                CapsuleTabSelector(
+                    tabs = listOf(
+                        stringResource(R.string.discover_douban_recommend_movie),
+                        stringResource(R.string.discover_douban_recommend_tv)
+                    ),
+                    selectedIndex = if (state.currentTab == RecommendTab.TV) 1 else 0,
+                    onTabSelected = { index ->
+                        onTabSelected(if (index == 0) RecommendTab.MOVIE else RecommendTab.TV)
+                    }
+                )
+            }
         }
 
         when (state) {
@@ -504,18 +540,31 @@ internal fun DoubanRecommendSection(
                 val interactionSource = remember { MutableInteractionSource() }
                 val isPressed by interactionSource.collectIsPressedAsState()
                 val scale by animateFloatAsState(
-                    targetValue = if (isPressed) 0.96f else 1f,
+                    targetValue = if (isPressed) 0.97f else 1f,
                     label = "douban_recommend_login_scale"
+                )
+                val shape = RoundedCornerShape(20.dp)
+                val gradient = Brush.linearGradient(
+                    listOf(Color(0xFF2E7D52), Color(0xFF4DB6AC))
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(scale)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(
-                            Brush.linearGradient(
-                                listOf(Color(0xFF2E7D52), Color(0xFF4DB6AC))
-                            )
+                        .neumorphicOuterShadow(
+                            shape = shape,
+                            isDark = isAppDarkTheme(),
+                            elevation = 6.dp,
+                            darkAlpha = if (isAppDarkTheme()) 0.35f else 0.18f,
+                            blurRadius = 16.dp,
+                            shadowOffset = 5.dp
+                        )
+                        .clip(shape)
+                        .background(gradient)
+                        .border(
+                            width = 1.dp,
+                            color = Color.White.copy(alpha = 0.30f),
+                            shape = shape
                         )
                         .clickable(
                             interactionSource = interactionSource,
@@ -525,6 +574,28 @@ internal fun DoubanRecommendSection(
                         .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
+                    // 边框周边内发光高光（C方案玻璃凸起感，避免覆盖文字）
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clip(shape)
+                            .innerShadow(
+                                shape = shape,
+                                shadow = Shadow(
+                                    radius = 8.dp,
+                                    color = Color.White.copy(alpha = 0.35f),
+                                    offset = DpOffset((-2).dp, (-2).dp)
+                                )
+                            )
+                            .innerShadow(
+                                shape = shape,
+                                shadow = Shadow(
+                                    radius = 8.dp,
+                                    color = Color.Black.copy(alpha = 0.10f),
+                                    offset = DpOffset(2.dp, 2.dp)
+                                )
+                            )
+                    )
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -636,21 +707,54 @@ internal fun CapsuleTabSelector(
         label = "capsule_tab_width"
     )
 
+    val isDark = isAppDarkTheme()
+    val capsuleShape = RoundedCornerShape(50)
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val activeGradient = Brush.linearGradient(
+        listOf(primaryColor, primaryColor.copy(alpha = 0.85f))
+    )
     Box(
         modifier = Modifier
             .height(tabHeight)
             .width(capsuleWidth)
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(capsuleShape)
+            .background(
+                if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.35f)
+            )
     ) {
-        // 滑块指示器（贴合无留白）
+        // 滑块指示器（贴合无留白，拟态药丸）
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffset)
                 .width(indicatorWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(50))
-                .background(MaterialTheme.colorScheme.primary)
+                .padding(horizontal = 2.dp, vertical = 2.dp)
+                .dropShadow(
+                    shape = capsuleShape,
+                    shadow = Shadow(
+                        radius = 5.dp,
+                        color = primaryColor.copy(alpha = 0.30f),
+                        offset = DpOffset(3.dp, 3.dp)
+                    )
+                )
+                .dropShadow(
+                    shape = capsuleShape,
+                    shadow = Shadow(
+                        radius = 4.dp,
+                        color = Color.White.copy(alpha = 0.40f),
+                        offset = DpOffset((-1).dp, (-1).dp)
+                    )
+                )
+                .clip(capsuleShape)
+                .background(activeGradient)
+                .innerShadow(
+                    shape = capsuleShape,
+                    shadow = Shadow(
+                        radius = 4.dp,
+                        color = Color.White.copy(alpha = 0.25f),
+                        offset = DpOffset((-1).dp, (-1).dp)
+                    )
+                )
         )
         // Tab 文字
         Row(modifier = Modifier.fillMaxHeight()) {
@@ -670,10 +774,11 @@ internal fun CapsuleTabSelector(
                         text = label,
                         style = TextStyle(
                             fontSize = 13.sp,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium
                         ),
-                        color = if (selected) MaterialTheme.colorScheme.onPrimary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (selected) Color.White
+                        else if (isDark) Color.White.copy(alpha = 0.65f)
+                        else Color(0xFF6B6B8A)
                     )
                 }
             }

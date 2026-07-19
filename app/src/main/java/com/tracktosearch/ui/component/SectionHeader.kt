@@ -14,9 +14,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 
 /**
@@ -33,19 +35,22 @@ fun SectionHeader(
     onActionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isAppDarkTheme()
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onBackground
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (isDark) Color.White else Color(0xFF1A1A2E)
         )
         if (actionText != null && onActionClick != null) {
+            val actionColor = MaterialTheme.colorScheme.primary
             Row(
                 modifier = Modifier
                     .clickable(onClick = onActionClick)
@@ -55,14 +60,15 @@ fun SectionHeader(
             ) {
                 Text(
                     text = actionText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = actionColor
                 )
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
                     contentDescription = stringResource(R.string.content_desc_view_all),
                     modifier = Modifier.size(12.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = actionColor
                 )
             }
         }

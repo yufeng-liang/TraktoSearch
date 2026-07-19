@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.discover
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -41,8 +42,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +69,8 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.YearBadge
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 
 /** 通用电影卡片（复用豆瓣卡片样式） */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -113,6 +119,8 @@ internal fun MovieCard(
         label = "movie_card_scale"
     )
     val ratingValue = rating?.toDoubleOrNull()
+    val isDark = isAppDarkTheme()
+    val posterShape = RoundedCornerShape(16.dp)
 
     Column(
         modifier = Modifier
@@ -129,17 +137,37 @@ internal fun MovieCard(
                         rememberSharedContentState(key = "poster-$tmdbId"),
                         animatedVisibilityScope = animatedVisibilityScope
                     )
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(posterShape)
             }
         } else {
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(14.dp))
+                .clip(posterShape)
         }
         Box(
             modifier = posterBoxModifier
-                .shadow(8.dp, RoundedCornerShape(14.dp))
+                .neumorphicOuterShadow(
+                    shape = posterShape,
+                    isDark = isDark,
+                    elevation = 5.dp,
+                    darkAlpha = if (isDark) 0.38f else 0.20f,
+                    blurRadius = 16.dp,
+                    shadowOffset = 5.dp
+                )
+                .dropShadow(
+                    shape = posterShape,
+                    shadow = Shadow(
+                        radius = 8.dp,
+                        color = Color.White.copy(alpha = if (isDark) 0.08f else 0.40f),
+                        offset = DpOffset((-2).dp, (-2).dp)
+                    )
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.35f),
+                    shape = posterShape
+                )
                 .clickable(
                     enabled = !isResolving,
                     interactionSource = interactionSource,
@@ -181,6 +209,20 @@ internal fun MovieCard(
                     )
                 }
             }
+            // 顶部白色高光（C方案玻璃质感）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .height(40.dp)
+                    .clip(posterShape)
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color.White.copy(alpha = 0.15f),
+                            1f to Color.Transparent
+                        )
+                    )
+            )
             // 想看/已看角标（海报左上角）
             if (isWatched || isInWatchlist) {
                 Row(

@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.discover
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -30,8 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.FormatListNumbered
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -52,8 +51,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -67,12 +70,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.ui.animation.fadeSlideIn
+import com.tracktosearch.ui.component.GlassHighlight
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicInnerShadow
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
 import com.tracktosearch.ui.screen.search.DoubanHotCategorySection
 import com.tracktosearch.ui.screen.settings.DiscoverSectionsDialog
@@ -171,6 +180,7 @@ fun DiscoverScreen(
         }
     }
 
+    val isDark = isAppDarkTheme()
     CompositionLocalProvider(
         LocalActivePosterTmdbId provides activePosterTmdbId,
         LocalActivePosterClickSetter provides { id ->
@@ -181,7 +191,8 @@ fun DiscoverScreen(
         LocalActivePosterClickToken provides activeClickToken
     ) {
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -270,7 +281,8 @@ fun DiscoverScreen(
                                         title = category.title,
                                         count = category.count,
                                         gradient = category.gradient,
-                                        onClick = category.onClick
+                                        onClick = category.onClick,
+                                        isDark = isDark
                                     )
                                 }
                             }
@@ -555,11 +567,21 @@ fun DiscoverScreen(
                                                     }
                                                 } else { Modifier }
                                                 Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
-                                                    Card(
-    modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-) {
+                                                    NeumorphicFrostedSurface(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
+                                                        isDark = isDark,
+                                                        shape = RoundedCornerShape(18.dp),
+                                                        elevation = 5.dp,
+                                                        blurRadius = 14.dp,
+                                                        shadowOffset = 4.dp,
+                                                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.45f),
+                                                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.70f),
+                                                        darkShadowAlpha = if (isDark) 0.25f else 0.10f,
+                                                        lightShadowAlpha = if (isDark) 0.08f else 0.55f,
+                                                        hazeState = null
+                                                    ) {
                                                         Row(
                                                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                                                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -569,13 +591,14 @@ fun DiscoverScreen(
                                                                 Text(
                                                                     text = listResponse.list.name,
                                                                     style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                                                                    color = if (isDark) Color.White else Color(0xFF1A1A2E),
                                                                     maxLines = 1,
                                                                     overflow = TextOverflow.Ellipsis
                                                                 )
                                                                 Text(
                                                                     text = stringResource(R.string.discover_list_meta, listResponse.list.item_count, listResponse.list.user?.username ?: "", listResponse.like_count),
                                                                     style = MaterialTheme.typography.bodySmall,
-                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                    color = if (isDark) Color.White.copy(alpha = 0.65f) else Color(0xFF8A8AAA)
                                                                 )
                                                             }
                                                         }
@@ -595,7 +618,7 @@ fun DiscoverScreen(
                     val interactionSource = remember { MutableInteractionSource() }
                     val isPressed by interactionSource.collectIsPressedAsState()
                     val cardScale by animateFloatAsState(
-                        targetValue = if (isPressed) 0.96f else 1f,
+                        targetValue = if (isPressed) 0.97f else 1f,
                         label = "discover_filter_entry_scale"
                     )
                     // 当从底部卡片进入筛选页时（activeFilterEntry == "card"），给卡片加 sharedElement 与筛选页根容器配对
@@ -611,17 +634,30 @@ fun DiscoverScreen(
                     } else {
                         Modifier.fillMaxWidth()
                     }
+                    val shape = RoundedCornerShape(22.dp)
+                    val gradient = Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
+                        )
+                    )
                     Box(
                         modifier = cardModifier
                             .scale(cardScale)
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
-                                    )
-                                )
+                            .neumorphicOuterShadow(
+                                shape = shape,
+                                isDark = isDark,
+                                elevation = 7.dp,
+                                darkAlpha = if (isDark) 0.35f else 0.18f,
+                                blurRadius = 18.dp,
+                                shadowOffset = 6.dp
+                            )
+                            .clip(shape)
+                            .background(gradient)
+                            .border(
+                                width = 1.dp,
+                                color = Color.White.copy(alpha = 0.30f),
+                                shape = shape
                             )
                             .clickable(
                                 interactionSource = interactionSource,
@@ -632,6 +668,18 @@ fun DiscoverScreen(
                             }
                             .padding(24.dp)
                     ) {
+                        // 顶部高光
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clip(shape)
+                                .background(
+                                    Brush.verticalGradient(
+                                        0f to Color.White.copy(alpha = 0.20f),
+                                        0.5f to Color.Transparent
+                                    )
+                                )
+                        )
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -653,16 +701,18 @@ fun DiscoverScreen(
                     }
                 }
             }
-            // Haze模糊渐变TopAppBar（含状态栏）
+            // 毛玻璃吸顶标题栏
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(
+                        if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
+                        else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+                    )
                     .hazeEffect(
                         state = discoverHazeState,
                         style = HazeMaterials.thin()
                     )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                    .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
                 Row(
@@ -676,7 +726,7 @@ fun DiscoverScreen(
                         text = stringResource(R.string.discover_title),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = if (isDark) Color.White else Color(0xFF1A1A2E)
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
@@ -690,24 +740,30 @@ fun DiscoverScreen(
                         } else {
                             Modifier
                         }
-                        IconButton(
+                        // 拟态玻璃图标按钮
+                        NeumorphicIconButton(
                             onClick = {
                                 activeFilterEntry = "icon"
                                 onFilterDiscoverClick()
                             },
-                            modifier = iconModifier
+                            modifier = iconModifier,
+                            isDark = isDark
                         ) {
                             Icon(
                                 Icons.Rounded.FilterList,
                                 contentDescription = stringResource(R.string.discover_filter_title),
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = if (isDark) Color.White else Color(0xFF2D2D4A)
                             )
                         }
-                        IconButton(onClick = { showDiscoverSectionsDialog = true }) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        NeumorphicIconButton(
+                            onClick = { showDiscoverSectionsDialog = true },
+                            isDark = isDark
+                        ) {
                             Icon(
                                 Icons.Rounded.FormatListNumbered,
                                 contentDescription = stringResource(R.string.settings_discover_sections),
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = if (isDark) Color.White else Color(0xFF2D2D4A)
                             )
                         }
                     }
@@ -923,17 +979,73 @@ private fun CategoryHeroCard(
     count: Int?,
     gradient: Brush,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isDark: Boolean = false
 ) {
+    val shape = RoundedCornerShape(22.dp)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.97f else 1f,
+        label = "category_hero_scale"
+    )
     Box(
         modifier = modifier
-            .width(150.dp)
-            .height(95.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .width(160.dp)
+            .height(100.dp)
+            .scale(scale)
+            .neumorphicOuterShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = 7.dp,
+                darkAlpha = if (isDark) 0.42f else 0.26f,
+                blurRadius = 22.dp,
+                shadowOffset = 7.dp
+            )
+            .dropShadow(
+                shape = shape,
+                shadow = Shadow(
+                    radius = 12.dp,
+                    color = Color.White.copy(alpha = if (isDark) 0.12f else 0.60f),
+                    offset = DpOffset((-3).dp, (-3).dp)
+                )
+            )
+            .clip(shape)
             .background(gradient)
-            .clickable(onClick = onClick)
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = 0.32f),
+                shape = shape
+            )
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            )
             .padding(16.dp)
     ) {
+        // 边框周边内发光高光（C方案玻璃凸起感）
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .clip(shape)
+                .innerShadow(
+                    shape = shape,
+                    shadow = Shadow(
+                        radius = 8.dp,
+                        color = Color.White.copy(alpha = if (isDark) 0.18f else 0.40f),
+                        offset = DpOffset((-2).dp, (-2).dp)
+                    )
+                )
+                .innerShadow(
+                    shape = shape,
+                    shadow = Shadow(
+                        radius = 8.dp,
+                        color = Color.Black.copy(alpha = if (isDark) 0.15f else 0.08f),
+                        offset = DpOffset(2.dp, 2.dp)
+                    )
+                )
+        )
         Column(
             modifier = Modifier.align(Alignment.BottomStart),
             verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -941,14 +1053,14 @@ private fun CategoryHeroCard(
             Text(
                 text = title,
                 color = Color.White,
-                fontSize = 16.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
             if (count != null && count > 0) {
                 Text(
                     text = stringResource(R.string.discover_view_all, count),
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 11.sp
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 12.sp
                 )
             }
         }

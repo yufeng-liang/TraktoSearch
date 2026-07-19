@@ -58,5 +58,5 @@ val Frost = Color(0xFF1E1E3A)       // 搜索栏玻璃底色
 // GlassBorder = white.copy(alpha = 0.12f) — 在使用处直接写
 // GlassRefraction = white.copy(alpha = 0.06f) — 在使用处直接写
 
-val RatingGold = Color(0xFFF4A460)
-val RatingGoldDim = Color(0xFFF4A460).copy(alpha = 0.7f)
+val RatingGold = Color(0xFFFFD54F)
+val RatingGoldDim = Color(0xFFFFD54F).copy(alpha = 0.7f)

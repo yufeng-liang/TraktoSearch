@@ -9,11 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -159,112 +156,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import kotlinx.coroutines.delay
-
-@Composable
-private fun FloatingOrbs(isDark: Boolean) {
-    val anim1 = remember { Animatable(0f) }
-    val anim2 = remember { Animatable(0f) }
-    val anim3 = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        launch {
-            while (true) {
-                anim1.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 20000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    )
-                )
-            }
-        }
-        launch {
-            while (true) {
-                anim2.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 25000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    )
-                )
-            }
-        }
-        launch {
-            while (true) {
-                anim3.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 22000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
-                    )
-                )
-            }
-        }
-    }
-    val t1 = anim1.value
-    val t2 = anim2.value
-    val t3 = anim3.value
-
-    // radialGradient 天然圆形渐变，无矩形伪影，GPU 开销低
-    val orb1Colors = if (isDark) {
-        listOf(Color(0xFF5C6BC0).copy(alpha = 0.42f), Color(0xFF5C6BC0).copy(alpha = 0f))
-    } else {
-        listOf(Color(0xFF7986CB).copy(alpha = 0.48f), Color(0xFF7986CB).copy(alpha = 0f))
-    }
-    val orb2Colors = if (isDark) {
-        listOf(Color(0xFFEC407A).copy(alpha = 0.35f), Color(0xFFEC407A).copy(alpha = 0f))
-    } else {
-        listOf(Color(0xFFF48FB1).copy(alpha = 0.42f), Color(0xFFF48FB1).copy(alpha = 0f))
-    }
-    val orb3Colors = if (isDark) {
-        listOf(Color(0xFF26A69A).copy(alpha = 0.32f), Color(0xFF26A69A).copy(alpha = 0f))
-    } else {
-        listOf(Color(0xFF80CBC4).copy(alpha = 0.40f), Color(0xFF80CBC4).copy(alpha = 0f))
-    }
-    val orb4Colors = if (isDark) {
-        listOf(Color(0xFFFFB74D).copy(alpha = 0.28f), Color(0xFFFFB74D).copy(alpha = 0f))
-    } else {
-        listOf(Color(0xFFFFE0B2).copy(alpha = 0.35f), Color(0xFFFFE0B2).copy(alpha = 0f))
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .size(300.dp)
-                .offset(
-                    x = (140 + kotlin.math.sin(t1 * Math.PI * 2).toFloat() * 100).dp,
-                    y = (-60 + kotlin.math.cos(t1 * Math.PI * 2).toFloat() * 50).dp
-                )
-                .background(Brush.radialGradient(orb1Colors), RoundedCornerShape(50))
-        )
-        Box(
-            modifier = Modifier
-                .size(260.dp)
-                .offset(
-                    x = (-110 + kotlin.math.cos(t2 * Math.PI * 2).toFloat() * 70).dp,
-                    y = (290 + kotlin.math.sin(t2 * Math.PI * 2).toFloat() * 100).dp
-                )
-                .background(Brush.radialGradient(orb2Colors), RoundedCornerShape(50))
-        )
-        Box(
-            modifier = Modifier
-                .size(240.dp)
-                .offset(
-                    x = (50 + kotlin.math.sin(t3 * Math.PI * 2 + 1).toFloat() * 80).dp,
-                    y = (150 + kotlin.math.cos(t3 * Math.PI * 2 + 1).toFloat() * 80).dp
-                )
-                .background(Brush.radialGradient(orb3Colors), RoundedCornerShape(50))
-        )
-        Box(
-            modifier = Modifier
-                .size(220.dp)
-                .offset(
-                    x = (250 + kotlin.math.cos(t1 * Math.PI * 2 + 2).toFloat() * 60).dp,
-                    y = (420 + kotlin.math.sin(t1 * Math.PI * 2 + 2).toFloat() * 70).dp
-                )
-                .background(Brush.radialGradient(orb4Colors), RoundedCornerShape(50))
-        )
-    }
-}
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -416,28 +307,11 @@ fun SearchScreen(
         label = "search_box_y"
     )
 
-    val bgGradient = if (isDark) {
-        Brush.linearGradient(
-            0.0f to Color(0xFF13132A),
-            0.5f to Color(0xFF181835),
-            1.0f to Color(0xFF1A1530)
-        )
-    } else {
-        Brush.linearGradient(
-            0.0f to Color(0xFFF0F4FF),
-            0.4f to Color(0xFFE8F0FF),
-            1.0f to Color(0xFFF5E8FF)
-        )
-    }
-
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(bgGradient)
             .hazeSource(state = hazeState)
     ) {
-        FloatingOrbs(isDark = isDark)
-
         // 标题区（固定顶部，不随搜索框移动，padding状态栏避开系统栏）
         Box(
             modifier = Modifier

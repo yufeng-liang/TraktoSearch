@@ -2,11 +2,17 @@ package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
@@ -230,6 +236,59 @@ fun NeumorphicFrostedSurface(
             )
             .background(backgroundColor, shape)
             .border(1.dp, borderColor, shape)
+    ) {
+        GlassHighlight(isDark = isDark, shape = shape)
+        content()
+    }
+}
+
+/**
+ * C方案拟态玻璃圆形图标按钮：外阴影 + 内高光 + 毛玻璃底色
+ */
+@Composable
+fun NeumorphicIconButton(
+    onClick: () -> Unit,
+    isDark: Boolean,
+    modifier: Modifier = Modifier,
+    size: Dp = 42.dp,
+    content: @Composable () -> Unit
+) {
+    val shape = CircleShape
+    Box(
+        modifier = modifier
+            .size(size)
+            .neumorphicOuterShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = 4.dp,
+                darkAlpha = if (isDark) 0.3f else 0.10f,
+                blurRadius = 10.dp,
+                shadowOffset = 4.dp
+            )
+            .clip(shape)
+            .background(
+                if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.45f),
+                shape
+            )
+            .neumorphicInnerShadow(
+                shape = shape,
+                isDark = isDark,
+                elevation = 4.dp,
+                lightAlpha = if (isDark) 0.08f else 0.55f,
+                blurRadius = 10.dp,
+                shadowOffset = 4.dp
+            )
+            .border(
+                width = 1.dp,
+                color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.65f),
+                shape = shape
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
     ) {
         GlassHighlight(isDark = isDark, shape = shape)
         content()
