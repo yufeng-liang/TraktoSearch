@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity() {
         // 安装 SplashScreen，处理系统默认启动页到自定义 splash 的平滑过渡
         val splashScreen = installSplashScreen()
         // 使用 mutableStateOf 让 Compose 能观察到变化
-        var keepSplashOnScreen by mutableStateOf(true)
+        var keepSplashOnScreen by mutableStateOf(savedInstanceState == null)
         splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
@@ -219,12 +219,15 @@ class MainActivity : AppCompatActivity() {
             prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
             prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
 
-            // 等待最小 splash 时间 + 预取数据就绪（双条件，避免无谓等待）
-            val elapsed = System.currentTimeMillis() - splashStartTime
-            val remaining = MIN_SPLASH_DURATION_MS - elapsed
-            if (remaining > 0) delay(remaining)
+            // Activity 重建时跳过开屏等待，直接进入
+            if (savedInstanceState == null) {
+                // 冷启动：等最小 splash 时间后再切主界面
+                val elapsed = System.currentTimeMillis() - splashStartTime
+                val remaining = MIN_SPLASH_DURATION_MS - elapsed
+                if (remaining > 0) delay(remaining)
+            }
             // 不强制等待所有预取完成，最多再等 500ms（避免个别慢请求阻塞首屏）
-            kotlinx.coroutines.withTimeoutOrNull(500L) {
+            kotlinx.coroutines.withTimeoutOrNull(if (savedInstanceState == null) 500L else 200L) {
                 prefetchJobs.forEach { it.join() }
             }
 
