@@ -701,34 +701,35 @@ fun DiscoverScreen(
                     }
                 }
             }
-            // 毛玻璃吸顶标题栏
-            Column(
+            // 毛玻璃吸顶标题栏（严格复刻网页原型：半透明背景 + thin 模糊 + 28sp ExtraBold 标题 + 42dp 玻璃图标按钮 + 底部白色高亮分隔线）
+            val topBarColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
+                              else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
-                        else Color(0xFFF0F4FF).copy(alpha = 0.55f)
-                    )
+                    .background(topBarColor)
                     .hazeEffect(
                         state = discoverHazeState,
                         style = HazeMaterials.thin()
                     )
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding())
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.discover_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDark) Color.White else Color(0xFF1A1A2E)
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Spacer(modifier = Modifier.statusBarsPadding())
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.discover_title),
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
                         val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
                             with(sharedTransitionScope) {
@@ -767,11 +768,22 @@ fun DiscoverScreen(
                             )
                         }
                     }
+                    // 底部白色高亮分隔线（网页原型同款）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(
+                                if (isDark) Color.White.copy(alpha = 0.15f)
+                                else Color.White.copy(alpha = 0.50f)
+                            )
+                    )
                 }
             }
         }
     }
-    } // CompositionLocalProvider
+    }
+} // CompositionLocalProvider
 
     // 豆瓣热榜全量弹窗
     showDoubanAllDialog?.let { catId ->
