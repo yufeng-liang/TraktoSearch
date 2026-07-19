@@ -1400,4 +1400,12 @@ Config:
     <string name="mark_records_help_entry_location">Entry: Settings → Mark Records card (login required)</string>
     <string name="mark_records_help_data_source">Watched records from Trakt history; watchlist/removed records from in-app action log</string>
     <string name="mark_records_help_history_limit">Watchlist/removal actions before feature launch cannot be traced (Trakt doesn\'t retain them)</string>
+
+    <!-- Settings Section Titles -->
+    <string name="settings_section_account">Account &amp; Login</string>
+    <string name="settings_section_sync">Sync &amp; Data</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_cache">Cache</string>
+    <string name="settings_section_data">Import &amp; Export</string>
+    <string name="settings_section_about">About</string>
 </resources>

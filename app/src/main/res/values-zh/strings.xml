@@ -1400,4 +1400,12 @@
     <string name="mark_records_help_entry_location">入口：设置页顶部「标记记录」卡片（需登录）</string>
     <string name="mark_records_help_data_source">已看记录来自 Trakt 观看历史；想看/移除记录为 App 内操作流水</string>
     <string name="mark_records_help_history_limit">功能上线前的想看/移除操作无法追溯（Trakt 不留存）</string>
+
+    <!-- Settings Section Titles -->
+    <string name="settings_section_account">账号与登录</string>
+    <string name="settings_section_sync">同步与数据</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_section_cache">缓存管理</string>
+    <string name="settings_section_data">导入与导出</string>
+    <string name="settings_section_about">关于</string>
 </resources>

@@ -1415,4 +1415,12 @@
     <string name="mark_records_help_entry_location">入口：設定ページ上部の「マーク記録」カード（ログイン必要）</string>
     <string name="mark_records_help_data_source">視聴記録はTrakt履歴から、ウォッチリスト/削除記録はアプリ内操作ログから取得</string>
     <string name="mark_records_help_history_limit">機能リリース前のウォッチリスト/削除操作は追溯できません（Traktに保存されないため）</string>
+
+    <!-- Settings Section Titles -->
+    <string name="settings_section_account">アカウントとログイン</string>
+    <string name="settings_section_sync">同期とデータ</string>
+    <string name="settings_section_appearance">外観</string>
+    <string name="settings_section_cache">キャッシュ管理</string>
+    <string name="settings_section_data">インポートとエクスポート</string>
+    <string name="settings_section_about">について</string>
 </resources>

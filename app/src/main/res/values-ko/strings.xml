@@ -1415,4 +1415,12 @@
     <string name="mark_records_help_entry_location">입구: 설정 페이지 상단의 「표시 기록」 카드 (로그인 필요)</string>
     <string name="mark_records_help_data_source">시청 기록은 Trakt 히스토리에서, 관심목록/제거 기록은 앱 내 작업 로그에서 가져옵니다</string>
     <string name="mark_records_help_history_limit">기능 출시 전의 관심목록/제거 작업은 추적할 수 없습니다 (Trakt에 보관되지 않음)</string>
+
+    <!-- Settings Section Titles -->
+    <string name="settings_section_account">계정 및 로그인</string>
+    <string name="settings_section_sync">동기화 및 데이터</string>
+    <string name="settings_section_appearance">외관</string>
+    <string name="settings_section_cache">캐시 관리</string>
+    <string name="settings_section_data">가져오기 및 내보내기</string>
+    <string name="settings_section_about">정보</string>
 </resources>
