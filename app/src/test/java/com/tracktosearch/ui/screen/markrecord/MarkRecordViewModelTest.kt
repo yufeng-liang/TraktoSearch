@@ -823,4 +823,72 @@ class MarkRecordViewModelTest {
 
         assertThat(viewModel.uiState.value.items[0].episodeInfo).isEqualTo("S01E03")
     }
+
+    // ==================== 筛选 mediaTypes 生效验证 ====================
+    // 回归测试：ALL/WATCHED Tab 应用 filterMediaTypes 过滤
+    // 之前 bug：loadFromTraktHistory 忽略 filterMediaTypes，导致选「电视剧」筛选不生效
+
+    @Test
+    fun `WATCHED_Tab_updateFilter_只选电视剧时过滤掉movie`() = runTest {
+        val movieItem = TraktRepository.WatchHistoryItem(
+            traktId = 1, tmdbId = 11, imdbId = "tt1", mediaType = "movie",
+            title = "Movie", displayTitle = "Movie", posterUrl = null,
+            year = 2024, watchedAt = 10000L, episodeInfo = null
+        )
+        val showItem = TraktRepository.WatchHistoryItem(
+            traktId = 2, tmdbId = 22, imdbId = "tt2", mediaType = "show",
+            title = "Show", displayTitle = "Show", posterUrl = null,
+            year = 2024, watchedAt = 5000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(movieItem, showItem), isComplete = true)
+        )
+
+        viewModel.switchTab(MarkRecordTab.WATCHED)
+        advanceUntilIdle()
+        // 初始：movie + show 都展示
+        assertThat(viewModel.uiState.value.items).hasSize(2)
+
+        // 筛选仅电视剧
+        viewModel.updateFilter(setOf("show"), DatePreset.ALL, null, false)
+        advanceUntilIdle()
+
+        // 修复后：只保留 show
+        assertThat(viewModel.uiState.value.items).hasSize(1)
+        assertThat(viewModel.uiState.value.items[0].mediaType).isEqualTo("show")
+    }
+
+    @Test
+    fun `ALL_Tab_updateFilter_只选电视剧时过滤掉movie`() = runTest {
+        // DAO 返回 1 条 show 记录
+        coEvery {
+            dao.query(any(), any(), eq(listOf("show")), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(sampleEntity(MarkActionType.ADD_WATCHLIST.value, 100, 5000L).copy(mediaType = "show"))
+        coEvery {
+            dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+        } returns listOf(sampleEntity(MarkActionType.ADD_WATCHLIST.value, 100, 5000L).copy(mediaType = "show"))
+
+        // Trakt 返回 movie + show 各 1 条
+        val movieItem = TraktRepository.WatchHistoryItem(
+            traktId = 1, tmdbId = 11, imdbId = "tt1", mediaType = "movie",
+            title = "Movie", displayTitle = "Movie", posterUrl = null,
+            year = 2024, watchedAt = 10000L, episodeInfo = null
+        )
+        val showItem = TraktRepository.WatchHistoryItem(
+            traktId = 2, tmdbId = 22, imdbId = "tt2", mediaType = "show",
+            title = "Show", displayTitle = "Show", posterUrl = null,
+            year = 2024, watchedAt = 3000L, episodeInfo = null
+        )
+        coEvery { traktRepo.fetchWatchHistory(any()) } returns flowOf(
+            TraktRepository.WatchHistoryEmit(items = listOf(movieItem, showItem), isComplete = true)
+        )
+
+        viewModel.updateFilter(setOf("show"), DatePreset.ALL, null, false)
+        advanceUntilIdle()
+
+        // 修复后：Trakt 端 movie 被过滤掉，DAO 端 show + Trakt 端 show = 2 条
+        val allItems = viewModel.uiState.value.items
+        assertThat(allItems.all { it.mediaType == "show" }).isTrue()
+        assertThat(allItems).hasSize(2)
+    }
 }

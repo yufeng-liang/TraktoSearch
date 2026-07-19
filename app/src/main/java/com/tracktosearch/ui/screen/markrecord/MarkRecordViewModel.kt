@@ -181,17 +181,24 @@ class MarkRecordViewModel @Inject constructor(
         val state = _uiState.value
         try {
             val newItems: List<MarkRecordItem> = when (state.currentTab) {
-                MarkRecordTab.WATCHED -> {
-                    loadFromTraktHistory(page) { firstBatch ->
+            MarkRecordTab.WATCHED -> {
+                loadFromTraktHistory(
+                    page = page,
+                    mediaTypesFilter = state.filterMediaTypes,
+                    onFirstBatch = { firstBatch ->
                         _uiState.update { it.copy(items = firstBatch, isLoading = false) }
                     }
-                }
-                MarkRecordTab.ALL -> {
-                    val localItems = loadFromDao(page, state)
-                    // ALL Tab 合并 local 自建表 + Trakt 已看历史；Trakt 失败不影响 local 展示
-                    val traktItems = if (page == 1) {
-                        try {
-                            loadFromTraktHistory(1) { firstBatch ->
+                )
+            }
+            MarkRecordTab.ALL -> {
+                val localItems = loadFromDao(page, state)
+                // ALL Tab 合并 local 自建表 + Trakt 已看历史；Trakt 失败不影响 local 展示
+                val traktItems = if (page == 1) {
+                    try {
+                        loadFromTraktHistory(
+                            page = 1,
+                            mediaTypesFilter = state.filterMediaTypes,
+                            onFirstBatch = { firstBatch ->
                                 val stateForUi = _uiState.value
                                 val localItemsForUi = loadFromDao(1, stateForUi)
                                 _uiState.update {
@@ -202,12 +209,13 @@ class MarkRecordViewModel @Inject constructor(
                                     )
                                 }
                             }
-                        } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
-                    } else emptyList()
-                    (localItems + traktItems).sortedByDescending { it.actedAt }.take(pageSize)
-                }
-                else -> loadFromDao(page, state)
+                        )
+                    } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                } else emptyList()
+                (localItems + traktItems).sortedByDescending { it.actedAt }.take(pageSize)
             }
+            else -> loadFromDao(page, state)
+        }
             val allItems = if (page == 1) newItems else _uiState.value.items + newItems
             // ALL Tab 是合并视图，不做分页（hasMore 恒为 false）
             val hasMore = newItems.size == pageSize && state.currentTab != MarkRecordTab.ALL
@@ -248,13 +256,20 @@ class MarkRecordViewModel @Inject constructor(
 
     private suspend fun loadFromTraktHistory(
         page: Int,
+        mediaTypesFilter: Set<String> = emptySet(),
         onFirstBatch: suspend (List<MarkRecordItem>) -> Unit
     ): List<MarkRecordItem> {
         var completed: List<MarkRecordItem>? = null
         traktRepository.fetchWatchHistory(page).collect { emit ->
             if (completed != null) return@collect
             if (emit.error != null) throw Exception(emit.error)
-            val mapped = emit.items.map { it.toMarkRecordItem() }
+            // 应用媒体类型筛选（修复 bug：之前忽略 filterMediaTypes 导致选电视剧不生效）
+            val filtered = if (mediaTypesFilter.isNotEmpty()) {
+                emit.items.filter { it.mediaType in mediaTypesFilter }
+            } else {
+                emit.items
+            }
+            val mapped = filtered.map { it.toMarkRecordItem() }
             if (emit.isComplete) {
                 completed = mapped
             } else {
