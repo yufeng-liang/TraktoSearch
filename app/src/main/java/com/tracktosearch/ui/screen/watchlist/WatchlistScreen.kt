@@ -97,6 +97,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -165,6 +166,8 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -208,6 +211,7 @@ fun WatchlistScreen(
     var selectedMode by rememberSaveable { mutableIntStateOf(0) }
     // 卡片入场动画状态
     var enterMode by remember { mutableStateOf(EnterMode.DEFAULT) }
+    var refreshPending by remember { mutableStateOf(false) }
     val animatedIds = rememberSaveable(
         saver = listSaver(
             save = { it.value.toList() },
@@ -300,8 +304,8 @@ fun WatchlistScreen(
                 if (overscrollOffset >= triggerThreshold && !isRefreshing) {
                     isRefreshing = true
                     viewModel.refresh()
-                    enterMode = EnterMode.EMPHASIS
-                    gridCoroutineScope.launch { delay(500); enterMode = EnterMode.DEFAULT }
+                    animatedIds.value = mutableSetOf()
+                    refreshPending = true
                     isRefreshing = false
                 }
                 // 始终弹回
@@ -395,6 +399,25 @@ fun WatchlistScreen(
         selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
         selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
         else -> uiState.isLoadingHistoryShows
+    }
+
+    // 下拉刷新：数据返回后触发 EMPHASIS 弹性入场动画
+    LaunchedEffect(refreshPending) {
+        if (!refreshPending) return@LaunchedEffect
+        enterMode = EnterMode.EMPHASIS
+        snapshotFlow {
+            when {
+                selectedMode == 0 && selectedTab == 0 -> uiState.isLoadingMovies
+                selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
+                selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
+                else -> uiState.isLoadingHistoryShows
+            }
+        }
+            .dropWhile { !it }
+            .first { !it }
+        delay(600)
+        enterMode = EnterMode.DEFAULT
+        refreshPending = false
     }
 
     // 监听列表变化，移除完成后关闭多选模式

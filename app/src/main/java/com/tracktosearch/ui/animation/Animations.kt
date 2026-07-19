@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
+import com.tracktosearch.ui.component.LocalIsCurrentTab
 import kotlinx.coroutines.launch
 
 /** 入场模式：DEFAULT=B 错峰淡入上滑；EMPHASIS=E 弹性上滑强调态。 */
@@ -37,11 +38,13 @@ fun Modifier.cardEnter(
     enterMode: EnterMode,
     animatedIds: MutableState<MutableSet<Long>>,
 ): Modifier = composed {
+    val isCurrentTab = LocalIsCurrentTab.current
     val alreadyPlayed = animatedIds.value.contains(id)
     val alpha = remember(id) { Animatable(if (alreadyPlayed) 1f else 0f) }
     val offsetY = remember(id) { Animatable(if (alreadyPlayed) 0f else 16f) }
 
-    LaunchedEffect(enterMode, id) {
+    LaunchedEffect(enterMode, id, isCurrentTab) {
+        if (!isCurrentTab) return@LaunchedEffect
         if (enterMode == EnterMode.EMPHASIS) {
             alpha.snapTo(0f)
             offsetY.snapTo(40f)
