@@ -148,9 +148,11 @@ import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
@@ -323,6 +325,7 @@ fun WatchlistScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
+    val isDark = isAppDarkTheme()
     // 为4种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响
     val movieGridState = rememberLazyGridState()        // mode=0, tab=0 想看电影
@@ -445,7 +448,8 @@ fun WatchlistScreen(
         LocalActivePosterClickToken provides activeClickToken
     ) {
         Scaffold(
-            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = Color.Transparent
         ) { paddingValues ->
             Box(
                 modifier = Modifier
@@ -569,7 +573,7 @@ fun WatchlistScreen(
                     contentPadding = PaddingValues(
                         start = 8.dp,
                         end = 8.dp,
-                        top = 110.dp + statusBarHeight,
+                        top = 170.dp + statusBarHeight,
                         bottom = if (isMultiSelectMode) 80.dp else 80.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -647,17 +651,48 @@ fun WatchlistScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column {
-                            // 状态栏 Spacer
-                            Spacer(
+                            // 毛玻璃吸顶标题栏（严格复刻网页原型：半透明背景 + thin 模糊 + 28sp ExtraBold 标题 + 底部白色高亮分隔线）
+                            val topBarColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
+                                              else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+                            Box(
                                 modifier = Modifier
-                                    .statusBarsPadding()
                                     .fillMaxWidth()
+                                    .background(topBarColor)
                                     .clickable {
                                         gridCoroutineScope.launch {
                                             currentGridState.animateScrollToItem(0)
                                         }
                                     }
-                            )
+                            ) {
+                                Column {
+                                    Spacer(modifier = Modifier.statusBarsPadding())
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.tab_me),
+                                            fontSize = 28.sp,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = (-0.5).sp,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+                                    // 底部白色高亮分隔线
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(1.dp)
+                                            .background(
+                                                if (isDark) Color.White.copy(alpha = 0.15f)
+                                                else Color.White.copy(alpha = 0.50f)
+                                            )
+                                    )
+                                }
+                            }
                             // 搜索栏 + 胶囊切换条
                             Row(
                                 modifier = Modifier
@@ -1209,7 +1244,7 @@ fun WatchlistScreen(
                     WatchlistSkeletonGrid(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 112.dp + statusBarHeight)
+                            .padding(top = 172.dp + statusBarHeight)
                     )
                 }
             }
