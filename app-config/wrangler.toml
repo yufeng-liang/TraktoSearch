@@ -1,3 +1,8 @@
 name = "app-config"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-01-01"
 pages_build_output_dir = "public"
+
+# 崩溃日志存储 KV
+kv_namespaces = [
+  { binding = "CRASH_LOGS", id = "__FILL_IN_AFTER_CREATING_KV__" }
+]

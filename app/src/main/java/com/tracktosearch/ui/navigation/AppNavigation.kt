@@ -52,6 +52,8 @@ import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.statistics.StatisticsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.watchlist.WatchlistViewModel
+import com.tracktosearch.data.util.CurrentPageHolder
+import com.tracktosearch.data.util.UserActionTracker
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -149,6 +151,14 @@ fun AppNavigation(
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
+    // 页面变化追踪（错误日志上下文）
+    navController.addOnDestinationChangedListener { _, destination, _ ->
+        val route = destination.route ?: ""
+        CurrentPageHolder.currentRoute = route
+        val pageName = simplifyRouteName(route)
+        CurrentPageHolder.currentPageName = pageName
+        UserActionTracker.record("nav", "to_page", pageName)
+    }
     var currentStartDest by remember { mutableStateOf(startDestination) }
     // 读取默认启动页设置
     val defaultTabStorage = EntryPointAccessors.fromApplication(context, DefaultTabEntryPoint::class.java).defaultTabStorage()
@@ -686,5 +696,20 @@ fun AppNavigation(
             }
             } // Box
         }
+    }
+}
+
+private fun simplifyRouteName(route: String): String {
+    return when {
+        route.startsWith("detail/") -> {
+            val type = route.removePrefix("detail/").substringBefore("/")
+            "detail/$type"
+        }
+        route.startsWith("person/") -> "person"
+        route.startsWith("search/") -> "search"
+        route.startsWith("traktSearch/") -> "traktSearch"
+        route.startsWith("listDetail/") -> "listDetail"
+        route.startsWith("doubanItemDetail/") -> "doubanItemDetail"
+        else -> route
     }
 }

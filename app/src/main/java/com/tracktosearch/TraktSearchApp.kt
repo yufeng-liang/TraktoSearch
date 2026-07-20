@@ -18,6 +18,7 @@ import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
@@ -62,6 +63,11 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
+            // 上传未发送的崩溃日志到云端
+            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+                CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
+            }
+
             // 远程配置初始化(拉取云端 API key/base URL),放在其他持久化缓存加载之前
             // ApiKeyInterceptor/BaseUrlInterceptor 在首次网络请求时就能用到缓存配置
             // 不阻塞 UI 线程:内部用 IO 协程,首次请求若未初始化完成会回退 BuildConfig 兜底

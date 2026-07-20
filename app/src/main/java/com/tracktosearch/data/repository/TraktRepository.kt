@@ -13,6 +13,7 @@ import com.tracktosearch.data.remote.trakt.TraktApiService
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
+import com.tracktosearch.data.util.UserActionTracker
 import com.tracktosearch.data.util.persistentTtlCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -1133,6 +1134,7 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun removeWatched(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
+        UserActionTracker.record("action", "remove_watched", "traktId=$traktId, type=$type")
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -1335,6 +1337,7 @@ class TraktRepository @Inject constructor(
 
     /** 添加到想看列表 */
     suspend fun addToWatchlist(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
+        UserActionTracker.record("action", "add_to_watchlist", "traktId=$traktId, type=$type")
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {
@@ -1373,6 +1376,7 @@ class TraktRepository @Inject constructor(
 
     /** 从想看列表移除 */
     suspend fun removeFromWatchlist(traktId: Int, type: MediaType, tmdbId: Int = 0): Result<TraktSyncResponse> {
+        UserActionTracker.record("action", "remove_from_watchlist", "traktId=$traktId, type=$type")
         return try {
             val ids = TraktIds(trakt = traktId)
             val request = when (type) {

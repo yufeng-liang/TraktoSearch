@@ -3,6 +3,8 @@ package com.tracktosearch
 import android.content.Context
 import android.os.Build
 import android.os.Process
+import com.tracktosearch.data.util.CurrentPageHolder
+import com.tracktosearch.data.util.UserActionTracker
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -112,6 +114,14 @@ class CrashHandler private constructor(
             pw.println()
             pw.println("=== Stack Trace ===")
             throwable.printStackTrace(pw)
+            pw.println()
+
+            pw.println("=== Crash Context ===")
+            pw.println("Current Page: ${CurrentPageHolder.currentPageName ?: "unknown"}")
+            pw.println("Current Route: ${CurrentPageHolder.currentRoute ?: "unknown"}")
+            pw.println()
+            pw.println("=== Recent User Actions ===")
+            pw.println(UserActionTracker.getSummary().ifEmpty { "(none)" })
             pw.println()
 
             // 打印 cause chain

@@ -25,8 +25,8 @@ android {
         applicationId = "com.tracktosearch"
         minSdk = 26
         targetSdk = 37
-        versionCode = 62
-        versionName = "3.4.0"
+        versionCode = 63
+        versionName = "3.5.0"
 
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
@@ -42,6 +42,8 @@ android {
         buildConfigField("String", "BAIDU_APP_ID", "\"${properties.getProperty("baidu.app.id", "")}\"")
         buildConfigField("String", "BAIDU_SECRET_KEY", "\"${properties.getProperty("baidu.secret.key", "")}\"")
         buildConfigField("String", "BAIDU_API_KEY", "\"${properties.getProperty("baidu.api.key", "")}\"")
+        buildConfigField("String", "CRASH_LOG_API_URL", "\"${properties.getProperty("crash.log.api.url", "https://app-config-1qe.pages.dev/api/crash-logs")}\"")
+        buildConfigField("String", "CRASH_LOG_API_TOKEN", "\"${properties.getProperty("crash.log.api.token", "")}\"")
         // 云端配置热更新:加密 key(与 app-config/.env 中 CONFIG_AES_KEY 一致)+ 配置服务 baseUrl
         buildConfigField("String", "CONFIG_AES_KEY", "\"${properties.getProperty("config.aes.key", "")}\"")
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")

@@ -8,6 +8,7 @@ import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PosterColorExtractor
+import com.tracktosearch.data.util.UserActionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
@@ -82,6 +83,7 @@ class MarkRecordViewModel @Inject constructor(
 
     fun switchTab(tab: MarkRecordTab) {
         if (_uiState.value.currentTab == tab) return
+        UserActionTracker.record("action", "switch_tab", tab.name)
         _uiState.update {
             it.copy(
                 currentTab = tab, currentPage = 0, hasMore = true,
@@ -92,6 +94,9 @@ class MarkRecordViewModel @Inject constructor(
     }
 
     fun updateSearchQuery(query: String) {
+        if (query.isNotEmpty()) {
+            UserActionTracker.record("action", "search", query)
+        }
         _uiState.update {
             it.copy(
                 searchQuery = query, currentPage = 0, hasMore = true,
@@ -107,6 +112,12 @@ class MarkRecordViewModel @Inject constructor(
         dateRange: Pair<Long, Long>?,
         ascending: Boolean
     ) {
+        val filterDetail = buildString {
+            if (mediaTypes.isNotEmpty()) append("types=${mediaTypes.joinToString(",")} ")
+            append("preset=${datePreset.name} ")
+            append("asc=$ascending")
+        }
+        UserActionTracker.record("action", "update_filter", filterDetail)
         _uiState.update {
             it.copy(
                 filterMediaTypes = mediaTypes,
@@ -122,6 +133,7 @@ class MarkRecordViewModel @Inject constructor(
     fun loadNextPage() {
         val state = _uiState.value
         if (state.isLoading || state.isLoadingMore || !state.hasMore) return
+        UserActionTracker.record("action", "load_next_page", "page=${state.currentPage + 1}")
         _uiState.update { it.copy(isLoadingMore = true) }
         viewModelScope.launch {
             loadPage(state.currentPage + 1)
@@ -130,6 +142,7 @@ class MarkRecordViewModel @Inject constructor(
     }
 
     fun refresh() {
+        UserActionTracker.record("action", "refresh", null)
         _uiState.update {
             it.copy(
                 currentPage = 0, hasMore = true, items = emptyList(),
