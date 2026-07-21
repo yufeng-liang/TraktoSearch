@@ -115,6 +115,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -458,6 +459,7 @@ fun WatchlistScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .hazeSource(state = hazeState)
             ) {
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     
@@ -495,77 +497,90 @@ fun WatchlistScreen(
                             .padding(horizontal = 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
+                        NeumorphicFrostedSurface(
+                            modifier = Modifier.fillMaxWidth(),
+                            isDark = isDark,
+                            shape = RoundedCornerShape(24.dp),
+                            backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.45f),
+                            borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.65f),
+                            elevation = 4.dp,
+                            blurRadius = 16.dp,
+                            hazeState = hazeState,
+                            hazeStyle = HazeMaterials.thin()
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Movie,
-                                contentDescription = null,
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            if (searchQuery.isNotEmpty()) {
-                                // 搜索无结果：只显示贴切文案，不显示引导链接
-                                Text(
-                                    text = stringResource(R.string.watchlist_search_no_result, searchQuery),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Movie,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                 )
-                            } else {
-                                Text(
-                                    text = if (selectedMode == 0)
-                                        stringResource(R.string.watchlist_empty_title)
-                                    else
-                                        stringResource(R.string.watched_empty_title),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    buildAnnotatedString {
-                                        append(if (selectedMode == 0)
-                                            stringResource(R.string.watchlist_empty_hint_prefix)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                if (searchQuery.isNotEmpty()) {
+                                    // 搜索无结果：只显示贴切文案，不显示引导链接
+                                    Text(
+                                        text = stringResource(R.string.watchlist_search_no_result, searchQuery),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (selectedMode == 0)
+                                            stringResource(R.string.watchlist_empty_title)
                                         else
-                                            stringResource(R.string.watched_empty_hint_prefix)
-                                        )
-                                        withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
-                                        }) {
-                                            append(stringResource(R.string.watchlist_empty_go_trakt))
-                                        }
-                                        append(stringResource(R.string.watchlist_empty_hint_middle))
-                                        withLink(LinkAnnotation.Clickable(
-                                            tag = "discover",
-                                            linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                        )) {
-                                            append(stringResource(R.string.watchlist_empty_go_discover))
-                                        }
-                                        append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                        // 「，或从豆瓣导入标记」超链接
-                                        append(stringResource(R.string.watchlist_empty_douban_import_prefix))
-                                        withLink(LinkAnnotation.Clickable(
-                                            tag = "douban_import",
-                                            linkInteractionListener = LinkInteractionListener {
-                                                // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
-                                                val hasDouban = viewModel.isDoubanLoggedIn()
-                                                if (hasDouban) {
-                                                    showSyncModePicker = true
-                                                } else {
-                                                    onNavigateToDoubanLogin()
-                                                }
+                                            stringResource(R.string.watched_empty_title),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        buildAnnotatedString {
+                                            append(if (selectedMode == 0)
+                                                stringResource(R.string.watchlist_empty_hint_prefix)
+                                            else
+                                                stringResource(R.string.watched_empty_hint_prefix)
+                                            )
+                                            withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
+                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
+                                            }) {
+                                                append(stringResource(R.string.watchlist_empty_go_trakt))
                                             }
-                                        )) {
-                                            append(stringResource(R.string.watchlist_empty_douban_import_link))
-                                        }
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center
-                                )
+                                            append(stringResource(R.string.watchlist_empty_hint_middle))
+                                            withLink(LinkAnnotation.Clickable(
+                                                tag = "discover",
+                                                linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                            )) {
+                                                append(stringResource(R.string.watchlist_empty_go_discover))
+                                            }
+                                            append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                            // 「，或从豆瓣导入标记」超链接
+                                            append(stringResource(R.string.watchlist_empty_douban_import_prefix))
+                                            withLink(LinkAnnotation.Clickable(
+                                                tag = "douban_import",
+                                                linkInteractionListener = LinkInteractionListener {
+                                                    // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
+                                                    val hasDouban = viewModel.isDoubanLoggedIn()
+                                                    if (hasDouban) {
+                                                        showSyncModePicker = true
+                                                    } else {
+                                                        onNavigateToDoubanLogin()
+                                                    }
+                                                }
+                                            )) {
+                                                append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                            }
+                                        },
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
@@ -585,7 +600,6 @@ fun WatchlistScreen(
                         .fillMaxSize()
                         .nestedScroll(pullToRefreshConnection)
                         .graphicsLayer { translationY = animatedOverscrollDp.toPx() }
-                        .hazeSource(state = hazeState)
                     ) {
                         // 根据 selectedMode 和 selectedTab 渲染对应列表
                         val items = currentItems
@@ -644,7 +658,6 @@ fun WatchlistScreen(
                             state = hazeState,
                             style = HazeMaterials.thin()
                         )
-                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                 ) {
                     // 搜索框 + Tab 栏（非多选模式时显示）
                     AnimatedVisibility(
@@ -654,13 +667,10 @@ fun WatchlistScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column {
-                            // 毛玻璃吸顶标题栏（严格复刻网页原型：半透明背景 + thin 模糊 + 28sp ExtraBold 标题 + 底部白色高亮分隔线）
-                            val topBarColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
-                                              else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+                            // 毛玻璃吸顶标题栏（继承外层 Box 的 hazeEffect，不重复叠加避免变白）
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .background(topBarColor)
                                     .clickable {
                                         gridCoroutineScope.launch {
                                             currentGridState.animateScrollToItem(0)
@@ -672,9 +682,9 @@ fun WatchlistScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                                            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.Bottom
                                     ) {
                                         Text(
                                             text = stringResource(R.string.tab_me),
@@ -683,20 +693,20 @@ fun WatchlistScreen(
                                             letterSpacing = (-0.5).sp,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
+                                        // 想看/已看胶囊切换（标题栏右侧，底部对齐标题底缘）
+                                        CapsuleTabSelector(
+                                            tabs = listOf(
+                                                stringResource(R.string.watchlist_mode_watchlist),
+                                                stringResource(R.string.watchlist_mode_watched)
+                                            ),
+                                            selectedIndex = selectedMode,
+                                            onTabSelected = { selectedMode = it },
+                                            sizeMultiplier = 1.25f
+                                        )
                                     }
-                                    // 底部白色高亮分隔线
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(1.dp)
-                                            .background(
-                                                if (isDark) Color.White.copy(alpha = 0.15f)
-                                                else Color.White.copy(alpha = 0.50f)
-                                            )
-                                    )
                                 }
                             }
-                            // 搜索栏 + 筛选按钮 + 想看/已看切换条
+                            // 搜索栏 + 筛选按钮
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -730,8 +740,13 @@ fun WatchlistScreen(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
                                         singleLine = true,
+                                        textStyle = TextStyle(
+                                            color = MaterialTheme.colorScheme.onSurface,
+                                            fontSize = 14.sp
+                                        ),
+                                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                                         modifier = Modifier
-                                            .fillMaxWidth()
+                                            .fillMaxSize()
                                             .padding(horizontal = 12.dp),
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                         keyboardActions = KeyboardActions(
@@ -748,7 +763,7 @@ fun WatchlistScreen(
                                         decorationBox = { innerTextField ->
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
-                                                modifier = Modifier.fillMaxWidth()
+                                                modifier = Modifier.fillMaxSize()
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.Search,
@@ -796,15 +811,6 @@ fun WatchlistScreen(
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }
-                                // 想看/已看胶囊切换（与发现页同款）
-                                CapsuleTabSelector(
-                                    tabs = listOf(
-                                        stringResource(R.string.watchlist_mode_watchlist),
-                                        stringResource(R.string.watchlist_mode_watched)
-                                    ),
-                                    selectedIndex = selectedMode,
-                                    onTabSelected = { selectedMode = it }
-                                )
                             }
     
                             // 分类 Tab（下划线样式）
@@ -863,12 +869,20 @@ fun WatchlistScreen(
                                     ),
                                     label = "sync_rotation"
                                 )
-                                Surface(
+                                NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { showSyncDialog = true },
-                                    color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                        else MaterialTheme.colorScheme.primary
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(12.dp),
+                                    backgroundColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    borderColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                    elevation = 2.dp,
+                                    blurRadius = 12.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin()
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -936,12 +950,20 @@ fun WatchlistScreen(
                                     ),
                                     label = "check_rotation"
                                 )
-                                Surface(
+                                NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { showConsistencyDialog = true },
-                                    color = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer
-                                        else MaterialTheme.colorScheme.primary
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(12.dp),
+                                    backgroundColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.55f),
+                                    borderColor = if (checkProgress.cookieExpired) MaterialTheme.colorScheme.error.copy(alpha = 0.20f)
+                                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.20f),
+                                    elevation = 2.dp,
+                                    blurRadius = 12.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin()
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -1002,7 +1024,17 @@ fun WatchlistScreen(
                                     ),
                                     label = "removal_rotation"
                                 )
-                                Surface(
+                                val removalBackground = if (removalProgress.isCancelling) {
+                                    MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                                }
+                                val removalBorder = if (removalProgress.isCancelling) {
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
+                                } else {
+                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.20f)
+                                }
+                                NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
@@ -1011,8 +1043,14 @@ fun WatchlistScreen(
                                                 viewModel.cancelBatchRemoval()
                                             }
                                         },
-                                    color = if (removalProgress.isCancelling) MaterialTheme.colorScheme.outlineVariant
-                                        else MaterialTheme.colorScheme.secondaryContainer
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(12.dp),
+                                    backgroundColor = removalBackground,
+                                    borderColor = removalBorder,
+                                    elevation = 2.dp,
+                                    blurRadius = 12.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin()
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -1073,9 +1111,16 @@ fun WatchlistScreen(
 
                             // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
                             if (tmdbUnavailable && !posterErrorDismissed) {
-                                Surface(
+                                NeumorphicFrostedSurface(
                                     modifier = Modifier.fillMaxWidth(),
-                                    color = MaterialTheme.colorScheme.errorContainer
+                                    isDark = isDark,
+                                    shape = RoundedCornerShape(12.dp),
+                                    backgroundColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.20f),
+                                    elevation = 2.dp,
+                                    blurRadius = 12.dp,
+                                    hazeState = hazeState,
+                                    hazeStyle = HazeMaterials.thin()
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -1122,68 +1167,74 @@ fun WatchlistScreen(
                     ) {
                         Column {
                             Spacer(modifier = Modifier.statusBarsPadding())
-                            Row(
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = false, onClick = {})
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                             ) {
-                                IconButton(onClick = { isMultiSelectMode = false }) {
-                                    Icon(
-                                        Icons.AutoMirrored.Rounded.ArrowBack,
-                                        contentDescription = stringResource(R.string.common_cancel),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                Text(
-                                    text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Row {
-                                    Button(
-                                        onClick = {
-                                            isRemoving = true
-                                            val ids = selectedItems.keys.toList()
-                                            val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
-                                            tabScope.launch {
-                                                if (selectedMode == 0) {
-                                                    viewModel.batchRemoveFromWatchlist(ids, type)
-                                                } else {
-                                                    viewModel.batchRemoveFromHistory(ids, type)
-                                                }
-                                                // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
-                                                if (viewModel.isBatchRemovalRunning()) {
-                                                    com.tracktosearch.service.DoubanBatchRemovalService.start(context)
-                                                }
-                                                // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
-                                                isMultiSelectMode = false
-                                                isRemoving = false
-                                            }
-                                        },
-                                        enabled = !isRemoving,
-                                        colors = ButtonDefaults.buttonColors(
-                                            containerColor = MaterialTheme.colorScheme.error
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = false, onClick = {})
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    IconButton(onClick = { isMultiSelectMode = false }) {
+                                        Icon(
+                                            Icons.AutoMirrored.Rounded.ArrowBack,
+                                            contentDescription = stringResource(R.string.common_cancel),
+                                            tint = MaterialTheme.colorScheme.primary
                                         )
-                                    ) {
-                                        if (isRemoving) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(18.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onError
-                                            )
-                                        } else {
-                                            Text(
-                                                if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
-                                                else stringResource(R.string.watchlist_remove_history)
-                                            )
-                                        }
                                     }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
-                                        Text(stringResource(R.string.common_cancel))
+                                    Text(
+                                        text = stringResource(R.string.watchlist_selected_count, selectedItems.size),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Row {
+                                        Button(
+                                            onClick = {
+                                                isRemoving = true
+                                                val ids = selectedItems.keys.toList()
+                                                val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
+                                                tabScope.launch {
+                                                    if (selectedMode == 0) {
+                                                        viewModel.batchRemoveFromWatchlist(ids, type)
+                                                    } else {
+                                                        viewModel.batchRemoveFromHistory(ids, type)
+                                                    }
+                                                    // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
+                                                    if (viewModel.isBatchRemovalRunning()) {
+                                                        com.tracktosearch.service.DoubanBatchRemovalService.start(context)
+                                                    }
+                                                    // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
+                                                    isMultiSelectMode = false
+                                                    isRemoving = false
+                                                }
+                                            },
+                                            enabled = !isRemoving,
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = MaterialTheme.colorScheme.error
+                                            )
+                                        ) {
+                                            if (isRemoving) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(18.dp),
+                                                    strokeWidth = 2.dp,
+                                                    color = MaterialTheme.colorScheme.onError
+                                                )
+                                            } else {
+                                                Text(
+                                                    if (selectedMode == 0) stringResource(R.string.watchlist_remove_watchlist)
+                                                    else stringResource(R.string.watchlist_remove_history)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        OutlinedButton(onClick = { isMultiSelectMode = false; isRemoving = false }) {
+                                            Text(stringResource(R.string.common_cancel))
+                                        }
                                     }
                                 }
                             }
