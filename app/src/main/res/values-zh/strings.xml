@@ -124,9 +124,9 @@
     <string name="trakt_search_tab_shows_count">电视剧(%d)</string>
     <string name="trakt_search_tab_persons">人物</string>
     <string name="trakt_search_tab_persons_count">人物(%d)</string>
-    <string name="trakt_search_tab_disk">网盘</string>
-    <string name="trakt_search_tab_disk_count">网盘(%d)</string>
-    <string name="trakt_search_hint_disk">搜索网盘资源</string>
+    <string name="trakt_search_tab_disk">资源</string>
+    <string name="trakt_search_tab_disk_count">资源(%d)</string>
+    <string name="trakt_search_hint_disk">搜索资源</string>
     <string name="trakt_search_hint_persons">在 Trakt 上搜索人物</string>
     <string name="trakt_search_no_persons">在 Trakt 上未找到人物</string>
 
@@ -1211,7 +1211,7 @@
     <string name="discover_filter_more_button">去影视筛选页</string>
 
     <!-- Search Source Type -->
-    <string name="search_type_disk">网盘资源</string>
+    <string name="search_type_disk">资源</string>
     <string name="search_type_movie">电影</string>
     <string name="search_type_show">电视剧</string>
     <string name="search_type_person">人物</string>

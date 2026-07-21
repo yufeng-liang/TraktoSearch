@@ -657,12 +657,10 @@ fun DiscoverScreen(
                     } else {
                         Modifier.fillMaxWidth()
                     }
-                    val shape = RoundedCornerShape(22.dp)
+                    val shape = RoundedCornerShape(20.dp)
+                    // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
                     val gradient = Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                        )
+                        listOf(Color(0xFFD8A8D8), Color(0xFFE8C0DC))
                     )
                     Box(
                         modifier = cardModifier
@@ -670,10 +668,10 @@ fun DiscoverScreen(
                             .neumorphicOuterShadow(
                                 shape = shape,
                                 isDark = isDark,
-                                elevation = 7.dp,
+                                elevation = 6.dp,
                                 darkAlpha = if (isDark) 0.35f else 0.18f,
-                                blurRadius = 18.dp,
-                                shadowOffset = 6.dp
+                                blurRadius = 16.dp,
+                                shadowOffset = 5.dp
                             )
                             .clip(shape)
                             .background(gradient)
