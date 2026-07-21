@@ -3,6 +3,8 @@ package com.tracktosearch.data.util
 import android.content.Context
 import android.os.Build
 import com.tracktosearch.BuildConfig
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -10,21 +12,33 @@ import java.io.File
 object CrashLogUploader {
 
     private const val CRASH_DIR = "crash_logs"
+    private val _uploadResult = CompletableDeferred<Boolean>()
+    val uploadResult: Deferred<Boolean> = _uploadResult
 
-    suspend fun uploadPendingLogs(context: Context) {
+    /** Called at app start — waits for current upload, returns true if all files uploaded OK. */
+    suspend fun uploadPendingLogs(context: Context): Boolean {
         val apiUrl = BuildConfig.CRASH_LOG_API_URL
         val apiToken = BuildConfig.CRASH_LOG_API_TOKEN
-        if (apiUrl.isBlank() || apiToken.isBlank()) return
+        if (apiUrl.isBlank() || apiToken.isBlank()) {
+            _uploadResult.complete(false)
+            return false
+        }
 
         val dir = File(context.filesDir, CRASH_DIR)
-        if (!dir.exists()) return
+        if (!dir.exists()) {
+            _uploadResult.complete(true)
+            return true
+        }
 
         val files = dir.listFiles()
             ?.filter { it.name.endsWith(".log") }
             ?.sortedBy { it.name }
-            ?: return
-        if (files.isEmpty()) return
+        if (files.isNullOrEmpty()) {
+            _uploadResult.complete(true)
+            return true
+        }
 
+        var allOk = true
         withContext(Dispatchers.IO) {
             for (file in files) {
                 try {
@@ -32,12 +46,16 @@ object CrashLogUploader {
                     val result = uploadLog(apiUrl, apiToken, content, context)
                     if (result) {
                         file.delete()
+                    } else {
+                        allOk = false
                     }
                 } catch (_: Exception) {
-                    // 上传失败不阻塞，下次启动重试
+                    allOk = false
                 }
             }
         }
+        _uploadResult.complete(allOk)
+        return allOk
     }
 
     private suspend fun uploadLog(

@@ -33,6 +33,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -43,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -97,14 +99,16 @@ fun MarkRecordScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // ========== 网格内容（hazeSource） ==========
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .hazeSource(state = hazeState)
+    ) {
+        // ========== 网格内容 ==========
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .hazeSource(state = hazeState),
+            modifier = Modifier.fillMaxSize(),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(
@@ -207,11 +211,11 @@ fun MarkRecordScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                 .hazeEffect(
                     state = hazeState,
                     style = HazeMaterials.thin()
                 )
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())
 
@@ -222,58 +226,62 @@ fun MarkRecordScreen(
                     .padding(start = 4.dp, end = 4.dp, top = 2.dp, bottom = 1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (searchExpanded) {
-                    IconButton(onClick = {
-                        searchExpanded = false
-                        viewModel.updateSearchQuery("")
-                    }) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = stringResource(R.string.content_desc_back)
+                CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                    if (searchExpanded) {
+                        IconButton(onClick = {
+                            searchExpanded = false
+                            viewModel.updateSearchQuery("")
+                        }) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                        OutlinedTextField(
+                            value = uiState.searchQuery,
+                            onValueChange = { viewModel.updateSearchQuery(it) },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text(stringResource(R.string.mark_records_search_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(999.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedBorderColor = Color.Transparent,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.None,
+                                imeAction = ImeAction.Search
+                            )
                         )
-                    }
-                    OutlinedTextField(
-                        value = uiState.searchQuery,
-                        onValueChange = { viewModel.updateSearchQuery(it) },
-                        modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.mark_records_search_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(999.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedBorderColor = Color.Transparent
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.None,
-                            imeAction = ImeAction.Search
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        }
+                    } else {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = stringResource(R.string.content_desc_back)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.mark_records_title),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
-                    )
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(Icons.Rounded.FilterList, contentDescription = null)
-                    }
-                } else {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = stringResource(R.string.content_desc_back)
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.mark_records_title),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { searchExpanded = true }) {
-                        Icon(Icons.Rounded.Search, contentDescription = null)
-                    }
-                    IconButton(onClick = { showFilterSheet = true }) {
-                        Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        IconButton(onClick = { searchExpanded = true }) {
+                            Icon(Icons.Rounded.Search, contentDescription = null)
+                        }
+                        IconButton(onClick = { showFilterSheet = true }) {
+                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        }
                     }
                 }
             }

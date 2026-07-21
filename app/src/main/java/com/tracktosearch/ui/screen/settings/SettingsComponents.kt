@@ -56,38 +56,44 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
 /**
- * 设置分组卡片：半透明圆角卡片，顶部显示 12sp 大写加粗分组标题。
+ * 设置分组卡片：玻璃拟态圆角卡片，顶部显示 13sp 分组标题。
  * 内部内容由调用方自行组织，通常配合 [GroupDivider] 在项之间添加细分隔线。
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SettingsGroupCard(
     title: String,
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = cardSurfaceColor(),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, bottom = 12.dp)
+    val isDark = isAppDarkTheme()
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text(
+            text = title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 0.3.sp,
+            modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 6.dp)
+        )
+        NeumorphicFrostedSurface(
+            modifier = Modifier.fillMaxWidth(),
+            isDark = isDark,
+            shape = RoundedCornerShape(20.dp),
+            backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                              else Color.White.copy(alpha = 0.70f),
+            borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                          else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+            elevation = 6.dp,
+            blurRadius = 18.dp,
+            hazeState = hazeState,
+            hazeStyle = HazeMaterials.thin()
         ) {
-            Text(
-                text = title.uppercase(),
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp)
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp),
+                content = content
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            content()
         }
     }
 }
@@ -95,10 +101,12 @@ fun SettingsGroupCard(
 /** 分组卡片内设置项之间的细 divider。 */
 @Composable
 fun ColumnScope.GroupDivider(modifier: Modifier = Modifier) {
+    val isDark = isAppDarkTheme()
     HorizontalDivider(
-        modifier = modifier.padding(horizontal = 16.dp),
+        modifier = modifier,
         thickness = 0.5.dp,
-        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+        color = if (isDark) Color.White.copy(alpha = 0.06f)
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f)
     )
 }
 
@@ -114,8 +122,7 @@ internal fun cardSurfaceColor(): Color {
 }
 
 /**
- * 设置项卡片：独占一行的圆角卡片（图标 + 标题 + 小字 + 右箭头）。
- * 用于把原列表项样式的 SettingsItem 改为卡片样式，保留小字描述。
+ * 设置项：玻璃卡片内的列表项（彩色图标块 + 标题 + 小字 + 右箭头/开关）。
  */
 @Composable
 internal fun SettingsItemCard(
@@ -124,53 +131,62 @@ internal fun SettingsItemCard(
     subtitle: String,
     onClick: () -> Unit,
     trailing: @Composable (() -> Unit)? = null,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    containerColor: Color = Color.Transparent,
+    iconTint: Color = MaterialTheme.colorScheme.primary
 ) {
     val view = LocalView.current
-    Surface(
+    val isDark = isAppDarkTheme()
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable { view.performHaptic(HapticType.CLICK); onClick() }
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(40.dp)
+                .background(
+                    color = iconTint.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    shape = RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
+                tint = iconTint,
+                modifier = Modifier.size(22.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = 15.sp
+            )
+            if (subtitle.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
                 )
-                if (subtitle.isNotEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
-            // 可选 trailing 内容(如冷却期状态标签),显示在右箭头左侧
-            if (trailing != null) {
-                Spacer(modifier = Modifier.width(8.dp))
-                trailing()
-                Spacer(modifier = Modifier.width(4.dp))
-            }
+        }
+        if (trailing != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            trailing()
+        } else {
             Icon(
                 imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -201,7 +217,8 @@ fun CustomSearchSourceItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = source.name.ifBlank { stringResource(R.string.settings_source_unnamed) },
-                    style = MaterialTheme.typography.bodyLarge
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = source.baseUrl,
@@ -213,7 +230,11 @@ fun CustomSearchSourceItem(
                 if (testResult?.isTesting == true) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(stringResource(R.string.settings_source_test), style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        stringResource(R.string.settings_source_test),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
             IconButton(onClick = onEdit) {
@@ -253,21 +274,41 @@ internal fun DataFlowCard(
     icon: ImageVector,
     title: String,
     onClick: () -> Unit,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    containerColor: Color = Color.Transparent,
+    iconTintColor: Color = MaterialTheme.colorScheme.primary
 ) {
-    Surface(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+    val view = LocalView.current
+    val isDark = isAppDarkTheme()
+    Column(
+        modifier = modifier
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .padding(vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    color = iconTintColor.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    shape = RoundedCornerShape(14.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
-            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = iconTintColor,
+                modifier = Modifier.size(26.dp)
+            )
         }
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -290,20 +331,26 @@ internal fun SettingsCard(
     loadingIcon: Boolean = false,
     subtitleColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onClick: () -> Unit,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    containerColor: Color = Color.Transparent
 ) {
     val view = LocalView.current
-    Surface(
+    val isDark = isAppDarkTheme()
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() },
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
+            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .padding(vertical = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(
+                    color = iconTintColor.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    shape = RoundedCornerShape(14.dp)
+                ),
+            contentAlignment = Alignment.Center
         ) {
             if (loadingIcon) {
                 CircularProgressIndicator(
@@ -312,43 +359,48 @@ internal fun SettingsCard(
                     color = iconTintColor
                 )
             } else if (icon != null) {
-                Icon(icon, contentDescription = null, tint = iconTintColor)
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = iconTintColor,
+                    modifier = Modifier.size(26.dp)
+                )
             }
-            if (mergeTitleAndSubtitle) {
-                // 合并显示「标题 - 小字」一行；小字为空时只显示标题，不显示破折号
-                val displayText = if (!subtitle.isNullOrEmpty()) {
-                    "$title - $subtitle"
-                } else {
-                    title
-                }
+        }
+        if (mergeTitleAndSubtitle) {
+            val displayText = if (!subtitle.isNullOrEmpty()) {
+                "$title - $subtitle"
+            } else {
+                title
+            }
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = subtitleColor,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (!subtitle.isNullOrEmpty()) {
                 Text(
-                    text = displayText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
                     color = subtitleColor,
                     textAlign = TextAlign.Center,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-            } else {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (!subtitle.isNullOrEmpty()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = subtitleColor,
-                        textAlign = TextAlign.Center,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
             }
         }
     }
@@ -460,48 +512,77 @@ internal fun SearchSourceAddCard(
 }
 
 /**
- * 观看统计大卡片：左侧图标放在主题色浅色背景方块中，右侧显示描述。
+ * 观看统计大卡片：玻璃拟态风格，左侧彩色图标块 + 右侧标题副标题 + 箭头。
  * 作为设置页第一位置，无类目 Header。
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun StatisticsCard(
     modifier: Modifier = Modifier,
+    hazeState: HazeState? = null,
     onClick: () -> Unit
 ) {
     val view = LocalView.current
-    Surface(
+    val isDark = isAppDarkTheme()
+    NeumorphicFrostedSurface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
-        shape = RoundedCornerShape(16.dp),
-        color = cardSurfaceColor(),
+        isDark = isDark,
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                          else Color.White.copy(alpha = 0.55f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                      else Color.White.copy(alpha = 0.75f),
+        elevation = 4.dp,
+        blurRadius = 16.dp,
+        hazeState = hazeState,
+        hazeStyle = HazeMaterials.thin()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Rounded.BarChart,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(28.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.BarChart,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.settings_view_statistics),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stringResource(R.string.settings_view_statistics_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }

@@ -574,28 +574,6 @@ internal fun DoubanRecommendSection(
                         .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    // 边框周边内发光高光（C方案玻璃凸起感，避免覆盖文字）
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .clip(shape)
-                            .innerShadow(
-                                shape = shape,
-                                shadow = Shadow(
-                                    radius = 8.dp,
-                                    color = Color.White.copy(alpha = 0.35f),
-                                    offset = DpOffset((-2).dp, (-2).dp)
-                                )
-                            )
-                            .innerShadow(
-                                shape = shape,
-                                shadow = Shadow(
-                                    radius = 8.dp,
-                                    color = Color.Black.copy(alpha = 0.10f),
-                                    offset = DpOffset(2.dp, 2.dp)
-                                )
-                            )
-                    )
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -675,19 +653,21 @@ internal fun DoubanRecommendSection(
 internal fun CapsuleTabSelector(
     tabs: List<String>,
     selectedIndex: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    sizeMultiplier: Float = 1f
 ) {
     require(tabs.isNotEmpty()) { "tabs 不能为空" }
-    val tabPadding = 12.dp
-    val tabHeight = 31.dp
+    val tabPadding = (12 * sizeMultiplier).dp
+    val tabHeight = (31 * sizeMultiplier).dp
+    val fontSize = (13 * sizeMultiplier).sp
     // 用 TextMeasurer 同步测量文字宽度，避免 onTextLayout 异步回调导致宽度跳变
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val tabWidths = tabs.map { label ->
-        remember(label) {
+        remember(label, sizeMultiplier) {
             val widthPx = textMeasurer.measure(
                 text = label,
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                style = TextStyle(fontSize = fontSize, fontWeight = FontWeight.SemiBold)
             ).size.width
             with(density) { widthPx.toDp() + tabPadding * 2 }
         }

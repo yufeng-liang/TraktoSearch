@@ -1,6 +1,8 @@
 /**
+ * Crash Logs API
  * POST /api/crash-logs — Receive crash log from app
  * GET  /api/crash-logs — List crash logs (summary)
+ * GET  /api/crash-logs/:id — Get single crash log detail
  */
 export async function onRequestPost(context) {
     const { request, env } = context;
@@ -43,18 +45,46 @@ export async function onRequestPost(context) {
 }
 
 export async function onRequestGet(context) {
-    const { env } = context;
-    const url = new URL(context.request.url);
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
+    const { env, request } = context;
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.replace('/api/crash-logs/', '').replace('/api/crash-logs', '').split('/').filter(Boolean);
 
+    // GET /api/crash-logs/:id — single detail
+    if (pathSegments.length > 0) {
+        const id = pathSegments[0];
+        try {
+            const fullKey = id.startsWith('crash_') ? id : `crash_${id}`;
+            let val = await env.CRASH_LOGS.get(fullKey, { type: 'json' });
+            if (!val) {
+                val = await env.CRASH_LOGS.get(id, { type: 'json' });
+            }
+            if (!val) {
+                return new Response(JSON.stringify({ error: 'Not found' }), {
+                    status: 404,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            }
+            return new Response(JSON.stringify(val), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        } catch (err) {
+            return new Response(JSON.stringify({ error: err.message }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    // GET /api/crash-logs — list
     try {
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
         const list = await env.CRASH_LOGS.list({
             limit,
             prefix: 'crash_',
             reverse: true
         });
 
-        // Fetch each key's value for summary
         const entries = [];
         for (const key of list.keys) {
             const val = await env.CRASH_LOGS.get(key.name, { type: 'json' });

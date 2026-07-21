@@ -83,7 +83,8 @@ fun CacheManagementItem(
                     Text(
                         text = stringResource(R.string.settings_cache_management),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = stringResource(R.string.settings_cache_total, formatFileSize(breakdown.totalBytes)),
@@ -94,7 +95,8 @@ fun CacheManagementItem(
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -171,7 +173,8 @@ private fun CacheCategoryRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(labelRes),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 text = stringResource(descRes),

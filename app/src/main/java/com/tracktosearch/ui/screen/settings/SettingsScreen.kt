@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.automirrored.rounded.HelpOutline
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BrokenImage
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.School
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.SyncAlt
+import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -82,6 +84,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
@@ -102,13 +106,24 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class, ExperimentalSharedTransitionApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    kotlinx.coroutines.FlowPreview::class,
+    ExperimentalSharedTransitionApi::class,
+    ExperimentalHazeMaterialsApi::class
+)
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit = {},
@@ -124,6 +139,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
+    val settingsHazeState = remember { HazeState() }
+    val isDark = isAppDarkTheme()
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -324,10 +341,11 @@ fun SettingsScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        containerColor = Color.Transparent,
         snackbarHost = {
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier.padding(bottom = 80.dp) // 避免被底部导航遮挡
+                modifier = Modifier.padding(bottom = 80.dp)
             )
         }
     ) { padding ->
@@ -340,7 +358,8 @@ fun SettingsScreen(
             LazyColumn(
                 state = settingsListState,
                 modifier = modifier
-                    .fillMaxSize(),
+                    .fillMaxSize()
+                    .hazeSource(state = settingsHazeState),
                 contentPadding = PaddingValues(
                     top = 65.dp + statusBarHeight,
                     bottom = 80.dp
@@ -359,6 +378,7 @@ fun SettingsScreen(
                 } else { Modifier }
                 StatisticsCard(
                     modifier = statisticsEntryModifier,
+                    hazeState = settingsHazeState,
                     onClick = onStatisticsClick
                 )
             }
@@ -366,13 +386,19 @@ fun SettingsScreen(
             // 标记记录（仅登录可见，独占整行卡片）
             if (isLoggedIn) {
                 item(key = "mark_records_entry") {
-                    MarkRecordsEntryCard(onClick = onMarkRecordsClick)
+                    MarkRecordsEntryCard(
+                    onClick = onMarkRecordsClick,
+                    hazeState = settingsHazeState
+                )
                 }
             }
 
             // 外观
             item(key = "group_appearance") {
-                SettingsGroupCard(title = stringResource(R.string.settings_appearance)) {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_appearance),
+                    hazeState = settingsHazeState
+                ) {
                     val themeName = when (currentTheme) {
                         ThemeStorage.MODE_DARK -> stringResource(R.string.theme_dark)
                         ThemeStorage.MODE_LIGHT -> stringResource(R.string.theme_light)
@@ -449,13 +475,16 @@ fun SettingsScreen(
 
             // 搜索源（State 收集下沉到 SearchSourcesItem，开关切换/测试结果更新只重组本 item）
             item(key = "group_search") {
-                SearchSourcesItem(viewModel = viewModel)
+                SearchSourcesItem(viewModel = viewModel, hazeState = settingsHazeState)
             }
 
             // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
             if (isLoggedIn) {
                 item(key = "group_notification") {
-                    SettingsGroupCard(title = stringResource(R.string.settings_notification)) {
+                    SettingsGroupCard(
+                        title = stringResource(R.string.settings_notification),
+                        hazeState = settingsHazeState
+                    ) {
                         NotificationItem(
                             viewModel = viewModel,
                             containerColor = Color.Transparent
@@ -466,7 +495,10 @@ fun SettingsScreen(
 
             // 自定义板块（合并原「发现页栏目」+「自定义详情页」）
             item(key = "group_custom") {
-                SettingsGroupCard(title = stringResource(R.string.settings_custom_section)) {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_custom_section),
+                    hazeState = settingsHazeState
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -492,7 +524,10 @@ fun SettingsScreen(
             // 数据管理（仅登录用户可见，依赖 Trakt API）
             if (isLoggedIn) {
                 item(key = "group_data") {
-                    SettingsGroupCard(title = stringResource(R.string.settings_data_management)) {
+                    SettingsGroupCard(
+                        title = stringResource(R.string.settings_data_management),
+                        hazeState = settingsHazeState
+                    ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             if (exportImportState.isExporting) {
                                 LinearProgressIndicator(
@@ -624,10 +659,11 @@ fun SettingsScreen(
                                                 showConsistencyConfirm = true
                                             }
                                         }
-                                    },
-                                    containerColor = Color.Transparent
-                                )
-                            }
+                                },
+                                trailing = {},
+                                containerColor = Color.Transparent
+                            )
+                        }
 
                             // 云端同步进行中:显示进度条
                             if (cloudSyncLoading) {
@@ -673,7 +709,10 @@ fun SettingsScreen(
 
             // 账户：已登录用户显示 Trakt+豆瓣账号信息；访客显示"登录 Trakt"入口
             item(key = "group_account") {
-                SettingsGroupCard(title = stringResource(R.string.settings_account)) {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_account),
+                    hazeState = settingsHazeState
+                ) {
                     if (isLoggedIn) {
                         AccountItem(
                             viewModel = viewModel,
@@ -694,7 +733,10 @@ fun SettingsScreen(
 
             // 缓存管理（倒数第二）：概览行 + 点击展开 5 个类目
             item(key = "group_storage") {
-                SettingsGroupCard(title = stringResource(R.string.settings_storage)) {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_storage),
+                    hazeState = settingsHazeState
+                ) {
                     CacheManagementSectionItem(
                         viewModel = viewModel,
                         onClearCategory = { category ->
@@ -709,7 +751,10 @@ fun SettingsScreen(
 
             // 关于
             item(key = "group_about") {
-                SettingsGroupCard(title = stringResource(R.string.settings_about)) {
+                SettingsGroupCard(
+                    title = stringResource(R.string.settings_about),
+                    hazeState = settingsHazeState
+                ) {
                     AboutItem(
                         hasUpdate = updateInfo?.hasUpdate == true,
                         latestVersion = latestVersion,
@@ -734,20 +779,31 @@ fun SettingsScreen(
                 }
             }
         }
-            // 标题栏（含状态栏）：纯色背景，避免 Haze 实时模糊导致滑动卡顿
-            Column(
+            // 毛玻璃吸顶标题栏（thin 模糊，与发现/我的页一致）
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-            ) {
-                Spacer(modifier = Modifier.statusBarsPadding())
-                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        text = stringResource(R.string.settings_title),
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                    .hazeEffect(
+                        state = settingsHazeState,
+                        style = HazeMaterials.thin()
                     )
+            ) {
+                Column {
+                    Spacer(modifier = Modifier.statusBarsPadding())
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.settings_title),
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = (-0.5).sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
             }
         }
@@ -1154,7 +1210,10 @@ fun SettingsScreen(
  * State 收集局部化到本函数，开关切换/测试结果/配置变更只重组本 item，不波及 LazyColumn 其他 item。
  */
 @Composable
-private fun SearchSourcesItem(viewModel: SettingsViewModel) {
+private fun SearchSourcesItem(
+    viewModel: SettingsViewModel,
+    hazeState: dev.chrisbanes.haze.HazeState? = null
+) {
     val pansouEnabled by viewModel.pansouEnabled.collectAsStateWithLifecycle()
     val panhubEnabled by viewModel.panhubEnabled.collectAsStateWithLifecycle()
     val zresoEnabled by viewModel.zresoEnabled.collectAsStateWithLifecycle()
@@ -1166,7 +1225,10 @@ private fun SearchSourcesItem(viewModel: SettingsViewModel) {
     var showEditCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
     var showDeleteCustomSource by remember { mutableStateOf<CustomSearchSource?>(null) }
 
-    SettingsGroupCard(title = stringResource(R.string.settings_search)) {
+    SettingsGroupCard(
+        title = stringResource(R.string.settings_search),
+        hazeState = hazeState
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1293,41 +1355,73 @@ private fun SearchSourcesItem(viewModel: SettingsViewModel) {
  * 标记记录入口卡片（仅登录用户可见，独占整行）。
  * 与 StatisticsCard 风格保持一致，点击跳转标记记录页。
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
-private fun MarkRecordsEntryCard(onClick: () -> Unit) {
+private fun MarkRecordsEntryCard(
+    onClick: () -> Unit,
+    hazeState: dev.chrisbanes.haze.HazeState? = null
+) {
     val view = LocalView.current
-    Surface(
+    val isDark = isAppDarkTheme()
+    NeumorphicFrostedSurface(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clickable { view.performHaptic(HapticType.CLICK); onClick() },
-        shape = RoundedCornerShape(16.dp),
-        color = cardSurfaceColor()
+        isDark = isDark,
+        shape = RoundedCornerShape(20.dp),
+        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                          else Color.White.copy(alpha = 0.55f),
+        borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                      else Color.White.copy(alpha = 0.75f),
+        elevation = 4.dp,
+        blurRadius = 16.dp,
+        hazeState = hazeState,
+        hazeStyle = HazeMaterials.thin()
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Rounded.History,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        shape = RoundedCornerShape(14.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.History,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.mark_records_settings_entry),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = stringResource(R.string.mark_records_settings_entry_desc),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            Icon(
+                imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 }
@@ -1366,7 +1460,8 @@ private fun SharedTransitionSwitchCard(
                 Text(
                     text = stringResource(R.string.settings_shared_transition),
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = stringResource(R.string.settings_shared_transition_subtitle),
@@ -1392,10 +1487,11 @@ private fun SharedTransitionSwitchCard(
  * 从 LazyColumn item 抽取为独立函数：3 个开关状态收集局部化到本函数，
  * 开关变化只重组本函数，不波及 LazyColumn 其他 item。
  */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun NotificationItem(
     viewModel: SettingsViewModel,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
+    containerColor: Color = Color.Transparent
 ) {
     val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
     val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
@@ -1407,109 +1503,171 @@ private fun NotificationItem(
             viewModel.setNotificationEnabled(false)
         }
     }
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        shape = RoundedCornerShape(12.dp),
-        color = containerColor,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            val view = LocalView.current
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+    val isDark = isAppDarkTheme()
+    val view = LocalView.current
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    if (notificationEnabled) {
+                        viewModel.setNotificationEnabled(false)
+                    } else {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        viewModel.setNotificationEnabled(true)
+                    }
+                }
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = if (isDark) 0.2f else 0.12f),
+                        shape = RoundedCornerShape(12.dp)
+                    ),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     Icons.Rounded.Notifications,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.settings_notification_enabled),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = stringResource(R.string.settings_notification_enabled_desc),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = notificationEnabled,
-                    onCheckedChange = { enabled ->
-                        if (enabled) {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                            }
-                            viewModel.setNotificationEnabled(true)
-                        } else {
-                            viewModel.setNotificationEnabled(false)
-                        }
-                    },
-                    colors = appSwitchColors()
+                    modifier = Modifier.size(22.dp)
                 )
             }
-            AnimatedVisibility(visible = notificationEnabled) {
-                Column {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Spacer(modifier = Modifier.width(28.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.settings_notification_release),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.settings_notification_release_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.settings_notification_enabled),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 15.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.settings_notification_enabled_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = 12.sp
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = notificationEnabled,
+                onCheckedChange = { enabled ->
+                    if (enabled) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = releaseEnabled,
-                            onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(it) },
-                            colors = appSwitchColors()
+                        viewModel.setNotificationEnabled(true)
+                    } else {
+                        viewModel.setNotificationEnabled(false)
+                    }
+                },
+                colors = appSwitchColors()
+            )
+        }
+        AnimatedVisibility(visible = notificationEnabled) {
+            Column {
+                GroupDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(!releaseEnabled) }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.tertiary.copy(alpha = if (isDark) 0.2f else 0.12f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Movie,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Spacer(modifier = Modifier.width(28.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.settings_notification_new_season),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = stringResource(R.string.settings_notification_new_season_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = newSeasonEnabled,
-                            onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(it) },
-                            colors = appSwitchColors()
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_notification_release),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.settings_notification_release_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = releaseEnabled,
+                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setReleaseReminderEnabled(it) },
+                        colors = appSwitchColors()
+                    )
+                }
+                GroupDivider()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(!newSeasonEnabled) }
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.secondary.copy(alpha = if (isDark) 0.2f else 0.12f),
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.Tv,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.settings_notification_new_season),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.settings_notification_new_season_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = newSeasonEnabled,
+                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setNewSeasonReminderEnabled(it) },
+                        colors = appSwitchColors()
+                    )
                 }
             }
         }

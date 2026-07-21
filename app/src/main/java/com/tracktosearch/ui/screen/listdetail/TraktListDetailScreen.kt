@@ -42,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -114,6 +115,7 @@ fun TraktListDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .hazeSource(state = hazeState)
         ) {
             when {
                 // 首次加载：骨架屏
@@ -121,9 +123,7 @@ fun TraktListDetailScreen(
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .hazeSource(state = hazeState),
+                            modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
@@ -146,11 +146,11 @@ fun TraktListDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(loadingHeaderModifier)
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                                 .hazeEffect(
                                     state = hazeState,
                                     style = HazeMaterials.thin()
                                 )
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                                 .clickable(enabled = false, onClick = {})
                         ) {
                             Spacer(modifier = Modifier.statusBarsPadding())
@@ -170,6 +170,7 @@ fun TraktListDetailScreen(
                                 Text(
                                     text = stringResource(R.string.common_loading),
                                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
@@ -206,9 +207,7 @@ fun TraktListDetailScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
                         state = gridState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .hazeSource(state = hazeState),
+                        modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
@@ -264,11 +263,11 @@ fun TraktListDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(headerModifier)
+                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                             .hazeEffect(
                                 state = hazeState,
                                 style = HazeMaterials.thin()
                             )
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                             .clickable(enabled = false, onClick = {})
                     ) {
                         Spacer(modifier = Modifier.statusBarsPadding())

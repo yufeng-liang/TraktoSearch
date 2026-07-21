@@ -4,5 +4,5 @@ pages_build_output_dir = "public"
 
 # 崩溃日志存储 KV
 kv_namespaces = [
-  { binding = "CRASH_LOGS", id = "__FILL_IN_AFTER_CREATING_KV__" }
+  { binding = "CRASH_LOGS", id = "d6fc37992e6d47fc9fe45207923627a3" }
 ]

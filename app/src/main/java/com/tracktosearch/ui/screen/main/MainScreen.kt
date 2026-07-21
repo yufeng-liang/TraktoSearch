@@ -389,8 +389,11 @@ fun MainScreen(
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
-            // 底部导航毛玻璃：与发现页吸顶标题栏同款（半透明背景 + thin 模糊）
-            val navBackgroundColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f) else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+            // 底部导航毛玻璃：thick 强模糊 + 50% 染色
+            val navHazeStyle = HazeStyle(
+                backgroundColor = Color.Transparent,
+                tints = listOf(HazeTint(color = if (isDark) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.50f)))
+            )
             NeumorphicFrostedSurface(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -403,12 +406,12 @@ fun MainScreen(
                 elevation = 8.dp,
                 blurRadius = 22.dp,
                 shadowOffset = 6.dp,
-                backgroundColor = navBackgroundColor,
+                backgroundColor = Color.Transparent,
                 borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.45f),
                 darkShadowAlpha = if (isDark) 0.38f else 0.16f,
                 lightShadowAlpha = 0f,
                 hazeState = hazeState,
-                hazeStyle = dev.chrisbanes.haze.materials.HazeMaterials.thin()
+                hazeStyle = navHazeStyle
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp

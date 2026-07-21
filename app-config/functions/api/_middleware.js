@@ -4,10 +4,7 @@
  */
 export async function onRequest(context) {
     const { request, env } = context;
-    const url = new URL(request.url);
 
-    // GET /api/crash-logs 允许不带 token（返回空列表也安全）
-    // 但最好还是验证。这里统一验证。
     const authHeader = request.headers.get('Authorization') || '';
     const token = authHeader.replace('Bearer ', '').trim();
 

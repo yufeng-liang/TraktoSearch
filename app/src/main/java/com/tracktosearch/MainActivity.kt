@@ -62,6 +62,7 @@ import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
@@ -526,12 +527,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkCrashAndPrompt() {
-        // IO 线程读取崩溃次数和日志
+    private suspend fun checkCrashAndPrompt() {
         val crashCount = CrashHandler.getAndResetCrashCount(this)
         if (crashCount < 1) return
+
+        // 等待自动上传结果（最多 8s），成功则不弹窗
+        val uploadOk = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+            CrashLogUploader.uploadResult.await()
+        } ?: false
+
+        if (uploadOk) {
+            CrashHandler.clearCrashLogs(this)
+            return
+        }
+
         val logs = CrashHandler.getCrashLogs(this)
-        // 回到主线程显示 Dialog
         runOnUiThread {
             AlertDialog.Builder(this)
                 .setTitle(getString(R.string.crash_dialog_title))

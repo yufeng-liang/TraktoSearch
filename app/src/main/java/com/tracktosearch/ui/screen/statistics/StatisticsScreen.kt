@@ -86,8 +86,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
-import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
+import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -130,6 +130,7 @@ fun StatisticsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .hazeSource(state = statsHazeState)
         ) {
             if (uiState.initialLoading) {
                 StatisticsSkeleton()
@@ -169,9 +170,7 @@ fun StatisticsScreen(
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .hazeSource(state = statsHazeState),
+                    modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -335,11 +334,11 @@ fun StatisticsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(headerModifier)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                     .hazeEffect(
                         state = statsHazeState,
                         style = HazeMaterials.thin()
                     )
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
                     .clickable(enabled = false, onClick = {})
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -352,7 +351,12 @@ fun StatisticsScreen(
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.detail_back), tint = MaterialTheme.colorScheme.primary)
                 }
-                Text(stringResource(R.string.statistics_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    text = stringResource(R.string.statistics_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
                 Spacer(modifier = Modifier.width(4.dp))
                 IconButton(
                     onClick = { showInfoDialog = true },

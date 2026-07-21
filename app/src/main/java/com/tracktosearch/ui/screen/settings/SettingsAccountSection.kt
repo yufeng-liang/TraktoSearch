@@ -72,7 +72,8 @@ fun VersionItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.settings_version),
-                style = MaterialTheme.typography.bodyLarge
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(2.dp))
             // 版本副标题：有新版本用主题色显示"最新版本 xxx"，无新版本显示"已是最新版本xxx"
@@ -220,6 +221,7 @@ internal fun AccountRow(
                         text = primaryName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )

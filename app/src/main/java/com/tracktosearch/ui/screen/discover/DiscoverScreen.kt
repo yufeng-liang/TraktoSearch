@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForwardIos
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.FormatListNumbered
 import androidx.compose.material3.CircularProgressIndicator
@@ -345,12 +346,14 @@ fun DiscoverScreen(
                                 val trendingListState = if (uiState.trendingTimeWindow == "day") trendingDayListState else trendingWeekListState
                                 Column {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             text = stringResource(R.string.discover_trending),
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDark) Color.White else Color(0xFF1A1A2E)
                                         )
                                         Spacer(modifier = Modifier.width(12.dp))
                                         // 今日/本周切换条（统一组件）
@@ -367,16 +370,25 @@ fun DiscoverScreen(
                                         )
                                         Spacer(modifier = Modifier.weight(1f))
                                         if (uiState.tmdbPopularMovies.isNotEmpty()) {
+                                            val actionColor = MaterialTheme.colorScheme.primary
                                             Row(
                                                 modifier = Modifier
                                                     .clickable { showPopularAll = true }
                                                     .padding(horizontal = 4.dp, vertical = 2.dp),
-                                                verticalAlignment = Alignment.CenterVertically
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp)
                                             ) {
                                                 Text(
                                                     text = stringResource(R.string.discover_view_all, uiState.tmdbPopularMovies.size),
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.primary
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = actionColor
+                                                )
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.ArrowForwardIos,
+                                                    contentDescription = stringResource(R.string.content_desc_view_all),
+                                                    modifier = Modifier.size(12.dp),
+                                                    tint = actionColor
                                                 )
                                             }
                                         }
@@ -566,20 +578,31 @@ fun DiscoverScreen(
                                                         )
                                                     }
                                                 } else { Modifier }
+                                                val interactionSource = remember { MutableInteractionSource() }
+                                                val isPressed by interactionSource.collectIsPressedAsState()
+                                                val cardScale by animateFloatAsState(
+                                                    targetValue = if (isPressed) 0.98f else 1f,
+                                                    label = "trakt_list_card_scale_${index}"
+                                                )
                                                 Box(modifier = Modifier.fillMaxWidth().then(listCardModifier).fadeSlideIn(index)) {
                                                     NeumorphicFrostedSurface(
                                                         modifier = Modifier
                                                             .fillMaxWidth()
-                                                            .clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
+                                                            .scale(cardScale)
+                                                            .clickable(
+                                                                interactionSource = interactionSource,
+                                                                indication = null,
+                                                                onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
+                                                            ),
                                                         isDark = isDark,
                                                         shape = RoundedCornerShape(18.dp),
-                                                        elevation = 5.dp,
-                                                        blurRadius = 14.dp,
-                                                        shadowOffset = 4.dp,
-                                                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.45f),
-                                                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.70f),
-                                                        darkShadowAlpha = if (isDark) 0.25f else 0.10f,
-                                                        lightShadowAlpha = if (isDark) 0.08f else 0.55f,
+                                                        elevation = 6.dp,
+                                                        blurRadius = 16.dp,
+                                                        shadowOffset = 5.dp,
+                                                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+                                                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+                                                        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+                                                        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
                                                         hazeState = null
                                                     ) {
                                                         Row(
@@ -701,13 +724,10 @@ fun DiscoverScreen(
                     }
                 }
             }
-            // 毛玻璃吸顶标题栏（严格复刻网页原型：半透明背景 + thin 模糊 + 28sp ExtraBold 标题 + 42dp 玻璃图标按钮 + 底部白色高亮分隔线）
-            val topBarColor = if (isDark) Color(0xFF13132A).copy(alpha = 0.55f)
-                              else Color(0xFFF0F4FF).copy(alpha = 0.55f)
+            // 毛玻璃吸顶标题栏（仅 thin 模糊，不叠 surface 背景，更通透）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(topBarColor)
                     .hazeEffect(
                         state = discoverHazeState,
                         style = HazeMaterials.thin()
@@ -718,7 +738,7 @@ fun DiscoverScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -729,6 +749,7 @@ fun DiscoverScreen(
                             letterSpacing = (-0.5).sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        // 两个拟态玻璃图标按钮右对齐
                         Row(verticalAlignment = Alignment.CenterVertically) {
                         // 当从右上角图标进入筛选页时（activeFilterEntry == "icon"），给图标加 sharedElement 与筛选页返回箭头配对
                         val iconModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && activeFilterEntry == "icon" && LocalSharedTransitionEnabled.current) {
@@ -768,16 +789,6 @@ fun DiscoverScreen(
                             )
                         }
                     }
-                    // 底部白色高亮分隔线（网页原型同款）
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(
-                                if (isDark) Color.White.copy(alpha = 0.15f)
-                                else Color.White.copy(alpha = 0.50f)
-                            )
-                    )
                 }
             }
         }
@@ -1036,28 +1047,6 @@ private fun CategoryHeroCard(
             )
             .padding(16.dp)
     ) {
-        // 边框周边内发光高光（C方案玻璃凸起感）
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clip(shape)
-                .innerShadow(
-                    shape = shape,
-                    shadow = Shadow(
-                        radius = 8.dp,
-                        color = Color.White.copy(alpha = if (isDark) 0.18f else 0.40f),
-                        offset = DpOffset((-2).dp, (-2).dp)
-                    )
-                )
-                .innerShadow(
-                    shape = shape,
-                    shadow = Shadow(
-                        radius = 8.dp,
-                        color = Color.Black.copy(alpha = if (isDark) 0.15f else 0.08f),
-                        offset = DpOffset(2.dp, 2.dp)
-                    )
-                )
-        )
         Column(
             modifier = Modifier.align(Alignment.BottomStart),
             verticalArrangement = Arrangement.spacedBy(2.dp)

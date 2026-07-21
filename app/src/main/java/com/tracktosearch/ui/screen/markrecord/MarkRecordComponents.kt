@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -102,60 +104,68 @@ fun MarkRecordItemRow(
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min),
             verticalAlignment = Alignment.Top
         ) {
-            // 海报 64×96dp
+            // 海报固定 80×120dp（2:3 比例），确保信息列底部行能对齐海报底部
+            val posterWidth = 80.dp
+            val posterHeight = 120.dp
             val fullPosterUrl = buildFullPosterUrl(item.posterUrl)
-            if (fullPosterUrl != null) {
-                AsyncImage(
-                    model = remember(fullPosterUrl) {
-                        ImageRequest.Builder(context)
-                            .data(fullPosterUrl)
-                            .size(150)
-                            .crossfade(false)
-                            .listener(
-                                onSuccess = { _, result ->
-                                    scope.launch {
-                                        val bitmap = result.drawable.toBitmap()
-                                        val argb = posterColorExtractor.extractDominantColor(fullPosterUrl, bitmap)
-                                        if (argb != 0L) dominantColor = Color(argb)
+            Box(
+                modifier = Modifier
+                    .width(posterWidth)
+                    .height(posterHeight)
+                    .clip(RoundedCornerShape(8.dp))
+            ) {
+                if (fullPosterUrl != null) {
+                    AsyncImage(
+                        model = remember(fullPosterUrl) {
+                            ImageRequest.Builder(context)
+                                .data(fullPosterUrl)
+                                .size(150)
+                                .crossfade(false)
+                                .listener(
+                                    onSuccess = { _, result ->
+                                        scope.launch {
+                                            val bitmap = result.drawable.toBitmap()
+                                            val argb = posterColorExtractor.extractDominantColor(fullPosterUrl, bitmap)
+                                            if (argb != 0L) dominantColor = Color(argb)
+                                        }
                                     }
-                                }
-                            )
-                            .build()
-                    },
-                    contentDescription = item.displayTitle.ifBlank { item.title },
-                    modifier = Modifier
-                        .fillMaxWidth(0.4f)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(8.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.4f)
-                        .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "?",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                .build()
+                        },
+                        contentDescription = item.displayTitle.ifBlank { item.title },
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "?",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.width(6.dp))
 
-            // 信息列：用 Box 按海报高度定位，标题区顶部对齐、底部行底部对齐
+            // 信息列：fillMaxHeight 拉满 Row 高度（= 海报 120dp）
             Box(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
-                // 标题区（顶部）
+                // 顶部内容区
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -172,6 +182,7 @@ fun MarkRecordItemRow(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(Modifier.height(4.dp))
                     // 年份 + 当前状态徽标（仅状态变更时显示），徽标右对齐
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -192,13 +203,13 @@ fun MarkRecordItemRow(
                     }
                 }
 
-                // 底部行：相对时间 + 操作胶囊（右对齐）
-                Row(
+                // 底部内容区：相对时间 + 操作胶囊，整体下对齐卡片底部
+                Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxWidth()
                 ) {
+                    // 相对时间
                     Text(
                         text = formatRelativeTime(item.actedAt, context),
                         style = MaterialTheme.typography.bodySmall,
@@ -206,9 +217,14 @@ fun MarkRecordItemRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.weight(1f))
-                    Spacer(Modifier.width(4.dp))
-                    ActionTypeChip(item.actionType)
+                    Spacer(Modifier.height(4.dp))
+                    // 操作胶囊（右对齐）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        ActionTypeChip(item.actionType)
+                    }
                 }
             }
         }

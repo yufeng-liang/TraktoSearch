@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -94,14 +93,26 @@ fun PosterCard(
         }
     }
 
+    val isDark = isAppDarkTheme()
     Box(modifier = modifier.scale(scale)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .shadow(8.dp, RoundedCornerShape(12.dp))
+                .neumorphicOuterShadow(
+                    shape = RoundedCornerShape(12.dp),
+                    isDark = isDark,
+                    elevation = 4.dp,
+                    darkAlpha = if (isDark) 0.4f else 0.12f
+                )
                 .clip(RoundedCornerShape(12.dp))
                 .then(posterModifier)
+                .neumorphicInnerShadow(
+                    shape = RoundedCornerShape(12.dp),
+                    isDark = isDark,
+                    elevation = 4.dp,
+                    lightAlpha = if (isDark) 0.08f else 0.55f
+                )
                 .then(
                     if (onClick != null) {
                         if (onLongClick != null) {

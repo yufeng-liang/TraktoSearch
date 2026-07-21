@@ -110,6 +110,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -323,9 +324,10 @@ fun SearchScreen(
             Column(modifier = Modifier.align(Alignment.CenterStart)) {
                 Text(
                     text = stringResource(R.string.search_title),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = if (isDark) Color.White else Color(0xFF263238),
-                    fontWeight = FontWeight.Bold
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = stringResource(R.string.search_subtitle),
@@ -1106,8 +1108,8 @@ private fun NeumorphicChip(
     onClick: () -> Unit,
     isSelected: Boolean,
     isDark: Boolean,
-    blurRadius: Dp = 12.dp,
-    shadowOffset: Dp = 4.dp,
+    blurRadius: Dp = 10.dp,
+    shadowOffset: Dp = 3.dp,
     content: @Composable () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -1119,12 +1121,12 @@ private fun NeumorphicChip(
     val bgColor = if (isSelected) {
         if (isDark) Color(0xFF3949AB).copy(alpha = 0.25f) else Color(0xFF5C6BC0).copy(alpha = 0.12f)
     } else {
-        if (isDark) Color(0xFF222244).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.55f)
+        if (isDark) Color(0xFF222244).copy(alpha = 0.55f) else Color.White.copy(alpha = 0.70f)
     }
     val borderColor = if (isSelected) {
         if (isDark) Color(0xFF5C6BC0).copy(alpha = 0.4f) else Color(0xFF5C6BC0).copy(alpha = 0.25f)
     } else {
-        if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.7f)
+        if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFD0D5DC).copy(alpha = 0.85f)
     }
     val elevation = 5.dp
     val chipShape = RoundedCornerShape(22.dp)
@@ -1136,8 +1138,8 @@ private fun NeumorphicChip(
                 shape = chipShape,
                 isDark = isDark,
                 elevation = elevation,
-                darkAlpha = if (isDark) 0.30f else 0.12f,
-                lightAlpha = if (isDark) 0.06f else 0.60f,
+                darkAlpha = if (isDark) 0.30f else 0.18f,
+                lightAlpha = if (isDark) 0.06f else 0.65f,
                 blurRadius = blurRadius,
                 shadowOffset = shadowOffset
             )
@@ -1156,6 +1158,7 @@ private fun NeumorphicChip(
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun SearchHistoryTwoRow(
     history: List<SearchHistoryItem>,
     onHistoryClick: (SearchHistoryItem) -> Unit,
@@ -1171,10 +1174,6 @@ private fun SearchHistoryTwoRow(
         "show" to Color(0xFFFFD54F),
         "person" to Color(0xFFF48FB1)
     )
-    val chunked = remember(history) {
-        val mid = (history.size + 1) / 2
-        listOf(history.take(mid), history.drop(mid))
-    }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -1197,76 +1196,73 @@ private fun SearchHistoryTwoRow(
                 )
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            chunked.forEach { rowItems ->
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            history.forEach { item ->
+                val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
+                val isSelected = item.keyword == selectedKeyword
+                val textColor = if (isSelected) {
+                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                } else {
+                    if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
+                }
+                val iconTint = if (isSelected) {
+                    if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
+                } else {
+                    if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
+                }
+                NeumorphicChip(
+                    onClick = { onHistoryClick(item) },
+                    isSelected = isSelected,
+                    isDark = isDark
                 ) {
-                    items(rowItems, key = { "${it.type}_${it.keyword}" }) { item ->
-                        val tagColor = typeColorMap[item.type] ?: Color(0xFF4CAF50)
-                        val isSelected = item.keyword == selectedKeyword
-                        val textColor = if (isSelected) {
-                            if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
-                        } else {
-                            if (isDark) Color.White.copy(alpha = 0.85f) else Color(0xFF455A64)
-                        }
-                        val iconTint = if (isSelected) {
-                            if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)
-                        } else {
-                            if (isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF78909C)
-                        }
-                        NeumorphicChip(
-                            onClick = { onHistoryClick(item) },
-                            isSelected = isSelected,
-                            isDark = isDark
+                    Row(
+                        modifier = Modifier.padding(start = 15.dp, top = 9.dp, end = 10.dp, bottom = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Rounded.History,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = iconTint
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = when (item.type) {
+                                "disk" -> stringResource(R.string.search_type_disk)
+                                "movie" -> stringResource(R.string.search_type_movie)
+                                "show" -> stringResource(R.string.search_type_show)
+                                "person" -> stringResource(R.string.search_type_person)
+                                else -> item.type
+                            },
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                            color = if (isSelected) (if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)) else tagColor,
+                            maxLines = 1,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = item.keyword,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clickable { onHistoryDelete(item) },
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(
-                                modifier = Modifier.padding(start = 15.dp, top = 9.dp, end = 10.dp, bottom = 9.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Rounded.History,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = iconTint
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = when (item.type) {
-                                        "disk" -> stringResource(R.string.search_type_disk)
-                                        "movie" -> stringResource(R.string.search_type_movie)
-                                        "show" -> stringResource(R.string.search_type_show)
-                                        "person" -> stringResource(R.string.search_type_person)
-                                        else -> item.type
-                                    },
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                    color = if (isSelected) (if (isDark) Color(0xFF9FA8DA) else Color(0xFF5C6BC0)) else tagColor,
-                                    maxLines = 1,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = item.keyword,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = textColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clickable { onHistoryDelete(item) },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Close,
-                                        contentDescription = stringResource(R.string.search_history_delete),
-                                        modifier = Modifier.size(14.dp),
-                                        tint = iconTint
-                                    )
-                                }
-                            }
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = stringResource(R.string.search_history_delete),
+                                modifier = Modifier.size(14.dp),
+                                tint = iconTint
+                            )
                         }
                     }
                 }

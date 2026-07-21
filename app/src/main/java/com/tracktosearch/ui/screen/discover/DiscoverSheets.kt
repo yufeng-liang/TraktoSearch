@@ -37,9 +37,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +63,10 @@ import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.repository.TraktRepository
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterCard
+import com.tracktosearch.ui.component.isAppDarkTheme
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
 @Composable
@@ -440,6 +452,7 @@ internal fun TrendingListsAllSheet(
     onListClick: (listId: Int, listName: String) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val isDark = isAppDarkTheme()
     val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -471,10 +484,31 @@ internal fun TrendingListsAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(lists, key = { _, item -> item.list.ids.slug }, contentType = { _, _ -> "list" }) { _, listResponse ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().clickable { onListClick(listResponse.list.ids.trakt, listResponse.list.name) },
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    val interactionSource = remember { MutableInteractionSource() }
+                    val isPressed by interactionSource.collectIsPressedAsState()
+                    val cardScale by animateFloatAsState(
+                        targetValue = if (isPressed) 0.98f else 1f,
+                        label = "sheet_list_card_scale"
+                    )
+                    NeumorphicFrostedSurface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .scale(cardScale)
+                            .clickable(
+                                interactionSource = interactionSource,
+                                indication = null,
+                                onClick = { onListClick(listResponse.list.ids.trakt, listResponse.list.name) }
+                            ),
+                        isDark = isDark,
+                        shape = RoundedCornerShape(18.dp),
+                        elevation = 6.dp,
+                        blurRadius = 16.dp,
+                        shadowOffset = 5.dp,
+                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
+                        borderColor = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFD0D5DC).copy(alpha = 0.9f),
+                        darkShadowAlpha = if (isDark) 0.25f else 0.16f,
+                        lightShadowAlpha = if (isDark) 0.08f else 0.65f,
+                        hazeState = null
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(

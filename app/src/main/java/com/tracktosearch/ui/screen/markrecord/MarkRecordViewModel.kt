@@ -217,6 +217,7 @@ class MarkRecordViewModel @Inject constructor(
                                 _uiState.update {
                                     it.copy(
                                         items = (localItemsForUi + firstBatch)
+                                            .distinctBy { itemKey(it) }
                                             .sortedByDescending { mr -> mr.actedAt }.take(pageSize),
                                         isLoading = false
                                     )
@@ -225,7 +226,9 @@ class MarkRecordViewModel @Inject constructor(
                         )
                     } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
                 } else emptyList()
-                (localItems + traktItems).sortedByDescending { it.actedAt }.take(pageSize)
+                (localItems + traktItems)
+                    .distinctBy { itemKey(it) }
+                    .sortedByDescending { it.actedAt }.take(pageSize)
             }
             else -> loadFromDao(page, state)
         }
@@ -302,6 +305,8 @@ class MarkRecordViewModel @Inject constructor(
         }
     }
 }
+
+private fun itemKey(item: MarkRecordItem) = "${item.traktId}_${item.actedAt}_${item.actionType}"
 
 private fun MarkActionRecordEntity.toMarkRecordItem() = MarkRecordItem(
     traktId = traktId,

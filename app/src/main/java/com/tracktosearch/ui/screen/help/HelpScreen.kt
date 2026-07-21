@@ -368,7 +368,8 @@ fun HelpScreen(
                     title = {
                         Text(
                             text = stringResource(R.string.help_title),
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     },
                     navigationIcon = {

@@ -430,8 +430,8 @@ fun TraktSearchScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
+                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
             ) {
                 // 状态栏 Spacer
                 Spacer(modifier = Modifier.statusBarsPadding())

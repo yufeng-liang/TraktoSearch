@@ -202,10 +202,10 @@ fun NeumorphicFrostedSurface(
     elevation: Dp = 14.dp,
     blurRadius: Dp? = null,
     shadowOffset: Dp? = null,
-    backgroundColor: Color = if (isDark) Color(0xFF1E1E3A).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.65f),
-    borderColor: Color = if (isDark) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.8f),
-    darkShadowAlpha: Float = if (isDark) 0.5f else 0.18f,
-    lightShadowAlpha: Float = if (isDark) 0.10f else 0.70f,
+    backgroundColor: Color = if (isDark) Color(0xFF1E1E3A).copy(alpha = 0.65f) else Color.White.copy(alpha = 0.70f),
+    borderColor: Color = if (isDark) Color.White.copy(alpha = 0.15f) else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+    darkShadowAlpha: Float = if (isDark) 0.5f else 0.12f,
+    lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
     hazeStyle: HazeStyle = HazeMaterials.thin(),
     content: @Composable () -> Unit
@@ -260,27 +260,27 @@ fun NeumorphicIconButton(
             .neumorphicOuterShadow(
                 shape = shape,
                 isDark = isDark,
-                elevation = 4.dp,
-                darkAlpha = if (isDark) 0.3f else 0.10f,
-                blurRadius = 10.dp,
-                shadowOffset = 4.dp
+                elevation = 5.dp,
+                darkAlpha = if (isDark) 0.35f else 0.12f,
+                blurRadius = 12.dp,
+                shadowOffset = 5.dp
             )
             .clip(shape)
             .background(
-                if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.45f),
+                if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
                 shape
             )
             .neumorphicInnerShadow(
                 shape = shape,
                 isDark = isDark,
                 elevation = 4.dp,
-                lightAlpha = if (isDark) 0.08f else 0.55f,
+                lightAlpha = if (isDark) 0.08f else 0.65f,
                 blurRadius = 10.dp,
                 shadowOffset = 4.dp
             )
             .border(
                 width = 1.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.65f),
+                color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE0E5EC).copy(alpha = 0.9f),
                 shape = shape
             )
             .clickable(
