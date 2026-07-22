@@ -79,10 +79,14 @@ export async function handleRefresh(
         throw new AppError('TOKEN_EXPIRED', 'Refresh token has expired', 401);
     }
 
-    // TODO: 验证客户端签名（需要 Web Crypto ECDSA verify）
-    // 第一版可暂缓，依赖 nonce 一次性 + HTTPS 防篡改
+    // 使用客户端 Keystore 签名校验 nonce，防止刷新请求被伪造。
 
     // 轮换：撤销旧会话 + 创建新会话
+    if (!(await verifyClientSignature(session.public_key, body.signature, body.nonce))) {
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'INVALID_SIGNATURE', session.friend_id);
+        throw new AppError('INVALID_SIGNATURE', 'Invalid client signature', 400);
+    }
+
     const newRefreshToken = generateSecureToken(32);
     const newRefreshTokenHash = await sha256(newRefreshToken);
     const newSessionId = generateId();
@@ -150,5 +154,79 @@ async function logSecurityEvent(
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, error_code, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(friendId, eventType, deviceId, requestId, result, errorCode, now()).run();
+    `).bind(eventType, friendId, deviceId, requestId, result, errorCode, now()).run();
+}
+
+async function verifyClientSignature(publicKeyBase64: string, signatureBase64: string, nonce: string): Promise<boolean> {
+    try {
+        const publicKey = await crypto.subtle.importKey(
+            'spki',
+            decodeBase64(publicKeyBase64),
+            { name: 'ECDSA', namedCurve: 'P-256' },
+            false,
+            ['verify']
+        );
+        const derSignature = decodeBase64(signatureBase64);
+        const rawSignature = derSignature.length === 64 ? derSignature : derToP1363(derSignature);
+        if (rawSignature.length !== 64) return false;
+        return await crypto.subtle.verify(
+            { name: 'ECDSA', hash: 'SHA-256' },
+            publicKey,
+            rawSignature,
+            new TextEncoder().encode(nonce)
+        );
+    } catch {
+        return false;
+    }
+}
+
+function decodeBase64(value: string): Uint8Array {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+    const binary = atob(normalized);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+function derToP1363(der: Uint8Array): Uint8Array {
+    let offset = 0;
+    if (der[offset++] !== 0x30) return new Uint8Array();
+    const sequenceLength = readDerLength(der, offset);
+    offset += sequenceLength.bytes;
+    if (sequenceLength.value !== der.length - offset) return new Uint8Array();
+    const r = readDerInteger(der, offset);
+    if (!r) return new Uint8Array();
+    const s = readDerInteger(der, r.nextOffset);
+    if (!s || s.nextOffset !== der.length) return new Uint8Array();
+    const result = new Uint8Array(64);
+    if (!copyScalar(r.value, result, 0) || !copyScalar(s.value, result, 32)) return new Uint8Array();
+    return result;
+}
+
+function readDerLength(bytes: Uint8Array, offset: number): { value: number; bytes: number } {
+    const first = bytes[offset];
+    if (first === undefined) return { value: -1, bytes: 0 };
+    if ((first & 0x80) === 0) return { value: first, bytes: 1 };
+    const count = first & 0x7f;
+    if (count === 0 || count > 2 || offset + count >= bytes.length) return { value: -1, bytes: 0 };
+    let value = 0;
+    for (let i = 1; i <= count; i++) value = (value << 8) | bytes[offset + i];
+    return { value, bytes: count + 1 };
+}
+
+function readDerInteger(bytes: Uint8Array, offset: number): { value: Uint8Array; nextOffset: number } | null {
+    if (bytes[offset++] !== 0x02) return null;
+    const length = readDerLength(bytes, offset);
+    if (length.value < 0) return null;
+    offset += length.bytes;
+    const end = offset + length.value;
+    if (end > bytes.length || length.value === 0) return null;
+    return { value: bytes.slice(offset, end), nextOffset: end };
+}
+
+function copyScalar(value: Uint8Array, output: Uint8Array, offset: number): boolean {
+    let start = 0;
+    while (start < value.length - 1 && value[start] === 0) start++;
+    const scalar = value.slice(start);
+    if (scalar.length > 32) return false;
+    output.set(scalar, offset + 32 - scalar.length);
+    return true;
 }

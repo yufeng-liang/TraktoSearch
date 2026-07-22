@@ -221,11 +221,11 @@ class MainActivity : AppCompatActivity() {
 
             // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
             val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
-            if (isValid) {
+            if (isAuthorized) {
                 prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) } })
+                prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
+                prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
             }
-            prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
-            prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
 
             // Activity 重建时跳过开屏等待，直接进入
             if (savedInstanceState == null) {
@@ -264,7 +264,7 @@ class MainActivity : AppCompatActivity() {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
-                        com.tracktosearch.ui.navigation.AuthStateHolder(tokenStorage)
+                        com.tracktosearch.ui.navigation.AuthStateHolder(authManager)
                     }
                     AppNavigation(
                         startDestination = currentDestination,

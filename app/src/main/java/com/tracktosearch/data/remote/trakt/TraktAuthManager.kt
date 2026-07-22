@@ -22,10 +22,11 @@ class TraktAuthManager @Inject constructor(
     suspend fun exchangeCodeForToken(code: String): Result<Unit> {
         return try {
             val response = authApiService.exchangeTraktCode(TraktOAuthCodeRequest(code))
-            if (response.isSuccessful) {
+            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Token exchange failed: ${response.code()}"))
+                val body = response.body()
+                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Token exchange failed"}"))
             }
         } catch (e: CancellationException) {
             throw e
@@ -37,10 +38,11 @@ class TraktAuthManager @Inject constructor(
     suspend fun refreshAccessToken(): Result<Unit> {
         return try {
             val response = authApiService.refreshTrakt()
-            if (response.isSuccessful) {
+            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
                 Result.success(Unit)
             } else {
-                Result.failure(Exception("Token refresh failed: ${response.code()}"))
+                val body = response.body()
+                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Token refresh failed"}"))
             }
         } catch (e: CancellationException) {
             throw e

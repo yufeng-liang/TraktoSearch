@@ -1,4 +1,5 @@
 <resources>
+    <string name="auth_offline_mode">Offline mode: using cached data.</string>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">Discover · Track · Search</string>
     <string name="auth_title">Activate access</string>

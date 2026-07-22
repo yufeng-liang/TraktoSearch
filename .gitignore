@@ -56,3 +56,6 @@ auth-worker/node_modules/
 
 # WorkBuddy workspace data
 .workbuddy/
+
+# Local verification screenshots and reports
+verification-artifacts/

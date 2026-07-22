@@ -124,7 +124,8 @@ object ConfigModule {
         return ApiKeyProvider(
             remoteConfig = remoteConfig,
             configKey = "trakt.clientId",  // Trakt 单 client_id,无池
-            fallbackKey = BuildConfig.TRAKT_CLIENT_ID
+            // Trakt client_id 只用于 OAuth 浏览器授权，API 请求必须经 Worker 注入凭据。
+            fallbackKey = ""
         )
     }
 
@@ -148,7 +149,7 @@ object ConfigModule {
         return BaseUrlInterceptor(
             remoteConfig = remoteConfig,
             configKey = "tmdb.baseUrl",
-            fallbackUrl = "https://api.tmdb.org/3/"
+            fallbackUrl = "${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/tmdb/"
         )
     }
 
@@ -159,7 +160,7 @@ object ConfigModule {
         return BaseUrlInterceptor(
             remoteConfig = remoteConfig,
             configKey = "trakt.baseUrl",
-            fallbackUrl = "https://api.trakt.tv/"
+            fallbackUrl = "${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/trakt/"
         )
     }
 
@@ -170,7 +171,7 @@ object ConfigModule {
         return BaseUrlInterceptor(
             remoteConfig = remoteConfig,
             configKey = "douban.baseUrl",
-            fallbackUrl = "https://douban-movie-api.pages.dev/"
+            fallbackUrl = "${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/douban/"
         )
     }
 

@@ -276,7 +276,7 @@ const API = {
 
     async getFriends() {
         const data = await this.get('/admin/friends');
-        return data.friends.map((f: any) => ({
+        return data.friends.map((f) => ({
             id: f.id,
             nickname: f.nickname,
             note: f.note,
@@ -288,14 +288,14 @@ const API = {
         }));
     },
 
-    async getFriend(id: string) {
+    async getFriend(id) {
         // 朋友详情 + 设备列表
         const friends = await this.getFriends();
-        const f = friends.find((x: any) => x.id === id);
+        const f = friends.find((x) => x.id === id);
         if (!f) throw new Error('NOT_FOUND');
 
         const deviceData = await this.get(`/admin/friends/${id}`);
-        f.devicesList = deviceData.devices.map((d: any) => ({
+        f.devicesList = deviceData.devices.map((d) => ({
             id: d.id,
             name: d.device_name,
             appVersion: d.app_version,
@@ -306,10 +306,10 @@ const API = {
         return f;
     },
 
-    async getAuditLogs(params: Record<string, string> = {}) {
+    async getAuditLogs(params = {}) {
         const qs = new URLSearchParams(params).toString();
         const data = await this.get(`/admin/audit-logs${qs ? '?' + qs : ''}`);
-        return data.logs.map((l: any) => ({
+        return data.logs.map((l) => ({
             id: l.id,
             eventType: l.event_type,
             friendId: l.friend_id,
@@ -320,19 +320,19 @@ const API = {
         }));
     },
 
-    async createFriend(data: any) {
+    async createFriend(data) {
         return this.post('/admin/friends', data);
     },
 
-    async createInvite(friendId: string, kind: string, expiresInDays: number) {
+    async createInvite(friendId, kind, expiresInDays) {
         return this.post(`/admin/friends/${friendId}/invites`, { kind, expiresInDays });
     },
 
-    async revokeDevice(deviceId: string) {
+    async revokeDevice(deviceId) {
         return this.post(`/admin/devices/${deviceId}/revoke`, {});
     },
 
-    async disableFriend(friendId: string) {
+    async disableFriend(friendId) {
         return this.post(`/admin/friends/${friendId}/disable`, {});
     },
 };

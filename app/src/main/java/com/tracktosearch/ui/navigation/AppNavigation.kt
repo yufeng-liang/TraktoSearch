@@ -29,7 +29,8 @@ import androidx.navigation.navArgument
 import com.tracktosearch.DeepLinkNavigator
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
-import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.auth.AuthManager
+import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -60,6 +61,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -137,9 +139,11 @@ object Routes {
 }
 
 class AuthStateHolder @Inject constructor(
-    private val tokenStorage: TokenStorage
+    private val authManager: AuthManager
 ) {
-    val isLoggedIn: kotlinx.coroutines.flow.StateFlow<Boolean> = tokenStorage.isLoggedInState
+    val authState: kotlinx.coroutines.flow.StateFlow<AuthState> = authManager.authState
+    val isLoggedIn: kotlinx.coroutines.flow.Flow<Boolean> = authManager.authState
+        .map { it == AuthState.AUTHORIZED || it == AuthState.OFFLINE }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -175,12 +179,27 @@ fun AppNavigation(
         mainInitialTab = storedDefaultTab
     }
     val scope = rememberCoroutineScope()
+    val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(currentAuthState) {
+        if (currentAuthState == AuthState.OFFLINE) {
+            Toast.makeText(context, context.getString(R.string.auth_offline_mode), Toast.LENGTH_LONG).show()
+        }
+        if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
+            navController.currentDestination?.route == Routes.MAIN
+        ) {
+            currentStartDest = Routes.AUTH
+            navController.navigate(Routes.AUTH) {
+                popUpTo(Routes.MAIN) { inclusive = true }
+            }
+        }
+    }
 
     // 监听通知深链路导航指令（上映/新季通知点击后跳转详情页）
     // 直接读 StateFlow.value 避免 Compose 状态捕获问题
     LaunchedEffect(Unit) {
         DeepLinkNavigator.pendingNavigation.collect { target ->
-            if (target != null && authStateHolder.isLoggedIn.value) {
+            if (target != null && (authStateHolder.authState.value == AuthState.AUTHORIZED || authStateHolder.authState.value == AuthState.OFFLINE)) {
                 navController.navigate(
                     Routes.detailRoute(target.type, target.traktId, target.tmdbId, target.title)
                 )
@@ -200,7 +219,7 @@ fun AppNavigation(
                 startDestination = currentStartDest
             ) {
                 composable(Routes.AUTH) {
-                    val expired = startDestination == Routes.AUTH
+                    val expired = currentAuthState == AuthState.EXPIRED
                     AuthScreen(
                         expired = expired,
                         onActivated = {
@@ -250,7 +269,7 @@ fun AppNavigation(
 
                 composable(Routes.MAIN) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle()
+                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle(initialValue = false)
 
                         // 从详情页返回时，按变更类型分别刷新想看列表或已看历史
                         // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry

@@ -4,6 +4,9 @@ import com.tracktosearch.data.local.TokenStorage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.decodeFromString
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -32,7 +35,8 @@ enum class AuthState {
 class AuthManager @Inject constructor(
     private val authApiService: AuthApiService,
     private val deviceKeyManager: DeviceKeyManager,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val json: Json
 ) {
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -64,16 +68,17 @@ class AuthManager @Inject constructor(
             )
             val response = authApiService.activate(request)
             if (response.isSuccessful) {
-                val body = response.body() ?: return Result.failure(Exception("Empty response"))
+                val body = response.body()?.data ?: return Result.failure(Exception(response.errorMessage("Empty response")))
                 // 保存令牌
                 tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
                 deviceId = body.deviceId
                 nextCheckAt = body.nextCheckAt
                 lastOnlineAt = System.currentTimeMillis() / 1000
+                tokenStorage.saveSessionMetadata(deviceId!!, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
             } else {
-                Result.failure(Exception("Activate failed: ${response.code()}"))
+                Result.failure(Exception(response.errorMessage("Activate failed: ${response.code()}")))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -87,16 +92,23 @@ class AuthManager @Inject constructor(
         return try {
             val response = authApiService.check()
             if (response.isSuccessful) {
-                val body = response.body() ?: return Result.failure(Exception("Empty response"))
+                val body = response.body()?.data ?: return Result.failure(Exception(response.errorMessage("Empty response")))
+                deviceId = body.deviceId.ifBlank { deviceId }
                 lastOnlineAt = System.currentTimeMillis() / 1000
                 nextCheckAt = body.nextCheckAt
+                if (deviceId != null) tokenStorage.saveSessionMetadata(deviceId!!, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
             } else if (response.code() == 401) {
                 // 令牌失效，尝试刷新
                 refreshAfterCheck()
+            } else if (response.code() == 403) {
+                tokenStorage.clearTokens()
+                deviceId = null
+                _authState.value = AuthState.UNAUTHORIZED
+                Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
             } else {
-                Result.failure(Exception("Check failed: ${response.code()}"))
+                Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
             }
         } catch (e: Exception) {
             // 网络异常 → 进入离线宽限
@@ -115,9 +127,14 @@ class AuthManager @Inject constructor(
             // 获取挑战码
             val challengeResponse = authApiService.challenge(ChallengeRequest(currentDeviceId))
             if (!challengeResponse.isSuccessful) {
-                return Result.failure(Exception("Challenge failed: ${challengeResponse.code()}"))
+                if (challengeResponse.code() == 401 || challengeResponse.code() == 403) {
+                    tokenStorage.clearTokens()
+                    deviceId = null
+                    _authState.value = AuthState.UNAUTHORIZED
+                }
+                return Result.failure(Exception(challengeResponse.errorMessage("Challenge failed: ${challengeResponse.code()}")))
             }
-            val challenge = challengeResponse.body()?.nonce ?: return Result.failure(Exception("No nonce"))
+                val challenge = challengeResponse.body()?.data?.nonce ?: return Result.failure(Exception("No nonce"))
 
             // 用 Keystore 私钥签名
             val signature = deviceKeyManager.sign(challenge.toByteArray())
@@ -133,16 +150,20 @@ class AuthManager @Inject constructor(
                 )
             )
             if (refreshResponse.isSuccessful) {
-                val body = refreshResponse.body() ?: return Result.failure(Exception("Empty response"))
+                val body = refreshResponse.body()?.data ?: return Result.failure(Exception(refreshResponse.errorMessage("Empty response")))
                 tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+                lastOnlineAt = System.currentTimeMillis() / 1000
+                tokenStorage.saveSessionMetadata(currentDeviceId, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
-            } else if (refreshResponse.code() == 401) {
+            } else if (refreshResponse.code() == 401 || refreshResponse.code() == 403) {
                 // 刷新失败，需要重新激活
+                tokenStorage.clearTokens()
+                deviceId = null
                 _authState.value = AuthState.UNAUTHORIZED
                 Result.failure(Exception("Refresh failed, re-authorization required"))
             } else {
-                Result.failure(Exception("Refresh failed: ${refreshResponse.code()}"))
+                Result.failure(Exception(refreshResponse.errorMessage("Refresh failed: ${refreshResponse.code()}")))
             }
         } catch (e: Exception) {
             handleOffline()
@@ -183,6 +204,9 @@ class AuthManager @Inject constructor(
     /** 启动时恢复本地会话并按需向网关校验。 */
     suspend fun initialize() {
         tokenStorage.ensureCacheLoaded()
+        deviceId = tokenStorage.getCachedDeviceId()
+        nextCheckAt = tokenStorage.getCachedNextCheckAt()
+        lastOnlineAt = tokenStorage.getCachedLastOnlineAt()
         if (!tokenStorage.isTokenValid()) {
             _authState.value = AuthState.UNAUTHORIZED
             return
@@ -207,4 +231,15 @@ class AuthManager @Inject constructor(
     fun getNextCheckAt(): Long = nextCheckAt
 
     fun getLastOnlineAt(): Long = lastOnlineAt
+
+    private fun <T> retrofit2.Response<GatewayResponse<T>>.errorMessage(fallback: String): String {
+        val envelope = body()
+        if (envelope != null && envelope.code != "SUCCESS") return "${envelope.code}: ${envelope.message}"
+        val raw = errorBody()?.string().orEmpty()
+        if (raw.isNotBlank()) {
+            runCatching { json.decodeFromString<GatewayResponse<JsonElement>>(raw) }
+                .getOrNull()?.let { return "${it.code}: ${it.message}" }
+        }
+        return fallback
+    }
 }

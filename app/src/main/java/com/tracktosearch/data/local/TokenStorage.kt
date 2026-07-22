@@ -49,6 +49,15 @@ class TokenStorage @Inject constructor(
     private var cachedExpiresAt: Long = 0L
 
     @Volatile
+    private var cachedDeviceId: String? = null
+
+    @Volatile
+    private var cachedLastOnlineAt: Long = 0L
+
+    @Volatile
+    private var cachedNextCheckAt: Long = 0L
+
+    @Volatile
     private var cacheLoaded: Boolean = false
 
     private val _accessTokenFlow = MutableStateFlow<String?>(null)
@@ -65,6 +74,9 @@ class TokenStorage @Inject constructor(
             val p = prefs()
             val token = p.getString(KEY_ACCESS_TOKEN, null)
             val expiresAt = p.getLong(KEY_EXPIRES_AT, 0L)
+            cachedDeviceId = p.getString(KEY_DEVICE_ID, null)
+            cachedLastOnlineAt = p.getLong(KEY_LAST_ONLINE_AT, 0L)
+            cachedNextCheckAt = p.getLong(KEY_NEXT_CHECK_AT, 0L)
             cachedAccessToken = token
             cachedExpiresAt = expiresAt
             cacheLoaded = true
@@ -76,6 +88,26 @@ class TokenStorage @Inject constructor(
             }
         }
     }
+
+    suspend fun saveSessionMetadata(deviceId: String, lastOnlineAt: Long, nextCheckAt: Long) {
+        val p = prefs()
+        withContext(Dispatchers.IO) {
+            p.edit()
+                .putString(KEY_DEVICE_ID, deviceId)
+                .putLong(KEY_LAST_ONLINE_AT, lastOnlineAt)
+                .putLong(KEY_NEXT_CHECK_AT, nextCheckAt)
+                .apply()
+        }
+        cachedDeviceId = deviceId
+        cachedLastOnlineAt = lastOnlineAt
+        cachedNextCheckAt = nextCheckAt
+    }
+
+    fun getCachedDeviceId(): String? = cachedDeviceId
+
+    fun getCachedLastOnlineAt(): Long = cachedLastOnlineAt
+
+    fun getCachedNextCheckAt(): Long = cachedNextCheckAt
 
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
@@ -130,10 +162,16 @@ class TokenStorage @Inject constructor(
                 .remove(KEY_ACCESS_TOKEN)
                 .remove(KEY_REFRESH_TOKEN)
                 .remove(KEY_EXPIRES_AT)
+                .remove(KEY_DEVICE_ID)
+                .remove(KEY_LAST_ONLINE_AT)
+                .remove(KEY_NEXT_CHECK_AT)
                 .apply()
         }
         cachedAccessToken = null
         cachedExpiresAt = 0L
+        cachedDeviceId = null
+        cachedLastOnlineAt = 0L
+        cachedNextCheckAt = 0L
         cacheLoaded = false
         _accessTokenFlow.value = null
         _isLoggedInState.value = false
@@ -143,5 +181,8 @@ class TokenStorage @Inject constructor(
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_EXPIRES_AT = "expires_at"
+        private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_LAST_ONLINE_AT = "last_online_at"
+        private const val KEY_NEXT_CHECK_AT = "next_check_at"
     }
 }

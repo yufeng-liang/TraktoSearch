@@ -1,4 +1,5 @@
 <resources>
+    <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">発見 · 追跡 · 検索</string>
     <string name="auth_title">アクセスを有効化</string>
