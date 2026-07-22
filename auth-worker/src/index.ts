@@ -7,12 +7,10 @@ import { handleChallenge } from './auth/challenge';
 import { handleRefresh } from './auth/refresh';
 import { handleCheck } from './auth/check';
 import { verifyAccessJWT } from './admin/access';
-import {
-    listFriends, createFriend, updateFriend, disableFriend,
-    listDevices, revokeDevice,
-    createInvite, revokeInvite,
-    listAuditLogs, healthCheck,
-} from './admin/admin';
+import { handleTmdbProxy } from './proxy/tmdb';
+import { handleTraktProxy, handleTraktOAuth } from './proxy/trakt';
+import { handleDoubanProxy } from './proxy/douban';
+import { handleOmdbProxy } from './proxy/omdb';
 
 export interface Env {
     DB: D1Database;
@@ -121,6 +119,23 @@ async function handleAuthApi(
 
     if (path === '/api/auth/check' && request.method === 'POST') {
         return handleCheck(request, env, requestId, payload);
+    }
+
+    // 敏感 API 代理（需 JWT）
+    if (path.startsWith('/api/tmdb/')) {
+        return handleTmdbProxy(request, env, path);
+    }
+    if (path.startsWith('/api/trakt/oauth/')) {
+        return handleTraktOAuth(request, env, path, payload.sub);
+    }
+    if (path.startsWith('/api/trakt/')) {
+        return handleTraktProxy(request, env, path, payload.sub);
+    }
+    if (path.startsWith('/api/douban/')) {
+        return handleDoubanProxy(request, env, path);
+    }
+    if (path.startsWith('/api/omdb/')) {
+        return handleOmdbProxy(request, env, path);
     }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);
