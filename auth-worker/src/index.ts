@@ -6,6 +6,13 @@ import { handleActivate } from './auth/activate';
 import { handleChallenge } from './auth/challenge';
 import { handleRefresh } from './auth/refresh';
 import { handleCheck } from './auth/check';
+import { verifyAccessJWT } from './admin/access';
+import {
+    listFriends, createFriend, updateFriend, disableFriend,
+    listDevices, revokeDevice,
+    createInvite, revokeInvite,
+    listAuditLogs, healthCheck,
+} from './admin/admin';
 
 export interface Env {
     DB: D1Database;
@@ -43,7 +50,7 @@ export default {
             }
             // 健康检查
             else if (path === '/health') {
-                response = successResponse({ status: 'ok' }, requestId);
+                response = await healthCheck(env, requestId);
             }
             else {
                 throw new AppError('NOT_FOUND', 'Not found', 404);
@@ -126,7 +133,59 @@ async function handleAdminApi(
     requestId: string,
     path: string
 ): Promise<Response> {
-    // TODO: 实现 Access JWT 验证
-    // TODO: 实现 Admin API 端点
-    throw new AppError('NOT_IMPLEMENTED', 'Admin API not yet implemented', 501);
+    // 验证 Cloudflare Access JWT
+    await verifyAccessJWT(request, env);
+
+    // 朋友管理
+    if (path === '/admin/friends' && request.method === 'GET') {
+        return listFriends(env, requestId);
+    }
+    if (path === '/admin/friends' && request.method === 'POST') {
+        return createFriend(request, env, requestId);
+    }
+
+    // 朋友详情操作（/:id）
+    const friendMatch = path.match(/^\/admin\/friends\/([^/]+)$/);
+    if (friendMatch && request.method === 'PATCH') {
+        return updateFriend(request, env, requestId, friendMatch[1]);
+    }
+    if (friendMatch && request.method === 'GET') {
+        return listDevices(env, requestId, friendMatch[1]);
+    }
+
+    // 禁用朋友
+    const disableMatch = path.match(/^\/admin\/friends\/([^/]+)\/disable$/);
+    if (disableMatch && request.method === 'POST') {
+        return disableFriend(env, requestId, disableMatch[1]);
+    }
+
+    // 设备撤销
+    const deviceMatch = path.match(/^\/admin\/devices\/([^/]+)\/revoke$/);
+    if (deviceMatch && request.method === 'POST') {
+        return revokeDevice(env, requestId, deviceMatch[1]);
+    }
+
+    // 邀请码创建
+    const inviteCreateMatch = path.match(/^\/admin\/friends\/([^/]+)\/invites$/);
+    if (inviteCreateMatch && request.method === 'POST') {
+        return createInvite(request, env, requestId, inviteCreateMatch[1]);
+    }
+
+    // 邀请码撤销
+    const inviteRevokeMatch = path.match(/^\/admin\/invites\/([^/]+)\/revoke$/);
+    if (inviteRevokeMatch && request.method === 'POST') {
+        return revokeInvite(env, requestId, inviteRevokeMatch[1]);
+    }
+
+    // 审计日志
+    if (path === '/admin/audit-logs' && request.method === 'GET') {
+        return listAuditLogs(request, env, requestId);
+    }
+
+    // 健康检查
+    if (path === '/admin/health' && request.method === 'GET') {
+        return healthCheck(env, requestId);
+    }
+
+    throw new AppError('NOT_FOUND', 'Not found', 404);
 }
