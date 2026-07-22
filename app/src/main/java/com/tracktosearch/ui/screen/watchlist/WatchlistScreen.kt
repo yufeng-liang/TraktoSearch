@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,13 +52,12 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -121,6 +121,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -155,6 +156,9 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.hazeBottomSheetSurface
+import com.tracktosearch.ui.component.hazeBottomSheetContent
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
@@ -168,8 +172,8 @@ import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.dropWhile
@@ -179,7 +183,7 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
@@ -329,6 +333,7 @@ fun WatchlistScreen(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
     // 为4种 (mode, tab) 组合各自创建独立的 gridState，彻底隔离滚动位置，
     // 避免切 tab 时列表位置互相影响
@@ -459,7 +464,6 @@ fun WatchlistScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-                    .hazeSource(state = hazeState)
             ) {
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     
@@ -598,6 +602,7 @@ fun WatchlistScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxSize()
+                        .hazeSource(state = hazeState)
                         .nestedScroll(pullToRefreshConnection)
                         .graphicsLayer { translationY = animatedOverscrollDp.toPx() }
                     ) {
@@ -647,16 +652,18 @@ fun WatchlistScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(bottom = 100.dp, end = 16.dp),
-                    hazeState = hazeState
+                    hazeState = hazeState,
+                    hazeStyle = HazeMaterials.thin()
                 )
     
                 // Haze 模糊覆盖层 - 搜索框 + 胶囊切换 + PrimaryTabRow 或 多选操作栏
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .hazeEffect(
+                        .hazeProgressiveTopBar(
                             state = hazeState,
-                            style = HazeMaterials.thin()
+                            style = hazeStyle,
+                            blurRadius = 24.dp
                         )
                 ) {
                     // 搜索框 + Tab 栏（非多选模式时显示）
@@ -1170,7 +1177,6 @@ fun WatchlistScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1635,18 +1641,22 @@ private fun WatchlistFilterSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onApply,
+        modifier = Modifier.hazeBottomSheetSurface(),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         // 统一背景色与发现页查看全部 sheet 一致
+        // 由 HazeMaterials.thick 负责染色，避免再叠加一层实色遮罩。
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         // 去除默认 drag 条,内容更紧凑
+        scrimColor = Color.Black.copy(alpha = 0.32f),
         dragHandle = null
     ) {
-        Column(
+        LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
+                .hazeBottomSheetContent()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
-                .verticalScroll(rememberScrollState())
         ) {
+            item {
+                Column(modifier = Modifier.fillMaxWidth()) {
             // 类型多选(chip 按估算宽度降序排列:长块先占位,短块填缝,行数少且每行数量均衡)
             // 估算宽度 = 中文字符数 * 14dp + 24dp(chip 内边距)
             val sortedGenres = remember(availableGenres) {
@@ -1896,18 +1906,20 @@ private fun WatchlistFilterSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             // 重置 + 应用
-            Row(
+                Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TextButton(onClick = onReset) {
-                    Text(stringResource(R.string.filter_reset))
-                }
-                Button(onClick = onApply) {
-                    Text(stringResource(R.string.filter_apply))
+                ) {
+                    TextButton(onClick = onReset) {
+                        Text(stringResource(R.string.filter_reset))
+                    }
+                    Button(onClick = onApply) {
+                        Text(stringResource(R.string.filter_apply))
+                    }
                 }
             }
         }
+    }
     }
 }
 

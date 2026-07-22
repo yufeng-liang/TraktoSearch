@@ -6,11 +6,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,10 +29,69 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
+
+/** 供跨窗口弹窗和底部抽屉共享当前页面背景的 Haze 状态。 */
+val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
+
+/** 标题栏使用普通 thin 模糊，不对模糊强度做渐进处理。 */
+@Composable
+fun Modifier.hazeProgressiveTopBar(
+    state: HazeState,
+    style: HazeBlurStyle = HazeMaterials.thin(),
+    blurRadius: Dp = 24.dp
+): Modifier = hazeEffect(state = state) {
+        blurEffect {
+            this.style = style
+            this.blurRadius = blurRadius
+        }
+}
+
+/** 弹窗/底部抽屉统一使用较厚模糊，避免每个页面重复配置。 */
+@Composable
+fun Modifier.hazeModalSurface(
+    ultraThick: Boolean,
+    blurRadius: Dp = 40.dp
+): Modifier {
+    val state = LocalModalHazeState.current ?: return this
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val style = if (ultraThick) {
+        HazeMaterials.ultraThick(surface.copy(alpha = 0.82f))
+    } else {
+        HazeMaterials.thick(surface.copy(alpha = 0.68f))
+    }
+    val shape = RoundedCornerShape(28.dp)
+    return clip(shape)
+        .hazeEffect(state = state) {
+            blurEffect {
+                this.style = style
+                this.blurRadius = blurRadius
+                noiseFactor = 0f
+            }
+        }
+        .clip(shape)
+}
+
+/** 底部抽屉恢复普通 surfaceVariant 填充，只裁剪顶部圆角以保持贴底布局。 */
+@Composable
+fun Modifier.hazeBottomSheetSurface(
+    blurRadius: Dp = 40.dp
+): Modifier {
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val shape = RoundedCornerShape(
+            topStart = 28.dp,
+            topEnd = 28.dp
+        )
+    return clip(shape)
+        .background(surface, shape)
+}
+
+/** 底部抽屉内容占满可用窗口，避免 Surface 与屏幕底部之间出现空隙。 */
+fun Modifier.hazeBottomSheetContent(): Modifier =
+    fillMaxWidth().fillMaxHeight()
 
 /**
  * C方案拟态外阴影：dropShadow 画右下暗投影（位于组件外部，不受clip影响）
@@ -193,7 +255,6 @@ fun NeumorphicActiveTab(
  * C方案拟态毛玻璃表面：外阴影 + clip + 毛玻璃 + 内阴影 + 顶部高光
  * 注意：clip 必须在 hazeEffect 之前，否则毛玻璃效果是矩形的，不会被裁成圆角
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun NeumorphicFrostedSurface(
     modifier: Modifier = Modifier,
@@ -207,11 +268,19 @@ fun NeumorphicFrostedSurface(
     darkShadowAlpha: Float = if (isDark) 0.5f else 0.12f,
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
-    hazeStyle: HazeStyle = HazeMaterials.thin(),
+    hazeStyle: HazeBlurStyle? = null,
+    hazeBlurRadius: Dp? = null,
+    showHighlight: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState, style = hazeStyle)
+        Modifier.hazeEffect(state = hazeState) {
+            blurEffect {
+                style = resolvedHazeStyle
+                hazeBlurRadius?.let { this.blurRadius = it }
+            }
+        }
     } else Modifier
 
     Box(
@@ -237,7 +306,9 @@ fun NeumorphicFrostedSurface(
             .background(backgroundColor, shape)
             .border(1.dp, borderColor, shape)
     ) {
-        GlassHighlight(isDark = isDark, shape = shape)
+        if (showHighlight) {
+            GlassHighlight(isDark = isDark, shape = shape)
+        }
         content()
     }
 }
