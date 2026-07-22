@@ -216,7 +216,7 @@ const Palettes = {
 
 // ===== API Client =====
 // API 根域名（部署时替换为实际 Worker 域名）
-const API_BASE = localStorage.getItem('tts-api-base') || 'https://auth-worker.your-domain.com';
+const API_BASE = localStorage.getItem('tts-api-base') || 'https://auth-worker.douban-movie-api-peak.workers.dev';
 
 const API = {
     // Access JWT（从 localStorage 读取，由 Access 登录后注入）

@@ -1,7 +1,3 @@
-// 0001_init.sql — 初始 schema
-// 朋友白名单授权系统 D1 数据库
-
--- 朋友表
 CREATE TABLE IF NOT EXISTS friends (
     id TEXT PRIMARY KEY,
     nickname TEXT NOT NULL,
@@ -13,7 +9,6 @@ CREATE TABLE IF NOT EXISTS friends (
     updated_at INTEGER NOT NULL
 );
 
--- 邀请码表
 CREATE TABLE IF NOT EXISTS invites (
     id TEXT PRIMARY KEY,
     friend_id TEXT NOT NULL REFERENCES friends(id),
@@ -25,7 +20,6 @@ CREATE TABLE IF NOT EXISTS invites (
     created_at INTEGER NOT NULL
 );
 
--- 设备表
 CREATE TABLE IF NOT EXISTS devices (
     id TEXT PRIMARY KEY,
     friend_id TEXT NOT NULL REFERENCES friends(id),
@@ -38,7 +32,6 @@ CREATE TABLE IF NOT EXISTS devices (
     revoked_at INTEGER
 );
 
--- 刷新令牌会话表
 CREATE TABLE IF NOT EXISTS refresh_sessions (
     id TEXT PRIMARY KEY,
     device_id TEXT NOT NULL REFERENCES devices(id),
@@ -49,14 +42,12 @@ CREATE TABLE IF NOT EXISTS refresh_sessions (
     created_at INTEGER NOT NULL
 );
 
--- Trakt 凭据表（加密存储）
 CREATE TABLE IF NOT EXISTS trakt_credentials (
     friend_id TEXT PRIMARY KEY REFERENCES friends(id),
     ciphertext TEXT NOT NULL,
     updated_at INTEGER NOT NULL
 );
 
--- 审计日志表
 CREATE TABLE IF NOT EXISTS audit_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type TEXT NOT NULL,
