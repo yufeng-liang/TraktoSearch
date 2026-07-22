@@ -401,10 +401,10 @@ input, select { font-family: inherit; }
 }
 .sidebar-link:hover { background: var(--surface-hover); color: var(--text); }
 .sidebar-link.active {
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--accent);
+    color: #fff;
     font-weight: 700;
-    box-shadow: inset 3px 0 0 var(--accent);
+    box-shadow: inset 3px 0 0 rgba(255,255,255,0.3);
 }
 .sidebar-icon {
     display: flex;
