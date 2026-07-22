@@ -94,7 +94,7 @@ class AuthManager @Inject constructor(
                 Result.success(body)
             } else if (response.code() == 401) {
                 // 令牌失效，尝试刷新
-                refresh()
+                refreshAfterCheck()
             } else {
                 Result.failure(Exception("Check failed: ${response.code()}"))
             }
@@ -152,7 +152,7 @@ class AuthManager @Inject constructor(
     /**
      * 处理网络异常（离线宽限）
      */
-    private suspend fun refresh(): Result<CheckResponse> {
+    private suspend fun refreshAfterCheck(): Result<CheckResponse> {
         val result = refresh()
         return if (result.isSuccess) {
             Result.success(CheckResponse(
@@ -169,7 +169,7 @@ class AuthManager @Inject constructor(
         }
     }
 
-    private fun handleOffline(): Result<Any> {
+    private fun <T> handleOffline(): Result<T> {
         val now = System.currentTimeMillis() / 1000
         val offlineDuration = now - lastOnlineAt
         _authState.value = if (offlineDuration > offlineGracePeriod) {
@@ -178,6 +178,16 @@ class AuthManager @Inject constructor(
             AuthState.OFFLINE
         }
         return Result.failure(Exception("Network error, offline grace: ${offlineGracePeriod - offlineDuration}s remaining"))
+    }
+
+    /** 启动时恢复本地会话并按需向网关校验。 */
+    suspend fun initialize() {
+        tokenStorage.ensureCacheLoaded()
+        if (!tokenStorage.isTokenValid()) {
+            _authState.value = AuthState.UNAUTHORIZED
+            return
+        }
+        check()
     }
 
     /**

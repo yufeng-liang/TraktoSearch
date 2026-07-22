@@ -7,6 +7,18 @@ import { handleChallenge } from './auth/challenge';
 import { handleRefresh } from './auth/refresh';
 import { handleCheck } from './auth/check';
 import { verifyAccessJWT } from './admin/access';
+import {
+    createFriend,
+    createInvite,
+    disableFriend,
+    healthCheck,
+    listAuditLogs,
+    listDevices,
+    listFriends,
+    revokeDevice,
+    revokeInvite,
+    updateFriend,
+} from './admin/admin';
 import { handleTmdbProxy } from './proxy/tmdb';
 import { handleTraktProxy, handleTraktOAuth } from './proxy/trakt';
 import { handleDoubanProxy } from './proxy/douban';
@@ -16,6 +28,12 @@ export interface Env {
     DB: D1Database;
     KV: KVNamespace;
     JWT_SIGNING_KEY: string;
+    TRAKT_CLIENT_ID: string;
+    TRAKT_CLIENT_SECRET: string;
+    TRAKT_CREDENTIALS_ENCRYPTION_KEY: string;
+    TMDB_API_KEY: string;
+    DOUBAN_API_KEY: string;
+    OMDB_API_KEY: string;
     ADMIN_EMAIL: string;
     ACCESS_TEAM_DOMAIN: string;
     ACCESS_AUDIENCE: string;
@@ -39,7 +57,7 @@ export default {
             let response: Response;
 
             // App API（需 JWT）
-            if (path.startsWith('/api/auth/')) {
+            if (path.startsWith('/api/')) {
                 response = await handleAuthApi(request, env, requestId, path);
             }
             // Admin API（需 Access JWT）

@@ -113,7 +113,7 @@ object ConfigModule {
         return ApiKeyProvider(
             remoteConfig = remoteConfig,
             configKey = "tmdb.apiKeys",
-            fallbackKey = BuildConfig.TMDB_API_KEY
+            fallbackKey = ""
         )
     }
 
@@ -135,7 +135,7 @@ object ConfigModule {
         return ApiKeyProvider(
             remoteConfig = remoteConfig,
             configKey = "douban.apiKey",
-            fallbackKey = BuildConfig.DOUBAN_API_KEY
+            fallbackKey = ""
         )
     }
 

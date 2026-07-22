@@ -38,3 +38,43 @@ export function timingSafeEqual(a: string, b: string): boolean {
     }
     return result === 0;
 }
+
+/** 使用 Worker Secret 派生 AES-GCM 密钥，凭据密文包含独立随机 IV。 */
+export async function encryptSecret(plaintext: string, secret: string): Promise<string> {
+    const key = await importEncryptionKey(secret);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        new TextEncoder().encode(plaintext)
+    );
+    return `${toBase64(iv)}.${toBase64(new Uint8Array(encrypted))}`;
+}
+
+export async function decryptSecret(ciphertext: string, secret: string): Promise<string> {
+    const [ivPart, dataPart] = ciphertext.split('.');
+    if (!ivPart || !dataPart) throw new Error('Invalid encrypted credential');
+    const key = await importEncryptionKey(secret);
+    const decrypted = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv: fromBase64(ivPart) },
+        key,
+        fromBase64(dataPart)
+    );
+    return new TextDecoder().decode(decrypted);
+}
+
+async function importEncryptionKey(secret: string): Promise<CryptoKey> {
+    const keyMaterial = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+    return crypto.subtle.importKey('raw', keyMaterial, { name: 'AES-GCM' }, false, ['encrypt', 'decrypt']);
+}
+
+function toBase64(bytes: Uint8Array): string {
+    let binary = '';
+    bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+    return btoa(binary);
+}
+
+function fromBase64(value: string): Uint8Array {
+    const binary = atob(value);
+    return Uint8Array.from(binary, char => char.charCodeAt(0));
+}

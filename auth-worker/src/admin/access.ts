@@ -1,95 +1,111 @@
 // Cloudflare Access JWT 验证
-
 import { AppError } from '../util/errors';
 
 interface AccessPayload {
-    iss: string;      // https://<team>.cloudflareaccess.com
-    sub: string;      // 用户 ID
-    aud: string;      // audience (应用 ID)
-    exp: number;      // 过期时间
-    iat: number;      // 签发时间
-    email: string;    // 管理员邮箱
+    iss: string;
+    sub: string;
+    aud: string | string[];
+    exp: number;
+    iat: number;
+    email: string;
     name?: string;
     common_name?: string;
 }
 
-// Access JWT 验证（验证签名 + issuer + audience + 邮箱白名单）
+interface AccessEnv {
+    ACCESS_TEAM_DOMAIN: string;
+    ACCESS_AUDIENCE: string;
+    ADMIN_EMAIL: string;
+    KV: KVNamespace;
+}
+
+interface AccessJwk {
+    kid: string;
+    kty: 'RSA';
+    alg?: 'RS256';
+    use?: string;
+    e: string;
+    n: string;
+    [key: string]: unknown;
+}
+
+const ACCESS_CERTS_CACHE_KEY = 'access:certs';
+const ACCESS_CERTS_CACHE_TTL = 24 * 60 * 60;
+
+// 验证签名、issuer、audience、过期时间和管理员邮箱白名单。
 export async function verifyAccessJWT(
     request: Request,
-    env: { ACCESS_TEAM_DOMAIN: string; ACCESS_AUDIENCE: string; ADMIN_EMAIL: string }
+    env: AccessEnv
 ): Promise<AccessPayload> {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
         throw new AppError('UNAUTHORIZED', 'Missing or invalid authorization header', 401);
     }
+
     const token = authHeader.slice(7);
-
-    // 获取 Access 公钥（JWK）
-    const certsUrl = `https://${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
-    const certsResponse = await fetch(certsUrl);
-    if (!certsResponse.ok) {
-        throw new AppError('INTERNAL_ERROR', 'Failed to fetch Access certificates', 500);
-    }
-    const { keys } = await certsResponse.json() as { keys: JsonWebKey[] };
-
-    // 解析 JWT header 获取 kid
     const parts = token.split('.');
     if (parts.length !== 3) {
         throw new AppError('UNAUTHORIZED', 'Invalid token format', 401);
     }
-    const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
-    const key = keys.find(k => k.kid === header.kid);
+
+    let header: { kid?: string; alg?: string };
+    let payload: AccessPayload;
+    try {
+        header = JSON.parse(decodeBase64Url(parts[0])) as { kid?: string; alg?: string };
+        payload = JSON.parse(decodeBase64Url(parts[1])) as AccessPayload;
+    } catch {
+        throw new AppError('UNAUTHORIZED', 'Invalid token encoding', 401);
+    }
+
+    if (header.alg !== 'RS256' || !header.kid) {
+        throw new AppError('UNAUTHORIZED', 'Invalid token algorithm', 401);
+    }
+
+    let keys = await getCachedKeys(env);
+    let key = keys.find(candidate => candidate.kid === header.kid);
+    if (!key) {
+        keys = await refreshKeysCache(env);
+        key = keys.find(candidate => candidate.kid === header.kid);
+    }
     if (!key) {
         throw new AppError('UNAUTHORIZED', 'Invalid token key ID', 401);
     }
 
-    // 导入公钥
-    const publicKey = await crypto.subtle.importKey(
-        'jwk',
-        key,
-        { name: 'ECDSA', namedCurve: 'P-256' },
-        false,
-        ['verify']
-    );
-
-    // 验证签名
-    const encoder = new TextEncoder();
-    const signingInput = encoder.encode(`${parts[0]}.${parts[1]}`);
-    const signature = Uint8Array.from(atob(parts[2].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    let publicKey: CryptoKey;
+    try {
+        // Cloudflare Access 使用 RSA-SHA256，不是 ECDSA/P-256。
+        publicKey = await crypto.subtle.importKey(
+            'jwk',
+            key,
+            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+            false,
+            ['verify']
+        );
+    } catch {
+        throw new AppError('UNAUTHORIZED', 'Invalid Access certificate', 401);
+    }
 
     const valid = await crypto.subtle.verify(
-        { name: 'ECDSA', hash: 'SHA-256' },
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
         publicKey,
-        signature,
-        signingInput
+        decodeBase64UrlBytes(parts[2]),
+        new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
     );
     if (!valid) {
         throw new AppError('UNAUTHORIZED', 'Invalid token signature', 401);
     }
 
-    // 解析 payload
-    const payload: AccessPayload = JSON.parse(
-        new TextDecoder().decode(Uint8Array.from(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)))
-    );
-
-    // 验证 issuer
-    const expectedIss = `https://${env.ACCESS_TEAM_DOMAIN}/`;
+    const expectedIss = `https://${env.ACCESS_TEAM_DOMAIN}`;
     if (payload.iss !== expectedIss) {
         throw new AppError('UNAUTHORIZED', 'Invalid token issuer', 401);
     }
-
-    // 验证 audience
-    if (payload.aud !== env.ACCESS_AUDIENCE) {
+    const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    if (!audiences.includes(env.ACCESS_AUDIENCE)) {
         throw new AppError('UNAUTHORIZED', 'Invalid token audience', 401);
     }
-
-    // 验证过期
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp < now) {
+    if (!Number.isFinite(payload.exp) || payload.exp < Math.floor(Date.now() / 1000)) {
         throw new AppError('UNAUTHORIZED', 'Token has expired', 401);
     }
-
-    // 验证管理员邮箱白名单
     if (payload.email !== env.ADMIN_EMAIL) {
         throw new AppError('FORBIDDEN', 'Email not authorized', 403);
     }
@@ -97,11 +113,44 @@ export async function verifyAccessJWT(
     return payload;
 }
 
-interface JsonWebKey {
-    kid: string;
-    kty: string;
-    crv: string;
-    x: string;
-    y: string;
-    [key: string]: unknown;
+async function getCachedKeys(env: AccessEnv): Promise<AccessJwk[]> {
+    try {
+        const cached = await env.KV.get<AccessJwk[]>(ACCESS_CERTS_CACHE_KEY, 'json');
+        return cached || [];
+    } catch {
+        return [];
+    }
+}
+
+async function refreshKeysCache(env: AccessEnv): Promise<AccessJwk[]> {
+    const certsUrl = `https://${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
+    const response = await fetch(certsUrl);
+    if (!response.ok) {
+        throw new AppError('INTERNAL_ERROR', 'Failed to fetch Access certificates', 500);
+    }
+
+    const data = await response.json() as { keys?: AccessJwk[] };
+    const keys = (data.keys || []).filter(key => key.kty === 'RSA' && key.kid && key.n && key.e);
+    if (keys.length === 0) {
+        throw new AppError('INTERNAL_ERROR', 'No valid Access certificates', 500);
+    }
+
+    try {
+        await env.KV.put(ACCESS_CERTS_CACHE_KEY, JSON.stringify(keys), {
+            expirationTtl: ACCESS_CERTS_CACHE_TTL,
+        });
+    } catch {
+        // KV 暂时不可用时仍可使用本次拉取的证书完成验证。
+    }
+    return keys;
+}
+
+function decodeBase64Url(value: string): string {
+    return new TextDecoder().decode(decodeBase64UrlBytes(value));
+}
+
+function decodeBase64UrlBytes(value: string): Uint8Array {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
+        .padEnd(Math.ceil(value.length / 4) * 4, '=');
+    return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
 }

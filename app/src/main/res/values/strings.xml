@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">Discover · Track · Search</string>
+    <string name="auth_title">Activate access</string>
+    <string name="auth_subtitle">Enter the invitation code provided by the administrator.</string>
+    <string name="auth_expired_message">Connect to the internet and activate access again.</string>
+    <string name="auth_invite_code">Invitation code</string>
+    <string name="auth_activate">Activate</string>
+    <string name="auth_error_invalid_invite">This invitation code is invalid.</string>
+    <string name="auth_error_invite_expired">This invitation code has expired.</string>
+    <string name="auth_error_device_limit">The device limit has been reached.</string>
+    <string name="auth_error_friend_disabled">This access has been disabled.</string>
+    <string name="auth_error_generic">Activation failed. Please try again.</string>
 
     <!-- Main Screen -->
     <string name="tab_search">Search</string>

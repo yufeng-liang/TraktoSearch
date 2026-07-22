@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">발견 · 추적 · 검색</string>
+    <string name="auth_title">접근 권한 활성화</string>
+    <string name="auth_subtitle">관리자가 제공한 초대 코드를 입력하세요.</string>
+    <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
+    <string name="auth_invite_code">초대 코드</string>
+    <string name="auth_activate">활성화</string>
+    <string name="auth_error_invalid_invite">초대 코드가 올바르지 않습니다.</string>
+    <string name="auth_error_invite_expired">초대 코드가 만료되었습니다.</string>
+    <string name="auth_error_device_limit">기기 한도에 도달했습니다.</string>
+    <string name="auth_error_friend_disabled">이 접근 권한은 비활성화되었습니다.</string>
+    <string name="auth_error_generic">활성화하지 못했습니다. 다시 시도하세요.</string>
 
     <!-- Main Screen -->
     <string name="tab_search">검색</string>

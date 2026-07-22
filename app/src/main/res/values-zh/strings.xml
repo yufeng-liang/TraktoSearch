@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">发现 · 追踪 · 搜索</string>
+    <string name="auth_title">激活访问权限</string>
+    <string name="auth_subtitle">请输入管理员提供的邀请码。</string>
+    <string name="auth_expired_message">请连接网络后重新激活访问权限。</string>
+    <string name="auth_invite_code">邀请码</string>
+    <string name="auth_activate">激活</string>
+    <string name="auth_error_invalid_invite">邀请码无效。</string>
+    <string name="auth_error_invite_expired">邀请码已过期。</string>
+    <string name="auth_error_device_limit">设备上限已满。</string>
+    <string name="auth_error_friend_disabled">当前访问权限已被停用。</string>
+    <string name="auth_error_generic">激活失败，请稍后重试。</string>
 
     <!-- Main Screen -->
     <string name="tab_search">搜索</string>

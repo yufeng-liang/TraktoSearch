@@ -20,6 +20,12 @@ interface AuthApiService {
 
     @POST("api/auth/refresh")
     suspend fun refresh(@Body request: RefreshRequest): Response<RefreshResponse>
+
+    @POST("api/trakt/oauth/exchange")
+    suspend fun exchangeTraktCode(@Body request: TraktOAuthCodeRequest): Response<GatewaySuccessResponse>
+
+    @POST("api/trakt/oauth/refresh")
+    suspend fun refreshTrakt(): Response<GatewaySuccessResponse>
 }
 
 // === 请求/响应 DTO ===
@@ -73,3 +79,7 @@ data class CheckResponse(
     val nextCheckAt: Long,
     val configVersion: Int
 )
+
+data class TraktOAuthCodeRequest(val code: String)
+
+data class GatewaySuccessResponse(val code: String, val message: String)

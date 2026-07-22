@@ -5,7 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
-import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.remote.config.ApiKeyInterceptor
 import com.tracktosearch.data.remote.config.BaseUrlInterceptor
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
@@ -14,7 +14,6 @@ import com.tracktosearch.data.remote.panhub.PanHubApiService
 import com.tracktosearch.data.remote.pansou.PanSouApiService
 import com.tracktosearch.data.remote.tmdb.TmdbApiService
 import com.tracktosearch.data.remote.trakt.TraktApiService
-import com.tracktosearch.data.remote.trakt.TraktAuthenticator
 import com.tracktosearch.data.remote.update.GitHubUpdateApiService
 import com.tracktosearch.data.remote.update.GiteeUpdateApiService
 import com.tracktosearch.data.remote.weather.OpenMeteoApi
@@ -107,33 +106,21 @@ object NetworkModule {
     fun provideTraktOkHttpClient(
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
-        tokenStorage: TokenStorage,
         cache: Cache,
-        traktAuthenticator: TraktAuthenticator,
-        @TraktBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
-        @TraktApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
-            .addInterceptor(baseUrlInterceptor)
-            .addInterceptor(apiKeyInterceptor)
+            .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
-                val token = tokenStorage.getCachedAccessToken()
                 val request = chain.request().newBuilder()
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("trakt-api-version", "2")
                     .addHeader("User-Agent", USER_AGENT)
-                    .apply {
-                        if (!token.isNullOrEmpty()) {
-                            addHeader("Authorization", "Bearer $token")
-                        }
-                    }
                     .build()
                 chain.proceed(request)
             })
-            .addInterceptor(RetryInterceptor(maxRetries = 2, tokenProvider = tokenStorage::getCachedAccessToken))
+            .addInterceptor(RetryInterceptor(maxRetries = 2))
             .addInterceptor(loggingInterceptor)
-            .authenticator(traktAuthenticator)
             .build()
     }
 
@@ -143,7 +130,7 @@ object NetworkModule {
         @Named("trakt") okHttpClient: OkHttpClient
     ): TraktApiService {
         return Retrofit.Builder()
-            .baseUrl("https://api.trakt.tv/")
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/trakt/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -157,13 +144,11 @@ object NetworkModule {
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
-        @TmdbBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
-        @TmdbApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
-            .addInterceptor(baseUrlInterceptor)
-            .addInterceptor(apiKeyInterceptor)
+            .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
@@ -184,7 +169,7 @@ object NetworkModule {
         @Named("tmdb") okHttpClient: OkHttpClient
     ): TmdbApiService {
         return Retrofit.Builder()
-            .baseUrl("https://api.tmdb.org/3/")
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/tmdb/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -304,7 +289,7 @@ object NetworkModule {
         @Named("douban") okHttpClient: OkHttpClient
     ): DoubanHotApiService {
         return Retrofit.Builder()
-            .baseUrl("https://douban-movie-api.pages.dev/")
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/douban/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
@@ -319,13 +304,11 @@ object NetworkModule {
         baseClient: OkHttpClient,
         loggingInterceptor: HttpLoggingInterceptor,
         cache: Cache,
-        @DoubanBaseUrlInterceptor baseUrlInterceptor: BaseUrlInterceptor,
-        @DoubanApiKeyInterceptor apiKeyInterceptor: ApiKeyInterceptor
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
             .cache(cache)
-            .addInterceptor(baseUrlInterceptor)
-            .addInterceptor(apiKeyInterceptor)
+            .addInterceptor(authInterceptor)
             .addInterceptor(Interceptor { chain ->
                 val request = chain.request().newBuilder()
                     .addHeader("User-Agent", USER_AGENT)
@@ -370,9 +353,11 @@ object NetworkModule {
     @Named("omdb")
     fun provideOmdbOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
     ): OkHttpClient {
         return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(8, TimeUnit.SECONDS)
@@ -386,7 +371,7 @@ object NetworkModule {
         @Named("omdb") okHttpClient: OkHttpClient
     ): OmdbApiService {
         return Retrofit.Builder()
-            .baseUrl("https://www.omdbapi.com/")
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/omdb/")
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

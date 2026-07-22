@@ -2,7 +2,8 @@
 
 import { Env } from '../index';
 import { AppError } from '../util/errors';
-import { sha256 } from '../util/crypto';
+import { decryptSecret, encryptSecret } from '../util/crypto';
+import { now } from '../util/errors';
 
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 
@@ -190,9 +191,10 @@ async function saveTraktCredentials(
     friendId: string,
     tokens: TraktTokens
 ): Promise<void> {
-    // 用 Worker Secret 派生密钥加密（简化：直接存，实际应 AES-GCM 加密）
-    const plaintext = JSON.stringify(tokens);
-    const ciphertext = await sha256(plaintext); // TODO: 替换为 AES-GCM 加密
+    const ciphertext = await encryptSecret(
+        JSON.stringify(tokens),
+        env.TRAKT_CREDENTIALS_ENCRYPTION_KEY
+    );
 
     await env.DB.prepare(`
         INSERT OR REPLACE INTO trakt_credentials (friend_id, ciphertext, updated_at)
@@ -211,6 +213,11 @@ async function getTraktCredentials(
 
     if (!result) return null;
 
-    // TODO: 解密（当前为简化实现）
-    return null;
+    try {
+        return JSON.parse(
+            await decryptSecret(result.ciphertext, env.TRAKT_CREDENTIALS_ENCRYPTION_KEY)
+        ) as TraktTokens;
+    } catch {
+        throw new AppError('CREDENTIALS_INVALID', 'Stored Trakt credentials are invalid', 401);
+    }
 }

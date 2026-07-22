@@ -45,6 +45,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
+import com.tracktosearch.ui.screen.auth.AuthScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -81,6 +82,7 @@ interface GuestModeEntryPoint {
 }
 
 object Routes {
+    const val AUTH = "auth"
     const val LOGIN = "login"
     const val MAIN = "main"
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
@@ -197,6 +199,18 @@ fun AppNavigation(
                 navController = navController,
                 startDestination = currentStartDest
             ) {
+                composable(Routes.AUTH) {
+                    val expired = startDestination == Routes.AUTH
+                    AuthScreen(
+                        expired = expired,
+                        onActivated = {
+                            currentStartDest = Routes.MAIN
+                            navController.navigate(Routes.MAIN) {
+                                popUpTo(Routes.AUTH) { inclusive = true }
+                            }
+                        }
+                    )
+                }
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val fromGuestMode = navController.previousBackStackEntry?.destination?.route == Routes.MAIN

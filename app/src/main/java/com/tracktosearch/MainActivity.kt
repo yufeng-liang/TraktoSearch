@@ -62,6 +62,8 @@ import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.auth.AuthManager
+import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
@@ -136,6 +138,9 @@ class MainActivity : AppCompatActivity() {
     lateinit var tokenStorage: TokenStorage
 
     @Inject
+    lateinit var authManager: AuthManager
+
+    @Inject
     lateinit var guestModeStorage: GuestModeStorage
 
     @Inject
@@ -192,15 +197,17 @@ class MainActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val splashStartTime = System.currentTimeMillis()
+            authManager.initialize()
+            val authState = authManager.authState.value
+            val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
             val isValid = tokenStorage.isTokenValid()
-            val isGuest = guestModeStorage.isGuestMode.first()
+            val isGuest = false
             startDest = when {
-                isValid -> Routes.MAIN
-                isGuest -> Routes.MAIN
-                else -> Routes.LOGIN
+                isAuthorized -> Routes.MAIN
+                else -> Routes.AUTH
             }
             // 已登录时读取用户设置的默认启动页，未登录时使用搜索页（0）
-            initialTab = if (isValid || isGuest) {
+            initialTab = if (isAuthorized) {
                 defaultTabStorage.defaultTab.first()
             } else {
                 0
