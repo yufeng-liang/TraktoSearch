@@ -49,6 +49,7 @@ backup.kt
 # Local directories (not tracked in git)
 docs/
 .superpowers/
+auth-worker/node_modules/
 
 # Perfetto / ART trace files (large, local performance analysis only)
 *.trace
