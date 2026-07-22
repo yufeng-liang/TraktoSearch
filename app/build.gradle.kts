@@ -47,6 +47,8 @@ android {
         // 云端配置热更新:加密 key(与 app-config/.env 中 CONFIG_AES_KEY 一致)+ 配置服务 baseUrl
         buildConfigField("String", "CONFIG_AES_KEY", "\"${properties.getProperty("config.aes.key", "")}\"")
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
+        // 授权网关根域名（固定，不可被远程配置替换）
+        buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://auth-worker.douban-movie-api-peak.workers.dev")}\"")
 
         val appId = applicationId ?: "com.tracktosearch"
         manifestPlaceholders["JPUSH_PKGNAME"] = appId

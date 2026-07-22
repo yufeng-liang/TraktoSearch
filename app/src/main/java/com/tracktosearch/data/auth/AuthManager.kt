@@ -1,0 +1,200 @@
+package com.tracktosearch.data.auth
+
+import com.tracktosearch.data.local.TokenStorage
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * 授权状态机
+ *
+ * 状态：
+ * - UNAUTHORIZED：未授权（无有效令牌）
+ * - AUTHORIZED：已授权（令牌有效）
+ * - OFFLINE：离线宽限中（网络异常，使用本地缓存能力）
+ * - EXPIRED：宽限期已过，必须重新联网
+ */
+enum class AuthState {
+    UNAUTHORIZED,
+    AUTHORIZED,
+    OFFLINE,
+    EXPIRED
+}
+
+/**
+ * 授权管理器
+ * - 管理激活、令牌刷新、每日校验、离线宽限
+ * - 持久化授权状态（最后在线时间、宽限期）
+ */
+@Singleton
+class AuthManager @Inject constructor(
+    private val authApiService: AuthApiService,
+    private val deviceKeyManager: DeviceKeyManager,
+    private val tokenStorage: TokenStorage
+) {
+    private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
+    val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    // 设备 ID（激活后缓存）
+    private var deviceId: String? = null
+
+    // 下次校验时间（Unix 秒）
+    private var nextCheckAt: Long = 0L
+
+    // 最后在线时间（Unix 秒）
+    private var lastOnlineAt: Long = 0L
+
+    // 离线宽限期（3 天 = 259200 秒）
+    private val offlineGracePeriod = 3 * 24 * 60 * 60L
+
+    /**
+     * 激活（首次使用或重新绑定）
+     */
+    suspend fun activate(inviteCode: String, deviceName: String, appVersion: String, packageName: String): Result<ActivateResponse> {
+        return try {
+            val publicKey = deviceKeyManager.getPublicKeyBase64()
+            val request = ActivateRequest(
+                inviteCode = inviteCode,
+                publicKey = publicKey,
+                deviceName = deviceName,
+                appVersion = appVersion,
+                packageName = packageName
+            )
+            val response = authApiService.activate(request)
+            if (response.isSuccessful) {
+                val body = response.body() ?: return Result.failure(Exception("Empty response"))
+                // 保存令牌
+                tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+                deviceId = body.deviceId
+                nextCheckAt = body.nextCheckAt
+                lastOnlineAt = System.currentTimeMillis() / 1000
+                _authState.value = AuthState.AUTHORIZED
+                Result.success(body)
+            } else {
+                Result.failure(Exception("Activate failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 每日校验（启动时 + 每 24 小时）
+     */
+    suspend fun check(): Result<CheckResponse> {
+        return try {
+            val response = authApiService.check()
+            if (response.isSuccessful) {
+                val body = response.body() ?: return Result.failure(Exception("Empty response"))
+                lastOnlineAt = System.currentTimeMillis() / 1000
+                nextCheckAt = body.nextCheckAt
+                _authState.value = AuthState.AUTHORIZED
+                Result.success(body)
+            } else if (response.code() == 401) {
+                // 令牌失效，尝试刷新
+                refresh()
+            } else {
+                Result.failure(Exception("Check failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            // 网络异常 → 进入离线宽限
+            handleOffline()
+        }
+    }
+
+    /**
+     * 刷新令牌
+     */
+    suspend fun refresh(): Result<RefreshResponse> {
+        return try {
+            val currentDeviceId = deviceId ?: return Result.failure(Exception("No device ID"))
+            val refreshToken = tokenStorage.getRefreshToken() ?: return Result.failure(Exception("No refresh token"))
+
+            // 获取挑战码
+            val challengeResponse = authApiService.challenge(ChallengeRequest(currentDeviceId))
+            if (!challengeResponse.isSuccessful) {
+                return Result.failure(Exception("Challenge failed: ${challengeResponse.code()}"))
+            }
+            val challenge = challengeResponse.body()?.nonce ?: return Result.failure(Exception("No nonce"))
+
+            // 用 Keystore 私钥签名
+            val signature = deviceKeyManager.sign(challenge.toByteArray())
+            val signatureBase64 = android.util.Base64.encodeToString(signature, android.util.Base64.NO_WRAP)
+
+            // 刷新
+            val refreshResponse = authApiService.refresh(
+                RefreshRequest(
+                    deviceId = currentDeviceId,
+                    refreshToken = refreshToken,
+                    nonce = challenge,
+                    signature = signatureBase64
+                )
+            )
+            if (refreshResponse.isSuccessful) {
+                val body = refreshResponse.body() ?: return Result.failure(Exception("Empty response"))
+                tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+                _authState.value = AuthState.AUTHORIZED
+                Result.success(body)
+            } else if (refreshResponse.code() == 401) {
+                // 刷新失败，需要重新激活
+                _authState.value = AuthState.UNAUTHORIZED
+                Result.failure(Exception("Refresh failed, re-authorization required"))
+            } else {
+                Result.failure(Exception("Refresh failed: ${refreshResponse.code()}"))
+            }
+        } catch (e: Exception) {
+            handleOffline()
+        }
+    }
+
+    /**
+     * 处理网络异常（离线宽限）
+     */
+    private suspend fun refresh(): Result<CheckResponse> {
+        val result = refresh()
+        return if (result.isSuccess) {
+            Result.success(CheckResponse(
+                authorized = true,
+                friendId = "",
+                deviceId = deviceId ?: "",
+                nickname = "",
+                deviceStatus = "ACTIVE",
+                nextCheckAt = nextCheckAt,
+                configVersion = 1
+            ))
+        } else {
+            Result.failure(result.exceptionOrNull() ?: Exception("Refresh failed"))
+        }
+    }
+
+    private fun handleOffline(): Result<Any> {
+        val now = System.currentTimeMillis() / 1000
+        val offlineDuration = now - lastOnlineAt
+        _authState.value = if (offlineDuration > offlineGracePeriod) {
+            AuthState.EXPIRED
+        } else {
+            AuthState.OFFLINE
+        }
+        return Result.failure(Exception("Network error, offline grace: ${offlineGracePeriod - offlineDuration}s remaining"))
+    }
+
+    /**
+     * 退出授权态（设备撤销后）
+     */
+    suspend fun deauthorize() {
+        tokenStorage.clearTokens()
+        deviceId = null
+        nextCheckAt = 0L
+        _authState.value = AuthState.UNAUTHORIZED
+    }
+
+    // === Getters ===
+
+    fun getDeviceId(): String? = deviceId
+
+    fun getNextCheckAt(): Long = nextCheckAt
+
+    fun getLastOnlineAt(): Long = lastOnlineAt
+}
