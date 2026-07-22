@@ -2,6 +2,10 @@
 
 import { successResponse, errorResponse, AppError, generateRequestId } from './util/errors';
 import { verifyAccessToken } from './util/jwt';
+import { handleActivate } from './auth/activate';
+import { handleChallenge } from './auth/challenge';
+import { handleRefresh } from './auth/refresh';
+import { handleCheck } from './auth/check';
 
 export interface Env {
     DB: D1Database;
@@ -125,31 +129,4 @@ async function handleAdminApi(
     // TODO: 实现 Access JWT 验证
     // TODO: 实现 Admin API 端点
     throw new AppError('NOT_IMPLEMENTED', 'Admin API not yet implemented', 501);
-}
-
-// === App API 处理器 ===
-
-async function handleActivate(request: Request, env: Env, requestId: string): Promise<Response> {
-    // TODO: 实现激活逻辑
-    throw new AppError('NOT_IMPLEMENTED', 'Activate not yet implemented', 501);
-}
-
-async function handleChallenge(request: Request, env: Env, requestId: string): Promise<Response> {
-    // TODO: 实现挑战码生成
-    throw new AppError('NOT_IMPLEMENTED', 'Challenge not yet implemented', 501);
-}
-
-async function handleRefresh(request: Request, env: Env, requestId: string): Promise<Response> {
-    // TODO: 实现刷新令牌
-    throw new AppError('NOT_IMPLEMENTED', 'Refresh not yet implemented', 501);
-}
-
-async function handleCheck(
-    request: Request,
-    env: Env,
-    requestId: string,
-    payload: { sub: string; device: string }
-): Promise<Response> {
-    // TODO: 实现状态检查
-    throw new AppError('NOT_IMPLEMENTED', 'Check not yet implemented', 501);
 }
