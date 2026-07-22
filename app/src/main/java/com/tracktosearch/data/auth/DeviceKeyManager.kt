@@ -8,6 +8,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.PublicKey
 import java.security.Signature
+import java.security.spec.ECGenParameterSpec
 import android.util.Base64
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,8 +51,8 @@ class DeviceKeyManager @Inject constructor(
             KEY_ALIAS,
             KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_VERIFY
         )
-            .setAlgorithmParameterSpec.security.spec.ECGenParameterSpec("secp256r1")) // P-256
-            .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA56)
+            .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1")) // P-256
+            .setDigests(KeyProperties.DIGEST_SHA256)
             .setUserAuthenticationRequired(false) // 不需要生物识别
             .build()
         generator.initialize(spec)

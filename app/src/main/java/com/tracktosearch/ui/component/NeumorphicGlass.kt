@@ -29,10 +29,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.HazeBlurStyle
-import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import dev.chrisbanes.haze.materials.HazeMaterials
 
 /** 供跨窗口弹窗和底部抽屉共享当前页面背景的 Haze 状态。 */
 val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
@@ -41,14 +40,9 @@ val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
 @Composable
 fun Modifier.hazeProgressiveTopBar(
     state: HazeState,
-    style: HazeBlurStyle = HazeMaterials.thin(),
+    style: HazeStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp
-): Modifier = hazeEffect(state = state) {
-        blurEffect {
-            this.style = style
-            this.blurRadius = blurRadius
-        }
-}
+): Modifier = hazeEffect(state = state, style = style)
 
 /** 弹窗/底部抽屉统一使用较厚模糊，避免每个页面重复配置。 */
 @Composable
@@ -65,13 +59,7 @@ fun Modifier.hazeModalSurface(
     }
     val shape = RoundedCornerShape(28.dp)
     return clip(shape)
-        .hazeEffect(state = state) {
-            blurEffect {
-                this.style = style
-                this.blurRadius = blurRadius
-                noiseFactor = 0f
-            }
-        }
+        .hazeEffect(state = state, style = style)
         .clip(shape)
 }
 
@@ -268,19 +256,14 @@ fun NeumorphicFrostedSurface(
     darkShadowAlpha: Float = if (isDark) 0.5f else 0.12f,
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
-    hazeStyle: HazeBlurStyle? = null,
+    hazeStyle: HazeStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState) {
-            blurEffect {
-                style = resolvedHazeStyle
-                hazeBlurRadius?.let { this.blurRadius = it }
-            }
-        }
+        Modifier.hazeEffect(state = hazeState, style = resolvedHazeStyle)
     } else Modifier
 
     Box(

@@ -13,6 +13,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
+import javax.inject.Named
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -20,13 +21,7 @@ object AuthModule {
 
     @Provides
     @Singleton
-    fun provideJson(): Json = Json {
-        ignoreUnknownKeys = true
-        encodeDefaults = true
-    }
-
-    @Provides
-    @Singleton
+    @Named("auth")
     fun provideAuthOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
@@ -38,7 +33,7 @@ object AuthModule {
     @Provides
     @Singleton
     fun provideAuthApiService(
-        client: OkHttpClient,
+        @Named("auth") client: OkHttpClient,
         json: Json
     ): AuthApiService {
         val retrofit = Retrofit.Builder()
