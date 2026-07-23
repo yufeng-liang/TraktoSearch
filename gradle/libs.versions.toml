@@ -19,7 +19,7 @@ serialization = "1.7.3"
 browser = "1.10.0"
 splashscreen = "1.2.0"
 palette = "1.0.0"
-haze = "1.7.2"
+haze = "2.0.0-alpha03"
 richtext = "0.20.0"
 room = "2.8.4"
 workManager = "2.11.2"
@@ -100,7 +100,8 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 
 # Haze (frosted glass)
 haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
-haze-materials = { group = "dev.chrisbanes.haze", name = "haze-materials", version.ref = "haze" }
+haze-blur = { group = "dev.chrisbanes.haze", name = "haze-blur", version.ref = "haze" }
+haze-blur-materials = { group = "dev.chrisbanes.haze", name = "haze-blur-materials", version.ref = "haze" }
 
 # Markdown
 richtext-commonmark = { group = "com.halilibo.compose-richtext", name = "richtext-commonmark", version.ref = "richtext" }

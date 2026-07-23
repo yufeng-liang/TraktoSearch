@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.settings
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.content.Intent
 import android.net.Uri
@@ -86,6 +87,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
@@ -110,10 +112,10 @@ import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -122,7 +124,6 @@ import java.util.Locale
     ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class,
     ExperimentalSharedTransitionApi::class,
-    ExperimentalHazeMaterialsApi::class
 )
 @Composable
 fun SettingsScreen(
@@ -140,6 +141,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settingsHazeState = remember { HazeState() }
+    val settingsHazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
@@ -783,9 +785,10 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(
+                    .hazeProgressiveTopBar(
                         state = settingsHazeState,
-                        style = HazeMaterials.thin()
+                        style = settingsHazeStyle,
+                        blurRadius = 24.dp
                     )
             ) {
                 Column {
@@ -858,7 +861,9 @@ fun SettingsScreen(
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_account)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
@@ -882,7 +887,9 @@ fun SettingsScreen(
     if (showDoubanLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_account_douban)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
@@ -916,7 +923,9 @@ fun SettingsScreen(
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_cache)) },
             text = {
                 Column {
@@ -952,7 +961,9 @@ fun SettingsScreen(
                 showClearCategoryDialog = false
                 pendingClearCategory = null
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_cache_clear_category_confirm)) },
             text = {
                 val cat = pendingClearCategory!!
@@ -1093,7 +1104,9 @@ fun SettingsScreen(
                 showCooldownGuidance = false
                 pendingCooldownMode = null
             },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
@@ -1132,7 +1145,9 @@ fun SettingsScreen(
     if (showConsistencyConfirm) {
         AlertDialog(
             onDismissRequest = { showConsistencyConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.consistency_check_confirm_title)) },
             text = {
                 Column {
@@ -1187,7 +1202,9 @@ fun SettingsScreen(
     if (showDoubanLoginPrompt) {
         AlertDialog(
             onDismissRequest = { showDoubanLoginPrompt = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {
@@ -1317,7 +1334,9 @@ private fun SearchSourcesItem(
     showDeleteCustomSource?.let { source ->
         AlertDialog(
             onDismissRequest = { showDeleteCustomSource = null },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.settings_delete_source)) },
             text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
             confirmButton = {
@@ -1355,7 +1374,6 @@ private fun SearchSourcesItem(
  * 标记记录入口卡片（仅登录用户可见，独占整行）。
  * 与 StatisticsCard 风格保持一致，点击跳转标记记录页。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun MarkRecordsEntryCard(
     onClick: () -> Unit,
@@ -1487,7 +1505,6 @@ private fun SharedTransitionSwitchCard(
  * 从 LazyColumn item 抽取为独立函数：3 个开关状态收集局部化到本函数，
  * 开关变化只重组本函数，不波及 LazyColumn 其他 item。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun NotificationItem(
     viewModel: SettingsViewModel,
@@ -1930,7 +1947,9 @@ private fun CloudSyncCompareDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(titleRes)) },
         text = {
             Column(

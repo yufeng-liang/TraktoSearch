@@ -31,8 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 毛玻璃胶囊搜索栏
@@ -49,7 +49,6 @@ import dev.chrisbanes.haze.materials.HazeMaterials
  * @param focusRequester 焦点请求器
  * @param trailingIcon 尾部图标
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun GlassSearchBar(
     placeholder: String,
@@ -71,6 +70,7 @@ fun GlassSearchBar(
     val containerColor = Color.LightGray.copy(alpha = 0.30f)
     val contentColor = MaterialTheme.colorScheme.onSurface
     val hintColor = contentColor.copy(alpha = 0.55f)
+    val hazeStyle = HazeMaterials.thin(MaterialTheme.colorScheme.background)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -80,10 +80,9 @@ fun GlassSearchBar(
             .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(28.dp))
             .then(
                 if (hazeState != null) {
-                    Modifier.hazeEffect(
-                        state = hazeState,
-                        style = HazeMaterials.thin(MaterialTheme.colorScheme.background)
-                    )
+                    Modifier.hazeEffect(state = hazeState) {
+                        blurEffect { style = hazeStyle }
+                    }
                 } else Modifier
             )
             .background(containerColor)

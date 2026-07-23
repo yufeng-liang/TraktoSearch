@@ -98,10 +98,8 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
-import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -113,7 +111,6 @@ interface TraktRepositoryEntryPoint {
     fun traktRepository(): TraktRepository
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
@@ -261,22 +258,25 @@ fun MainScreen(
                 .padding(innerPadding)
                 .nestedScroll(nestedScrollConnection)
         ) {
-            // 跨页面共享背景（渐变 + 彩色光晕，光晕在宽画布上连续运动）
-            PageBackground(
-                currentPage = selectedTab,
-                pageCount = 4,
-                isDark = isAppDarkTheme(),
-                modifier = Modifier.fillMaxSize()
-            )
-
-            HorizontalPager(
-                state = pagerState,
-                userScrollEnabled = false,
-                beyondViewportPageCount = 1,
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .hazeSource(state = hazeState)
-            ) { page ->
+                    .hazeSource(state = hazeState, zIndex = 0f)
+            ) {
+                // 跨页面共享背景（渐变 + 彩色光晕，光晕在宽画布上连续运动）
+                PageBackground(
+                    currentPage = selectedTab,
+                    pageCount = 4,
+                    isDark = isAppDarkTheme(),
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                HorizontalPager(
+                    state = pagerState,
+                    userScrollEnabled = false,
+                    beyondViewportPageCount = 1,
+                    modifier = Modifier.fillMaxSize()
+                ) { page ->
                 // 只有当前可见 tab 的 MovieCard 参与 sharedElement 转场，避免 HorizontalPager 常驻的其他 tab 同 tmdbId 海报冲突
                 CompositionLocalProvider(LocalIsCurrentTab provides (page == pagerState.currentPage)) {
                 when (page) {
@@ -381,7 +381,8 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
-                } // CompositionLocalProvider
+                    } // CompositionLocalProvider
+                }
             }
 
             // 悬浮底部导航（C 方案：毛玻璃 + 强拟态双向阴影 + 选中凹陷药丸）
@@ -389,10 +390,9 @@ fun MainScreen(
             val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
             val navBarShape = RoundedCornerShape(31.dp)
             val isDark = isAppDarkTheme()
-            // 底部导航毛玻璃：thick 强模糊 + 50% 染色
-            val navHazeStyle = HazeStyle(
-                backgroundColor = Color.Transparent,
-                tints = listOf(HazeTint(color = if (isDark) Color.Black.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.50f)))
+            // 降低表面染色强度，让模糊后的页面主色透过导航栏。
+            val navHazeStyle = HazeMaterials.thin(
+                MaterialTheme.colorScheme.surface.copy(alpha = if (isDark) 0.08f else 0.03f)
             )
             NeumorphicFrostedSurface(
                 modifier = Modifier
@@ -400,7 +400,9 @@ fun MainScreen(
                     .padding(bottom = navBarHeight + 8.dp)
                     .offset(y = fabOffset)
                     .fillMaxWidth(navBarWidthFraction)
-                    .height(62.dp),
+                    .height(62.dp)
+                    .hazeSource(state = hazeState, zIndex = 1f),
+                    // 让底部导航作为前景层，effect 明确采样 zIndex=0 的页面内容。
                 isDark = isDark,
                 shape = navBarShape,
                 elevation = 8.dp,
@@ -411,7 +413,9 @@ fun MainScreen(
                 darkShadowAlpha = if (isDark) 0.38f else 0.16f,
                 lightShadowAlpha = 0f,
                 hazeState = hazeState,
-                hazeStyle = navHazeStyle
+                hazeStyle = navHazeStyle,
+                hazeBlurRadius = 40.dp,
+                showHighlight = false
             ) {
                 val tabCount = tabs.size
                 val rowPadding = 8.dp

@@ -31,6 +31,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,8 +54,11 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 
 @EntryPoint
 @InstallIn(SingletonComponent::class)
@@ -105,37 +109,20 @@ fun MovieCard(
     }
     // 卡片可见性状态:海报加载成功 + 卡片仍在屏幕上 1.5s 后才提取主色,
     // 避免快速滑动时大量卡片同时触发 Palette CPU 密集型计算影响帧率
-    var posterLoaded by remember { mutableStateOf(false) }
     var colorExtracted by remember { mutableStateOf(false) }
-    // 当前缓存的 bitmap,供延迟提取使用
-    var posterLoadedBitmap: android.graphics.Bitmap? by remember { mutableStateOf(null) }
+    // 仅保存延迟主色提取任务，不把 Bitmap 放入 Compose 状态。
+    val colorExtractionScope = rememberCoroutineScope()
+    val colorExtractionJob = remember { AtomicReference<Job?>(null) }
 
     // posterUrl 变化时重置提取状态
     LaunchedEffect(posterUrl) {
-        posterLoaded = false
         colorExtracted = false
-        posterLoadedBitmap = null
+        colorExtractionJob.getAndSet(null)?.cancel()
     }
 
     // 海报加载成功 + 卡片仍在组合树中,延迟 500ms 后提取主色
     // 快速滑过的卡片会在 DisposableEffect 中取消协程,不会浪费 CPU
     // 500ms 确保用户点击卡片进入详情页前 PosterColorCache 大概率已写入
-    LaunchedEffect(posterLoaded, posterUrl) {
-        if (posterLoaded && !colorExtracted && posterUrl != null) {
-            delay(500L)
-            // 再检查一次:可能此时卡片已滑出屏幕但尚未被 dispose
-            if (posterLoaded && !colorExtracted) {
-                val bitmap = posterLoadedBitmap
-                if (bitmap != null) {
-                    withContext(Dispatchers.Default) {
-                        posterColorExtractor.extractDominantColor(posterUrl, bitmap)
-                    }
-                    colorExtracted = true
-                }
-            }
-        }
-    }
-
     // ImageRequest 尺寸与 DetailHeaderContent 保持一致(264),让 Coil 内存缓存同一份解码图,
     // 避免 sharedElement 转场时详情页需要重新解码导致图片"空"瞬间跳动
     val imageRequest = remember(posterUrl) {
@@ -147,8 +134,18 @@ fun MovieCard(
                 onSuccess = { _, result ->
                     // 仅标记海报已加载,不立即提取主色
                     // 由 LaunchedEffect + delay 控制提取时机
-                    posterLoadedBitmap = result.drawable.toBitmap()
-                    posterLoaded = true
+                    colorExtractionJob.getAndSet(null)?.cancel()
+                    val bitmap = result.drawable.toBitmap()
+                    colorExtractionJob.set(colorExtractionScope.launch {
+                        delay(500L)
+                        if (!colorExtracted && posterUrl != null) {
+                            withContext(Dispatchers.Default) {
+                                posterColorExtractor.extractDominantColor(posterUrl, bitmap)
+                            }
+                            colorExtracted = true
+                        }
+                    }
+                    )
                 }
             )
             .build()
@@ -157,7 +154,7 @@ fun MovieCard(
     // 卡片离开屏幕时清理 bitmap 引用,帮助 GC
     DisposableEffect(posterUrl) {
         onDispose {
-            posterLoadedBitmap = null
+            colorExtractionJob.getAndSet(null)?.cancel()
         }
     }
 

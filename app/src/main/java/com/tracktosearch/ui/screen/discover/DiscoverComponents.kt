@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.discover
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
@@ -349,7 +350,9 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
     if (showError) {
         AlertDialog(
             onDismissRequest = { showError = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.error_detail_title)) },
             text = {
                 Text(

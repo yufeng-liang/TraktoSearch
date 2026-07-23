@@ -148,6 +148,7 @@ import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.ImportResult
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.hazeModalSurface
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -1203,7 +1204,9 @@ fun DoubanFailuresScreen(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.screen_douban_failures_clear_all)) },
             text = { Text(stringResource(R.string.screen_douban_failures_clear_all_confirm)) },
             confirmButton = {
@@ -1572,7 +1575,9 @@ private fun FailureActionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            modifier = Modifier.hazeModalSurface(ultraThick = true),
+            shape = MaterialTheme.shapes.extraLarge,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = {
             Text(
                 text = failure.title,

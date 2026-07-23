@@ -346,8 +346,7 @@ class WatchlistViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(movies = emptyList())
                     }
                 }
-                // 每个 item 的 TMDB enrich 完成就立即显示，不等整批
-                // 预填充占位列表到完整大小，避免多个 async 协程并发 add/resize 导致 IndexOutOfBounds
+                // 先发布完整占位列表，富化结果全部完成后再一次性替换，避免每个 item 触发一次状态复制。
                 val placeholderList = List(items.size) { index ->
                     val p = items[index].movie
                     createPlaceholder(p.ids.trakt, p.ids.tmdb, p.title, p.year, p.ids.imdb, p.rating, items[index].listed_at)
@@ -355,23 +354,14 @@ class WatchlistViewModel @Inject constructor(
                 if (!silent) {
                     _uiState.update { it.copy(movies = placeholderList) }
                 }
-                val deferredItems = items.mapIndexed { index, item ->
+                val deferredItems = items.map { item ->
                     async {
-                        val uiItem = enrichMediaItem(
+                        enrichMediaItem(
                             traktId = item.movie.ids.trakt, tmdbId = item.movie.ids.tmdb,
                             title = item.movie.title, year = item.movie.year,
                             imdbId = item.movie.ids.imdb, rating = item.movie.rating,
                             listedAt = item.listed_at, isMovie = true
                         )
-                        if (!silent) {
-                            // 直接按索引赋值占位符，不调用 add 避免并发 resize
-                            _uiState.update { state ->
-                                val current = state.movies.toMutableList()
-                                current[index] = uiItem
-                                state.copy(movies = current)
-                            }
-                        }
-                        uiItem
                     }
                 }
                 val uiItems = deferredItems.awaitAll()
@@ -441,23 +431,14 @@ class WatchlistViewModel @Inject constructor(
                 if (!silent) {
                     _uiState.update { it.copy(shows = placeholderList) }
                 }
-                val deferredItems = items.mapIndexed { index, item ->
+                val deferredItems = items.map { item ->
                     async {
-                        val uiItem = enrichMediaItem(
+                        enrichMediaItem(
                             traktId = item.show.ids.trakt, tmdbId = item.show.ids.tmdb,
                             title = item.show.title, year = item.show.year,
                             imdbId = item.show.ids.imdb, rating = item.show.rating,
                             listedAt = item.listed_at, isMovie = false
                         )
-                        if (!silent) {
-                            // 直接按索引赋值占位符，不调用 add 避免并发 resize
-                            _uiState.update { state ->
-                                val current = state.shows.toMutableList()
-                                current[index] = uiItem
-                                state.copy(shows = current)
-                            }
-                        }
-                        uiItem
                     }
                 }
                 val uiItems = deferredItems.awaitAll()

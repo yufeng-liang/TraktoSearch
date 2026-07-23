@@ -74,7 +74,6 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbVideo
 import com.tracktosearch.ui.component.queryExistingFile
 import com.tracktosearch.ui.component.savePosterToGallery
 import com.tracktosearch.ui.util.showToast
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.launch
 import net.engawapg.lib.zoomable.rememberZoomState
 import net.engawapg.lib.zoomable.zoomable
@@ -615,7 +614,6 @@ internal fun YouTubePlayerOverlay(
 
 // ==================== 截图滑动查看 ====================
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun BackdropPagerOverlay(
     backdrops: List<String>,

@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.settings
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -69,7 +70,9 @@ internal fun ThemeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.settings_theme)) },
         text = {
             Column {
@@ -127,7 +130,9 @@ internal fun AccentColorDialog(
     val view = LocalView.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.settings_accent_color)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -235,7 +240,9 @@ internal fun LanguageSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.settings_language)) },
         text = {
             Column {
@@ -320,7 +327,9 @@ fun ChangelogDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = null,
         text = {
             Box(
@@ -381,7 +390,9 @@ fun DiscoverSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = {
             Column {
                 Text(stringResource(R.string.settings_discover_sections))
@@ -496,7 +507,9 @@ fun DetailSectionsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = {
             Text(stringResource(R.string.settings_detail_sections))
         },
@@ -579,7 +592,9 @@ fun CustomSourceEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(if (isNew) stringResource(R.string.settings_add_source) else stringResource(R.string.settings_edit_source)) },
         text = {
             Column(
@@ -763,7 +778,9 @@ internal fun DefaultTabSelectionDialog(
     val view = LocalView.current
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.settings_default_tab)) },
         text = {
             Column {

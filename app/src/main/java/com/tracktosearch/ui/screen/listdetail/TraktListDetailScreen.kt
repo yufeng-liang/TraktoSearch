@@ -60,14 +60,15 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun TraktListDetailScreen(
     onBack: () -> Unit,
@@ -79,6 +80,7 @@ fun TraktListDetailScreen(
     val watchlistWatchedIds by viewModel.watchlistWatchedIds.collectAsStateWithLifecycle()
     val gridState = rememberLazyGridState()
     val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     // 当前活跃海报 tmdbId（-1=都不启用），确保只有用户点击的卡片参与共享元素转场
     var activePosterTmdbId by rememberSaveable { mutableIntStateOf(-1) }
@@ -147,9 +149,10 @@ fun TraktListDetailScreen(
                                 .fillMaxWidth()
                                 .then(loadingHeaderModifier)
                                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                                .hazeEffect(
+                                .hazeProgressiveTopBar(
                                     state = hazeState,
-                                    style = HazeMaterials.thin()
+                                    style = hazeStyle,
+                                    blurRadius = 24.dp
                                 )
                                 .clickable(enabled = false, onClick = {})
                         ) {
@@ -264,9 +267,10 @@ fun TraktListDetailScreen(
                             .fillMaxWidth()
                             .then(headerModifier)
                             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                            .hazeEffect(
+                            .hazeProgressiveTopBar(
                                 state = hazeState,
-                                style = HazeMaterials.thin()
+                                style = hazeStyle,
+                                blurRadius = 24.dp
                             )
                             .clickable(enabled = false, onClick = {})
                     ) {

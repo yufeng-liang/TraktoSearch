@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.settings
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
@@ -47,7 +48,9 @@ fun PanHubConfigDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.panhub_config_title)) },
         text = {
             Column(

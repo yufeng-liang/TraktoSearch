@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.douban
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -148,10 +149,9 @@ import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -847,7 +847,7 @@ class DoubanItemDetailViewModel @Inject constructor(
 
 // ==================== Composable ====================
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DoubanItemDetailScreen(
     doubanId: String,
@@ -862,6 +862,7 @@ fun DoubanItemDetailScreen(
     val view = LocalView.current
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
+    val hazeSurface = MaterialTheme.colorScheme.surface
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
@@ -1219,15 +1220,13 @@ fun DoubanItemDetailScreen(
                     .align(Alignment.TopStart)
                     .size(40.dp)
                     .clip(CircleShape)
-                    .hazeEffect(
-                        state = hazeState,
-                        style = HazeStyle(
-                            backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                            blurRadius = 20.dp,
-                            noiseFactor = 0f,
-                            tint = null
-                        )
-                    )
+                    .hazeEffect(state = hazeState) {
+                        blurEffect {
+                            backgroundColor = hazeSurface.copy(alpha = 0.25f)
+                            blurRadius = 20.dp
+                            noiseFactor = 0f
+                        }
+                    }
                     .background(
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
                         shape = CircleShape
@@ -1271,15 +1270,13 @@ fun DoubanItemDetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeStyle(
-                                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                    blurRadius = 20.dp,
-                                    noiseFactor = 0f,
-                                    tint = null
-                                )
-                            )
+                            .hazeEffect(state = hazeState) {
+                                blurEffect {
+                                    backgroundColor = hazeSurface.copy(alpha = 0.25f)
+                                    blurRadius = 20.dp
+                                    noiseFactor = 0f
+                                }
+                            }
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
                                 shape = CircleShape
@@ -1392,15 +1389,13 @@ fun DoubanItemDetailScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle(
-                                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.25f),
-                                blurRadius = 20.dp,
-                                noiseFactor = 0f,
-                                tint = null
-                            )
-                        )
+                        .hazeEffect(state = hazeState) {
+                            blurEffect {
+                                backgroundColor = hazeSurface.copy(alpha = 0.25f)
+                                blurRadius = 20.dp
+                                noiseFactor = 0f
+                            }
+                        }
                         .background(
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
                             shape = CircleShape
@@ -1475,7 +1470,9 @@ fun DoubanItemDetailScreen(
         if (failure != null) {
             AlertDialog(
                 onDismissRequest = { viewModel.showSubtitleDialog(false) },
-                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.hazeModalSurface(ultraThick = true),
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
                 title = { Text(stringResource(R.string.screen_douban_item_detail_subtitle_edit)) },
                 text = {
                     OutlinedTextField(
@@ -1508,7 +1505,9 @@ fun DoubanItemDetailScreen(
     if (showRemoveConfirm) {
         AlertDialog(
             onDismissRequest = { showRemoveConfirm = false },
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.hazeModalSurface(ultraThick = true),
+                shape = MaterialTheme.shapes.extraLarge,
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
             title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
             text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
             confirmButton = {
@@ -1591,7 +1590,6 @@ fun DoubanItemDetailScreen(
  * 取消标记按钮使用红色警示态。
  * 样式与详情页 ActionButtonRow 统一。
  */
-@OptIn(dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun DoubanWritebackActions(
     failure: DoubanSyncFailure,

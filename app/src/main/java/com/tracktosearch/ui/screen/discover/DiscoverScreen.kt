@@ -74,6 +74,7 @@ import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.GlassHighlight
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -92,13 +93,13 @@ import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DiscoverScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
@@ -167,6 +168,7 @@ fun DiscoverScreen(
     }
 
     val discoverHazeState = remember { HazeState() }
+    val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val coroutineScope = rememberCoroutineScope()
@@ -726,9 +728,10 @@ fun DiscoverScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .hazeEffect(
+                    .hazeProgressiveTopBar(
                         state = discoverHazeState,
-                        style = HazeMaterials.thin()
+                        style = discoverHazeStyle,
+                        blurRadius = 24.dp
                     )
             ) {
                 Column {

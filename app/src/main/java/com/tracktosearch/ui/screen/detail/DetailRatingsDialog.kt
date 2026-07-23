@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.detail
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -262,7 +263,8 @@ internal fun RatingDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         shape = RoundedCornerShape(24.dp),
         title = null,
         text = {

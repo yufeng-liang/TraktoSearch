@@ -117,6 +117,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -128,11 +129,10 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
 /** 计算网盘tab筛选后的结果数（用于Tab标签显示） */
@@ -143,7 +143,7 @@ private fun getFilteredDiskCount(diskState: DiskSearchState): Int {
         .size
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TraktSearchScreen(
     initialQuery: String,
@@ -163,6 +163,8 @@ fun TraktSearchScreen(
     val focusRequester = remember { FocusRequester() }
     val coroutineScope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
+    val hazeSurface = MaterialTheme.colorScheme.surface
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
 
@@ -431,7 +433,11 @@ fun TraktSearchScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
-                    .hazeEffect(state = hazeState, style = HazeMaterials.thin())
+                    .hazeProgressiveTopBar(
+                        state = hazeState,
+                        style = hazeStyle,
+                        blurRadius = 24.dp
+                    )
             ) {
                 // 状态栏 Spacer
                 Spacer(modifier = Modifier.statusBarsPadding())
@@ -601,15 +607,13 @@ fun TraktSearchScreen(
                     modifier = Modifier
                         .size(58.dp)
                         .clip(CircleShape)
-                        .hazeEffect(
-                            state = hazeState,
-                            style = HazeStyle(
-                                backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                                blurRadius = 20.dp,
-                                noiseFactor = 0f,
-                                tint = null
-                            )
-                        )
+                        .hazeEffect(state = hazeState) {
+                            blurEffect {
+                                backgroundColor = hazeSurface.copy(alpha = 0.6f)
+                                blurRadius = 20.dp
+                                noiseFactor = 0f
+                            }
+                        }
                         .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f), CircleShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },

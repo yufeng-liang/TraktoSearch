@@ -63,15 +63,16 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MarkRecordScreen(
     onBack: () -> Unit,
@@ -81,6 +82,7 @@ fun MarkRecordScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
     var showFilterSheet by remember { mutableStateOf(false) }
     var searchExpanded by remember { mutableStateOf(false) }
@@ -212,9 +214,10 @@ fun MarkRecordScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                .hazeEffect(
+                .hazeProgressiveTopBar(
                     state = hazeState,
-                    style = HazeMaterials.thin()
+                    style = hazeStyle,
+                    blurRadius = 24.dp
                 )
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())

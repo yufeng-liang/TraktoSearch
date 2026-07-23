@@ -84,6 +84,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -94,12 +95,12 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun DiscoverFilterScreen(
     onBack: () -> Unit,
@@ -110,6 +111,7 @@ fun DiscoverFilterScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isLoggedIn by viewModel.isLoggedIn.collectAsStateWithLifecycle()
     val hazeState = remember { HazeState() }
+    val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyListState()
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -252,9 +254,10 @@ fun DiscoverFilterScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                .hazeEffect(
+                .hazeProgressiveTopBar(
                     state = hazeState,
-                    style = HazeMaterials.thin()
+                    style = hazeStyle,
+                    blurRadius = 24.dp
                 )
         ) {
             Spacer(modifier = Modifier.statusBarsPadding())

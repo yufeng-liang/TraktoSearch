@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.detail
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -82,7 +83,9 @@ internal fun MarkWatchedDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.detail_mark_watched_title)) },
         text = {
             // 第0季（特别篇）放到最后

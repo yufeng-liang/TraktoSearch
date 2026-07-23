@@ -52,14 +52,12 @@ import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 设置分组卡片：玻璃拟态圆角卡片，顶部显示 13sp 分组标题。
  * 内部内容由调用方自行组织，通常配合 [GroupDivider] 在项之间添加细分隔线。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SettingsGroupCard(
     title: String,
@@ -515,7 +513,6 @@ internal fun SearchSourceAddCard(
  * 观看统计大卡片：玻璃拟态风格，左侧彩色图标块 + 右侧标题副标题 + 箭头。
  * 作为设置页第一位置，无类目 Header。
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 internal fun StatisticsCard(
     modifier: Modifier = Modifier,
@@ -591,7 +588,6 @@ internal fun StatisticsCard(
  * 设置页 Section 容器：标题（13sp Medium 主色）+ 玻璃卡片
  * 统一 6 个分组的标题+卡片样式，避免重复代码
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun SettingsSectionCard(
     title: String,

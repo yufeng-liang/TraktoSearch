@@ -33,8 +33,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 详情页操作按钮组（想看 / 已看 / 评分）
@@ -42,7 +42,6 @@ import dev.chrisbanes.haze.materials.HazeMaterials
  * @param actions 操作项列表
  * @param hazeState Haze 模糊状态
  */
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun ActionButtonRow(
     actions: List<ActionItem>,
@@ -95,7 +94,9 @@ fun ActionButtonRow(
                     .clip(RoundedCornerShape(14.dp))
                     .then(
                         if (hazeStyle != null) {
-                            Modifier.hazeEffect(state = hazeState, style = hazeStyle)
+                            Modifier.hazeEffect(state = hazeState) {
+                                blurEffect { style = hazeStyle }
+                            }
                         } else {
                             Modifier
                         }

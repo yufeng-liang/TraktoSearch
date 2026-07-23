@@ -26,6 +26,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
 import com.tracktosearch.DeepLinkNavigator
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
@@ -33,6 +35,7 @@ import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalModalHazeState
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
@@ -187,12 +190,20 @@ fun AppNavigation(
         }
     }
 
+    val modalHazeState = remember { HazeState() }
+
     SharedTransitionLayout {
         CompositionLocalProvider(
             LocalSharedTransitionScope provides this@SharedTransitionLayout,
-            com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled
+            com.tracktosearch.ui.component.LocalSharedTransitionEnabled provides sharedTransitionEnabled,
+            LocalModalHazeState provides modalHazeState
         ) {
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .hazeSource(state = modalHazeState)
+            ) {
             NavHost(
                 navController = navController,
                 startDestination = currentStartDest

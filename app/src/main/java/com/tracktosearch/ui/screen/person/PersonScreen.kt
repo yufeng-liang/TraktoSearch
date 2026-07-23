@@ -62,7 +62,7 @@ import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.util.ToastEffect
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 
@@ -90,6 +90,7 @@ fun PersonScreen(
 
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
+    val hazeSurface = MaterialTheme.colorScheme.surface
     // 全部作品展开状态
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
@@ -374,15 +375,13 @@ fun PersonScreen(
                             .padding(start = 12.dp, top = 4.dp)
                             .size(40.dp)
                             .clip(CircleShape)
-                            .hazeEffect(
-                                state = hazeState,
-                                style = HazeStyle(
-                                    backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-                                    blurRadius = 20.dp,
-                                    noiseFactor = 0f,
-                                    tint = null
-                                )
-                            )
+                            .hazeEffect(state = hazeState) {
+                                blurEffect {
+                                    backgroundColor = hazeSurface.copy(alpha = 0.6f)
+                                    blurRadius = 20.dp
+                                    noiseFactor = 0f
+                                }
+                            }
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f),
                                 shape = CircleShape

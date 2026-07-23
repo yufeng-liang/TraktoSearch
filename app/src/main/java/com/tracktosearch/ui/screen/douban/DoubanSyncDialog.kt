@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.douban
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -153,7 +154,9 @@ fun DoubanSyncDialog(
         onDismissRequest = {
             if (!p.isRunning) onDismiss()
         },
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
             Column {

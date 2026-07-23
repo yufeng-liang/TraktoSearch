@@ -28,6 +28,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -35,9 +36,10 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 
 private const val DEEP_SCROLL_THRESHOLD = 5
@@ -46,10 +48,17 @@ private const val DEEP_SCROLL_THRESHOLD = 5
 private val HAZE_BUTTON_SIZE = 58.dp
 
 @Composable
+internal fun resolveScrollToTopHazeStyle(
+    hazeStyle: HazeBlurStyle?,
+    surface: Color
+): HazeBlurStyle = hazeStyle ?: HazeMaterials.thin(surface)
+
+@Composable
 fun ScrollToTopButton(
     listState: LazyListState,
     modifier: Modifier = Modifier,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    hazeStyle: HazeBlurStyle? = null
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
@@ -84,7 +93,8 @@ fun ScrollToTopButton(
     ) {
         ScrollToTopButtonContent(
             onClick = { scope.launch { listState.animateScrollToItem(0) } },
-            hazeState = hazeState
+            hazeState = hazeState,
+            hazeStyle = hazeStyle
         )
     }
 }
@@ -93,7 +103,8 @@ fun ScrollToTopButton(
 fun ScrollToTopButton(
     gridState: LazyGridState,
     modifier: Modifier = Modifier,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    hazeStyle: HazeBlurStyle? = null
 ) {
     val scope = rememberCoroutineScope()
     var showButton by remember { mutableStateOf(false) }
@@ -128,36 +139,34 @@ fun ScrollToTopButton(
     ) {
         ScrollToTopButtonContent(
             onClick = { scope.launch { gridState.animateScrollToItem(0) } },
-            hazeState = hazeState
+            hazeState = hazeState,
+            hazeStyle = hazeStyle
         )
     }
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun ScrollToTopButtonContent(
     onClick: () -> Unit,
-    hazeState: HazeState?
+    hazeState: HazeState?,
+    hazeStyle: HazeBlurStyle?
 ) {
     val view = LocalView.current
     val arrowTint = MaterialTheme.colorScheme.primary
     val onClickWithHaptic = { view.performHaptic(HapticType.TICK); onClick() }
     if (hazeState != null) {
+        val resolvedHazeStyle = resolveScrollToTopHazeStyle(
+            hazeStyle = hazeStyle,
+            surface = MaterialTheme.colorScheme.surface
+        )
         // 毛玻璃样式（与首页悬浮导航一致），尺寸增大 20%
-        val hazeBackgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
         Box(
             modifier = Modifier
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
-                .hazeEffect(
-                    state = hazeState,
-                    style = HazeStyle(
-                        backgroundColor = hazeBackgroundColor,
-                        blurRadius = 20.dp,
-                        noiseFactor = 0f,
-                        tint = null
-                    )
-                )
+                .hazeEffect(state = hazeState) {
+                    blurEffect { style = resolvedHazeStyle }
+                }
                 .border(
                     width = 1.dp,
                     color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),

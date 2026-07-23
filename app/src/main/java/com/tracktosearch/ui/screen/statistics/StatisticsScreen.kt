@@ -1,4 +1,5 @@
 package com.tracktosearch.ui.screen.statistics
+import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
@@ -88,15 +89,16 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -105,7 +107,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class, ExperimentalSharedTransitionApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun StatisticsScreen(
     onBack: () -> Unit,
@@ -122,6 +124,7 @@ fun StatisticsScreen(
     }
 
     val statsHazeState = remember { HazeState() }
+    val statsHazeStyle = HazeMaterials.thin()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -335,9 +338,10 @@ fun StatisticsScreen(
                     .fillMaxWidth()
                     .then(headerModifier)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                    .hazeEffect(
+                    .hazeProgressiveTopBar(
                         state = statsHazeState,
-                        style = HazeMaterials.thin()
+                        style = statsHazeStyle,
+                        blurRadius = 24.dp
                     )
                     .clickable(enabled = false, onClick = {})
             ) {
@@ -385,7 +389,9 @@ fun StatisticsScreen(
 private fun StatisticsInfoDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier.hazeModalSurface(ultraThick = true),
+        shape = MaterialTheme.shapes.extraLarge,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
         title = { Text(stringResource(R.string.statistics_info)) },
         text = {
             Column(

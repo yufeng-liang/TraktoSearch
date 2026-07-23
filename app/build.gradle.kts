@@ -176,7 +176,8 @@ dependencies {
 
     // Haze (frosted glass blur)
     implementation(libs.haze)
-    implementation(libs.haze.materials)
+    implementation(libs.haze.blur)
+    implementation(libs.haze.blur.materials)
 
     // Markdown
     implementation(libs.richtext.commonmark)

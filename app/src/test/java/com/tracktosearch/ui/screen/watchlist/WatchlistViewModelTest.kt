@@ -32,6 +32,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -559,5 +560,52 @@ class WatchlistViewModelTest {
         // isTmdbUnavailable 应检测到该条目 TMDB 不可用
         // selectedMode=0(想看), selectedTab=0(movie)
         assertThat(state.isTmdbUnavailable(0, 0)).isTrue()
+    }
+
+    @Test
+    fun loadMovies_publishesOnlyPlaceholderAndFinalEnrichedList() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(
+                listOf(
+                    makeWatchlistMovie(1, title = "Movie One", tmdb = 101),
+                    makeWatchlistMovie(2, title = "Movie Two", tmdb = 102)
+                ) to 1
+            )
+        coEvery { tmdbRepository.enrichMovie(101, "Movie One", 2023) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/one.jpg",
+                chineseTitle = "Movie One",
+                overview = "",
+                genres = "",
+                year = 2023,
+                rating = 8.0
+            )
+        coEvery { tmdbRepository.enrichMovie(102, "Movie Two", 2023) } returns
+            TmdbRepository.MovieEnrichment(
+                posterUrl = "https://image.tmdb.org/t/p/w500/two.jpg",
+                chineseTitle = "Movie Two",
+                overview = "",
+                genres = "",
+                year = 2023,
+                rating = 8.0
+            )
+
+        val states = mutableListOf<WatchlistUiState>()
+        val collectJob = launch {
+            viewModel.uiState.collect { states.add(it) }
+        }
+        advanceUntilIdle()
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        collectJob.cancel()
+
+        val statesWithEnrichedMovies = states.filter { state ->
+            state.movies.any { movie -> movie.posterUrl != null }
+        }
+        assertThat(statesWithEnrichedMovies).hasSize(1)
+        val finalMovies = statesWithEnrichedMovies.single().movies
+        assertThat(finalMovies).hasSize(2)
+        assertThat(finalMovies.all { it.posterUrl != null }).isTrue()
     }
 }
