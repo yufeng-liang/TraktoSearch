@@ -54,8 +54,8 @@
     --glass-border: rgba(255, 255, 255, 0.85);
     --glass-highlight: rgba(255, 255, 255, 0.95);
     --text: #2d3340;
-    --text-muted: #6b7280;
-    --text-dim: #9ca3af;
+    --text-muted: #4b5563;
+    --text-dim: #667085;
     --accent: #4f46e5;
     --accent-hover: #4338ca;
     --accent-soft: rgba(79, 70, 229, 0.08);
@@ -469,6 +469,9 @@ input, select { font-family: inherit; }
     transform: translateY(-1px);
     box-shadow: 0 4px 16px var(--accent-soft);
 }
+[data-theme="light"] .btn-primary {
+    color: #27303f;
+}
 .btn-ghost { color: var(--text-muted); }
 .btn-ghost:hover { color: var(--text); background: var(--surface-hover); }
 .btn-danger {
@@ -659,8 +662,8 @@ tbody tr:last-child td { border-bottom: none; }
 .form-input, .form-select {
     width: 100%;
     padding: 10px 14px;
-    background: var(--bg);
-    border: 1px solid var(--border);
+    background: var(--surface-solid);
+    border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: var(--text);
     font-size: 13px;
@@ -671,7 +674,7 @@ tbody tr:last-child td { border-bottom: none; }
     border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-soft);
 }
-.form-input::placeholder { color: var(--text-dim); }
+.form-input::placeholder { color: var(--text-muted); }
 .form-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
@@ -684,7 +687,7 @@ tbody tr:last-child td { border-bottom: none; }
     flex-wrap: wrap;
 }
 .toolbar-search { flex: 1; min-width: 220px; }
-.toolbar-search .form-input { padding-left: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 14px center; }
+.toolbar-search .form-input { padding-left: 40px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364758b' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 14px center; }
 .toolbar-filters { display: flex; gap: 10px; flex-wrap: wrap; }
 
 /* ===== States ===== */
@@ -878,7 +881,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== Section headings ===== */
 .section-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 4px; }
-.section-subtitle { font-size: 13px; color: var(--text-dim); margin-bottom: 24px; }
+.section-subtitle { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
 .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 
 /* ===== Detail layout ===== */
