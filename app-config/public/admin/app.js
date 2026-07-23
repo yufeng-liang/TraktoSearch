@@ -219,9 +219,17 @@ const Palettes = {
 const API_BASE = localStorage.getItem('tts-api-base') || 'https://auth-worker.douban-movie-api-peak.workers.dev';
 
 const API = {
-    // Access JWT（从 localStorage 读取，由 Access 登录后注入）
+    // Access JWT（优先 localStorage，回退读取当前域名 Cookie）
     getToken() {
-        return localStorage.getItem('tts-access-token');
+        const localToken = localStorage.getItem('tts-access-token');
+        if (localToken) return localToken;
+
+        const match = document.cookie.match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
+        if (!match) return null;
+
+        const token = decodeURIComponent(match[1]);
+        localStorage.setItem('tts-access-token', token);
+        return token;
     },
 
     // 通用请求
