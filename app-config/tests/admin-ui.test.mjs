@@ -25,6 +25,10 @@ test('后台表单和仪表盘关键错误不会静默失败', () => {
     assert.match(appSource, /auditRetry/);
 });
 
+test('创建朋友后使用与路由解析器一致的 hash 格式', () => {
+    assert.match(appSource, /window\.location\.hash = '#\/' \+ route/);
+});
+
 test('管理代理清理认证和长度头并返回上游降级响应', () => {
     assert.match(proxySource, /headers\.delete\('Host'\)/);
     assert.match(proxySource, /headers\.delete\('Content-Length'\)/);

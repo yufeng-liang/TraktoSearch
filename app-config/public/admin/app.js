@@ -502,7 +502,7 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 function navigate(route, params = {}) {
     state.route = route;
     state.params = params;
-    window.location.hash = '#' + route + (params.id ? '/' + params.id : '');
+    window.location.hash = '#/' + route + (params.id ? '/' + params.id : '');
     updateActiveNav();
     render();
 }
