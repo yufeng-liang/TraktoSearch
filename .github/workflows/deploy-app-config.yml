@@ -1,0 +1,36 @@
+name: Deploy app-config
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'app-config/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Pages
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup config.plain.json
+        run: echo "${{ secrets.APP_CONFIG_PLAIN }}" > scripts/config.plain.json
+        working-directory: app-config
+
+      - name: Install deps
+        run: npm install
+        working-directory: app-config/scripts
+
+      - name: Encrypt config
+        run: npm run encrypt
+        working-directory: app-config/scripts
+        env:
+          CONFIG_AES_KEY: ${{ secrets.CONFIG_AES_KEY }}
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy public --project-name=app-config
+          workingDirectory: app-config
