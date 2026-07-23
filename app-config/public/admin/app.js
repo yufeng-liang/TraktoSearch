@@ -401,6 +401,13 @@ function clearFormError(form) {
     form.querySelector('.form-error')?.remove();
 }
 
+let modalFormId = 0;
+
+function bindSubmitButton(form, button) {
+    form.id = `modal-form-${++modalFormId}`;
+    button.setAttribute('form', form.id);
+}
+
 function statusBadge(status) {
     const map = {
         ACTIVE: 'badge-active', DISABLED: 'badge-disabled', REVOKED: 'badge-revoked',
@@ -852,6 +859,7 @@ function showCreateFriendModal() {
     submitBtn.className = 'btn btn-primary';
     submitBtn.type = 'submit';
     submitBtn.textContent = '创建';
+    bindSubmitButton(form, submitBtn);
 
     modal.open({
         title: '创建朋友',
@@ -926,6 +934,7 @@ function showCreateInviteModal(friendId, friendName) {
     submitBtn.className = 'btn btn-primary';
     submitBtn.type = 'submit';
     submitBtn.textContent = '生成邀请码';
+    bindSubmitButton(form, submitBtn);
 
     modal.open({
         title: `生成邀请码 · ${friendName}`,

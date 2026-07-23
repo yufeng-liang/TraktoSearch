@@ -19,6 +19,7 @@ test('朋友创建不提交朋友到期时间，邀请码单独携带有效期',
 test('后台表单和仪表盘关键错误不会静默失败', () => {
     assert.match(appSource, /form\.noValidate = true/);
     assert.match(appSource, /showFormError\(form, '请输入昵称。'/);
+    assert.match(appSource, /bindSubmitButton\(form, submitBtn\)/);
     assert.match(appSource, /s\.totalFriends/);
     assert.match(appSource, /Promise\.all\(\[API\.getStats\(\), API\.getAuditLogs\(\)\]\)/);
     assert.match(appSource, /auditRetry/);
