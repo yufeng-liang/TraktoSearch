@@ -258,7 +258,7 @@ const API = {
 
     // Access 登录 URL（替换为实际 team domain）
     getAccessLoginUrl() {
-        const teamDomain = localStorage.getItem('tts-access-team') || 'your-team';
+        const teamDomain = localStorage.getItem('tts-access-team') || 'douban-movie-api-peak';
         return `https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/login`;
     },
 
