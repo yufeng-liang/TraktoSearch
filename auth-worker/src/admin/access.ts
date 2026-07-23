@@ -104,13 +104,13 @@ export async function verifyAccessJWT(
         throw new AppError('UNAUTHORIZED', 'Invalid token issuer', 401);
     }
     const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-    if (!audiences.includes(env.ACCESS_AUDIENCE.trim())) {
+    if (!audiences.includes((env.ACCESS_AUDIENCE || '').trim())) {
         throw new AppError('UNAUTHORIZED', 'Invalid token audience', 401);
     }
     if (!Number.isFinite(payload.exp) || payload.exp < Math.floor(Date.now() / 1000)) {
         throw new AppError('UNAUTHORIZED', 'Token has expired', 401);
     }
-    if (payload.email !== env.ADMIN_EMAIL.trim()) {
+    if (payload.email !== (env.ADMIN_EMAIL || '').trim()) {
         throw new AppError('FORBIDDEN', 'Email not authorized', 403);
     }
 
@@ -160,9 +160,14 @@ async function refreshKeysCache(env: AccessEnv): Promise<AccessJwk[]> {
 }
 
 function normalizeTeamDomain(value: string): string {
-    return value.trim()
+    if (typeof value !== 'string') return '';
+
+    const domain = value.trim()
         .replace(/^https?:\/\//i, '')
-        .replace(/\/+$/, '');
+        .split('/')[0]
+        .replace(/\.+$/, '');
+
+    return domain && domain.includes('.') ? domain : (domain ? `${domain}.cloudflareaccess.com` : '');
 }
 
 function decodeBase64Url(value: string): string {
