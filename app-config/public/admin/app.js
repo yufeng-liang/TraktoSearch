@@ -480,7 +480,9 @@ document.getElementById('themeToggle').addEventListener('click', () => Theme.tog
 // ===== Logout =====
 document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem('tts-access-token');
+    localStorage.removeItem('tts-access-team');
     localStorage.removeItem('tts-api-base');
+    document.getElementById('adminEmail').textContent = '未登录';
     showToast('已退出登录');
     // 可选：跳转 Access 登录
     // window.location.href = API.getAccessLoginUrl();

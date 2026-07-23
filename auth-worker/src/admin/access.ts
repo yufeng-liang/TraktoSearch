@@ -95,18 +95,22 @@ export async function verifyAccessJWT(
         throw new AppError('UNAUTHORIZED', 'Invalid token signature', 401);
     }
 
-    const expectedIss = `https://${env.ACCESS_TEAM_DOMAIN}`;
+    const teamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
+    if (!teamDomain) {
+        throw new AppError('INTERNAL_ERROR', 'Access team domain is not configured', 500);
+    }
+    const expectedIss = `https://${teamDomain}`;
     if (payload.iss !== expectedIss) {
         throw new AppError('UNAUTHORIZED', 'Invalid token issuer', 401);
     }
     const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-    if (!audiences.includes(env.ACCESS_AUDIENCE)) {
+    if (!audiences.includes(env.ACCESS_AUDIENCE.trim())) {
         throw new AppError('UNAUTHORIZED', 'Invalid token audience', 401);
     }
     if (!Number.isFinite(payload.exp) || payload.exp < Math.floor(Date.now() / 1000)) {
         throw new AppError('UNAUTHORIZED', 'Token has expired', 401);
     }
-    if (payload.email !== env.ADMIN_EMAIL) {
+    if (payload.email !== env.ADMIN_EMAIL.trim()) {
         throw new AppError('FORBIDDEN', 'Email not authorized', 403);
     }
 
@@ -123,10 +127,20 @@ async function getCachedKeys(env: AccessEnv): Promise<AccessJwk[]> {
 }
 
 async function refreshKeysCache(env: AccessEnv): Promise<AccessJwk[]> {
-    const certsUrl = `https://${env.ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`;
-    const response = await fetch(certsUrl);
+    const teamDomain = normalizeTeamDomain(env.ACCESS_TEAM_DOMAIN);
+    if (!teamDomain) {
+        throw new AppError('INTERNAL_ERROR', 'Access team domain is not configured', 500);
+    }
+
+    const certsUrl = `https://${teamDomain}/cdn-cgi/access/certs`;
+    let response: Response;
+    try {
+        response = await fetch(certsUrl);
+    } catch {
+        throw new AppError('ACCESS_CERTS_UNAVAILABLE', 'Failed to fetch Access certificates', 503);
+    }
     if (!response.ok) {
-        throw new AppError('INTERNAL_ERROR', 'Failed to fetch Access certificates', 500);
+        throw new AppError('ACCESS_CERTS_UNAVAILABLE', 'Failed to fetch Access certificates', 503);
     }
 
     const data = await response.json() as { keys?: AccessJwk[] };
@@ -143,6 +157,12 @@ async function refreshKeysCache(env: AccessEnv): Promise<AccessJwk[]> {
         // KV 暂时不可用时仍可使用本次拉取的证书完成验证。
     }
     return keys;
+}
+
+function normalizeTeamDomain(value: string): string {
+    return value.trim()
+        .replace(/^https?:\/\//i, '')
+        .replace(/\/+$/, '');
 }
 
 function decodeBase64Url(value: string): string {
