@@ -15,7 +15,7 @@ export async function onRequest(context) {
 
     const cookie = request.headers.get('Cookie') || '';
     const tokenMatch = cookie.match(/(?:^|;\s*)CF_Authorization=([^;]+)/);
-    const accessToken = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
+    const accessToken = request.headers.get('Cf-Access-Jwt-Assertion') || decodeCookieToken(tokenMatch?.[1]);
     const response = await next();
 
     if (!accessToken || !response.headers.get('content-type')?.includes('text/html')) {
@@ -23,9 +23,10 @@ export async function onRequest(context) {
     }
 
     const html = await response.text();
+    const email = readJwtEmail(accessToken);
     const injectedHtml = html.replace(
         '<head>',
-        `<head><script>localStorage.setItem('tts-access-token', ${JSON.stringify(accessToken)}); localStorage.setItem('tts-access-team', 'douban-movie-api-peak');</script>`
+        `<head><script>window.__ADMIN_EMAIL__ = ${JSON.stringify(email || '管理员')};</script>`
     );
 
     const headers = new Headers(response.headers);
@@ -36,4 +37,24 @@ export async function onRequest(context) {
         statusText: response.statusText,
         headers,
     });
+}
+
+function readJwtEmail(token) {
+    if (!token) return null;
+    try {
+        const payload = token.split('.')[1];
+        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(payload.length / 4) * 4, '=');
+        return JSON.parse(atob(base64)).email || null;
+    } catch {
+        return null;
+    }
+}
+
+function decodeCookieToken(value) {
+    if (!value) return null;
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return null;
+    }
 }

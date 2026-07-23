@@ -216,7 +216,7 @@ const Palettes = {
 
 // ===== API Client =====
 // API 根域名（部署时替换为实际 Worker 域名）
-const API_BASE = localStorage.getItem('tts-api-base') || 'https://auth-worker.douban-movie-api-peak.workers.dev';
+const API_BASE = `${window.location.origin}/admin-api`;
 
 const API = {
     // Access JWT（优先 localStorage，回退读取当前域名 Cookie）
@@ -486,6 +486,11 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     // 由 Access 清除当前 Pages 域名的授权 Cookie。
     window.location.assign(`${window.location.origin}/cdn-cgi/access/logout`);
 });
+
+const adminEmail = document.getElementById('adminEmail');
+if (window.__ADMIN_EMAIL__) {
+    adminEmail.textContent = window.__ADMIN_EMAIL__;
+}
 
 // ===== Render router =====
 function render() {
