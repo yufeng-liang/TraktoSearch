@@ -37,7 +37,7 @@ object AuthModule {
         json: Json
     ): AuthApiService {
         val retrofit = Retrofit.Builder()
-            .baseUrl(BuildConfig.GATEWAY_BASE_URL)
+            .baseUrl(BuildConfig.GATEWAY_BASE_URL.trimEnd('/') + "/")
             .client(client)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()

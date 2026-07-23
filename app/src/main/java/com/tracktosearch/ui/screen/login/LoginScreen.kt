@@ -88,6 +88,15 @@ class LoginViewModel @Inject constructor(
         _loginState.value = LoginState.AUTHORIZING
     }
 
+    suspend fun getAuthorizationUrl(): String? {
+        val result = authManager.buildAuthorizationUrl()
+        return result.getOrElse {
+            _loginState.value = LoginState.ERROR
+            _errorMessage.value = it.message ?: "Authorization URL unavailable"
+            null
+        }
+    }
+
     fun exchangeCodeForToken(code: String) {
         _loginState.value = LoginState.CONNECTING
         viewModelScope.launch {
@@ -137,9 +146,10 @@ fun LoginScreen(
     LaunchedEffect(redirectToBrowser) {
         if (redirectToBrowser && loginState == LoginState.IDLE) {
             viewModel.startAuthorization()
-            val authUrl = viewModel.authManager.buildAuthorizationUrl()
-            val customTabsIntent = CustomTabsIntent.Builder().build()
-            customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+            viewModel.getAuthorizationUrl()?.let { authUrl ->
+                val customTabsIntent = CustomTabsIntent.Builder().build()
+                customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+            }
         }
     }
 
@@ -238,10 +248,13 @@ fun LoginScreen(
                 LoginState.IDLE, LoginState.AUTHORIZING -> {
                     Button(
                         onClick = {
-                            viewModel.startAuthorization()
-                            val authUrl = viewModel.authManager.buildAuthorizationUrl()
-                            val customTabsIntent = CustomTabsIntent.Builder().build()
-                            customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                            scope.launch {
+                                viewModel.startAuthorization()
+                                viewModel.getAuthorizationUrl()?.let { authUrl ->
+                                    val customTabsIntent = CustomTabsIntent.Builder().build()
+                                    customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                                }
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -389,10 +402,13 @@ fun LoginScreen(
                     // 标记 OAuth 成功后自动跳豆瓣登录页
                     pendingDoubanImportAfterLogin = true
                     // 启动 Trakt OAuth 流程
-                    viewModel.startAuthorization()
-                    val authUrl = viewModel.authManager.buildAuthorizationUrl()
-                    val customTabsIntent = CustomTabsIntent.Builder().build()
-                    customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                    scope.launch {
+                        viewModel.startAuthorization()
+                        viewModel.getAuthorizationUrl()?.let { authUrl ->
+                            val customTabsIntent = CustomTabsIntent.Builder().build()
+                            customTabsIntent.launchUrl(context, Uri.parse(authUrl))
+                        }
+                    }
                 }) {
                     Text(stringResource(R.string.douban_import_require_trakt_login))
                 }

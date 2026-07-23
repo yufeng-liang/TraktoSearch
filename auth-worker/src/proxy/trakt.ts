@@ -14,9 +14,23 @@ export async function handleTraktOAuth(
     request: Request,
     env: Env,
     path: string,
-    friendId: string
+    friendId: string,
+    requestId: string
 ): Promise<Response> {
     const subPath = path.replace('/api/trakt/oauth/', '');
+
+    if (subPath === 'authorize' && request.method === 'GET') {
+        const url = new URL('https://trakt.tv/oauth/authorize');
+        url.searchParams.set('response_type', 'code');
+        url.searchParams.set('client_id', env.TRAKT_CLIENT_ID);
+        url.searchParams.set('redirect_uri', 'tracktosearch://oauth/callback');
+        return new Response(JSON.stringify({
+            code: 'SUCCESS',
+            message: 'OK',
+            requestId,
+            data: { url: url.toString() },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     if (subPath === 'exchange' && request.method === 'POST') {
         return traktExchange(request, env, friendId);

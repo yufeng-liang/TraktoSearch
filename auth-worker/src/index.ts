@@ -144,7 +144,7 @@ async function handleAuthApi(
         return handleTmdbProxy(request, env, path);
     }
     if (path.startsWith('/api/trakt/oauth/')) {
-        return handleTraktOAuth(request, env, path, payload.sub);
+        return handleTraktOAuth(request, env, path, payload.sub, requestId);
     }
     if (path.startsWith('/api/trakt/')) {
         return handleTraktProxy(request, env, path, payload.sub);
@@ -184,6 +184,11 @@ async function handleAdminApi(
     }
     if (friendMatch && request.method === 'GET') {
         return listDevices(env, requestId, friendMatch[1]);
+    }
+
+    const devicesMatch = path.match(/^\/admin\/friends\/([^/]+)\/devices$/);
+    if (devicesMatch && request.method === 'GET') {
+        return listDevices(env, requestId, devicesMatch[1]);
     }
 
     // 禁用朋友

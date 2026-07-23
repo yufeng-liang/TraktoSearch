@@ -30,8 +30,6 @@ android {
 
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
-        buildConfigField("String", "TRAKT_CLIENT_ID", "\"${properties.getProperty("trakt.client.id", "")}\"")
-        buildConfigField("String", "TRAKT_REDIRECT_URI", "\"${properties.getProperty("trakt.redirect.uri", "tracktosearch://oauth/callback")}\"")
         buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
         buildConfigField("String", "JPUSH_APPKEY", "\"${properties.getProperty("jpush.appkey", "")}\"")

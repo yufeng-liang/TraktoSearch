@@ -73,10 +73,26 @@ export async function handleActivate(
     }
 
     // 检查设备上限（事务中）
+    const existingDevice = await env.DB.prepare(`
+        SELECT id, friend_id, status
+        FROM devices
+        WHERE public_key = ?
+    `).bind(body.publicKey).first<{ id: string; friend_id: string; status: string }>();
+
+    if (invite.kind === 'MIGRATION' && !existingDevice) {
+        throw new AppError('MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', 400);
+    }
+    if (invite.kind === 'MIGRATION' && existingDevice && existingDevice.friend_id !== invite.friend_id) {
+        throw new AppError('MIGRATION_DEVICE_MISMATCH', 'Device belongs to another friend', 400);
+    }
+    if (invite.kind !== 'MIGRATION' && existingDevice) {
+        throw new AppError('DEVICE_ALREADY_BOUND', 'Device is already bound', 400);
+    }
+
     const activeDeviceCount = await env.DB.prepare(`
         SELECT COUNT(*) as count FROM devices
-        WHERE friend_id = ? AND status = 'ACTIVE'
-    `).bind(invite.friend_id).first<{ count: number }>();
+        WHERE friend_id = ? AND status = 'ACTIVE' AND (? IS NULL OR id != ?)
+    `).bind(invite.friend_id, existingDevice?.id || null, existingDevice?.id || null).first<{ count: number }>();
 
     if (activeDeviceCount && activeDeviceCount.count >= invite.max_devices) {
         throw new AppError('DEVICE_LIMIT_REACHED',
@@ -84,7 +100,7 @@ export async function handleActivate(
     }
 
     // 生成设备 ID 和刷新令牌
-    const deviceId = generateId();
+    const deviceId = existingDevice?.id || generateId();
     const refreshToken = generateSecureToken(32);
     const refreshTokenHash = await sha256(refreshToken);
     const refreshSessionId = generateId();
@@ -98,10 +114,21 @@ export async function handleActivate(
 
     // 事务：创建设备 + 创建刷新会话 + 标记邀请码已使用
     const statements = [
-        env.DB.prepare(`
+        existingDevice
+            ? env.DB.prepare(`
+            UPDATE devices
+            SET friend_id = ?, device_name = ?, status = 'ACTIVE', app_version = ?, revoked_at = NULL
+            WHERE id = ?
+        `).bind(invite.friend_id, body.deviceName || null, body.appVersion || null, deviceId)
+            : env.DB.prepare(`
             INSERT INTO devices (id, friend_id, public_key, device_name, status, app_version, activated_at)
             VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
         `).bind(deviceId, invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime),
+
+        env.DB.prepare(`
+            UPDATE refresh_sessions SET revoked_at = ?
+            WHERE device_id = ? AND revoked_at IS NULL
+        `).bind(currentTime, deviceId),
 
         env.DB.prepare(`
             INSERT INTO refresh_sessions (id, device_id, token_hash, expires_at, created_at)
@@ -127,8 +154,8 @@ export async function handleActivate(
     // 写入审计日志
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, created_at)
-        VALUES ('ACTIVATE', ?, ?, ?, 'SUCCESS', ?)
-    `).bind(invite.friend_id, deviceId, requestId, currentTime).run();
+        VALUES (?, ?, ?, ?, 'SUCCESS', ?)
+    `).bind(invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE', invite.friend_id, deviceId, requestId, currentTime).run();
 
     const response: ActivateResponse = {
         deviceId,

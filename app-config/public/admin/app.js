@@ -302,7 +302,7 @@ const API = {
         const f = friends.find((x) => x.id === id);
         if (!f) throw new Error('NOT_FOUND');
 
-        const deviceData = await this.get(`/admin/friends/${id}`);
+        const deviceData = await this.get(`/admin/friends/${id}/devices`);
         f.devicesList = deviceData.devices.map((d) => ({
             id: d.id,
             name: d.device_name,

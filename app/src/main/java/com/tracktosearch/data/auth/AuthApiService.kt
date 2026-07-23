@@ -3,6 +3,7 @@ package com.tracktosearch.data.auth
 import kotlinx.serialization.Serializable
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 
 /**
@@ -26,6 +27,9 @@ interface AuthApiService {
 
     @POST("api/trakt/oauth/refresh")
     suspend fun refreshTrakt(): Response<GatewayResponse<GatewaySuccessResponse>>
+
+    @GET("api/trakt/oauth/authorize")
+    suspend fun getTraktAuthorizeUrl(): Response<GatewayResponse<TraktAuthorizeResponse>>
 }
 
 // === 请求/响应 DTO ===
@@ -100,3 +104,6 @@ data class TraktOAuthCodeRequest(val code: String)
 
 @Serializable
 data class GatewaySuccessResponse(val success: Boolean = true)
+
+@Serializable
+data class TraktAuthorizeResponse(val url: String)

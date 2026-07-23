@@ -1,6 +1,5 @@
 package com.tracktosearch.data.remote.trakt
 
-import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.auth.AuthApiService
 import com.tracktosearch.data.auth.TraktOAuthCodeRequest
 import kotlinx.coroutines.CancellationException
@@ -12,11 +11,20 @@ class TraktAuthManager @Inject constructor(
     private val authApiService: AuthApiService
 ) {
     companion object {
-        const val AUTH_URL = "https://trakt.tv/oauth/authorize"
     }
 
-    fun buildAuthorizationUrl(): String {
-        return "$AUTH_URL?response_type=code&client_id=${BuildConfig.TRAKT_CLIENT_ID}&redirect_uri=${BuildConfig.TRAKT_REDIRECT_URI}"
+    suspend fun buildAuthorizationUrl(): Result<String> {
+        return try {
+            val response = authApiService.getTraktAuthorizeUrl()
+            val url = response.body()?.data?.url
+            if (response.isSuccessful && !url.isNullOrBlank()) {
+                Result.success(url)
+            } else {
+                Result.failure(Exception(response.body()?.message ?: "Authorization URL unavailable"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     suspend fun exchangeCodeForToken(code: String): Result<Unit> {

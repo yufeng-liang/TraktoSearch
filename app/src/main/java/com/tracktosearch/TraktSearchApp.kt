@@ -68,9 +68,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
             }
 
-            // 远程配置初始化(拉取云端 API key/base URL),放在其他持久化缓存加载之前
-            // ApiKeyInterceptor/BaseUrlInterceptor 在首次网络请求时就能用到缓存配置
-            // 不阻塞 UI 线程:内部用 IO 协程,首次请求若未初始化完成会回退 BuildConfig 兜底
+            // 远程配置初始化，用于非敏感运行参数；上游 key 不进入 APK
             remoteConfigManager.initialize()
             // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
             // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存

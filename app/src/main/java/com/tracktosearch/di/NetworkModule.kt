@@ -6,8 +6,6 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.data.auth.AuthInterceptor
-import com.tracktosearch.data.remote.config.ApiKeyInterceptor
-import com.tracktosearch.data.remote.config.BaseUrlInterceptor
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.omdb.OmdbApiService
 import com.tracktosearch.data.remote.panhub.PanHubApiService
