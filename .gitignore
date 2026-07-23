@@ -51,6 +51,10 @@ docs/
 .superpowers/
 auth-worker/node_modules/
 
+# Cloudflare Wrangler local state
+auth-worker/.wrangler/
+gateway-pages/.wrangler/
+
 # Perfetto / ART trace files (large, local performance analysis only)
 *.trace
 
