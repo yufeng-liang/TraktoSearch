@@ -55,3 +55,14 @@ docs/
 
 # WorkBuddy workspace data
 .workbuddy/
+
+# Root-level emulator/UI verification artifacts
+/device-*.png
+/device-*.xml
+/emulator-*.png
+/emulator-*.xml
+/emulator-*.txt
+/ui-*.xml
+/ui-*.txt
+/nul
+/%SystemDrive%/
