@@ -42,7 +42,7 @@ android {
         buildConfigField("String", "CONFIG_AES_KEY", "\"${properties.getProperty("config.aes.key", "")}\"")
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
         // 授权网关根域名（固定，不可被远程配置替换）
-        buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://auth-worker.douban-movie-api-peak.workers.dev")}\"")
+        buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
 
         val appId = applicationId ?: "com.tracktosearch"
         manifestPlaceholders["JPUSH_PKGNAME"] = appId
