@@ -38,7 +38,11 @@ fun AuthScreen(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(stringResource(R.string.auth_title), style = MaterialTheme.typography.headlineMedium)
+        Text(
+            text = stringResource(R.string.auth_title),
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
         Text(
             text = stringResource(if (expired) R.string.auth_expired_message else R.string.auth_subtitle),
             modifier = Modifier.padding(top = 8.dp, bottom = 24.dp),
