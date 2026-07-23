@@ -483,9 +483,8 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     localStorage.removeItem('tts-access-team');
     localStorage.removeItem('tts-api-base');
     document.getElementById('adminEmail').textContent = '未登录';
-    showToast('已退出登录');
-    // 可选：跳转 Access 登录
-    // window.location.href = API.getAccessLoginUrl();
+    // 由 Access 清除当前 Pages 域名的授权 Cookie。
+    window.location.assign(`${window.location.origin}/cdn-cgi/access/logout`);
 });
 
 // ===== Render router =====
