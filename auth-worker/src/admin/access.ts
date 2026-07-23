@@ -85,12 +85,17 @@ export async function verifyAccessJWT(
         throw new AppError('UNAUTHORIZED', 'Invalid Access certificate', 401);
     }
 
-    const valid = await crypto.subtle.verify(
-        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-        publicKey,
-        decodeBase64UrlBytes(parts[2]),
-        new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
-    );
+    let valid = false;
+    try {
+        valid = await crypto.subtle.verify(
+            { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+            publicKey,
+            decodeBase64UrlBytes(parts[2]),
+            new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+        );
+    } catch {
+        throw new AppError('UNAUTHORIZED', 'Invalid token signature', 401);
+    }
     if (!valid) {
         throw new AppError('UNAUTHORIZED', 'Invalid token signature', 401);
     }
@@ -119,8 +124,9 @@ export async function verifyAccessJWT(
 
 async function getCachedKeys(env: AccessEnv): Promise<AccessJwk[]> {
     try {
-        const cached = await env.KV.get<AccessJwk[]>(ACCESS_CERTS_CACHE_KEY, 'json');
-        return cached || [];
+        const cached = await env.KV.get<unknown>(ACCESS_CERTS_CACHE_KEY, 'json');
+        if (!Array.isArray(cached)) return [];
+        return cached.filter(isAccessJwk);
     } catch {
         return [];
     }
@@ -143,8 +149,13 @@ async function refreshKeysCache(env: AccessEnv): Promise<AccessJwk[]> {
         throw new AppError('ACCESS_CERTS_UNAVAILABLE', 'Failed to fetch Access certificates', 503);
     }
 
-    const data = await response.json() as { keys?: AccessJwk[] };
-    const keys = (data.keys || []).filter(key => key.kty === 'RSA' && key.kid && key.n && key.e);
+    let data: { keys?: unknown };
+    try {
+        data = await response.json() as { keys?: unknown };
+    } catch {
+        throw new AppError('ACCESS_CERTS_UNAVAILABLE', 'Invalid Access certificates response', 503);
+    }
+    const keys = Array.isArray(data.keys) ? data.keys.filter(isAccessJwk) : [];
     if (keys.length === 0) {
         throw new AppError('INTERNAL_ERROR', 'No valid Access certificates', 500);
     }
@@ -168,6 +179,12 @@ function normalizeTeamDomain(value: string): string {
         .replace(/\.+$/, '');
 
     return domain && domain.includes('.') ? domain : (domain ? `${domain}.cloudflareaccess.com` : '');
+}
+
+function isAccessJwk(value: unknown): value is AccessJwk {
+    if (!value || typeof value !== 'object') return false;
+    const key = value as Partial<AccessJwk>;
+    return key.kty === 'RSA' && typeof key.kid === 'string' && typeof key.n === 'string' && typeof key.e === 'string';
 }
 
 function decodeBase64Url(value: string): string {
