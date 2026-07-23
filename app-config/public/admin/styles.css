@@ -676,6 +676,7 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .form-input::placeholder { color: var(--text-muted); }
 .form-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+.form-error { margin: 0 0 14px; color: var(--danger); font-size: 13px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 
 /* ===== Toolbar ===== */

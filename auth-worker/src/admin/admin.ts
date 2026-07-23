@@ -25,15 +25,24 @@ export async function createFriend(
     env: { DB: D1Database },
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as {
+    const body = await readJson<{
         nickname: string;
         note?: string;
         maxDevices?: number;
-        expiresAt?: number | null;
-    };
+    }>(request);
 
-    if (!body.nickname) {
+    const nickname = typeof body.nickname === 'string' ? body.nickname.trim() : '';
+    const note = typeof body.note === 'string' ? body.note.trim() : '';
+    const maxDevices = body.maxDevices ?? 2;
+
+    if (!nickname) {
         throw new AppError('INVALID_REQUEST', 'nickname is required', 400);
+    }
+    if (nickname.length > 32 || note.length > 64) {
+        throw new AppError('INVALID_REQUEST', 'nickname or note is too long', 400);
+    }
+    if (!Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 10) {
+        throw new AppError('INVALID_REQUEST', 'maxDevices must be an integer between 1 and 10', 400);
     }
 
     const id = generateId();
@@ -41,15 +50,15 @@ export async function createFriend(
 
     await env.DB.prepare(`
         INSERT INTO friends (id, nickname, note, status, max_devices, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
-    `).bind(id, body.nickname, body.note || null, body.maxDevices || 2, body.expiresAt || null, currentTime, currentTime).run();
+        VALUES (?, ?, ?, 'ACTIVE', ?, NULL, ?, ?)
+    `).bind(id, nickname, note || null, maxDevices, currentTime, currentTime).run();
 
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
         VALUES ('FRIEND_CREATE', ?, ?, 'SUCCESS', ?)
     `).bind(id, requestId, currentTime).run();
 
-    return successResponse({ id, nickname: body.nickname, status: 'ACTIVE' }, requestId);
+    return successResponse({ id, nickname, status: 'ACTIVE' }, requestId);
 }
 
 // PATCH /admin/friends/:id — 更新朋友
@@ -59,19 +68,38 @@ export async function updateFriend(
     requestId: string,
     friendId: string
 ): Promise<Response> {
-    const body = await request.json() as {
+    const existing = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    if (!existing) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+
+    const body = await readJson<{
         nickname?: string;
         note?: string;
         maxDevices?: number;
         expiresAt?: number | null;
-    };
+    }>(request);
 
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
 
-    if (body.nickname !== undefined) { updates.push('nickname = ?'); values.push(body.nickname); }
-    if (body.note !== undefined) { updates.push('note = ?'); values.push(body.note); }
-    if (body.maxDevices !== undefined) { updates.push('max_devices = ?'); values.push(body.maxDevices); }
+    if (body.nickname !== undefined) {
+        const nickname = body.nickname.trim();
+        if (!nickname || nickname.length > 32) throw new AppError('INVALID_REQUEST', 'Invalid nickname', 400);
+        updates.push('nickname = ?');
+        values.push(nickname);
+    }
+    if (body.note !== undefined) {
+        const note = body.note.trim();
+        if (note.length > 64) throw new AppError('INVALID_REQUEST', 'note is too long', 400);
+        updates.push('note = ?');
+        values.push(note || null);
+    }
+    if (body.maxDevices !== undefined) {
+        if (!Number.isInteger(body.maxDevices) || body.maxDevices < 1 || body.maxDevices > 10) {
+            throw new AppError('INVALID_REQUEST', 'maxDevices must be an integer between 1 and 10', 400);
+        }
+        updates.push('max_devices = ?');
+        values.push(body.maxDevices);
+    }
     if (body.expiresAt !== undefined) { updates.push('expires_at = ?'); values.push(body.expiresAt); }
 
     if (updates.length === 0) {
@@ -95,6 +123,10 @@ export async function disableFriend(
     requestId: string,
     friendId: string
 ): Promise<Response> {
+    const friend = await env.DB.prepare('SELECT id, status FROM friends WHERE id = ?').bind(friendId).first<{ id: string; status: string }>();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+    if (friend.status === 'DISABLED') throw new AppError('FRIEND_DISABLED', 'Friend already disabled', 400);
+
     const currentTime = now();
 
     // 禁用朋友 + 撤销全部设备 + 撤销全部刷新会话
@@ -125,6 +157,9 @@ export async function listDevices(
     requestId: string,
     friendId: string
 ): Promise<Response> {
+    const friend = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+
     const { results } = await env.DB.prepare(`
         SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at
         FROM devices
@@ -182,10 +217,10 @@ export async function createInvite(
     requestId: string,
     friendId: string
 ): Promise<Response> {
-    const body = await request.json() as {
+    const body = await readJson<{
         kind?: 'ACTIVATION' | 'MIGRATION';
         expiresInDays?: number;
-    };
+    }>(request);
 
     // 验证朋友存在且活跃
     const friend = await env.DB.prepare(`
@@ -200,7 +235,13 @@ export async function createInvite(
     }
 
     const kind = body.kind || 'ACTIVATION';
-    const expiresInDays = body.expiresInDays || 7;
+    const expiresInDays = body.expiresInDays ?? 7;
+    if (kind !== 'ACTIVATION' && kind !== 'MIGRATION') {
+        throw new AppError('INVALID_REQUEST', 'kind must be ACTIVATION or MIGRATION', 400);
+    }
+    if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
+        throw new AppError('INVALID_REQUEST', 'expiresInDays must be an integer between 1 and 365', 400);
+    }
     const code = generateInviteCode();
     const codeHash = await sha256(code);
     const id = generateId();
@@ -275,8 +316,10 @@ export async function listAuditLogs(
     const result = url.searchParams.get('result');
     const fromTime = url.searchParams.get('from');
     const toTime = url.searchParams.get('to');
-    const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
-    const offset = parseInt(url.searchParams.get('offset') || '0');
+    const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+    const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
+    const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
 
     const conditions: string[] = [];
     const values: (string | number)[] = [];
@@ -285,8 +328,10 @@ export async function listAuditLogs(
     if (friendId) { conditions.push('friend_id = ?'); values.push(friendId); }
     if (deviceId) { conditions.push('device_id = ?'); values.push(deviceId); }
     if (result) { conditions.push('result = ?'); values.push(result); }
-    if (fromTime) { conditions.push('created_at >= ?'); values.push(parseInt(fromTime)); }
-    if (toTime) { conditions.push('created_at <= ?'); values.push(parseInt(toTime)); }
+    const fromTimestamp = fromTime ? Number.parseInt(fromTime, 10) : NaN;
+    const toTimestamp = toTime ? Number.parseInt(toTime, 10) : NaN;
+    if (Number.isInteger(fromTimestamp)) { conditions.push('created_at >= ?'); values.push(fromTimestamp); }
+    if (Number.isInteger(toTimestamp)) { conditions.push('created_at <= ?'); values.push(toTimestamp); }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -314,17 +359,34 @@ export async function healthCheck(env: { DB: D1Database }, requestId: string): P
         dbHealthy = false;
     }
 
-    // 统计
-    const stats = await env.DB.prepare(`
-        SELECT
-            (SELECT COUNT(*) FROM friends WHERE status = 'ACTIVE') as active_friends,
-            (SELECT COUNT(*) FROM devices WHERE status = 'ACTIVE') as active_devices,
-            (SELECT COUNT(*) FROM audit_logs WHERE result = 'FAILURE' AND created_at > ?) as recent_failures
-    `).bind(currentTime - 86400).first<{ active_friends: number; active_devices: number; recent_failures: number }>();
+    // 统计查询失败时仍返回可读的降级状态，避免后台页面永远停在加载骨架。
+    let stats: { active_friends: number; active_devices: number; recent_failures: number } | null = null;
+    try {
+        stats = await env.DB.prepare(`
+            SELECT
+                (SELECT COUNT(*) FROM friends WHERE status = 'ACTIVE') as active_friends,
+                (SELECT COUNT(*) FROM devices WHERE status = 'ACTIVE') as active_devices,
+                (SELECT COUNT(*) FROM audit_logs WHERE result = 'FAILURE' AND created_at > ?) as recent_failures
+        `).bind(currentTime - 86400).first<{ active_friends: number; active_devices: number; recent_failures: number }>();
+    } catch {
+        dbHealthy = false;
+    }
 
     return successResponse({
         status: dbHealthy ? 'ok' : 'degraded',
         timestamp: currentTime,
         stats: stats || { active_friends: 0, active_devices: 0, recent_failures: 0 },
     }, requestId);
+}
+
+async function readJson<T>(request: Request): Promise<T> {
+    try {
+        const body = await request.json();
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            throw new Error('body must be an object');
+        }
+        return body as T;
+    } catch {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON body', 400);
+    }
 }

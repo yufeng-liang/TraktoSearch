@@ -25,19 +25,29 @@ export async function onRequest(context) {
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
-    const accessToken = headers.get('Cf-Access-Jwt-Assertion') || readCookie(headers.get('Cookie'));
+    const accessToken = headers.get('Cf-Access-Jwt-Assertion')
+        || readCookie(headers.get('Cookie'))
+        || readBearerToken(headers.get('Authorization'));
+    headers.delete('Authorization');
     if (accessToken) {
         headers.set('Authorization', `Bearer ${accessToken}`);
     }
     headers.delete('Cookie');
     headers.delete('Cf-Access-Jwt-Assertion');
+    headers.delete('Host');
+    headers.delete('Content-Length');
     headers.set('Origin', WORKER_ORIGIN);
 
-    const upstream = await fetch(new Request(upstreamUrl, {
-        method: request.method,
-        headers,
-        body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-    }));
+    let upstream;
+    try {
+        upstream = await fetch(new Request(upstreamUrl, {
+            method: request.method,
+            headers,
+            body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+        }));
+    } catch {
+        return jsonResponse({ code: 'UPSTREAM_UNAVAILABLE', message: 'Admin service unavailable' }, 502);
+    }
 
     const responseHeaders = new Headers(upstream.headers);
     responseHeaders.set('Cache-Control', 'no-store');
@@ -56,4 +66,18 @@ function readCookie(cookieHeader) {
     } catch {
         return null;
     }
+}
+
+function readBearerToken(header) {
+    return header?.startsWith('Bearer ') ? header.slice(7).trim() : null;
+}
+
+function jsonResponse(body, status) {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+        },
+    });
 }

@@ -9,7 +9,7 @@ export async function onRequest(context) {
     const url = new URL(request.url);
 
     // 仅处理后台页面，避免改写配置和其他 API 响应。
-    if (!url.pathname.startsWith('/admin')) {
+    if (!url.pathname.startsWith('/admin/')) {
         return next();
     }
 
