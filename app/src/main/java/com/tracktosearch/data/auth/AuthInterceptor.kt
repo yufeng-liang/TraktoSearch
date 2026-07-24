@@ -39,9 +39,9 @@ class AuthInterceptor @Inject constructor(
             response.close()
             // 同步刷新（runBlocking，仅在拦截器内）
             val refreshed = kotlinx.coroutines.runBlocking {
-                authManager.refresh()
+                authManager.refreshIfNeeded(token)
             }
-            if (refreshed.isSuccess) {
+            if (refreshed) {
                 val newToken = tokenStorage.getCachedAccessToken() ?: return chain.proceed(authorizedRequest)
                 val retryRequest = originalRequest.newBuilder()
                     .header("Authorization", "Bearer $newToken")

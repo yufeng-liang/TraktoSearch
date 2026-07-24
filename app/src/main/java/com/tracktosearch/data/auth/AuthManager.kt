@@ -38,6 +38,8 @@ class AuthManager @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val json: Json
 ) {
+    private val refreshCoordinator = AuthRefreshCoordinator()
+
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
@@ -119,7 +121,23 @@ class AuthManager @Inject constructor(
     /**
      * 刷新令牌
      */
-    suspend fun refresh(): Result<RefreshResponse> {
+    suspend fun refresh(): Result<RefreshResponse> = refreshCoordinator.withLock {
+        refreshLocked()
+    }
+
+    /**
+     * 处理因旧 access token 失败的刷新请求。
+     * 如果其他并发请求已经完成刷新，直接复用缓存中的新 token。
+     */
+    suspend fun refreshIfNeeded(failedAccessToken: String): Boolean =
+        refreshCoordinator.refreshIfNeeded(
+            failedAccessToken = failedAccessToken,
+            currentAccessToken = tokenStorage::getCachedAccessToken
+        ) {
+            refreshLocked().isSuccess
+        }
+
+    private suspend fun refreshLocked(): Result<RefreshResponse> {
         return try {
             val currentDeviceId = deviceId ?: return Result.failure(Exception("No device ID"))
             val refreshToken = tokenStorage.getRefreshToken() ?: return Result.failure(Exception("No refresh token"))
