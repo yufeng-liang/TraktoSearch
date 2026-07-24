@@ -96,6 +96,8 @@ test('invite lifecycle keeps expired and used records read-only', () => {
     assert.match(workerSource, /INVITE_EXPIRED/);
     assert.match(workerSource, /invite\.expires_at < currentTime/);
     assert.match(workerSource, /if \(invite\.used_at !== null\)/);
+    assert.match(workerSource, /used_at IS NULL AND revoked_at IS NULL AND expires_at >= \?/);
+    assert.match(workerSource, /updateResult\.meta\.changes !== 1/);
     assert.match(workerSource, /SELECT id, kind, code_mask, expires_at, used_at, revoked_at, created_at/);
     assert.doesNotMatch(workerSource, /SELECT id, kind, code_hash, code_mask/);
 });

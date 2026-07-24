@@ -307,9 +307,19 @@ export async function revokeInvite(
         throw new AppError('INVITE_EXPIRED', 'Invite already expired', 400);
     }
 
-    await env.DB.prepare(`
-        UPDATE invites SET revoked_at = ? WHERE id = ?
-    `).bind(currentTime, inviteId).run();
+    const updateResult = await env.DB.prepare(`
+        UPDATE invites
+        SET revoked_at = ?
+        WHERE id = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at >= ?
+    `).bind(currentTime, inviteId, currentTime).run();
+    if (updateResult.meta.changes !== 1) {
+        const latest = await env.DB.prepare(`
+            SELECT used_at, revoked_at, expires_at FROM invites WHERE id = ?
+        `).bind(inviteId).first<{ used_at: number | null; revoked_at: number | null; expires_at: number }>();
+        if (latest?.used_at !== null) throw new AppError('INVITE_ALREADY_USED', 'Invite already used', 400);
+        if (latest?.revoked_at !== null) throw new AppError('INVITE_REVOKED', 'Invite already revoked', 400);
+        throw new AppError('INVITE_EXPIRED', 'Invite already expired', 400);
+    }
 
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
