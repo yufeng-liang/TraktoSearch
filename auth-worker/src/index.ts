@@ -125,6 +125,12 @@ async function handleAuthApi(
         return handleRefresh(request, env, requestId);
     }
 
+    // Trakt 的 client_id 本身是公开标识；授权地址不依赖用户凭据。
+    // 将该入口保持公开，避免 access token 过期时连登录页都无法重新打开。
+    if (path === '/api/trakt/oauth/authorize' && request.method === 'GET') {
+        return handleTraktOAuth(request, env, path, '', requestId);
+    }
+
     // 需要 JWT 的端点
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {

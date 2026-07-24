@@ -4,6 +4,12 @@ import { Env } from '../index';
 import { AppError } from '../util/errors';
 import { decryptSecret, encryptSecret } from '../util/crypto';
 import { now } from '../util/errors';
+import {
+    TRAKT_OAUTH_REDIRECT_URI,
+    buildAuthorizationCodePayload,
+    buildRefreshTokenPayload,
+    classifyTraktOAuthError,
+} from './trakt-token';
 
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 
@@ -23,7 +29,7 @@ export async function handleTraktOAuth(
         const url = new URL('https://trakt.tv/oauth/authorize');
         url.searchParams.set('response_type', 'code');
         url.searchParams.set('client_id', env.TRAKT_CLIENT_ID);
-        url.searchParams.set('redirect_uri', 'tracktosearch://oauth/callback');
+        url.searchParams.set('redirect_uri', TRAKT_OAUTH_REDIRECT_URI);
         return new Response(JSON.stringify({
             code: 'SUCCESS',
             message: 'OK',
@@ -66,18 +72,17 @@ async function traktExchange(
     // 用 Worker Secret 中的 client_secret 交换
     const tokenResponse = await fetch(`${TRAKT_BASE_URL}/oauth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            code: body.code,
-            client_id: env.TRAKT_CLIENT_ID,
-            client_secret: env.TRAKT_CLIENT_SECRET,
-            redirect_uri: 'tracktosearch://oauth/callback',
-            grant_type: 'authorization_code',
-        }),
+        headers: traktOAuthHeaders(env.TRAKT_CLIENT_ID),
+        body: JSON.stringify(buildAuthorizationCodePayload(
+            body.code,
+            env.TRAKT_CLIENT_ID,
+            env.TRAKT_CLIENT_SECRET,
+        )),
     });
 
     if (!tokenResponse.ok) {
-        throw new AppError('UPSTREAM_ERROR', `Trakt token exchange failed: ${tokenResponse.status}`, 400);
+        const classification = await classifyTokenResponse(tokenResponse);
+        throw new AppError(classification.code, classification.message, 400);
     }
 
     const tokens = await tokenResponse.json() as {
@@ -110,17 +115,17 @@ async function traktRefresh(
 
     const tokenResponse = await fetch(`${TRAKT_BASE_URL}/oauth/token`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            refresh_token: credentials.refresh_token,
-            client_id: env.TRAKT_CLIENT_ID,
-            client_secret: env.TRAKT_CLIENT_SECRET,
-            grant_type: 'refresh_token',
-        }),
+        headers: traktOAuthHeaders(env.TRAKT_CLIENT_ID),
+        body: JSON.stringify(buildRefreshTokenPayload(
+            credentials.refresh_token,
+            env.TRAKT_CLIENT_ID,
+            env.TRAKT_CLIENT_SECRET,
+        )),
     });
 
     if (!tokenResponse.ok) {
-        throw new AppError('UPSTREAM_ERROR', `Trakt refresh failed: ${tokenResponse.status}`, 400);
+        const classification = await classifyTokenResponse(tokenResponse);
+        throw new AppError(classification.code, classification.message, 400);
     }
 
     const tokens = await tokenResponse.json() as {
@@ -243,4 +248,29 @@ async function getTraktCredentials(
     } catch {
         throw new AppError('CREDENTIALS_INVALID', 'Stored Trakt credentials are invalid', 401);
     }
+}
+
+function traktOAuthHeaders(clientId: string): HeadersInit {
+    return {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'TrackToSearch/3.0',
+        'trakt-api-version': '2',
+        'trakt-api-key': clientId,
+    };
+}
+
+async function classifyTokenResponse(response: Response) {
+    let body: unknown = null;
+    try {
+        body = await response.clone().json();
+    } catch {
+        // Trakt 可能返回空响应或非 JSON，按状态码分类。
+    }
+    const classification = classifyTraktOAuthError(response.status, body);
+    console.warn('Trakt OAuth request rejected', {
+        status: response.status,
+        code: classification.code,
+    });
+    return classification;
 }
