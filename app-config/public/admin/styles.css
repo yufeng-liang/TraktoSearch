@@ -610,6 +610,7 @@ input, select { font-family: inherit; }
 }
 .invite-summary-grid strong { color: var(--text); font-size: 20px; }
 .invite-status-filter { width: auto; min-width: 110px; }
+.card-header .invite-status-filter { width: 220px; flex: 0 0 220px; }
 .invite-code-masked { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; white-space: nowrap; }
 .invite-pagination {
     display: flex;
@@ -918,6 +919,13 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ===== Detail layout ===== */
 .detail-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+.detail-grid > div:not(.card) {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 0;
+}
+.detail-grid > div:not(.card) > .detail-card { margin-bottom: 0; }
 .detail-card { margin-bottom: 20px; }
 
 /* ===== Health indicator ===== */
@@ -1017,6 +1025,7 @@ tbody tr:last-child td { border-bottom: none; }
     .toolbar { flex-direction: column; align-items: stretch; }
     .admin-email { display: none; }
     .topbar { padding: 0 16px; }
+    .card-header .invite-status-filter { width: 160px; flex-basis: 160px; }
 }
 
 /* ===== Focus ===== */

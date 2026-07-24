@@ -101,3 +101,12 @@ test('invite lifecycle keeps expired and used records read-only', () => {
     assert.match(workerSource, /SELECT id, kind, code_mask, expires_at, used_at, revoked_at, created_at/);
     assert.doesNotMatch(workerSource, /SELECT id, kind, code_hash, code_mask/);
 });
+
+test('invite card keeps vertical spacing and a stable filter width', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(stylesSource, /\.detail-grid > div:not\(\.card\)/);
+    assert.match(stylesSource, /gap:\s*20px/);
+    assert.match(stylesSource, /\.card-header \.invite-status-filter/);
+    assert.match(stylesSource, /flex:\s*0 0 220px/);
+    assert.match(stylesSource, /width:\s*160px;\s*flex-basis:\s*160px/);
+});
