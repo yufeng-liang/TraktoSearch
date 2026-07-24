@@ -629,6 +629,23 @@ th, td {
     border-bottom: 1px solid var(--border);
     font-size: 13px;
 }
+.entity-cell {
+    min-width: 132px;
+}
+.entity-cell[title] {
+    cursor: help;
+}
+.entity-name {
+    font-weight: 500;
+    color: var(--text);
+}
+.entity-id {
+    margin-top: 3px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.02em;
+}
 th {
     font-weight: 600;
     color: var(--text-muted);

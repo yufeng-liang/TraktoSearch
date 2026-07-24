@@ -441,22 +441,27 @@ export async function listAuditLogs(
     const conditions: string[] = [];
     const values: (string | number)[] = [];
 
-    if (eventType) { conditions.push('event_type = ?'); values.push(eventType); }
-    if (friendId) { conditions.push('friend_id = ?'); values.push(friendId); }
-    if (deviceId) { conditions.push('device_id = ?'); values.push(deviceId); }
-    if (result) { conditions.push('result = ?'); values.push(result); }
+    if (eventType) { conditions.push('a.event_type = ?'); values.push(eventType); }
+    if (friendId) { conditions.push('COALESCE(a.friend_id, d.friend_id) = ?'); values.push(friendId); }
+    if (deviceId) { conditions.push('a.device_id = ?'); values.push(deviceId); }
+    if (result) { conditions.push('a.result = ?'); values.push(result); }
     const fromTimestamp = fromTime ? Number.parseInt(fromTime, 10) : NaN;
     const toTimestamp = toTime ? Number.parseInt(toTime, 10) : NaN;
-    if (Number.isInteger(fromTimestamp)) { conditions.push('created_at >= ?'); values.push(fromTimestamp); }
-    if (Number.isInteger(toTimestamp)) { conditions.push('created_at <= ?'); values.push(toTimestamp); }
+    if (Number.isInteger(fromTimestamp)) { conditions.push('a.created_at >= ?'); values.push(fromTimestamp); }
+    if (Number.isInteger(toTimestamp)) { conditions.push('a.created_at <= ?'); values.push(toTimestamp); }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const { results } = await env.DB.prepare(`
-        SELECT id, event_type, friend_id, device_id, request_id, result, error_code, created_at
-        FROM audit_logs
+        SELECT a.id, a.event_type, a.friend_id, a.device_id, a.request_id, a.result,
+               a.error_code, a.created_at,
+               f.nickname AS friend_nickname,
+               d.device_name AS device_name
+        FROM audit_logs a
+        LEFT JOIN devices d ON d.id = a.device_id
+        LEFT JOIN friends f ON f.id = COALESCE(a.friend_id, d.friend_id)
         ${whereClause}
-        ORDER BY created_at DESC
+        ORDER BY a.created_at DESC
         LIMIT ? OFFSET ?
     `).bind(...values, limit, offset).all();
 

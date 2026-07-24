@@ -330,7 +330,9 @@ const API = {
             id: l.id,
             eventType: l.event_type,
             friendId: l.friend_id,
+            friendName: l.friend_nickname,
             deviceId: l.device_id,
+            deviceName: l.device_name,
             result: l.result,
             errorCode: l.error_code,
             createdAt: l.created_at * 1000, // Unix 秒 → 毫秒
@@ -410,6 +412,23 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function maskIdentifier(value) {
+    const id = String(value ?? '').trim();
+    if (!id) return '';
+    return id.length > 12 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id;
+}
+
+function entityCell(name, id, fallbackLabel) {
+    const label = String(name ?? '').trim() || fallbackLabel;
+    const identifier = String(id ?? '').trim();
+    const maskedId = maskIdentifier(identifier);
+    const title = identifier ? `title="${escapeHtml(identifier)}"` : '';
+    return `<div class="entity-cell" ${title}>
+        <div class="entity-name">${escapeHtml(label)}</div>
+        ${maskedId ? `<div class="entity-id">${escapeHtml(maskedId)}</div>` : ''}
+    </div>`;
 }
 
 function legacyErrorMessage(error) {
@@ -976,8 +995,8 @@ function renderAudit(container) {
                 <tr>
                     <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
                     <td>${eventLabel(l.eventType)}</td>
-                    <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td>
-                    <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.deviceId || '—')}</td>
+                    <td>${entityCell(l.friendName, l.friendId, '未知朋友')}</td>
+                    <td>${entityCell(l.deviceName, l.deviceId, '未知设备')}</td>
                     <td>${statusBadge(l.result)}</td>
                     <td style="color:var(--danger);font-size:12px">${escapeHtml(l.errorCode || '—')}</td>
                 </tr>
