@@ -25,8 +25,10 @@ export async function handleCheck(
     const result = await firstRow<{
         friend_id: string; nickname: string; friend_status: string;
         device_id: string; device_status: string;
+        friend_expires_at: number | null;
     }>(env.DB.prepare(`
         SELECT f.id as friend_id, f.nickname, f.status as friend_status,
+               f.expires_at as friend_expires_at,
                d.id as device_id, d.status as device_status
         FROM friends f
         JOIN devices d ON d.friend_id = f.id
@@ -39,6 +41,9 @@ export async function handleCheck(
 
     if (result.friend_status !== 'ACTIVE' || result.device_status !== 'ACTIVE') {
         throw new AppError('DEVICE_REVOKED', 'Account or device is disabled', 403);
+    }
+    if (result.friend_expires_at !== null && result.friend_expires_at < currentTime) {
+        throw new AppError('FRIEND_EXPIRED', 'Friend account has expired', 403);
     }
 
     // 更新设备最后活动时间

@@ -47,10 +47,11 @@ export async function handleRefresh(
     const session = await firstRow<{
         id: string; device_id: string; expires_at: number; revoked_at: number | null;
         token_hash: string; device_status: string; public_key: string;
-        friend_id: string; friend_status: string;
+        friend_id: string; friend_status: string; friend_expires_at: number | null;
     }>(env.DB.prepare(`
         SELECT rs.id, rs.device_id, rs.expires_at, rs.revoked_at, rs.token_hash,
-               d.status as device_status, d.public_key, d.friend_id, f.status as friend_status
+               d.status as device_status, d.public_key, d.friend_id, f.status as friend_status,
+               f.expires_at as friend_expires_at
         FROM refresh_sessions rs
         JOIN devices d ON rs.device_id = d.id
         JOIN friends f ON d.friend_id = f.id
@@ -67,6 +68,10 @@ export async function handleRefresh(
     if (session.device_status !== 'ACTIVE' || session.friend_status !== 'ACTIVE') {
         await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'DEVICE_REVOKED', session.friend_id, 'refresh:device_or_friend_revoked');
         throw new AppError('DEVICE_REVOKED', 'Device or friend is disabled', 403);
+    }
+    if (session.friend_expires_at !== null && session.friend_expires_at < currentTime) {
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'FRIEND_EXPIRED', session.friend_id, 'refresh:friend_expired');
+        throw new AppError('FRIEND_EXPIRED', 'Friend account has expired', 403);
     }
 
     // 检查会话是否已撤销

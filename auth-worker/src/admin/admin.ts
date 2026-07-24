@@ -68,7 +68,12 @@ export async function updateFriend(
     requestId: string,
     friendId: string
 ): Promise<Response> {
-    const existing = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    const existing = await env.DB.prepare(`
+        SELECT id,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'ACTIVE') AS active_devices
+        FROM friends
+        WHERE id = ?
+    `).bind(friendId).first<{ id: string; active_devices: number }>();
     if (!existing) throw new AppError('NOT_FOUND', 'Friend not found', 404);
 
     const body = await readJson<{
@@ -82,12 +87,14 @@ export async function updateFriend(
     const values: (string | number | null)[] = [];
 
     if (body.nickname !== undefined) {
+        if (typeof body.nickname !== 'string') throw new AppError('INVALID_REQUEST', 'Invalid nickname', 400);
         const nickname = body.nickname.trim();
         if (!nickname || nickname.length > 32) throw new AppError('INVALID_REQUEST', 'Invalid nickname', 400);
         updates.push('nickname = ?');
         values.push(nickname);
     }
     if (body.note !== undefined) {
+        if (typeof body.note !== 'string') throw new AppError('INVALID_REQUEST', 'Invalid note', 400);
         const note = body.note.trim();
         if (note.length > 64) throw new AppError('INVALID_REQUEST', 'note is too long', 400);
         updates.push('note = ?');
@@ -97,10 +104,19 @@ export async function updateFriend(
         if (!Number.isInteger(body.maxDevices) || body.maxDevices < 1 || body.maxDevices > 10) {
             throw new AppError('INVALID_REQUEST', 'maxDevices must be an integer between 1 and 10', 400);
         }
+        if (body.maxDevices < Number(existing.active_devices || 0)) {
+            throw new AppError('MAX_DEVICES_BELOW_ACTIVE', 'maxDevices cannot be less than active devices', 400);
+        }
         updates.push('max_devices = ?');
         values.push(body.maxDevices);
     }
-    if (body.expiresAt !== undefined) { updates.push('expires_at = ?'); values.push(body.expiresAt); }
+    if (body.expiresAt !== undefined) {
+        if (body.expiresAt !== null && (!Number.isInteger(body.expiresAt) || body.expiresAt <= 0)) {
+            throw new AppError('INVALID_REQUEST', 'expiresAt must be a positive Unix timestamp or null', 400);
+        }
+        updates.push('expires_at = ?');
+        values.push(body.expiresAt);
+    }
 
     if (updates.length === 0) {
         throw new AppError('INVALID_REQUEST', 'No fields to update', 400);
@@ -277,7 +293,7 @@ export async function createInvite(
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
         VALUES ('INVITE_CREATE', ?, ?, 'SUCCESS', ?, ?)
-    `).bind(friendId, requestId, `invite_kind:${kind}`, currentTime).run();
+    `).bind(friendId, requestId, `invite_kind:${kind};invite_id:${id};invite_mask:${codeMask}`, currentTime).run();
 
     // 注意：明文邀请码只在创建响应中返回一次
     return successResponse({

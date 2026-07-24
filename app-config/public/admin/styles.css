@@ -958,6 +958,7 @@ tbody tr:last-child td { border-bottom: none; }
 .detail-heading-copy { min-width: 0; }
 .detail-heading .section-title,
 .detail-heading .section-subtitle { margin-bottom: 0; }
+.detail-heading-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; margin-top: 2px; }
 .detail-disable-btn { flex: 0 0 auto; margin-top: 2px; }
 
 /* ===== Health indicator ===== */
@@ -1058,6 +1059,7 @@ tbody tr:last-child td { border-bottom: none; }
     .admin-email { display: none; }
     .topbar { padding: 0 16px; }
     .card-header .invite-status-filter { width: 160px; flex-basis: 160px; }
+    .detail-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
 
 /* ===== Focus ===== */

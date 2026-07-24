@@ -350,6 +350,10 @@ const API = {
         return this.post('/admin/friends', data);
     },
 
+    async updateFriend(friendId, data) {
+        return this.patch(`/admin/friends/${friendId}`, data);
+    },
+
     async createInvite(friendId, kind, expiresInDays) {
         return this.post(`/admin/friends/${friendId}/invites`, { kind, expiresInDays });
     },
@@ -412,6 +416,14 @@ function formatDate(ts) {
     return dateMs ? new Date(dateMs).toLocaleDateString('zh-CN') : '长期有效';
 }
 
+function formatDateTimeLocal(ts) {
+    const dateMs = toDateMs(ts);
+    if (!dateMs) return '';
+    const date = new Date(dateMs);
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function formatDateTime(ts, empty = '—') {
     const dateMs = toDateMs(ts);
     if (!ts || !dateMs) return empty;
@@ -461,6 +473,7 @@ function errorMessage(error) {
         MIGRATION_DEVICE_NOT_FOUND: '迁移邀请码需要已有绑定设备，请改选激活',
         MIGRATION_DEVICE_MISMATCH: '该设备不属于此朋友，无法迁移',
         DEVICE_ALREADY_BOUND: '此设备已绑定，请改用激活邀请码或先撤销原绑定',
+        MAX_DEVICES_BELOW_ACTIVE: '设备上限不能低于当前活跃设备数',
     };
     if (error?.code && codeMessages[error.code]) return codeMessages[error.code];
     return legacyErrorMessage(error);
@@ -497,10 +510,14 @@ function statusBadge(status) {
     return `<span class="badge ${map[status] || ''}"><span class="badge-dot"></span>${escapeHtml(label[status] || status)}</span>`;
 }
 
+function inviteKindLabel(kind) {
+    return kind === 'MIGRATION' ? '迁移' : kind === 'ACTIVATION' ? '激活' : String(kind || '—');
+}
+
 function eventLabel(type) {
     const map = {
         ACTIVATE: '激活', MIGRATE: '迁移', REFRESH: '刷新令牌', REFRESH_REPLAY: '重放检测',
-        DEVICE_REVOKE: '撤销设备', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友',
+        DEVICE_REVOKE: '撤销设备', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友', FRIEND_UPDATE: '更新朋友',
         INVITE_CREATE: '生成邀请码', INVITE_REVOKE: '撤销邀请码',
     };
     return escapeHtml(map[type] || type);
@@ -519,6 +536,7 @@ function auditDetail(log) {
         'refresh:invalid_signature': '客户端签名校验失败',
         'refresh:invalid_challenge': '刷新挑战已过期或与设备不匹配',
         'refresh:device_or_friend_revoked': '设备或朋友已撤销',
+        'refresh:friend_expired': '朋友有效期已到，设备授权已失效',
         'refresh:expired': '刷新令牌已过期',
         'refresh:token_not_found': '刷新令牌不存在或已失效',
         'refresh:replay_revoked_all': '检测到令牌重放，已撤销该设备全部刷新会话',
@@ -535,7 +553,11 @@ function auditDetail(log) {
     if (log.eventType === 'REFRESH' && log.result === 'SUCCESS') return '刷新成功，旧刷新令牌已轮换';
     if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_REPLAY') return '检测到令牌重放，已撤销该设备全部刷新会话';
     if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_NOT_FOUND') return '刷新令牌不存在或已失效';
-    if (log.eventType === 'FRIEND_UPDATE' && detail.startsWith('fields:')) return `已更新：${detail.slice(7).split(',').join('、')}`;
+    if (log.eventType === 'FRIEND_UPDATE' && detail.startsWith('fields:')) {
+        const labels = { nickname: '昵称', note: '备注', max_devices: '设备上限', expires_at: '有效期至' };
+        const fields = detail.slice(7).split(',').map((field) => labels[field] || field);
+        return `已更新：${fields.join('、')}`;
+    }
     return '—';
 }
 
@@ -765,7 +787,7 @@ function renderFriends(container) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>到期</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div>`;
     container.appendChild(tableWrap);
 
     const searchInput = toolbar.querySelector('#searchInput');
@@ -816,7 +838,7 @@ function renderFriendDetail(container) {
     const id = state.params.id;
     const title = document.createElement('div');
     title.className = 'detail-heading';
-    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">朋友详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用朋友</button>`;
+    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">朋友详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用朋友</button></div>`;
     container.appendChild(title);
 
     const content = document.createElement('div');
@@ -826,7 +848,9 @@ function renderFriendDetail(container) {
 
     API.getFriend(id).then(f => {
         title.querySelector('#detailSubtitle').textContent = `${f.nickname} · ${f.devices} 台设备`;
+        const editButton = title.querySelector('#editBtn');
         const disableButton = title.querySelector('#disableBtn');
+        editButton.hidden = false;
         disableButton.hidden = false;
         disableButton.disabled = f.status === 'DISABLED';
         disableButton.textContent = f.status === 'DISABLED' ? '已禁用' : '禁用朋友';
@@ -837,7 +861,7 @@ function renderFriendDetail(container) {
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">昵称</span><span style="font-weight:500">${escapeHtml(f.nickname)}</span></div>
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">备注</span><span>${escapeHtml(f.note || '—')}</span></div>
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备上限</span><span>${f.maxDevices} 台</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">到期时间</span><span>${formatDate(f.expiresAt)}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">有效期至</span><span>${formatDate(f.expiresAt)}</span></div>
                     </div>
                 </div>
                 <div class="card">
@@ -858,6 +882,7 @@ function renderFriendDetail(container) {
                     </tbody></table></div>
                 </div>
         `;
+        editButton.addEventListener('click', () => showEditFriendModal(f));
         content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname, f.devices));
         disableButton.addEventListener('click', () => showDisableFriendModal(f.id, f.nickname, f.devices));
         content.querySelectorAll('.js-revoke-device').forEach(button => {
@@ -890,7 +915,7 @@ function loadInvitesSection(friendId, section) {
             ? '<tr><td colspan="7"><div class="empty-state"><div class="empty-title">暂无邀请码记录</div><div class="empty-desc">创建邀请码后会显示在这里</div></div></td></tr>'
             : invites.map(invite => '<tr>' +
                 '<td class="invite-code-masked">' + escapeHtml(invite.code_mask || invite.codeMask || '—') + '</td>' +
-                '<td>' + escapeHtml(invite.kind || '—') + '</td>' +
+                '<td>' + escapeHtml(inviteKindLabel(invite.kind)) + '</td>' +
                 '<td>' + statusBadge(invite.status) + '</td>' +
                 '<td class="invite-date">' + formatDateTime(invite.created_at) + '</td>' +
                 '<td class="invite-date">' + formatDateTime(invite.expires_at, '长期有效') + '</td>' +
@@ -911,7 +936,7 @@ function loadInvitesSection(friendId, section) {
                 '<div><span>已使用</span><strong>' + Number(summary.used || 0) + '</strong></div>' +
                 '<div><span>已失效</span><strong>' + (Number(summary.expired || 0) + Number(summary.revoked || 0)) + '</strong></div>' +
             '</div><div class="table-scroll"><table><thead><tr><th>邀请码</th><th>类型</th><th>状态</th>' +
-                '<th>创建时间</th><th>有效期</th><th>使用时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+                '<th>创建时间</th><th>有效期至</th><th>使用时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
             '<div class="invite-pagination"><span>第 ' + (invites.length ? offset + 1 : 0) + ' - ' + (offset + invites.length) + ' 条</span>' +
                 '<div><button class="btn btn-ghost btn-sm invite-prev" ' + (offset === 0 ? 'disabled' : '') + '>上一页</button>' +
                 '<button class="btn btn-ghost btn-sm invite-next" ' + (data.hasMore ? '' : 'disabled') + '>下一页</button></div></div>';
@@ -1141,6 +1166,94 @@ function showCreateFriendModal() {
             submitBtn.disabled = false;
             submitBtn.textContent = '创建';
             showToast('创建失败: ' + errorMessage(err), 'error');
+        }
+    });
+}
+
+function showEditFriendModal(friend) {
+    const form = document.createElement('form');
+    form.noValidate = true;
+    form.innerHTML = `
+        <div class="form-group"><label class="form-label">昵称 *</label><input class="form-input" name="nickname" maxlength="32" value="${escapeHtml(friend.nickname)}"></div>
+        <div class="form-group"><label class="form-label">备注</label><input class="form-input" name="note" maxlength="64" value="${escapeHtml(friend.note || '')}"></div>
+        <div class="form-group"><label class="form-label">设备上限</label><input class="form-input" name="maxDevices" type="number" min="1" max="10" value="${Number(friend.maxDevices) || 1}"><p class="form-hint">不能低于当前活跃设备数（${Number(friend.devices) || 0} 台）。</p></div>
+        <div class="form-group"><label class="form-label">有效期至</label><div style="display:flex;align-items:center;gap:10px"><input class="form-input" name="expiresAt" type="datetime-local" style="flex:1"><label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:var(--text-muted)"><input name="noExpiry" type="checkbox">长期有效</label></div></div>
+    `;
+
+    const expiresInput = form.expiresAt;
+    const noExpiryInput = form.noExpiry;
+    noExpiryInput.checked = !friend.expiresAt;
+    expiresInput.value = formatDateTimeLocal(friend.expiresAt);
+    expiresInput.disabled = noExpiryInput.checked;
+    noExpiryInput.addEventListener('change', () => {
+        expiresInput.disabled = noExpiryInput.checked;
+        if (noExpiryInput.checked) expiresInput.value = '';
+    });
+
+    const submitBtn = document.createElement('button');
+    submitBtn.className = 'btn btn-primary';
+    submitBtn.type = 'submit';
+    submitBtn.textContent = '保存修改';
+    bindSubmitButton(form, submitBtn);
+
+    modal.open({
+        title: `编辑朋友 · ${friend.nickname}`,
+        body: form,
+        footer: [
+            Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
+            submitBtn,
+        ],
+    });
+    modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        clearFormError(form);
+        const nickname = form.nickname.value.trim();
+        const note = form.note.value.trim();
+        const maxDevices = Number.parseInt(form.maxDevices.value, 10);
+        if (!nickname) {
+            showFormError(form, '请输入昵称。');
+            form.nickname.focus();
+            return;
+        }
+        if (nickname.length > 32 || note.length > 64) {
+            showFormError(form, '昵称最多 32 个字符，备注最多 64 个字符。');
+            return;
+        }
+        if (!Number.isInteger(maxDevices) || maxDevices < 1 || maxDevices > 10) {
+            showFormError(form, '设备上限必须是 1 到 10 之间的整数。');
+            form.maxDevices.focus();
+            return;
+        }
+        if (maxDevices < Number(friend.devices) || maxDevices < 1) {
+            showFormError(form, `设备上限不能低于当前活跃设备数（${Number(friend.devices) || 0} 台）。`);
+            form.maxDevices.focus();
+            return;
+        }
+
+        let expiresAt = null;
+        if (!noExpiryInput.checked) {
+            const timestamp = new Date(expiresInput.value).getTime();
+            if (!expiresInput.value || !Number.isFinite(timestamp) || timestamp <= 0) {
+                showFormError(form, '请选择有效期至时间，或勾选长期有效。');
+                expiresInput.focus();
+                return;
+            }
+            expiresAt = Math.floor(timestamp / 1000);
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = '保存中...';
+        try {
+            await API.updateFriend(friend.id, { nickname, note, maxDevices, expiresAt });
+            modal.close();
+            showToast(`朋友「${nickname}」已更新`);
+            navigate('friend-detail', { id: friend.id });
+        } catch (err) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = '保存修改';
+            showFormError(form, errorMessage(err));
         }
     });
 }
