@@ -405,6 +405,20 @@ function formatDate(ts) {
     return dateMs ? new Date(dateMs).toLocaleDateString('zh-CN') : '长期有效';
 }
 
+function formatDateTime(ts, empty = '—') {
+    const dateMs = toDateMs(ts);
+    if (!ts || !dateMs) return empty;
+    return new Date(dateMs).toLocaleString('zh-CN', {
+        hour12: false,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+    });
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -843,9 +857,9 @@ function loadInvitesSection(friendId, section) {
                 '<td class="invite-code-masked">' + escapeHtml(invite.code_mask || invite.codeMask || '—') + '</td>' +
                 '<td>' + escapeHtml(invite.kind || '—') + '</td>' +
                 '<td>' + statusBadge(invite.status) + '</td>' +
-                '<td>' + formatDate(invite.created_at) + '</td>' +
-                '<td>' + formatDate(invite.expires_at) + '</td>' +
-                '<td>' + (invite.used_at ? formatDate(invite.used_at) : '—') + '</td>' +
+                '<td class="invite-date">' + formatDateTime(invite.created_at) + '</td>' +
+                '<td class="invite-date">' + formatDateTime(invite.expires_at, '长期有效') + '</td>' +
+                '<td class="invite-date">' + formatDateTime(invite.used_at, '—') + '</td>' +
                 '<td>' + (invite.status === 'AVAILABLE'
                     ? '<button class="btn btn-danger btn-sm js-revoke-invite" data-invite-id="' + escapeHtml(invite.id) + '">撤销</button>'
                     : '—') + '</td></tr>').join('');

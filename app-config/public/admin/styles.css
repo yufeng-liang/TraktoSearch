@@ -612,6 +612,7 @@ input, select { font-family: inherit; }
 .invite-status-filter { width: auto; min-width: 110px; }
 .card-header .invite-status-filter { width: 220px; flex: 0 0 220px; }
 .invite-code-masked { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; white-space: nowrap; }
+.invite-date { white-space: nowrap; font-family: var(--font-mono); font-size: 12px; }
 .invite-pagination {
     display: flex;
     align-items: center;
