@@ -98,6 +98,7 @@
 - 部署后不要只看 Wrangler 的成功输出；用 `npx wrangler pages deployment list --project-name app-config` 确认最新记录的 `Environment=Production`、`Branch=master` 和提交 SHA，并打开该部署 URL 检查实际静态资源版本。
 - Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 `curl`/`Invoke-WebRequest` 可能只拿到 302 或登录 HTML，不能据此判断页面代码未更新。应在已登录浏览器中强制刷新，或直接检查部署哈希 URL 的资源内容。
 - Worker 部署后记录版本 ID，并至少验证健康检查和本次变更涉及的 API；Pages 与 Worker 的部署成功不等于业务流程已验证。
+- Wrangler 部署若超时或长时间无输出，不能直接判定成功或失败：先检查并结束本次残留的 `wrangler`/`node` 子进程，再分别用直连和 Clash 代理重试。Windows Clash 常见 HTTP 代理为 `http://127.0.0.1:7890`，只在当前命令临时设置 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`，不要写入全局配置；重试后仍须记录 Worker 版本 ID、Pages 的 Production/master 记录和健康检查结果。
 
 ## Android ADB 设备核验经验
 
