@@ -81,8 +81,14 @@ private fun authErrorString(error: String): Int = when {
     error.contains("MIGRATION_DEVICE_MISMATCH") -> R.string.auth_error_migration_device_mismatch
     error.contains("DEVICE_ALREADY_BOUND") -> R.string.auth_error_device_already_bound
     error.contains("DEVICE_LIMIT_REACHED") -> R.string.auth_error_device_limit
+    error.contains("INVITE_ALREADY_USED") -> R.string.auth_error_invite_used
+    error.contains("INVITE_REVOKED") -> R.string.auth_error_invite_revoked
     error.contains("INVITE_EXPIRED") -> R.string.auth_error_invite_expired
     error.contains("FRIEND_DISABLED") -> R.string.auth_error_friend_disabled
     error.contains("INVALID_INVITE") -> R.string.auth_error_invalid_invite
+    error.contains("timeout", ignoreCase = true) ||
+        error.contains("unable to resolve host", ignoreCase = true) ||
+        error.contains("failed to connect", ignoreCase = true) ||
+        error.contains("network is unreachable", ignoreCase = true) -> R.string.auth_error_network
     else -> R.string.auth_error_generic
 }

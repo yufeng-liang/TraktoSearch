@@ -1,6 +1,7 @@
 package com.tracktosearch.di
 
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.auth.AuthHeaderInterceptor
 import com.tracktosearch.data.auth.AuthApiService
 import dagger.Module
 import dagger.Provides
@@ -22,8 +23,9 @@ object AuthModule {
     @Provides
     @Singleton
     @Named("auth")
-    fun provideAuthOkHttpClient(): OkHttpClient {
+    fun provideAuthOkHttpClient(authHeaderInterceptor: AuthHeaderInterceptor): OkHttpClient {
         return OkHttpClient.Builder()
+            .addInterceptor(authHeaderInterceptor)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
