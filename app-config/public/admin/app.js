@@ -524,8 +524,14 @@ function auditDetail(log) {
         'refresh:replay_revoked_all': '检测到令牌重放，已撤销该设备全部刷新会话',
     };
     if (details[detail]) return details[detail];
-    if (log.eventType === 'ACTIVATE') return '邀请码类型：激活';
-    if (log.eventType === 'MIGRATE') return '邀请码类型：迁移';
+    if (detail.startsWith('invite_kind:')) {
+        const kind = detail.match(/^invite_kind:(ACTIVATION|MIGRATION)/)?.[1];
+        const mask = detail.match(/;invite_mask:([^;]*)/)?.[1];
+        const label = kind === 'MIGRATION' ? '迁移' : '激活';
+        return `邀请码类型：${label}${mask ? `（${escapeHtml(mask)}）` : ''}`;
+    }
+    if (log.eventType === 'ACTIVATE') return '邀请码类型：激活（历史记录）';
+    if (log.eventType === 'MIGRATE') return '邀请码类型：迁移（历史记录）';
     if (log.eventType === 'REFRESH' && log.result === 'SUCCESS') return '刷新成功，旧刷新令牌已轮换';
     if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_REPLAY') return '检测到令牌重放，已撤销该设备全部刷新会话';
     if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_NOT_FOUND') return '刷新令牌不存在或已失效';

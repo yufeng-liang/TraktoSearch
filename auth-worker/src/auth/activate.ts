@@ -41,9 +41,10 @@ export async function handleActivate(
     const invite = await firstRow<{
         id: string; friend_id: string; kind: string; expires_at: number;
         used_at: number | null; revoked_at: number | null;
+        code_mask: string | null;
         friend_status: string; max_devices: number; friend_expires_at: number | null;
     }>(env.DB.prepare(`
-        SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at,
+        SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at, i.code_mask,
                f.status as friend_status, f.max_devices, f.expires_at as friend_expires_at
         FROM invites i
         JOIN friends f ON i.friend_id = f.id
@@ -119,6 +120,15 @@ export async function handleActivate(
     const refreshExpiresAt = currentTime + refreshExpiresIn;
     const nextCheckAt = currentTime + 24 * 60 * 60; // 24 小时后校验
 
+    // 先签发 JWT，再提交数据库批次；签名配置异常时不得消耗邀请码或修改设备状态。
+    const accessToken = await signAccessToken(
+        env.JWT_SIGNING_KEY,
+        invite.friend_id,
+        deviceId,
+        ['api'],
+        accessExpiresIn
+    );
+
     // 事务：创建设备 + 创建刷新会话 + 标记邀请码已使用
     const statements = [
         existingDevice
@@ -145,31 +155,22 @@ export async function handleActivate(
         env.DB.prepare(`
             UPDATE invites SET used_at = ? WHERE id = ?
         `).bind(currentTime, invite.id),
+
+        // 将授权审计与邀请码消费放进同一批处理，避免出现“邀请码已使用但没有审计记录”。
+        env.DB.prepare(`
+            INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, detail, created_at)
+            VALUES (?, ?, ?, ?, 'SUCCESS', ?, ?)
+        `).bind(
+            invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE',
+            invite.friend_id,
+            deviceId,
+            requestId,
+            `invite_kind:${invite.kind};invite_id:${invite.id};invite_mask:${invite.code_mask || ''}`,
+            currentTime,
+        ),
     ];
 
     await env.DB.batch(statements);
-
-    // 签发访问 JWT
-    const accessToken = await signAccessToken(
-        env.JWT_SIGNING_KEY,
-        invite.friend_id,
-        deviceId,
-        ['api'],
-        accessExpiresIn
-    );
-
-    // 写入审计日志
-    await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, detail, created_at)
-        VALUES (?, ?, ?, ?, 'SUCCESS', ?, ?)
-    `).bind(
-        invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE',
-        invite.friend_id,
-        deviceId,
-        requestId,
-        `invite_kind:${invite.kind}`,
-        currentTime,
-    ).run();
 
     const response: ActivateResponse = {
         deviceId,
