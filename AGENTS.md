@@ -77,6 +77,11 @@
 4. 验证
 5. 有价值教训写入本文件
 
+## 授权撤销同步经验
+
+- 后台撤销设备后，App 不能只依赖进程启动时的 `AuthManager.initialize()`；前台恢复应立即调用 `check()`，并通过网络约束的 15 分钟周期 Worker 兜底。
+- Worker 返回 403 时沿用 `AuthManager.check()` 的清理逻辑，清除本地令牌并由导航状态切回激活页；撤销设备仍保留记录，重新绑定应使用迁移邀请码。
+
 ## 常见陷阱
 
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录

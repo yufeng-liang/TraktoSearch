@@ -76,6 +76,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.pow
@@ -163,6 +164,7 @@ class MainActivity : AppCompatActivity() {
 
     // 全局 scrollToTop 提供者
     private val scrollToTopProvider = ScrollToTopProvider()
+    private var authInitializationJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashStartTime = System.currentTimeMillis()
@@ -196,7 +198,7 @@ class MainActivity : AppCompatActivity() {
         var initialTab by mutableStateOf(0)
         var isTraktConnected by mutableStateOf(false)
 
-        lifecycleScope.launch {
+        authInitializationJob = lifecycleScope.launch {
             val splashStartTime = System.currentTimeMillis()
             authManager.initialize()
             val authState = authManager.authState.value
@@ -446,6 +448,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         JPushHelper.onResume(this)
+        lifecycleScope.launch {
+            authInitializationJob?.join()
+            if (authManager.authState.value != AuthState.UNAUTHORIZED) {
+                authManager.check()
+            }
+        }
     }
 
     private var statusBarHeight: Int = 0

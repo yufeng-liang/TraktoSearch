@@ -13,6 +13,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.tracktosearch.di.DoubanIdMapping
 import com.tracktosearch.di.NetworkModule
+import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
@@ -39,6 +40,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var baseOkHttpClient: OkHttpClient
     @Inject lateinit var notificationScheduler: NotificationScheduler
+    @Inject lateinit var authCheckScheduler: AuthCheckScheduler
     @Inject lateinit var tmdbRepository: TmdbRepository
     @Inject lateinit var traktRepository: TraktRepository
     @Inject lateinit var doubanHotCache: PersistentTtlCache<DoubanHotData>
@@ -63,6 +65,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
+            // 授权撤销最多 15 分钟内生效；网络不可用时由 AuthManager 保留离线宽限策略。
+            Thread { authCheckScheduler.schedulePeriodicCheck() }.start()
             // 上传未发送的崩溃日志到云端
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
