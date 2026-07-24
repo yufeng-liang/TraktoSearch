@@ -345,6 +345,24 @@ const API = {
         return this.post(`/admin/friends/${friendId}/invites`, { kind, expiresInDays });
     },
 
+    async getInvites(friendId, params = {}) {
+        const query = new URLSearchParams({
+            status: params.status || 'ALL',
+            limit: String(params.limit || 50),
+            offset: String(params.offset || 0),
+        });
+        const data = await this.get('/admin/friends/' + friendId + '/invites?' + query);
+        return {
+            ...data,
+            invites: data.invites || [],
+            summary: data.summary || { total: 0, available: 0, used: 0, expired: 0, revoked: 0 },
+        };
+    },
+
+    async revokeInvite(inviteId) {
+        return this.post('/admin/invites/' + inviteId + '/revoke', {});
+    },
+
     async revokeDevice(deviceId) {
         return this.post(`/admin/devices/${deviceId}/revoke`, {});
     },
@@ -432,9 +450,10 @@ function bindSubmitButton(form, button) {
 function statusBadge(status) {
     const map = {
         ACTIVE: 'badge-active', DISABLED: 'badge-disabled', REVOKED: 'badge-revoked',
+        AVAILABLE: 'badge-active', USED: 'badge-success', EXPIRED: 'badge-disabled',
         SUCCESS: 'badge-success', FAILURE: 'badge-failure',
     };
-    const label = { ACTIVE: '活跃', DISABLED: '已禁用', REVOKED: '已撤销', SUCCESS: '成功', FAILURE: '失败' };
+    const label = { ACTIVE: '活跃', DISABLED: '已禁用', REVOKED: '已撤销', AVAILABLE: '可用', USED: '已使用', EXPIRED: '已过期', SUCCESS: '成功', FAILURE: '失败' };
     return `<span class="badge ${map[status] || ''}"><span class="badge-dot"></span>${escapeHtml(label[status] || status)}</span>`;
 }
 
@@ -776,9 +795,120 @@ function renderFriendDetail(container) {
         content.querySelectorAll('.js-revoke-device').forEach(button => {
             button.addEventListener('click', () => showRevokeDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
         });
+        const inviteSection = document.createElement('div');
+        inviteSection.id = 'inviteSection';
+        inviteSection.className = 'card invite-management-card';
+        content.firstElementChild?.appendChild(inviteSection);
+        loadInvitesSection(f.id, inviteSection);
     }).catch(err => {
         content.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendDetailRetry">重试</button></div>`;
         content.querySelector('#friendDetailRetry')?.addEventListener('click', () => renderFriendDetail(container));
+    });
+}
+
+function loadInvitesSection(friendId, section) {
+    let status = 'ALL';
+    let offset = 0;
+    const limit = 50;
+
+    const renderLoading = () => {
+        section.innerHTML = '<div class="card-header"><span class="card-title">邀请码</span></div><div class="loading-skeleton" style="height:180px"></div>';
+    };
+
+    const render = (data) => {
+        const summary = data.summary || {};
+        const invites = data.invites || [];
+        const rows = invites.length === 0
+            ? '<tr><td colspan="7"><div class="empty-state"><div class="empty-title">暂无邀请码记录</div><div class="empty-desc">创建邀请码后会显示在这里</div></div></td></tr>'
+            : invites.map(invite => '<tr>' +
+                '<td class="invite-code-masked">' + escapeHtml(invite.code_mask || invite.codeMask || '—') + '</td>' +
+                '<td>' + escapeHtml(invite.kind || '—') + '</td>' +
+                '<td>' + statusBadge(invite.status) + '</td>' +
+                '<td>' + formatDate(invite.created_at) + '</td>' +
+                '<td>' + formatDate(invite.expires_at) + '</td>' +
+                '<td>' + (invite.used_at ? formatDate(invite.used_at) : '—') + '</td>' +
+                '<td>' + (invite.status === 'AVAILABLE'
+                    ? '<button class="btn btn-danger btn-sm js-revoke-invite" data-invite-id="' + escapeHtml(invite.id) + '">撤销</button>'
+                    : '—') + '</td></tr>').join('');
+        section.innerHTML =
+            '<div class="card-header"><span class="card-title">邀请码</span>' +
+                '<select class="form-select invite-status-filter" aria-label="邀请码状态筛选">' +
+                    '<option value="ALL">全部</option><option value="AVAILABLE">可用</option>' +
+                    '<option value="USED">已使用</option><option value="EXPIRED">已过期</option>' +
+                    '<option value="REVOKED">已撤销</option>' +
+                '</select></div>' +
+            '<div class="invite-summary-grid">' +
+                '<div><span>总数</span><strong>' + Number(summary.total || 0) + '</strong></div>' +
+                '<div><span>可用</span><strong>' + Number(summary.available || 0) + '</strong></div>' +
+                '<div><span>已使用</span><strong>' + Number(summary.used || 0) + '</strong></div>' +
+                '<div><span>已失效</span><strong>' + (Number(summary.expired || 0) + Number(summary.revoked || 0)) + '</strong></div>' +
+            '</div><div class="table-scroll"><table><thead><tr><th>邀请码</th><th>类型</th><th>状态</th>' +
+                '<th>创建时间</th><th>有效期</th><th>使用时间</th><th>操作</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+            '<div class="invite-pagination"><span>第 ' + (invites.length ? offset + 1 : 0) + ' - ' + (offset + invites.length) + ' 条</span>' +
+                '<div><button class="btn btn-ghost btn-sm invite-prev" ' + (offset === 0 ? 'disabled' : '') + '>上一页</button>' +
+                '<button class="btn btn-ghost btn-sm invite-next" ' + (data.hasMore ? '' : 'disabled') + '>下一页</button></div></div>';
+        section.querySelector('.invite-status-filter').value = status;
+        section.querySelector('.invite-status-filter').addEventListener('change', (event) => {
+            status = event.target.value;
+            offset = 0;
+            load();
+        });
+        section.querySelector('.invite-prev').addEventListener('click', () => {
+            offset = Math.max(0, offset - limit);
+            load();
+        });
+        section.querySelector('.invite-next').addEventListener('click', () => {
+            if (data.hasMore) {
+                offset += limit;
+                load();
+            }
+        });
+        section.querySelectorAll('.js-revoke-invite').forEach(button => {
+            button.addEventListener('click', () => showRevokeInviteModal(button.dataset.inviteId, load));
+        });
+    };
+
+    const renderError = (err) => {
+        section.innerHTML = '<div class="card-header"><span class="card-title">邀请码</span></div><div class="error-banner"><span class="error-text">加载失败：' +
+            escapeHtml(errorMessage(err)) + '</span><button class="btn btn-sm btn-ghost invite-retry">重试</button></div>';
+        section.querySelector('.invite-retry').addEventListener('click', load);
+    };
+
+    const load = () => {
+        renderLoading();
+        API.getInvites(friendId, { status, limit, offset }).then(render).catch(renderError);
+    };
+    load();
+}
+
+function showRevokeInviteModal(inviteId, reload) {
+    const body = document.createElement('div');
+    body.innerHTML = '<div class="confirm-danger-text">确定要撤销这个邀请码吗？</div><div class="confirm-danger-impact">撤销后邀请码立即失效，操作不可恢复；已使用或已过期的邀请码不可撤销。</div>';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-danger';
+    confirmBtn.textContent = '确认撤销';
+    modal.open({
+        title: '撤销邀请码',
+        body,
+        footer: [
+            Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
+            confirmBtn,
+        ],
+    });
+    modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '撤销中...';
+        try {
+            await API.revokeInvite(inviteId);
+            modal.close();
+            showToast('邀请码已撤销');
+            reload();
+        } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '确认撤销';
+            showToast('撤销失败: ' + errorMessage(err), 'error');
+        }
     });
 }
 

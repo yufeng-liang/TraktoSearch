@@ -15,6 +15,7 @@ import {
     listAuditLogs,
     listDevices,
     listFriends,
+    listInvites,
     revokeDevice,
     revokeInvite,
     updateFriend,
@@ -205,6 +206,9 @@ async function handleAdminApi(
 
     // 邀请码创建
     const inviteCreateMatch = path.match(/^\/admin\/friends\/([^/]+)\/invites$/);
+    if (inviteCreateMatch && request.method === 'GET') {
+        return listInvites(request, env, requestId, inviteCreateMatch[1]);
+    }
     if (inviteCreateMatch && request.method === 'POST') {
         return createInvite(request, env, requestId, inviteCreateMatch[1]);
     }

@@ -258,14 +258,15 @@ export async function createInvite(
     }
     const code = generateInviteCode();
     const codeHash = await sha256(code);
+    const codeMask = maskInviteCode(code);
     const id = generateId();
     const currentTime = now();
     const expiresAt = currentTime + expiresInDays * 24 * 60 * 60;
 
     await env.DB.prepare(`
-        INSERT INTO invites (id, friend_id, kind, code_hash, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(id, friendId, kind, codeHash, expiresAt, currentTime).run();
+        INSERT INTO invites (id, friend_id, kind, code_hash, code_mask, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, friendId, kind, codeHash, codeMask, expiresAt, currentTime).run();
 
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
@@ -290,8 +291,8 @@ export async function revokeInvite(
     const currentTime = now();
 
     const invite = await env.DB.prepare(`
-        SELECT id, used_at, revoked_at FROM invites WHERE id = ?
-    `).bind(inviteId).first<{ id: string; used_at: number | null; revoked_at: number | null }>();
+        SELECT id, used_at, revoked_at, expires_at FROM invites WHERE id = ?
+    `).bind(inviteId).first<{ id: string; used_at: number | null; revoked_at: number | null; expires_at: number }>();
 
     if (!invite) {
         throw new AppError('NOT_FOUND', 'Invite not found', 404);
@@ -301,6 +302,9 @@ export async function revokeInvite(
     }
     if (invite.revoked_at !== null) {
         throw new AppError('INVITE_REVOKED', 'Invite already revoked', 400);
+    }
+    if (invite.expires_at < currentTime) {
+        throw new AppError('INVITE_EXPIRED', 'Invite already expired', 400);
     }
 
     await env.DB.prepare(`
@@ -313,6 +317,95 @@ export async function revokeInvite(
     `).bind(inviteId, requestId, currentTime).run();
 
     return successResponse({ id: inviteId, revoked: true }, requestId);
+}
+
+// GET /admin/friends/:id/invites - 邀请码历史及状态
+export async function listInvites(
+    request: Request,
+    env: { DB: D1Database },
+    requestId: string,
+    friendId: string
+): Promise<Response> {
+    const friend = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+
+    const url = new URL(request.url);
+    const requestedStatus = (url.searchParams.get('status') || 'ALL').toUpperCase();
+    const statuses = new Set(['ALL', 'AVAILABLE', 'USED', 'EXPIRED', 'REVOKED']);
+    if (!statuses.has(requestedStatus)) {
+        throw new AppError('INVALID_REQUEST', 'Invalid invite status', 400);
+    }
+    const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+    const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 50) : 50;
+    const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
+    const currentTime = now();
+
+    const statusWhere = (status: string): { sql: string; values: (string | number)[] } => {
+        switch (status) {
+            case 'AVAILABLE': return { sql: 'revoked_at IS NULL AND used_at IS NULL AND expires_at >= ?', values: [currentTime] };
+            case 'USED': return { sql: 'used_at IS NOT NULL', values: [] };
+            case 'EXPIRED': return { sql: 'revoked_at IS NULL AND used_at IS NULL AND expires_at < ?', values: [currentTime] };
+            case 'REVOKED': return { sql: 'revoked_at IS NOT NULL', values: [] };
+            default: return { sql: '', values: [] };
+        }
+    };
+
+    const selected = statusWhere(requestedStatus);
+    const filteredClause = selected.sql ? `AND ${selected.sql}` : '';
+    const listQuery = `
+        SELECT id, kind, code_mask, expires_at, used_at, revoked_at, created_at,
+               CASE
+                   WHEN revoked_at IS NOT NULL THEN 'REVOKED'
+                   WHEN used_at IS NOT NULL THEN 'USED'
+                   WHEN expires_at < ? THEN 'EXPIRED'
+                   ELSE 'AVAILABLE'
+               END AS status
+        FROM invites
+        WHERE friend_id = ? ${filteredClause}
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+    `;
+    const listValues: (string | number)[] = [currentTime, friendId, ...selected.values, limit, offset];
+    const countQuery = `SELECT COUNT(*) AS count FROM invites WHERE friend_id = ? ${filteredClause}`;
+    const countValues: (string | number)[] = [friendId, ...selected.values];
+    const summaryQuery = `
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN revoked_at IS NULL AND used_at IS NULL AND expires_at >= ? THEN 1 ELSE 0 END) AS available,
+            SUM(CASE WHEN used_at IS NOT NULL THEN 1 ELSE 0 END) AS used,
+            SUM(CASE WHEN revoked_at IS NULL AND used_at IS NULL AND expires_at < ? THEN 1 ELSE 0 END) AS expired,
+            SUM(CASE WHEN revoked_at IS NOT NULL THEN 1 ELSE 0 END) AS revoked
+        FROM invites WHERE friend_id = ?
+    `;
+
+    const [{ results }, countRow, summaryRow] = await Promise.all([
+        env.DB.prepare(listQuery).bind(...listValues).all(),
+        env.DB.prepare(countQuery).bind(...countValues).first<{ count: number }>(),
+        env.DB.prepare(summaryQuery).bind(currentTime, currentTime, friendId).first<{
+            total: number; available: number; used: number; expired: number; revoked: number;
+        }>(),
+    ]);
+
+    const totalFiltered = Number(countRow?.count || 0);
+    return successResponse({
+        friendId,
+        invites: results,
+        summary: {
+            total: Number(summaryRow?.total || 0),
+            available: Number(summaryRow?.available || 0),
+            used: Number(summaryRow?.used || 0),
+            expired: Number(summaryRow?.expired || 0),
+            revoked: Number(summaryRow?.revoked || 0),
+        },
+        limit,
+        offset,
+        hasMore: offset + results.length < totalFiltered,
+    }, requestId);
+}
+
+function maskInviteCode(code: string): string {
+    return code.length >= 8 ? `${code.slice(0, 4)}****${code.slice(-4)}` : '****';
 }
 
 // === 审计日志 ===

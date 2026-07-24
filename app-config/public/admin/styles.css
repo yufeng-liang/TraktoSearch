@@ -590,6 +590,37 @@ input, select { font-family: inherit; }
     opacity: 0.8;
 }
 .table-scroll { overflow-x: auto; }
+.invite-management-card { grid-column: 1 / -1; }
+.invite-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 16px;
+}
+.invite-summary-grid > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    font-size: 12px;
+}
+.invite-summary-grid strong { color: var(--text); font-size: 20px; }
+.invite-status-filter { width: auto; min-width: 110px; }
+.invite-code-masked { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em; white-space: nowrap; }
+.invite-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-top: 14px;
+    color: var(--text-dim);
+    font-size: 12px;
+}
+.invite-pagination > div { display: flex; gap: 8px; }
 table { min-width: 700px; }
 th, td {
     padding: 14px 18px;
