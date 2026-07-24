@@ -6,9 +6,12 @@ import { decryptSecret, encryptSecret } from '../util/crypto';
 import { now } from '../util/errors';
 import {
     TRAKT_OAUTH_REDIRECT_URI,
+    buildTraktApiHeaders,
+    buildTraktProxyUrl,
     buildAuthorizationCodePayload,
     buildRefreshTokenPayload,
     classifyTraktOAuthError,
+    readTraktProxyBody,
 } from './trakt-token';
 
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
@@ -159,17 +162,13 @@ export async function handleTraktProxy(
         throw new AppError('UNAUTHORIZED', 'Trakt not connected', 401);
     }
 
-    const url = `${TRAKT_BASE_URL}/${traktPath}`;
+    const url = buildTraktProxyUrl(request.url, traktPath);
+    const body = await readTraktProxyBody(request);
 
     const upstreamResponse = await fetch(url, {
         method: request.method,
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${credentials.access_token}`,
-            'trakt-api-version': '2',
-            'trakt-api-key': env.TRAKT_CLIENT_ID,
-        },
-        body: request.method !== 'GET' ? await request.blob() : undefined,
+        headers: buildTraktApiHeaders(credentials.access_token, env.TRAKT_CLIENT_ID),
+        body,
     });
 
     // 401 → Trakt token 过期，尝试刷新
@@ -180,13 +179,8 @@ export async function handleTraktProxy(
             const newCredentials = await getTraktCredentials(env, friendId);
             const retryResponse = await fetch(url, {
                 method: request.method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${newCredentials?.access_token}`,
-                    'trakt-api-version': '2',
-                    'trakt-api-key': env.TRAKT_CLIENT_ID,
-                },
-                body: request.method !== 'GET' ? await request.blob() : undefined,
+                headers: buildTraktApiHeaders(newCredentials?.access_token || '', env.TRAKT_CLIENT_ID),
+                body,
             });
             return proxyResponse(retryResponse);
         }

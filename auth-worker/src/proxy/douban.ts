@@ -2,8 +2,9 @@
 
 import { Env } from '../index';
 import { AppError } from '../util/errors';
+import { buildDoubanHeaders } from './douban-token';
 
-const DOUBAN_BASE_URL = 'https://api.douban.com/v2';
+const DOUBAN_BASE_URL = 'https://douban-movie-api.pages.dev';
 
 const DOUBAN_PREFIX = '/api/douban/';
 
@@ -12,25 +13,19 @@ export async function handleDoubanProxy(
     env: Env,
     path: string
 ): Promise<Response> {
-    // 兼容旧版 App 的 `api/chart` 形式，避免拼出 `/v2/api/chart` 这种无效地址。
-    const doubanPath = path.replace(DOUBAN_PREFIX, '').replace(/^api\//, '');
+    // 保留原热榜服务的 `api/chart`、`api/weekly` 等路径。
+    const doubanPath = path.replace(DOUBAN_PREFIX, '');
 
     const url = new URL(`${DOUBAN_BASE_URL}/${doubanPath}`);
-    url.searchParams.set('apikey', env.DOUBAN_API_KEY);
-
     // 复制客户端查询参数
     const clientUrl = new URL(request.url);
     for (const [key, value] of clientUrl.searchParams) {
-        if (key !== 'apikey') {
-            url.searchParams.set(key, value);
-        }
+        url.searchParams.set(key, value);
     }
 
     const upstreamResponse = await fetch(url.toString(), {
         method: request.method,
-        headers: {
-            'Accept': 'application/json',
-        },
+        headers: buildDoubanHeaders(env.DOUBAN_API_KEY),
         body: request.method !== 'GET' ? await request.blob() : undefined,
     });
 
