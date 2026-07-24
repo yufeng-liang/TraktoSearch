@@ -226,7 +226,15 @@ class AuthManager @Inject constructor(
         nextCheckAt = tokenStorage.getCachedNextCheckAt()
         lastOnlineAt = tokenStorage.getCachedLastOnlineAt()
         if (!tokenStorage.isTokenValid()) {
-            _authState.value = AuthState.UNAUTHORIZED
+            // access token 仅有 15 分钟寿命；只要 refresh session 仍在，就先轮换令牌。
+            // 不能因为短期 access token 过期就丢弃已激活的设备会话，否则应用重启会错误回到邀请码页。
+            val hasRefreshSession = !deviceId.isNullOrBlank() &&
+                !tokenStorage.getRefreshToken().isNullOrBlank()
+            if (hasRefreshSession) {
+                refresh()
+            } else {
+                _authState.value = AuthState.UNAUTHORIZED
+            }
             return
         }
         check()
