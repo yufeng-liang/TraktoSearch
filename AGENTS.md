@@ -86,6 +86,19 @@
 - commit 格式：`<type>: <描述>`
   - feat / fix / refactor / docs / style / test / chore
 
+## Cloudflare 生产部署经验
+
+- Pages 生产部署必须显式使用 `--branch master`：`npx wrangler pages deploy public --project-name app-config --branch master`。
+- 部署后不要只看 Wrangler 的成功输出；用 `npx wrangler pages deployment list --project-name app-config` 确认最新记录的 `Environment=Production`、`Branch=master` 和提交 SHA，并打开该部署 URL 检查实际静态资源版本。
+- Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 `curl`/`Invoke-WebRequest` 可能只拿到 302 或登录 HTML，不能据此判断页面代码未更新。应在已登录浏览器中强制刷新，或直接检查部署哈希 URL 的资源内容。
+- Worker 部署后记录版本 ID，并至少验证健康检查和本次变更涉及的 API；Pages 与 Worker 的部署成功不等于业务流程已验证。
+
+## Android ADB 设备核验经验
+
+- Gradle 的 `installDebug` 设备筛选可能因 ADB 返回的 API 属性异常而跳过设备；先用 `adb -s <serial> shell getprop ro.build.version.release` 和 `ro.build.version.sdk` 记录设备实际报告值。
+- 若 Gradle 提示 `minSdkVersion` 不兼容，仍应直接用 `adb -s <serial> install -r <apk>` 做一次事实核验；本项目曾出现 Gradle 报 API 21、但 ADB 直接安装返回 `Success` 的不一致情况。
+- 安装成功后必须继续执行 `am start`、UI 树检查、`screencap` 后 `adb pull` 截图和 `logcat -b crash`，不能仅凭安装成功宣称功能通过。若系统属性与用户描述不一致，保留命令输出并报告差异。
+
 ## 安全意识
 
 - 不硬编码密码、密钥
