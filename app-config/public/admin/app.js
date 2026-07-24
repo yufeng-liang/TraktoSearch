@@ -774,18 +774,22 @@ function renderFriends(container) {
 function renderFriendDetail(container) {
     const id = state.params.id;
     const title = document.createElement('div');
-    title.innerHTML = `<h1 class="section-title">朋友详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p>`;
+    title.className = 'detail-heading';
+    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">朋友详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用朋友</button>`;
     container.appendChild(title);
 
     const content = document.createElement('div');
-    content.className = 'detail-grid';
-    content.innerHTML = `<div class="card"><div class="loading-skeleton" style="height:300px"></div></div><div class="card"><div class="loading-skeleton" style="height:300px"></div></div>`;
+    content.className = 'detail-grid friend-detail-grid';
+    content.innerHTML = `<div class="card"><div class="loading-skeleton" style="height:460px"></div></div>`;
     container.appendChild(content);
 
     API.getFriend(id).then(f => {
         title.querySelector('#detailSubtitle').textContent = `${f.nickname} · ${f.devices} 台设备`;
+        const disableButton = title.querySelector('#disableBtn');
+        disableButton.hidden = false;
+        disableButton.disabled = f.status === 'DISABLED';
+        disableButton.textContent = f.status === 'DISABLED' ? '已禁用' : '禁用朋友';
         content.innerHTML = `
-            <div>
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">基本信息</span><span>${statusBadge(f.status)}</span></div>
                     <div style="display:grid;gap:14px;font-size:13px">
@@ -812,26 +816,16 @@ function renderFriendDetail(container) {
                         `).join('')}
                     </tbody></table></div>
                 </div>
-            </div>
-            <div>
-                <div class="card">
-                    <div class="card-header"><span class="card-title">危险操作</span></div>
-                    <div style="display:flex;flex-direction:column;gap:14px">
-                        <button class="btn btn-danger" id="disableBtn" ${f.status === 'DISABLED' ? 'disabled' : ''}>${f.status === 'DISABLED' ? '已禁用' : '禁用该朋友'}</button>
-                        <p style="font-size:12px;color:var(--text-dim)">禁用后该朋友下所有设备和会话立即失效。</p>
-                    </div>
-                </div>
-            </div>
         `;
         content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname, f.devices));
-        content.querySelector('#disableBtn')?.addEventListener('click', () => showDisableFriendModal(f.id, f.nickname, f.devices));
+        disableButton.addEventListener('click', () => showDisableFriendModal(f.id, f.nickname, f.devices));
         content.querySelectorAll('.js-revoke-device').forEach(button => {
             button.addEventListener('click', () => showRevokeDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
         });
         const inviteSection = document.createElement('div');
         inviteSection.id = 'inviteSection';
         inviteSection.className = 'card invite-management-card';
-        content.firstElementChild?.appendChild(inviteSection);
+        content.appendChild(inviteSection);
         loadInvitesSection(f.id, inviteSection);
     }).catch(err => {
         content.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendDetailRetry">重试</button></div>`;

@@ -110,3 +110,13 @@ test('invite card keeps vertical spacing and a stable filter width', () => {
     assert.match(stylesSource, /flex:\s*0 0 220px/);
     assert.match(stylesSource, /width:\s*160px;\s*flex-basis:\s*160px/);
 });
+
+test('friend detail uses full-width lists and places disable action in the heading', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(appSource, /title\.className = 'detail-heading'/);
+    assert.match(appSource, /friend-detail-grid/);
+    assert.match(appSource, /content\.appendChild\(inviteSection\)/);
+    assert.doesNotMatch(appSource, /content\.firstElementChild\?\.appendChild\(inviteSection\)/);
+    assert.match(stylesSource, /\.friend-detail-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/);
+    assert.match(stylesSource, /\.detail-heading \{/);
+});
