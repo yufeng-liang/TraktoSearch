@@ -774,7 +774,7 @@ function renderFriendDetail(container) {
                                 <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(d.appVersion || '—')}</td>
                                 <td>${statusBadge(d.status)}</td>
                                 <td style="color:var(--text-dim);font-size:12px">${formatTime(d.lastSeen)}</td>
-                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-ghost btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : '—'}</td>
+                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-danger btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : '—'}</td>
                             </tr>
                         `).join('')}
                     </tbody></table></div>
@@ -802,7 +802,7 @@ function renderFriendDetail(container) {
         loadInvitesSection(f.id, inviteSection);
     }).catch(err => {
         content.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendDetailRetry">重试</button></div>`;
-        content.querySelector('#friendDetailRetry')?.addEventListener('click', () => renderFriendDetail(container));
+        content.querySelector('#friendDetailRetry')?.addEventListener('click', () => navigate('friend-detail', { id: state.params.id }));
     });
 }
 
@@ -1196,7 +1196,7 @@ function showRevokeDeviceModal(deviceId, deviceName) {
             await API.revokeDevice(deviceId);
             modal.close();
             showToast('设备已撤销');
-            renderFriendDetail(document.getElementById('mainContent'));
+            navigate('friend-detail', { id: state.params.id });
         } catch (err) {
             confirmBtn.disabled = false;
             confirmBtn.textContent = '确认撤销';
@@ -1233,7 +1233,7 @@ function showDisableFriendModal(friendId, friendName, deviceCount) {
             await API.disableFriend(friendId);
             modal.close();
             showToast('朋友已禁用');
-            renderFriendDetail(document.getElementById('mainContent'));
+            navigate('friend-detail', { id: state.params.id });
         } catch (err) {
             confirmBtn.disabled = false;
             confirmBtn.textContent = '确认禁用';
