@@ -19,6 +19,10 @@ const TRAKT_BASE_URL = 'https://api.trakt.tv';
 
 const TRAKT_PREFIX = '/api/trakt/';
 
+// 同一朋友的多个请求可能同时发现 access token 过期。
+// 在同一个 Worker isolate 内共享刷新 Promise，避免并发消费同一个 refresh token。
+const refreshInFlight = new Map<string, Promise<Response>>();
+
 // Trakt OAuth 端点
 export async function handleTraktOAuth(
     request: Request,
@@ -190,7 +194,7 @@ export async function handleTraktProxy(
 
     // 401 → Trakt token 过期，尝试刷新
     if (upstreamResponse.status === 401) {
-        const refreshResult = await traktRefresh(request, env, friendId);
+        const refreshResult = await refreshTraktCredentials(request, env, friendId);
         if (refreshResult.status === 200) {
             // 重试
             const newCredentials = await getTraktCredentials(env, friendId);
@@ -208,6 +212,22 @@ export async function handleTraktProxy(
     }
 
     return proxyResponse(upstreamResponse);
+}
+
+/** 合并同一朋友在同一 isolate 内并发触发的 Trakt token 刷新。 */
+async function refreshTraktCredentials(
+    request: Request,
+    env: Env,
+    friendId: string,
+): Promise<Response> {
+    const existing = refreshInFlight.get(friendId);
+    if (existing) return existing;
+
+    const refreshPromise = traktRefresh(request, env, friendId).finally(() => {
+        refreshInFlight.delete(friendId);
+    });
+    refreshInFlight.set(friendId, refreshPromise);
+    return refreshPromise;
 }
 
 function proxyResponse(response: Response): Response {
