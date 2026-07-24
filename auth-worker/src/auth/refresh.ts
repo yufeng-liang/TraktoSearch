@@ -37,6 +37,7 @@ export async function handleRefresh(
     // 验证 nonce 存在且未过期
     const nonceDeviceId = await env.KV.get(`challenge:${nonceHash}`);
     if (!nonceDeviceId || nonceDeviceId !== body.deviceId) {
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'INVALID_SIGNATURE', null, 'refresh:invalid_challenge');
         throw new AppError('INVALID_SIGNATURE', 'Invalid or expired challenge', 400);
     }
     // 消费 nonce（一次性）
@@ -58,12 +59,13 @@ export async function handleRefresh(
 
     if (!session) {
         // 令牌不存在 — 可能是重放攻击
-        await logSecurityEvent(env, requestId, 'REFRESH_REPLAY', body.deviceId, 'FAILURE', 'TOKEN_NOT_FOUND');
+        await logSecurityEvent(env, requestId, 'REFRESH_REPLAY', body.deviceId, 'FAILURE', 'TOKEN_NOT_FOUND', null, 'refresh:token_not_found');
         throw new AppError('INVALID_TOKEN', 'Invalid refresh token', 401);
     }
 
     // 检查设备/朋友状态
     if (session.device_status !== 'ACTIVE' || session.friend_status !== 'ACTIVE') {
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'DEVICE_REVOKED', session.friend_id, 'refresh:device_or_friend_revoked');
         throw new AppError('DEVICE_REVOKED', 'Device or friend is disabled', 403);
     }
 
@@ -71,12 +73,13 @@ export async function handleRefresh(
     if (session.revoked_at !== null) {
         // 令牌已被撤销但又被使用 → 重放攻击
         await revokeAllDeviceSessions(env, body.deviceId);
-        await logSecurityEvent(env, requestId, 'REFRESH_REPLAY', body.deviceId, 'FAILURE', 'TOKEN_REPLAY');
+        await logSecurityEvent(env, requestId, 'REFRESH_REPLAY', body.deviceId, 'FAILURE', 'TOKEN_REPLAY', null, 'refresh:replay_revoked_all');
         throw new AppError('REFRESH_REPLAY', 'Token replay detected, all sessions revoked', 401);
     }
 
     // 检查过期
     if (session.expires_at < currentTime) {
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'TOKEN_EXPIRED', session.friend_id, 'refresh:expired');
         throw new AppError('TOKEN_EXPIRED', 'Refresh token has expired', 401);
     }
 
@@ -84,7 +87,7 @@ export async function handleRefresh(
 
     // 轮换：撤销旧会话 + 创建新会话
     if (!(await verifyClientSignature(session.public_key, body.signature, body.nonce))) {
-        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'INVALID_SIGNATURE', session.friend_id);
+        await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'INVALID_SIGNATURE', session.friend_id, 'refresh:invalid_signature');
         throw new AppError('INVALID_SIGNATURE', 'Invalid client signature', 400);
     }
 
@@ -121,7 +124,7 @@ export async function handleRefresh(
         accessExpiresIn
     );
 
-    await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'SUCCESS', null, session.friend_id);
+    await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'SUCCESS', null, session.friend_id, 'refresh:rotated');
 
     const response: RefreshResponse = {
         accessToken,
@@ -150,12 +153,13 @@ async function logSecurityEvent(
     deviceId: string,
     result: string,
     errorCode: string | null,
-    friendId: string | null = null
+    friendId: string | null = null,
+    detail: string | null = null,
 ): Promise<void> {
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, error_code, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(eventType, friendId, deviceId, requestId, result, errorCode, now()).run();
+        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, error_code, detail, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(eventType, friendId, deviceId, requestId, result, errorCode, detail, now()).run();
 }
 
 async function verifyClientSignature(publicKeyBase64: string, signatureBase64: string, nonce: string): Promise<boolean> {

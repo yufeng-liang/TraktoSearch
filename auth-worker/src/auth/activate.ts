@@ -31,7 +31,7 @@ export async function handleActivate(
 
     // 参数校验
     if (!body.inviteCode || !body.publicKey) {
-        throw new AppError('INVALID_INVITE', 'inviteCode and publicKey are required', 400);
+        return logAndThrowActivationFailure(env, requestId, 'INVALID_INVITE', 'inviteCode and publicKey are required');
     }
 
     const codeHash = await sha256(body.inviteCode);
@@ -51,26 +51,26 @@ export async function handleActivate(
     `).bind(codeHash));
 
     if (!invite) {
-        throw new AppError('INVALID_INVITE', 'Invite code not found', 400);
+        return logAndThrowActivationFailure(env, requestId, 'INVALID_INVITE', 'Invite code not found');
     }
 
     // 检查邀请码状态
     if (invite.used_at !== null) {
-        throw new AppError('INVITE_ALREADY_USED', 'Invite code already used', 400);
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_ALREADY_USED', 'Invite code already used', invite);
     }
     if (invite.revoked_at !== null) {
-        throw new AppError('INVITE_REVOKED', 'Invite code has been revoked', 400);
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_REVOKED', 'Invite code has been revoked', invite);
     }
     if (invite.expires_at < currentTime) {
-        throw new AppError('INVITE_EXPIRED', 'Invite code has expired', 400);
+        return logAndThrowActivationFailure(env, requestId, 'INVITE_EXPIRED', 'Invite code has expired', invite);
     }
 
     // 检查朋友状态
     if (invite.friend_status !== 'ACTIVE') {
-        throw new AppError('FRIEND_DISABLED', 'Friend account is disabled', 400);
+        return logAndThrowActivationFailure(env, requestId, 'FRIEND_DISABLED', 'Friend account is disabled', invite);
     }
     if (invite.friend_expires_at !== null && invite.friend_expires_at < currentTime) {
-        throw new AppError('FRIEND_DISABLED', 'Friend account has expired', 400);
+        return logAndThrowActivationFailure(env, requestId, 'FRIEND_DISABLED', 'Friend account has expired', invite);
     }
 
     // 检查设备上限（事务中）
@@ -81,13 +81,13 @@ export async function handleActivate(
     `).bind(body.publicKey));
 
     if (invite.kind === 'MIGRATION' && !existingDevice) {
-        throw new AppError('MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', 400);
+        return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', invite);
     }
     if (invite.kind === 'MIGRATION' && existingDevice && existingDevice.friend_id !== invite.friend_id) {
-        throw new AppError('MIGRATION_DEVICE_MISMATCH', 'Device belongs to another friend', 400);
+        return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_MISMATCH', 'Device belongs to another friend', invite, existingDevice.id);
     }
     if (invite.kind !== 'MIGRATION' && existingDevice) {
-        throw new AppError('DEVICE_ALREADY_BOUND', 'Device is already bound', 400);
+        return logAndThrowActivationFailure(env, requestId, 'DEVICE_ALREADY_BOUND', 'Device is already bound', invite, existingDevice.id);
     }
 
     const activeDeviceCount = await env.DB.prepare(`
@@ -96,8 +96,14 @@ export async function handleActivate(
     `).bind(invite.friend_id, existingDevice?.id || null, existingDevice?.id || null).first<{ count: number }>();
 
     if (activeDeviceCount && activeDeviceCount.count >= invite.max_devices) {
-        throw new AppError('DEVICE_LIMIT_REACHED',
-            `Device limit reached (max ${invite.max_devices})`, 400);
+        return logAndThrowActivationFailure(
+            env,
+            requestId,
+            'DEVICE_LIMIT_REACHED',
+            `Device limit reached (max ${invite.max_devices})`,
+            invite,
+            existingDevice?.id,
+        );
     }
 
     // 生成设备 ID 和刷新令牌
@@ -154,9 +160,16 @@ export async function handleActivate(
 
     // 写入审计日志
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, created_at)
-        VALUES (?, ?, ?, ?, 'SUCCESS', ?)
-    `).bind(invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE', invite.friend_id, deviceId, requestId, currentTime).run();
+        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, detail, created_at)
+        VALUES (?, ?, ?, ?, 'SUCCESS', ?, ?)
+    `).bind(
+        invite.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE',
+        invite.friend_id,
+        deviceId,
+        requestId,
+        `invite_kind:${invite.kind}`,
+        currentTime,
+    ).run();
 
     const response: ActivateResponse = {
         deviceId,
@@ -168,4 +181,31 @@ export async function handleActivate(
     };
 
     return successResponse(response, requestId);
+}
+
+async function logAndThrowActivationFailure(
+    env: { DB: D1Database },
+    requestId: string,
+    errorCode: string,
+    message: string,
+    invite?: { kind: string; friend_id: string },
+    deviceId?: string,
+): Promise<never> {
+    try {
+        await env.DB.prepare(`
+            INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, error_code, detail, created_at)
+            VALUES (?, ?, ?, ?, 'FAILURE', ?, ?, ?)
+        `).bind(
+            invite?.kind === 'MIGRATION' ? 'MIGRATE' : 'ACTIVATE',
+            invite?.friend_id || null,
+            deviceId || null,
+            requestId,
+            errorCode,
+            invite ? `invite_kind:${invite.kind}` : null,
+            now(),
+        ).run();
+    } catch {
+        // 审计写入失败时仍返回原始激活错误，不能掩盖用户可处理的原因。
+    }
+    throw new AppError(errorCode, message, 400);
 }

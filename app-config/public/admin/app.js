@@ -326,7 +326,8 @@ const API = {
     async getAuditLogs(params = {}) {
         const qs = new URLSearchParams(params).toString();
         const data = await this.get(`/admin/audit-logs${qs ? '?' + qs : ''}`);
-        return data.logs.map((l) => ({
+        return {
+            logs: (data.logs || []).map((l) => ({
             id: l.id,
             eventType: l.event_type,
             friendId: l.friend_id,
@@ -335,8 +336,14 @@ const API = {
             deviceName: l.device_name,
             result: l.result,
             errorCode: l.error_code,
+            detail: l.detail,
             createdAt: l.created_at * 1000, // Unix 秒 → 毫秒
-        }));
+            })),
+            limit: data.limit || Number(params.limit) || 50,
+            offset: data.offset || Number(params.offset) || 0,
+            total: data.total || 0,
+            hasMore: Boolean(data.hasMore),
+        };
     },
 
     async createFriend(data) {
@@ -497,6 +504,33 @@ function eventLabel(type) {
         INVITE_CREATE: '生成邀请码', INVITE_REVOKE: '撤销邀请码',
     };
     return escapeHtml(map[type] || type);
+}
+
+function auditDetail(log) {
+    const detail = log.detail || '';
+    const details = {
+        'invite_kind:ACTIVATION': '邀请码类型：激活',
+        'invite_kind:MIGRATION': '邀请码类型：迁移',
+        invite_revoked: '邀请码已撤销',
+        friend_created: '朋友已创建',
+        friend_disabled: '朋友已禁用',
+        device_revoked: '设备已撤销',
+        'refresh:rotated': '刷新成功，旧刷新令牌已轮换',
+        'refresh:invalid_signature': '客户端签名校验失败',
+        'refresh:invalid_challenge': '刷新挑战已过期或与设备不匹配',
+        'refresh:device_or_friend_revoked': '设备或朋友已撤销',
+        'refresh:expired': '刷新令牌已过期',
+        'refresh:token_not_found': '刷新令牌不存在或已失效',
+        'refresh:replay_revoked_all': '检测到令牌重放，已撤销该设备全部刷新会话',
+    };
+    if (details[detail]) return details[detail];
+    if (log.eventType === 'ACTIVATE') return '邀请码类型：激活';
+    if (log.eventType === 'MIGRATE') return '邀请码类型：迁移';
+    if (log.eventType === 'REFRESH' && log.result === 'SUCCESS') return '刷新成功，旧刷新令牌已轮换';
+    if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_REPLAY') return '检测到令牌重放，已撤销该设备全部刷新会话';
+    if (log.eventType === 'REFRESH_REPLAY' && log.errorCode === 'TOKEN_NOT_FOUND') return '刷新令牌不存在或已失效';
+    if (log.eventType === 'FRIEND_UPDATE' && detail.startsWith('fields:')) return `已更新：${detail.slice(7).split(',').join('、')}`;
+    return '—';
 }
 
 // ===== Toast =====
@@ -663,7 +697,8 @@ function renderDashboard(container) {
     `;
     container.appendChild(grid);
 
-    Promise.all([API.getStats(), API.getAuditLogs()]).then(([s, logs]) => {
+    Promise.all([API.getStats(), API.getAuditLogs({ limit: 50, offset: 0 })]).then(([s, auditPage]) => {
+        const logs = auditPage.logs;
         stats.innerHTML = `
             <div class="stat-card"><div class="stat-label">活跃朋友</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
             <div class="stat-card"><div class="stat-label">活跃设备</div><div class="stat-value stat-success">${s.activeDevices}</div><div class="stat-hint">在线设备</div></div>
@@ -957,6 +992,7 @@ function renderAudit(container) {
             <option value="DEVICE_REVOKE">撤销设备</option>
             <option value="FRIEND_DISABLE">禁用朋友</option>
             <option value="FRIEND_CREATE">创建朋友</option>
+            <option value="FRIEND_UPDATE">更新朋友</option>
             <option value="INVITE_CREATE">生成邀请码</option>
             <option value="INVITE_REVOKE">撤销邀请码</option>
         </select>
@@ -969,56 +1005,69 @@ function renderAudit(container) {
             <option value="24h">最近 24 小时</option>
             <option value="7d">最近 7 天</option>
             <option value="30d">最近 30 天</option>
+            <option value="90d">最近 90 天</option>
         </select>
     `;
     container.appendChild(toolbar);
 
+    const help = document.createElement('p');
+    help.className = 'form-hint';
+    help.textContent = '刷新令牌：访问令牌过期后轮换刷新令牌；重放检测：检测到旧刷新令牌再次使用，会撤销该设备的全部刷新会话。';
+    container.appendChild(help);
+
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="6"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>详情</th><th>朋友</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination audit-pagination"></div>`;
     container.appendChild(tableWrap);
 
     const eventFilter = toolbar.querySelector('#eventFilter');
     const resultFilter = toolbar.querySelector('#resultFilter');
     const timeFilter = toolbar.querySelector('#timeFilter');
 
-    function loadAndRender() {
+    function loadAndRender(offset = 0) {
         const eFilter = eventFilter.value;
         const rFilter = resultFilter.value;
         const tFilter = timeFilter.value;
         const now = Date.now();
-        const cutoff = tFilter === '24h' ? now - 86400000 : tFilter === '7d' ? now - 86400000 * 7 : now - 86400000 * 30;
+        const cutoff = tFilter === '24h' ? now - 86400000 : tFilter === '7d' ? now - 86400000 * 7 : tFilter === '30d' ? now - 86400000 * 30 : now - 86400000 * 90;
+        const params = { limit: 50, offset, from: Math.floor(cutoff / 1000) };
+        if (eFilter) params.eventType = eFilter;
+        if (rFilter) params.result = rFilter;
 
-        API.getAuditLogs().then(logs => {
-            let filtered = logs.filter(l => l.createdAt >= cutoff);
-            if (eFilter) filtered = filtered.filter(l => l.eventType === eFilter);
-            if (rFilter) filtered = filtered.filter(l => l.result === rFilter);
+        API.getAuditLogs(params).then(page => {
+            const logs = page.logs;
 
             const tbody = tableWrap.querySelector('tbody');
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state"><div class="empty-title">无记录</div><div class="empty-desc">当前筛选条件下没有审计日志</div></div></td></tr>`;
-                return;
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-title">无记录</div><div class="empty-desc">当前筛选条件下没有审计日志</div></div></td></tr>`;
+            } else {
+                tbody.innerHTML = logs.map(l => `
+                    <tr>
+                        <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
+                        <td>${eventLabel(l.eventType)}</td>
+                        <td>${escapeHtml(auditDetail(l))}</td>
+                        <td>${entityCell(l.friendName, l.friendId, '未知朋友')}</td>
+                        <td>${entityCell(l.deviceName, l.deviceId, '未知设备')}</td>
+                        <td>${statusBadge(l.result)}</td>
+                        <td style="color:var(--danger);font-size:12px">${escapeHtml(l.errorCode || '—')}</td>
+                    </tr>
+                `).join('');
             }
-            tbody.innerHTML = filtered.map(l => `
-                <tr>
-                    <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
-                    <td>${eventLabel(l.eventType)}</td>
-                    <td>${entityCell(l.friendName, l.friendId, '未知朋友')}</td>
-                    <td>${entityCell(l.deviceName, l.deviceId, '未知设备')}</td>
-                    <td>${statusBadge(l.result)}</td>
-                    <td style="color:var(--danger);font-size:12px">${escapeHtml(l.errorCode || '—')}</td>
-                </tr>
-            `).join('');
+            const pagination = tableWrap.querySelector('.audit-pagination');
+            const end = Math.min(page.offset + page.logs.length, page.total);
+            pagination.innerHTML = `<span>共 ${page.total} 条，${page.total ? `第 ${page.offset + 1} - ${end} 条` : '暂无记录'}</span><div><button class="btn btn-ghost btn-sm audit-prev" ${page.offset === 0 ? 'disabled' : ''}>上一页</button><button class="btn btn-ghost btn-sm audit-next" ${page.hasMore ? '' : 'disabled'}>下一页</button></div>`;
+            pagination.querySelector('.audit-prev')?.addEventListener('click', () => loadAndRender(Math.max(0, page.offset - page.limit)));
+            pagination.querySelector('.audit-next')?.addEventListener('click', () => loadAndRender(page.offset + page.limit));
         }).catch(err => {
             const tbody = tableWrap.querySelector('tbody');
-            tbody.innerHTML = `<tr><td colspan="6"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="auditRetry">重试</button></div></td></tr>`;
-            tbody.querySelector('#auditRetry')?.addEventListener('click', loadAndRender);
+            tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="auditRetry">重试</button></div></td></tr>`;
+            tbody.querySelector('#auditRetry')?.addEventListener('click', () => loadAndRender(0));
         });
     }
 
-    eventFilter.addEventListener('change', loadAndRender);
-    resultFilter.addEventListener('change', loadAndRender);
-    timeFilter.addEventListener('change', loadAndRender);
+    eventFilter.addEventListener('change', () => loadAndRender(0));
+    resultFilter.addEventListener('change', () => loadAndRender(0));
+    timeFilter.addEventListener('change', () => loadAndRender(0));
     loadAndRender();
 }
 

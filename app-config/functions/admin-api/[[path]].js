@@ -25,9 +25,11 @@ export async function onRequest(context) {
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
-    const accessToken = headers.get('Cf-Access-Jwt-Assertion')
-        || readCookie(headers.get('Cookie'))
-        || readBearerToken(headers.get('Authorization'));
+    // 前端会在本地保存最新的 Access JWT。优先使用显式 Authorization，避免
+    // Cloudflare 注入的旧 Cf-Access-Jwt-Assertion 覆盖刚刷新过的令牌。
+    const accessToken = readBearerToken(headers.get('Authorization'))
+        || headers.get('Cf-Access-Jwt-Assertion')
+        || readCookie(headers.get('Cookie'));
     headers.delete('Authorization');
     if (accessToken) {
         headers.set('Authorization', `Bearer ${accessToken}`);

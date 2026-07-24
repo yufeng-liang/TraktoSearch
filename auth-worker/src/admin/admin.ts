@@ -54,8 +54,8 @@ export async function createFriend(
     `).bind(id, nickname, note || null, maxDevices, currentTime, currentTime).run();
 
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
-        VALUES ('FRIEND_CREATE', ?, ?, 'SUCCESS', ?)
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('FRIEND_CREATE', ?, ?, 'SUCCESS', 'friend_created', ?)
     `).bind(id, requestId, currentTime).run();
 
     return successResponse({ id, nickname, status: 'ACTIVE' }, requestId);
@@ -106,6 +106,7 @@ export async function updateFriend(
         throw new AppError('INVALID_REQUEST', 'No fields to update', 400);
     }
 
+    const changedFields = updates.map((update) => update.split(' = ')[0]).join(',');
     updates.push('updated_at = ?');
     values.push(now());
     values.push(friendId);
@@ -113,6 +114,11 @@ export async function updateFriend(
     await env.DB.prepare(`
         UPDATE friends SET ${updates.join(', ')} WHERE id = ?
     `).bind(...values).run();
+
+    await env.DB.prepare(`
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('FRIEND_UPDATE', ?, ?, 'SUCCESS', ?, ?)
+    `).bind(friendId, requestId, `fields:${changedFields}`, now()).run();
 
     return successResponse({ id: friendId, updated: true }, requestId);
 }
@@ -144,8 +150,8 @@ export async function disableFriend(
     await env.DB.batch(statements);
 
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
-        VALUES ('FRIEND_DISABLE', ?, ?, 'SUCCESS', ?)
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('FRIEND_DISABLE', ?, ?, 'SUCCESS', 'friend_disabled', ?)
     `).bind(friendId, requestId, currentTime).run();
 
     return successResponse({ id: friendId, status: 'DISABLED' }, requestId);
@@ -201,8 +207,8 @@ export async function revokeDevice(
     await env.DB.batch(statements);
 
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, device_id, request_id, result, created_at)
-        VALUES ('DEVICE_REVOKE', ?, ?, 'SUCCESS', ?)
+        INSERT INTO audit_logs (event_type, device_id, request_id, result, detail, created_at)
+        VALUES ('DEVICE_REVOKE', ?, ?, 'SUCCESS', 'device_revoked', ?)
     `).bind(deviceId, requestId, currentTime).run();
 
     return successResponse({ id: deviceId, status: 'REVOKED' }, requestId);
@@ -269,9 +275,9 @@ export async function createInvite(
     `).bind(id, friendId, kind, codeHash, codeMask, expiresAt, currentTime).run();
 
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
-        VALUES ('INVITE_CREATE', ?, ?, 'SUCCESS', ?)
-    `).bind(friendId, requestId, currentTime).run();
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('INVITE_CREATE', ?, ?, 'SUCCESS', ?, ?)
+    `).bind(friendId, requestId, `invite_kind:${kind}`, currentTime).run();
 
     // 注意：明文邀请码只在创建响应中返回一次
     return successResponse({
@@ -322,8 +328,8 @@ export async function revokeInvite(
     }
 
     await env.DB.prepare(`
-        INSERT INTO audit_logs (event_type, friend_id, request_id, result, created_at)
-        VALUES ('INVITE_REVOKE', (SELECT friend_id FROM invites WHERE id = ?), ?, 'SUCCESS', ?)
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('INVITE_REVOKE', (SELECT friend_id FROM invites WHERE id = ?), ?, 'SUCCESS', 'invite_revoked', ?)
     `).bind(inviteId, requestId, currentTime).run();
 
     return successResponse({ id: inviteId, revoked: true }, requestId);
@@ -441,6 +447,10 @@ export async function listAuditLogs(
     const conditions: string[] = [];
     const values: (string | number)[] = [];
 
+    // 审计日志按产品约定只展示最近 90 天，避免历史数据无限膨胀影响后台查询。
+    conditions.push('a.created_at >= ?');
+    values.push(now() - 90 * 24 * 60 * 60);
+
     if (eventType) { conditions.push('a.event_type = ?'); values.push(eventType); }
     if (friendId) { conditions.push('COALESCE(a.friend_id, d.friend_id) = ?'); values.push(friendId); }
     if (deviceId) { conditions.push('a.device_id = ?'); values.push(deviceId); }
@@ -454,18 +464,26 @@ export async function listAuditLogs(
 
     const { results } = await env.DB.prepare(`
         SELECT a.id, a.event_type, a.friend_id, a.device_id, a.request_id, a.result,
-               a.error_code, a.created_at,
+               a.error_code, a.detail, a.created_at,
                f.nickname AS friend_nickname,
                d.device_name AS device_name
         FROM audit_logs a
         LEFT JOIN devices d ON d.id = a.device_id
         LEFT JOIN friends f ON f.id = COALESCE(a.friend_id, d.friend_id)
         ${whereClause}
-        ORDER BY a.created_at DESC
+        ORDER BY a.created_at DESC, a.id DESC
         LIMIT ? OFFSET ?
     `).bind(...values, limit, offset).all();
 
-    return successResponse({ logs: results, limit, offset }, requestId);
+    const countResult = await env.DB.prepare(`
+        SELECT COUNT(*) AS count
+        FROM audit_logs a
+        LEFT JOIN devices d ON d.id = a.device_id
+        ${whereClause}
+    `).bind(...values).first<{ count: number }>();
+    const total = Number(countResult?.count || 0);
+
+    return successResponse({ logs: results, limit, offset, total, hasMore: offset + results.length < total }, requestId);
 }
 
 // GET /admin/health — 网关健康状态
