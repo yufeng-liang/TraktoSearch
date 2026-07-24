@@ -13,6 +13,7 @@ import {
     classifyTraktOAuthError,
     readTraktProxyBody,
 } from './trakt-token';
+import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
 
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 
@@ -29,9 +30,10 @@ export async function handleTraktOAuth(
     const subPath = path.replace('/api/trakt/oauth/', '');
 
     if (subPath === 'authorize' && request.method === 'GET') {
+        const clientId = await new KeyPool('trakt', env.TRAKT_CLIENT_ID, env.KV).pickKey();
         const url = new URL('https://trakt.tv/oauth/authorize');
         url.searchParams.set('response_type', 'code');
-        url.searchParams.set('client_id', env.TRAKT_CLIENT_ID);
+        url.searchParams.set('client_id', clientId);
         url.searchParams.set('redirect_uri', TRAKT_OAUTH_REDIRECT_URI);
         return new Response(JSON.stringify({
             code: 'SUCCESS',
@@ -73,15 +75,20 @@ async function traktExchange(
     }
 
     // 用 Worker Secret 中的 client_secret 交换
-    const tokenResponse = await fetch(`${TRAKT_BASE_URL}/oauth/token`, {
-        method: 'POST',
-        headers: traktOAuthHeaders(env.TRAKT_CLIENT_ID),
-        body: JSON.stringify(buildAuthorizationCodePayload(
-            body.code,
-            env.TRAKT_CLIENT_ID,
-            env.TRAKT_CLIENT_SECRET,
-        )),
-    });
+    const pool = new KeyPool('trakt', env.TRAKT_CLIENT_ID, env.KV);
+    const tokenResponse = await fetchWithKeyRotation(
+        pool,
+        (clientId) => fetch(`${TRAKT_BASE_URL}/oauth/token`, {
+            method: 'POST',
+            headers: traktOAuthHeaders(clientId),
+            body: JSON.stringify(buildAuthorizationCodePayload(
+                body.code,
+                clientId,
+                env.TRAKT_CLIENT_SECRET,
+            )),
+        }),
+        [401, 403, 429],
+    );
 
     if (!tokenResponse.ok) {
         const classification = await classifyTokenResponse(tokenResponse);
@@ -116,15 +123,20 @@ async function traktRefresh(
         throw new AppError('INVALID_REQUEST', 'No Trakt refresh token available', 400);
     }
 
-    const tokenResponse = await fetch(`${TRAKT_BASE_URL}/oauth/token`, {
-        method: 'POST',
-        headers: traktOAuthHeaders(env.TRAKT_CLIENT_ID),
-        body: JSON.stringify(buildRefreshTokenPayload(
-            credentials.refresh_token,
-            env.TRAKT_CLIENT_ID,
-            env.TRAKT_CLIENT_SECRET,
-        )),
-    });
+    const pool = new KeyPool('trakt', env.TRAKT_CLIENT_ID, env.KV);
+    const tokenResponse = await fetchWithKeyRotation(
+        pool,
+        (clientId) => fetch(`${TRAKT_BASE_URL}/oauth/token`, {
+            method: 'POST',
+            headers: traktOAuthHeaders(clientId),
+            body: JSON.stringify(buildRefreshTokenPayload(
+                credentials.refresh_token,
+                clientId,
+                env.TRAKT_CLIENT_SECRET,
+            )),
+        }),
+        [401, 403, 429],
+    );
 
     if (!tokenResponse.ok) {
         const classification = await classifyTokenResponse(tokenResponse);
@@ -164,12 +176,17 @@ export async function handleTraktProxy(
 
     const url = buildTraktProxyUrl(request.url, traktPath);
     const body = await readTraktProxyBody(request);
-
-    const upstreamResponse = await fetch(url, {
-        method: request.method,
-        headers: buildTraktApiHeaders(credentials.access_token, env.TRAKT_CLIENT_ID),
-        body,
-    });
+    const pool = new KeyPool('trakt', env.TRAKT_CLIENT_ID, env.KV);
+    // 业务 API 的 401 代表用户 token 过期，不能拿它误判 client ID 失效。
+    const upstreamResponse = await fetchWithKeyRotation(
+        pool,
+        (clientId) => fetch(url, {
+            method: request.method,
+            headers: buildTraktApiHeaders(credentials.access_token, clientId),
+            body,
+        }),
+        [403, 429],
+    );
 
     // 401 → Trakt token 过期，尝试刷新
     if (upstreamResponse.status === 401) {
@@ -177,11 +194,15 @@ export async function handleTraktProxy(
         if (refreshResult.status === 200) {
             // 重试
             const newCredentials = await getTraktCredentials(env, friendId);
-            const retryResponse = await fetch(url, {
-                method: request.method,
-                headers: buildTraktApiHeaders(newCredentials?.access_token || '', env.TRAKT_CLIENT_ID),
-                body,
-            });
+            const retryResponse = await fetchWithKeyRotation(
+                pool,
+                (clientId) => fetch(url, {
+                    method: request.method,
+                    headers: buildTraktApiHeaders(newCredentials?.access_token || '', clientId),
+                    body,
+                }),
+                [403, 429],
+            );
             return proxyResponse(retryResponse);
         }
     }

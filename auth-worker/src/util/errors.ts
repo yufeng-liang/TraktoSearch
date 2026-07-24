@@ -32,12 +32,17 @@ export const ErrorCode = {
 } as const;
 
 export class AppError extends Error {
+    public readonly code: string;
+    public readonly statusCode: number;
+
     constructor(
-        public code: string,
+        code: string,
         message: string,
-        public statusCode: number = 400
+        statusCode: number = 400
     ) {
         super(message);
+        this.code = code;
+        this.statusCode = statusCode;
         this.name = 'AppError';
     }
 }

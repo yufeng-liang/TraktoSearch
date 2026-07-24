@@ -1,8 +1,8 @@
 // 豆瓣代理
 
 import { Env } from '../index';
-import { AppError } from '../util/errors';
 import { buildDoubanHeaders } from './douban-token';
+import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
 
 const DOUBAN_BASE_URL = 'https://douban-movie-api.pages.dev';
 
@@ -16,18 +16,26 @@ export async function handleDoubanProxy(
     // 保留原热榜服务的 `api/chart`、`api/weekly` 等路径。
     const doubanPath = path.replace(DOUBAN_PREFIX, '');
 
-    const url = new URL(`${DOUBAN_BASE_URL}/${doubanPath}`);
-    // 复制客户端查询参数
     const clientUrl = new URL(request.url);
-    for (const [key, value] of clientUrl.searchParams) {
-        url.searchParams.set(key, value);
-    }
-
-    const upstreamResponse = await fetch(url.toString(), {
-        method: request.method,
-        headers: buildDoubanHeaders(env.DOUBAN_API_KEY),
-        body: request.method !== 'GET' ? await request.blob() : undefined,
-    });
+    const body = request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : await request.arrayBuffer();
+    const pool = new KeyPool('douban', env.DOUBAN_API_KEY, env.KV);
+    const upstreamResponse = await fetchWithKeyRotation(
+        pool,
+        async (key) => {
+            const url = new URL(`${DOUBAN_BASE_URL}/${doubanPath}`);
+            for (const [queryKey, value] of clientUrl.searchParams) {
+                url.searchParams.set(queryKey, value);
+            }
+            return fetch(url.toString(), {
+                method: request.method,
+                headers: buildDoubanHeaders(key),
+                body,
+            });
+        },
+        [401, 403, 429],
+    );
 
     return proxyResponse(upstreamResponse);
 }

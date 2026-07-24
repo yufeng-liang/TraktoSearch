@@ -1,7 +1,7 @@
 // OMDb 代理
 
 import { Env } from '../index';
-import { AppError } from '../util/errors';
+import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
 
 const OMDB_BASE_URL = 'https://www.omdbapi.com/';
 
@@ -12,24 +12,27 @@ export async function handleOmdbProxy(
     env: Env,
     path: string
 ): Promise<Response> {
-    const url = new URL(OMDB_BASE_URL);
-    url.searchParams.set('apikey', env.OMDB_API_KEY);
-
-    // 复制客户端查询参数
     const clientUrl = new URL(request.url);
-    for (const [key, value] of clientUrl.searchParams) {
-        if (key !== 'apikey') {
-            url.searchParams.set(key, value);
-        }
-    }
-
-    const upstreamResponse = await fetch(url.toString(), {
-        method: request.method,
-        headers: {
-            'Accept': 'application/json',
+    const body = request.method === 'GET' || request.method === 'HEAD'
+        ? undefined
+        : await request.arrayBuffer();
+    const pool = new KeyPool('omdb', env.OMDB_API_KEY, env.KV);
+    const upstreamResponse = await fetchWithKeyRotation(
+        pool,
+        async (key) => {
+            const url = new URL(OMDB_BASE_URL);
+            url.searchParams.set('apikey', key);
+            for (const [queryKey, value] of clientUrl.searchParams) {
+                if (queryKey !== 'apikey') url.searchParams.set(queryKey, value);
+            }
+            return fetch(url.toString(), {
+                method: request.method,
+                headers: { 'Accept': 'application/json' },
+                body,
+            });
         },
-        body: request.method !== 'GET' ? await request.blob() : undefined,
-    });
+        [401, 403, 429],
+    );
 
     return proxyResponse(upstreamResponse);
 }
