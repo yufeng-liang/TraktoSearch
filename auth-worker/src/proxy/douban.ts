@@ -12,7 +12,8 @@ export async function handleDoubanProxy(
     env: Env,
     path: string
 ): Promise<Response> {
-    const doubanPath = path.replace(DOUBAN_PREFIX, '');
+    // 兼容旧版 App 的 `api/chart` 形式，避免拼出 `/v2/api/chart` 这种无效地址。
+    const doubanPath = path.replace(DOUBAN_PREFIX, '').replace(/^api\//, '');
 
     const url = new URL(`${DOUBAN_BASE_URL}/${doubanPath}`);
     url.searchParams.set('apikey', env.DOUBAN_API_KEY);
