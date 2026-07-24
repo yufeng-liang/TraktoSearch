@@ -10,6 +10,9 @@
     <string name="auth_error_invalid_invite">招待コードが無効です。</string>
     <string name="auth_error_invite_expired">招待コードの有効期限が切れています。</string>
     <string name="auth_error_device_limit">デバイス上限に達しました。</string>
+    <string name="auth_error_migration_device_not_found">移行には既存の登録デバイスが必要です。</string>
+    <string name="auth_error_migration_device_mismatch">このデバイスは別の友達に属しています。</string>
+    <string name="auth_error_device_already_bound">このデバイスはすでに登録されています。</string>
     <string name="auth_error_friend_disabled">このアクセスは無効化されています。</string>
     <string name="auth_error_generic">有効化に失敗しました。もう一度お試しください。</string>
 

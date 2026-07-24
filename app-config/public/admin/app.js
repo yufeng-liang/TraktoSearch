@@ -258,7 +258,9 @@ const API = {
         const data = contentType.includes('application/json') ? await response.json() : null;
 
         if (!response.ok) {
-            throw new Error(data?.message || `Request failed (${response.status})`);
+            const error = new Error(data?.message || `Request failed (${response.status})`);
+            error.code = data?.code;
+            throw error;
         }
         if (!data || !Object.prototype.hasOwnProperty.call(data, 'data')) {
             throw new Error('Invalid server response');
@@ -359,9 +361,17 @@ const state = {
 };
 
 // ===== Utils =====
+function toDateMs(value) {
+    const timestamp = Number(value);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return null;
+    return timestamp < 1e12 ? timestamp * 1000 : timestamp;
+}
+
 function formatTime(ts) {
     if (!ts) return '—';
-    const diff = Date.now() - ts;
+    const dateMs = toDateMs(ts);
+    if (!dateMs) return '无';
+    const diff = Date.now() - dateMs;
     if (diff < 60000) return '刚刚';
     if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
     if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
@@ -370,8 +380,9 @@ function formatTime(ts) {
 }
 
 function formatDate(ts) {
+    const dateMs = toDateMs(ts);
     if (!ts) return '长期有效';
-    return new Date(ts).toLocaleDateString('zh-CN');
+    return dateMs ? new Date(dateMs).toLocaleDateString('zh-CN') : '长期有效';
 }
 
 function escapeHtml(value) {
@@ -383,8 +394,18 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
-function errorMessage(error) {
+function legacyErrorMessage(error) {
     return error instanceof Error && error.message ? error.message : '请求失败';
+}
+
+function errorMessage(error) {
+    const codeMessages = {
+        MIGRATION_DEVICE_NOT_FOUND: '迁移邀请码需要已有绑定设备，请改选激活',
+        MIGRATION_DEVICE_MISMATCH: '该设备不属于此朋友，无法迁移',
+        DEVICE_ALREADY_BOUND: '此设备已绑定，请改用激活邀请码或先撤销原绑定',
+    };
+    if (error?.code && codeMessages[error.code]) return codeMessages[error.code];
+    return legacyErrorMessage(error);
 }
 
 function showFormError(form, message) {
@@ -750,7 +771,7 @@ function renderFriendDetail(container) {
                 </div>
             </div>
         `;
-        content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname));
+        content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname, f.devices));
         content.querySelector('#disableBtn')?.addEventListener('click', () => showDisableFriendModal(f.id, f.nickname, f.devices));
         content.querySelectorAll('.js-revoke-device').forEach(button => {
             button.addEventListener('click', () => showRevokeDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
@@ -912,7 +933,7 @@ function showCreateFriendModal() {
     });
 }
 
-function showCreateInviteModal(friendId, friendName) {
+function showCreateInviteModal(friendId, friendName, activeDeviceCount = 0) {
     const form = document.createElement('form');
     form.innerHTML = `
         <div class="form-group"><label class="form-label">邀请类型</label>
@@ -936,6 +957,17 @@ function showCreateInviteModal(friendId, friendName) {
     submitBtn.textContent = '生成邀请码';
     bindSubmitButton(form, submitBtn);
 
+    const updateInviteKindState = () => {
+        const isMigration = form.kind.value === 'MIGRATION';
+        const blocked = isMigration && Number(activeDeviceCount) < 1;
+        if (blocked) {
+            showFormError(form, '迁移邀请码需要已有绑定设备，请改选激活');
+        } else {
+            clearFormError(form);
+        }
+        submitBtn.disabled = blocked;
+    };
+
     modal.open({
         title: `生成邀请码 · ${friendName}`,
         body: form,
@@ -946,9 +978,15 @@ function showCreateInviteModal(friendId, friendName) {
     });
 
     modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
+    form.kind.addEventListener('change', updateInviteKindState);
+    updateInviteKindState();
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (form.kind.value === 'MIGRATION' && Number(activeDeviceCount) < 1) {
+            updateInviteKindState();
+            return;
+        }
         submitBtn.disabled = true;
         submitBtn.textContent = '生成中...';
         const kind = form.kind.value;
@@ -959,8 +997,8 @@ function showCreateInviteModal(friendId, friendName) {
             if (!code) throw new Error('服务器未返回邀请码');
             showInviteCodeResult(code, invite.expiresAt);
         } catch (err) {
-            submitBtn.disabled = false;
             submitBtn.textContent = '生成邀请码';
+            updateInviteKindState();
             showToast('生成失败: ' + errorMessage(err), 'error');
         }
     });
@@ -971,7 +1009,7 @@ function showInviteCodeResult(code, expiresAt) {
     body.innerHTML = `
         <div class="invite-warning">⚠️ 此邀请码只显示一次，关闭此窗口后无法再次查看。请立即复制并发送给朋友。</div>
         <div class="invite-code-box"><div class="invite-code" id="inviteCodeDisplay">${escapeHtml(code)}</div></div>
-        <p style="font-size:12px;color:var(--text-dim);text-align:center">有效期至 ${new Date(expiresAt).toLocaleDateString('zh-CN')}</p>
+        <p style="font-size:12px;color:var(--text-dim);text-align:center">有效期至 ${formatDate(expiresAt)}</p>
     `;
 
     const copyBtn = document.createElement('button');

@@ -77,6 +77,9 @@ fun AuthScreen(
 }
 
 private fun authErrorString(error: String): Int = when {
+    error.contains("MIGRATION_DEVICE_NOT_FOUND") -> R.string.auth_error_migration_device_not_found
+    error.contains("MIGRATION_DEVICE_MISMATCH") -> R.string.auth_error_migration_device_mismatch
+    error.contains("DEVICE_ALREADY_BOUND") -> R.string.auth_error_device_already_bound
     error.contains("DEVICE_LIMIT_REACHED") -> R.string.auth_error_device_limit
     error.contains("INVITE_EXPIRED") -> R.string.auth_error_invite_expired
     error.contains("FRIEND_DISABLED") -> R.string.auth_error_friend_disabled

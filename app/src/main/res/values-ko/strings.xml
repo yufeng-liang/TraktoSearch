@@ -10,6 +10,9 @@
     <string name="auth_error_invalid_invite">초대 코드가 올바르지 않습니다.</string>
     <string name="auth_error_invite_expired">초대 코드가 만료되었습니다.</string>
     <string name="auth_error_device_limit">기기 한도에 도달했습니다.</string>
+    <string name="auth_error_migration_device_not_found">마이그레이션하려면 기존에 등록된 기기가 필요합니다.</string>
+    <string name="auth_error_migration_device_mismatch">이 기기는 다른 친구에 속해 있습니다.</string>
+    <string name="auth_error_device_already_bound">이 기기는 이미 등록되어 있습니다.</string>
     <string name="auth_error_friend_disabled">이 접근 권한은 비활성화되었습니다.</string>
     <string name="auth_error_generic">활성화하지 못했습니다. 다시 시도하세요.</string>
 

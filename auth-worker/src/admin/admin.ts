@@ -239,6 +239,20 @@ export async function createInvite(
     if (kind !== 'ACTIVATION' && kind !== 'MIGRATION') {
         throw new AppError('INVALID_REQUEST', 'kind must be ACTIVATION or MIGRATION', 400);
     }
+    if (kind === 'MIGRATION') {
+        const activeDevice = await env.DB.prepare(`
+            SELECT id FROM devices
+            WHERE friend_id = ? AND status = 'ACTIVE'
+            LIMIT 1
+        `).bind(friendId).first<{ id: string }>();
+        if (!activeDevice) {
+            throw new AppError(
+                'MIGRATION_DEVICE_NOT_FOUND',
+                'Migration invite requires an existing active device',
+                400
+            );
+        }
+    }
     if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
         throw new AppError('INVALID_REQUEST', 'expiresInDays must be an integer between 1 and 365', 400);
     }
