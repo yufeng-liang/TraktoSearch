@@ -14,6 +14,7 @@ import {
     readTraktProxyBody,
 } from './trakt-token';
 import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
+import { firstRow } from '../util/db';
 
 const TRAKT_BASE_URL = 'https://api.trakt.tv';
 
@@ -270,9 +271,9 @@ async function getTraktCredentials(
     env: Env,
     friendId: string
 ): Promise<TraktTokens | null> {
-    const result = await env.DB.prepare(`
+    const result = await firstRow<{ ciphertext: string }>(env.DB.prepare(`
         SELECT ciphertext FROM trakt_credentials WHERE friend_id = ?
-    `).bind(friendId).first<{ ciphertext: string }>();
+    `).bind(friendId));
 
     if (!result) return null;
 

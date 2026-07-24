@@ -3,6 +3,7 @@
 import { AppError, successResponse, now } from '../util/errors';
 import { sha256, generateSecureToken, generateId } from '../util/crypto';
 import { signAccessToken } from '../util/jwt';
+import { firstRow } from '../util/db';
 
 interface ActivateRequest {
     inviteCode: string;
@@ -37,17 +38,17 @@ export async function handleActivate(
     const currentTime = now();
 
     // 查找有效邀请码
-    const invite = await env.DB.prepare(`
+    const invite = await firstRow<{
+        id: string; friend_id: string; kind: string; expires_at: number;
+        used_at: number | null; revoked_at: number | null;
+        friend_status: string; max_devices: number; friend_expires_at: number | null;
+    }>(env.DB.prepare(`
         SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at,
                f.status as friend_status, f.max_devices, f.expires_at as friend_expires_at
         FROM invites i
         JOIN friends f ON i.friend_id = f.id
         WHERE i.code_hash = ?
-    `).bind(codeHash).first<{
-        id: string; friend_id: string; kind: string; expires_at: number;
-        used_at: number | null; revoked_at: number | null;
-        friend_status: string; max_devices: number; friend_expires_at: number | null;
-    }>();
+    `).bind(codeHash));
 
     if (!invite) {
         throw new AppError('INVALID_INVITE', 'Invite code not found', 400);
@@ -73,11 +74,11 @@ export async function handleActivate(
     }
 
     // 检查设备上限（事务中）
-    const existingDevice = await env.DB.prepare(`
+    const existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
         SELECT id, friend_id, status
         FROM devices
         WHERE public_key = ?
-    `).bind(body.publicKey).first<{ id: string; friend_id: string; status: string }>();
+    `).bind(body.publicKey));
 
     if (invite.kind === 'MIGRATION' && !existingDevice) {
         throw new AppError('MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', 400);

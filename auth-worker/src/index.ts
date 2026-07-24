@@ -1,6 +1,6 @@
 // auth-worker 主入口
 
-import { successResponse, errorResponse, AppError, generateRequestId } from './util/errors';
+import { successResponse, errorResponse, AppError, generateRequestId, isAppError } from './util/errors';
 import { verifyAccessToken } from './util/jwt';
 import { handleActivate } from './auth/activate';
 import { handleChallenge } from './auth/challenge';
@@ -76,7 +76,7 @@ export default {
             // 添加 CORS 头
             return addCorsHeaders(response);
         } catch (err) {
-            if (err instanceof AppError) {
+            if (isAppError(err)) {
                 return addCorsHeaders(errorResponse(err, requestId));
             }
             console.error('Unhandled error:', err);

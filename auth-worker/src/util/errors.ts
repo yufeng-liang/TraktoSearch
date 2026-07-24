@@ -47,6 +47,19 @@ export class AppError extends Error {
     }
 }
 
+/**
+ * Worker 在异步边界或模块边界捕获错误时，不能只依赖 instanceof。
+ * 保留结构化检查，确保业务错误不会被误报成 INTERNAL_ERROR。
+ */
+export function isAppError(error: unknown): error is AppError {
+    if (error instanceof AppError) return true;
+    if (!error || typeof error !== 'object') return false;
+    const candidate = error as Partial<AppError> & { name?: unknown };
+    return candidate.name === 'AppError'
+        && typeof candidate.code === 'string'
+        && typeof candidate.statusCode === 'number';
+}
+
 // 统一响应格式
 export interface ApiResponse<T = unknown> {
     code: string;

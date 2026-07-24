@@ -1,6 +1,7 @@
 // POST /api/auth/check — 每日在线校验
 
 import { AppError, successResponse, now } from '../util/errors';
+import { firstRow } from '../util/db';
 
 interface CheckResponse {
     authorized: boolean;
@@ -21,16 +22,16 @@ export async function handleCheck(
     const currentTime = now();
 
     // 查询朋友 + 设备状态
-    const result = await env.DB.prepare(`
+    const result = await firstRow<{
+        friend_id: string; nickname: string; friend_status: string;
+        device_id: string; device_status: string;
+    }>(env.DB.prepare(`
         SELECT f.id as friend_id, f.nickname, f.status as friend_status,
                d.id as device_id, d.status as device_status
         FROM friends f
         JOIN devices d ON d.friend_id = f.id
         WHERE f.id = ? AND d.id = ?
-    `).bind(payload.sub, payload.device).first<{
-        friend_id: string; nickname: string; friend_status: string;
-        device_id: string; device_status: string;
-    }>();
+    `).bind(payload.sub, payload.device));
 
     if (!result) {
         throw new AppError('UNAUTHORIZED', 'Friend or device not found', 401);

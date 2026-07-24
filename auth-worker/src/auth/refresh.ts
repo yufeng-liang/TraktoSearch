@@ -3,6 +3,7 @@
 import { AppError, successResponse, now } from '../util/errors';
 import { sha256, generateSecureToken, generateId } from '../util/crypto';
 import { signAccessToken } from '../util/jwt';
+import { firstRow } from '../util/db';
 
 interface RefreshRequest {
     deviceId: string;
@@ -42,18 +43,18 @@ export async function handleRefresh(
     await env.KV.delete(`challenge:${nonceHash}`);
 
     // 查找刷新会话
-    const session = await env.DB.prepare(`
+    const session = await firstRow<{
+        id: string; device_id: string; expires_at: number; revoked_at: number | null;
+        token_hash: string; device_status: string; public_key: string;
+        friend_id: string; friend_status: string;
+    }>(env.DB.prepare(`
         SELECT rs.id, rs.device_id, rs.expires_at, rs.revoked_at, rs.token_hash,
                d.status as device_status, d.public_key, d.friend_id, f.status as friend_status
         FROM refresh_sessions rs
         JOIN devices d ON rs.device_id = d.id
         JOIN friends f ON d.friend_id = f.id
         WHERE rs.device_id = ? AND rs.token_hash = ?
-    `).bind(body.deviceId, tokenHash).first<{
-        id: string; device_id: string; expires_at: number; revoked_at: number | null;
-        token_hash: string; device_status: string; public_key: string;
-        friend_id: string; friend_status: string;
-    }>();
+    `).bind(body.deviceId, tokenHash));
 
     if (!session) {
         // 令牌不存在 — 可能是重放攻击

@@ -2,6 +2,7 @@
 
 import { AppError, successResponse, now } from '../util/errors';
 import { generateSecureToken, generateId, sha256 } from '../util/crypto';
+import { firstRow } from '../util/db';
 
 interface ChallengeRequest {
     deviceId: string;
@@ -24,9 +25,9 @@ export async function handleChallenge(
     }
 
     // 验证设备存在且活跃
-    const device = await env.DB.prepare(`
+    const device = await firstRow<{ id: string; status: string }>(env.DB.prepare(`
         SELECT id, status FROM devices WHERE id = ?
-    `).bind(body.deviceId).first<{ id: string; status: string }>();
+    `).bind(body.deviceId));
 
     if (!device) {
         throw new AppError('DEVICE_NOT_FOUND', 'Device not found', 404);
