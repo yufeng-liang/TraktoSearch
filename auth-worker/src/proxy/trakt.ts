@@ -38,6 +38,15 @@ export async function handleTraktOAuth(
     if (subPath === 'refresh' && request.method === 'POST') {
         return traktRefresh(request, env, friendId);
     }
+    if (subPath === 'disconnect' && request.method === 'POST') {
+        await env.DB.prepare('DELETE FROM trakt_credentials WHERE friend_id = ?').bind(friendId).run();
+        return new Response(JSON.stringify({
+            code: 'SUCCESS',
+            message: 'OK',
+            requestId,
+            data: { success: true },
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);
 }

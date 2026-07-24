@@ -1907,6 +1907,22 @@ class TraktRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
+    /**
+     * 启动时检查当前网关朋友是否已经连接 Trakt。
+     *
+     * 这里必须绕过用户资料缓存：网关授权和 Trakt OAuth 是两套独立会话，
+     * 不能因为上一个账号留下的本地资料缓存就误判当前账号已登录。
+     */
+    suspend fun checkTraktConnection(): Boolean {
+        return try {
+            traktApiService.getUserProfile().isSuccessful
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     suspend fun clearUserProfileCache() {
         userProfileCache = null
         userProfileStorage.clear()

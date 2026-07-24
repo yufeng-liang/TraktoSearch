@@ -28,6 +28,9 @@ interface AuthApiService {
     @POST("api/trakt/oauth/refresh")
     suspend fun refreshTrakt(): Response<GatewayResponse<GatewaySuccessResponse>>
 
+    @POST("api/trakt/oauth/disconnect")
+    suspend fun disconnectTrakt(): Response<GatewayResponse<GatewaySuccessResponse>>
+
     @GET("api/trakt/oauth/authorize")
     suspend fun getTraktAuthorizeUrl(): Response<GatewayResponse<TraktAuthorizeResponse>>
 }

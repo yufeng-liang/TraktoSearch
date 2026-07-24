@@ -61,9 +61,9 @@ import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
@@ -135,10 +135,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Inject
-    lateinit var tokenStorage: TokenStorage
+    lateinit var authManager: AuthManager
 
     @Inject
-    lateinit var authManager: AuthManager
+    lateinit var traktAuthManager: TraktAuthManager
 
     @Inject
     lateinit var guestModeStorage: GuestModeStorage
@@ -194,20 +194,23 @@ class MainActivity : AppCompatActivity() {
         var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        var isTraktConnected by mutableStateOf(false)
 
         lifecycleScope.launch {
             val splashStartTime = System.currentTimeMillis()
             authManager.initialize()
             val authState = authManager.authState.value
             val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
-            val isValid = tokenStorage.isTokenValid()
-            val isGuest = false
+            // 网关激活与 Trakt OAuth 是两套独立会话。启动时必须真实检查 Trakt，
+            // 否则激活成功会被误当成 Trakt 已登录，直接跳过原有登录页。
+            isTraktConnected = isAuthorized && traktRepository.checkTraktConnection()
             startDest = when {
-                isAuthorized -> Routes.MAIN
-                else -> Routes.AUTH
+                !isAuthorized -> Routes.AUTH
+                isTraktConnected -> Routes.MAIN
+                else -> Routes.LOGIN
             }
             // 已登录时读取用户设置的默认启动页，未登录时使用搜索页（0）
-            initialTab = if (isAuthorized) {
+            initialTab = if (isTraktConnected) {
                 defaultTabStorage.defaultTab.first()
             } else {
                 0
@@ -221,7 +224,7 @@ class MainActivity : AppCompatActivity() {
 
             // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
             val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
-            if (isAuthorized) {
+            if (isTraktConnected) {
                 prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) } })
                 prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
                 prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
@@ -264,21 +267,15 @@ class MainActivity : AppCompatActivity() {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
-                        com.tracktosearch.ui.navigation.AuthStateHolder(authManager)
+                        com.tracktosearch.ui.navigation.AuthStateHolder(authManager, traktAuthManager)
                     }
                     AppNavigation(
                         startDestination = currentDestination,
                         initialTab = initialTab,
+                        initialTraktLoggedIn = isTraktConnected,
                         authStateHolder = authStateHolder,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN
-                        },
-                        onLogout = {
-                            lifecycleScope.launch {
-                                tokenStorage.clearTokens()
-                                guestModeStorage.setGuestMode(false)
-                                currentDestination = Routes.LOGIN
-                            }
                         }
                     )
                 } else {

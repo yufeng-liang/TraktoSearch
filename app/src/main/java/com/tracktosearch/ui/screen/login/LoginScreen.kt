@@ -44,8 +44,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
+import com.tracktosearch.data.repository.TraktRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -66,7 +66,7 @@ enum class LoginState {
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     val authManager: TraktAuthManager,
-    private val tokenStorage: TokenStorage
+    private val traktRepository: TraktRepository
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow(LoginState.IDLE)
@@ -80,8 +80,7 @@ class LoginViewModel @Inject constructor(
      * 用于「从豆瓣导入」按钮前置校验:未登录 Trakt 时引导用户先登录。
      */
     suspend fun isTraktLoggedIn(): Boolean {
-        val token = tokenStorage.getCachedAccessToken() ?: return false
-        return tokenStorage.isTokenValid()
+        return traktRepository.checkTraktConnection()
     }
 
     fun startAuthorization() {
