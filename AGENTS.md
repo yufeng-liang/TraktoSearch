@@ -99,6 +99,7 @@
 - Pages 受 Cloudflare Access 保护时，未带登录 Cookie 的 `curl`/`Invoke-WebRequest` 可能只拿到 302 或登录 HTML，不能据此判断页面代码未更新。应在已登录浏览器中强制刷新，或直接检查部署哈希 URL 的资源内容。
 - Worker 部署后记录版本 ID，并至少验证健康检查和本次变更涉及的 API；Pages 与 Worker 的部署成功不等于业务流程已验证。
 - Wrangler 部署若超时或长时间无输出，不能直接判定成功或失败：先检查并结束本次残留的 `wrangler`/`node` 子进程，再分别用直连和 Clash 代理重试。Windows Clash 常见 HTTP 代理为 `http://127.0.0.1:7890`，只在当前命令临时设置 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`，不要写入全局配置；重试后仍须记录 Worker 版本 ID、Pages 的 Production/master 记录和健康检查结果。
+- Pages Functions 必须从 `app-config` 项目根目录部署（或显式指定该目录的配置），确保读取 `app-config/wrangler.toml` 并上传 `functions/`；从其他目录直接上传 `public` 可能只发布静态文件，导致 `/admin-api/*` 返回 HTML/Access 页面并触发前端 `Invalid server response`。部署后应在部署哈希域名请求 `/admin-api/admin/health`，未登录时应返回 JSON `401`，而不是 HTML。
 
 ## Android ADB 设备核验经验
 
