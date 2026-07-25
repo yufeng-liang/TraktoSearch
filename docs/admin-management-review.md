@@ -15,7 +15,7 @@
 3. 页面渲染和数据请求缺少取消、超时、分页及部分失败降级。
 4. 玻璃拟态、动态背景和多层滤镜对后台重复操作场景偏重，移动端和辅助功能仍需完善。
 
-截至本轮优化，时间处理、请求生命周期、仪表盘局部失败、朋友列表分页、朋友详情按需查询、无障碍基础语义和移动端侧栏交互已经完成代码级修复。仍需产品确认的只有两项：禁用朋友是否允许恢复，以及是否把后台视觉方向收敛为更系统化、信息密度优先的管理工具。
+截至本轮优化，时间处理、请求生命周期、仪表盘局部失败、朋友列表分页、朋友详情按需查询、无障碍基础语义、移动端侧栏交互、朋友重新启用和依赖漏洞修复已经完成代码级处理。产品已确认：允许重新启用朋友，但只恢复朋友状态，不恢复已撤销设备和会话；后台视觉收敛为系统化、信息密度优先的管理工具。
 
 ## 已完成优化
 
@@ -26,16 +26,19 @@
 - 修复 Toast 动画单位；补充 Toast 状态播报、当前导航、表单标签/错误关联、筛选控件名称和配色按钮展开状态。
 - 移动端侧栏增加遮罩、`Escape` 关闭、焦点恢复和 `aria-expanded`；邀请码复制增加传统 `execCommand` fallback。
 - `prefers-reduced-motion` 下关闭主内容平滑滚动、背景和节点动画。
+- 禁用朋友支持幂等重新启用；启用只更新朋友状态，保留已撤销设备和会话状态，并写入 `FRIEND_ENABLE` 审计日志。
+- 管理后台降低背景光晕、噪声纹理、玻璃滤镜和卡片位移动效；移动端关闭 `backdrop-filter`，移除未使用的 Space Grotesk 字体请求。
+- `auth-worker` 将 Wrangler 升级到 `4.114.0`、Workers 类型升级到 `5.20260724.1`，修复依赖树中的已知漏洞。
 
 ## 二、必须修复
 
-### P1：禁用朋友后无法启用
+### 已完成：禁用朋友后无法启用
 
 页面文案提示禁用后可以手动启用，但前端没有启用按钮，Worker 也只有 disable 路由。该状态实际成为不可逆操作，属于功能缺口。
 
 涉及：`app-config/public/admin/app.js`、`auth-worker/src/index.ts`、`auth-worker/src/admin/admin.ts`。
 
-处理方式：先确认产品是否允许恢复；若允许，新增幂等的 enable API、审计事件、前端确认流程和测试。
+处理方式：已确认允许恢复，新增幂等的 `POST /admin/friends/:id/enable` API、`FRIEND_ENABLE` 审计事件、前端确认流程和回归测试。启用不会恢复已撤销设备和会话，管理员需要重新生成邀请码并重新绑定设备。
 
 ### 已完成：超过 30 天的时间显示错误
 
@@ -65,7 +68,7 @@
 
 ## 四、UI/UX 优化
 
-建议将后台定位为“系统化、密度适中的管理工具”，保留品牌色和少量层次感，减少大面积动态光晕、噪声纹理和高强度 backdrop-filter。
+已将后台定位为“系统化、密度适中的管理工具”，保留品牌色和少量层次感，减少大面积动态光晕、噪声纹理和高强度 `backdrop-filter`。
 
 - 修复 Toast 动画 `250cm` 无效单位，应为 `250ms`。
 - 表单标签补充 `for`/`id` 关联、`autocomplete`、错误字段关联和键盘焦点。
@@ -75,6 +78,7 @@
 - 列表筛选条件写入 URL，支持刷新、返回和复制当前视图。
 - 邀请码复制增加 Clipboard API 不可用时的自动选中和手动复制 fallback。
 - 遵守 `prefers-reduced-motion`，同时关闭平滑滚动和动态背景。
+- 卡片圆角统一为 8px，统计卡片 hover 不再产生位移，降低重复操作中的视觉干扰。
 
 ## 五、性能与鲁棒性
 
@@ -88,17 +92,19 @@
 
 ## 六、验证基线
 
-- `node --test app-config/tests/admin-ui.test.mjs app-config/tests/admin-api.test.mjs`：28/28 通过。
+- `node --test app-config/tests/admin-ui.test.mjs app-config/tests/admin-api.test.mjs`：30/30 通过。
 - `node --check app-config/public/admin/app.js`：通过。
-- `npm run typecheck`（`auth-worker`）：通过；此前因依赖未安装，已在 `auth-worker` 执行 `npm ci --ignore-scripts` 后完成。
-- `git diff --check`：通过。
+- `npm run typecheck`（`auth-worker`）：通过。
+- `npm audit --json`：0 vulnerabilities。
+- `npm audit --omit=dev --json`：0 vulnerabilities。
+- `git diff --check`：通过；仅有 Git 的 LF/CRLF 转换提示。
 
-`npm ci` 报告了依赖树中的 6 个漏洞（2 moderate、4 high），本轮未执行可能引入破坏性升级的 `npm audit fix --force`，需要单独安排依赖升级评估。
+依赖升级将 Wrangler 从 3.x 提升到 4.114.0，并同步 Workers 类型和锁文件。Wrangler 4 要求 Node.js 22 或更高版本；当前验证环境为 Node.js 26.4.0、npm 11.17.0。
 
 ## 七、实施顺序
 
 1. 已完成时间显示、测试契约、Toast 单位、重复渲染、请求取消和分页优化。
 2. 已完成仪表盘局部降级、健康状态语义、朋友详情按需查询和无障碍基础修复。
-3. 等待产品确认后实现朋友启用策略及对应审计/UI。
-4. 视觉方向确认后，处理滤镜降级、CSP 和资源缓存策略。
+3. 已完成朋友启用策略及对应审计/UI，明确不恢复已撤销设备和会话。
+4. 已完成视觉滤镜、噪声和动效降级；CSP 和资源缓存策略仍是后续部署加固项。
 5. 补充真实运行时验收：登录、列表、创建、编辑、禁用/启用、邀请码、撤销、审计和异常网络场景。

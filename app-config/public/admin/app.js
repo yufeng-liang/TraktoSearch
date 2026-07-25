@@ -438,6 +438,10 @@ const API = {
     async disableFriend(friendId) {
         return this.post(`/admin/friends/${friendId}/disable`, {});
     },
+
+    async enableFriend(friendId) {
+        return this.post(`/admin/friends/${friendId}/enable`, {});
+    },
 };
 
 // ===== State =====
@@ -981,8 +985,9 @@ function renderFriendDetail(container, renderToken) {
         const disableButton = title.querySelector('#disableBtn');
         editButton.hidden = false;
         disableButton.hidden = false;
-        disableButton.disabled = f.status === 'DISABLED';
-        disableButton.textContent = f.status === 'DISABLED' ? '已禁用' : '禁用朋友';
+        disableButton.disabled = false;
+        disableButton.className = `btn btn-sm detail-disable-btn ${f.status === 'DISABLED' ? 'btn-primary' : 'btn-danger'}`;
+        disableButton.textContent = f.status === 'DISABLED' ? '重新启用朋友' : '禁用朋友';
         content.innerHTML = `
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">基本信息</span><span>${statusBadge(f.status)}</span></div>
@@ -1013,7 +1018,10 @@ function renderFriendDetail(container, renderToken) {
         `;
         editButton.addEventListener('click', () => showEditFriendModal(f));
         content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname, f.devices));
-        disableButton.addEventListener('click', () => showDisableFriendModal(f.id, f.nickname, f.devices));
+        disableButton.addEventListener('click', () => {
+            if (f.status === 'DISABLED') showEnableFriendModal(f.id, f.nickname);
+            else showDisableFriendModal(f.id, f.nickname, f.devices);
+        });
         content.querySelectorAll('.js-revoke-device').forEach(button => {
             button.addEventListener('click', () => showRevokeDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
         });
@@ -1155,6 +1163,7 @@ function renderAudit(container, renderToken) {
             <option value="REFRESH_REPLAY">重放检测</option>
             <option value="DEVICE_REVOKE">撤销设备</option>
             <option value="FRIEND_DISABLE">禁用朋友</option>
+            <option value="FRIEND_ENABLE">启用朋友</option>
             <option value="FRIEND_CREATE">创建朋友</option>
             <option value="FRIEND_UPDATE">更新朋友</option>
             <option value="INVITE_CREATE">生成邀请码</option>
@@ -1599,6 +1608,43 @@ function showDisableFriendModal(friendId, friendName, deviceCount) {
             confirmBtn.disabled = false;
             confirmBtn.textContent = '确认禁用';
             showToast('禁用失败: ' + errorMessage(err), 'error');
+        }
+    });
+}
+
+function showEnableFriendModal(friendId, friendName) {
+    const body = document.createElement('div');
+    body.innerHTML = `
+        <div class="confirm-danger-text">确定要重新启用朋友 <strong>${escapeHtml(friendName)}</strong> 吗？</div>
+        <div class="confirm-danger-impact">启用只恢复朋友状态，不会恢复已撤销设备和会话。需要重新生成邀请码并重新绑定设备。</div>
+    `;
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.textContent = '确认启用';
+
+    modal.open({
+        title: '重新启用朋友',
+        body,
+        footer: [
+            Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
+            confirmBtn,
+        ],
+    });
+
+    modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '启用中...';
+        try {
+            await API.enableFriend(friendId);
+            modal.close();
+            showToast('朋友已重新启用');
+            navigate('friend-detail', { id: state.params.id });
+        } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '确认启用';
+            showToast('启用失败: ' + errorMessage(err), 'error');
         }
     });
 }

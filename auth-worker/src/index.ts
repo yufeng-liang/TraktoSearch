@@ -11,6 +11,7 @@ import {
     createFriend,
     createInvite,
     disableFriend,
+    enableFriend,
     getFriendDetail,
     healthCheck,
     listAuditLogs,
@@ -207,6 +208,12 @@ async function handleAdminApi(
     const disableMatch = path.match(/^\/admin\/friends\/([^/]+)\/disable$/);
     if (disableMatch && request.method === 'POST') {
         return disableFriend(env, requestId, disableMatch[1]);
+    }
+
+    // 重新启用朋友（不会恢复已撤销设备）
+    const enableMatch = path.match(/^\/admin\/friends\/([^/]+)\/enable$/);
+    if (enableMatch && request.method === 'POST') {
+        return enableFriend(env, requestId, enableMatch[1]);
     }
 
     // 设备撤销

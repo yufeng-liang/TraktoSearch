@@ -208,3 +208,23 @@ test('toolbar controls expose accessible names and expanded state', () => {
     assert.match(appSource, /statusFilter.*aria-label/);
     assert.match(appSource, /btn\.setAttribute\('aria-expanded', String\(!panel\.hidden\)\)/);
 });
+
+test('disabled friends can be re-enabled without restoring revoked devices', () => {
+    assert.match(appSource, /API\.enableFriend\(friendId\)/);
+    assert.match(appSource, /重新启用朋友/);
+    assert.match(appSource, /不会恢复已撤销设备和会话/);
+    assert.match(appSource, /FRIEND_ENABLE/);
+    assert.match(workerSource, /export async function enableFriend/);
+    assert.match(workerSource, /UPDATE friends SET status = 'ACTIVE'/);
+    assert.match(workerSource, /VALUES \('FRIEND_ENABLE'/);
+    assert.match(indexSource, /const enableMatch = path\.match/);
+});
+
+test('admin visual system favors stable density over glass and motion cost', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.doesNotMatch(htmlSource, /Space\+Grotesk/);
+    assert.match(stylesSource, /--radius-lg:\s*8px/);
+    assert.match(stylesSource, /\.ambient-blob\s*\{[\s\S]*?animation: none;/);
+    assert.match(stylesSource, /backdrop-filter: blur\(16px\) saturate\(120%\)/);
+    assert.match(stylesSource, /\.glass::before,\s*\.stat-card::after,\s*\.card::after/);
+});

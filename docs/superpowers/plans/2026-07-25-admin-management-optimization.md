@@ -4,7 +4,7 @@
 
 **目标：** 在不改变现有后台技术栈的前提下，修复确定性缺陷，改善请求生命周期、错误降级、数据规模适配、无障碍和移动端体验。
 
-**暂缓决策：** 朋友禁用后是否允许重新启用；后台视觉方向是保留玻璃拟态还是改为系统化/工业化管理风格。
+**已确认决策：** 朋友禁用后允许重新启用，但只恢复朋友状态，不恢复已撤销设备和会话；后台视觉收敛为系统化、信息密度优先的管理风格。
 
 ## 第一批：确定性缺陷
 
@@ -51,9 +51,10 @@
 
 ## 第四批：产品决策后的状态能力
 
-- [ ] 若确认可恢复，新增启用朋友 API。
-- [ ] 新增启用审计事件和前端确认/刷新流程。
-- [ ] 明确禁用、启用、设备撤销和邀请码状态的可逆性文案。
+- [x] 新增启用朋友 API。
+- [x] 新增启用审计事件和前端确认/刷新流程。
+- [x] 明确禁用、启用、设备撤销和邀请码状态的可逆性文案。
+- [x] 启用操作不恢复已撤销设备和会话，前端提示重新生成邀请码并重新绑定设备。
 
 ## 第五批：UI/UX、无障碍和性能
 
@@ -61,13 +62,20 @@
 - [x] 完善移动端侧栏、顶部工具栏、焦点和 Escape 行为。
 - [x] 增加 Clipboard fallback。
 - [x] 为 reduced motion 关闭平滑滚动和动态背景。
-- [ ] 在视觉方向确认后，降低滤镜和噪声成本并统一管理页层级。
+- [x] 在视觉方向确认后，降低滤镜和噪声成本并统一管理页层级。
 - [ ] 增加 CSP 和资源缓存策略。
+
+## 第六批：依赖安全
+
+- [x] 将 Wrangler 升级到 `4.114.0`，同步升级 `@cloudflare/workers-types` 到 `5.20260724.1`。
+- [x] 更新 `auth-worker/package-lock.json`，保留 TypeScript 5.x，避免无关的大版本迁移。
+- [x] `npm audit --json` 和 `npm audit --omit=dev --json` 均为 0 vulnerabilities。
 
 ## 验证命令
 
 ```bash
 node --test app-config/tests/admin-ui.test.mjs app-config/tests/admin-api.test.mjs
 cd auth-worker && npm run typecheck
+cd auth-worker && npm audit --json
 git diff --check
 ```

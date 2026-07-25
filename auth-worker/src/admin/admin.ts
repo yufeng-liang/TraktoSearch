@@ -228,6 +228,34 @@ export async function disableFriend(
     return successResponse({ id: friendId, status: 'DISABLED' }, requestId);
 }
 
+// POST /admin/friends/:id/enable - 恢复朋友资格，不恢复已撤销设备与会话
+export async function enableFriend(
+    env: { DB: D1Database },
+    requestId: string,
+    friendId: string,
+): Promise<Response> {
+    const friend = await env.DB.prepare('SELECT id, status FROM friends WHERE id = ?')
+        .bind(friendId)
+        .first<{ id: string; status: string }>();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+    if (friend.status === 'ACTIVE') {
+        return successResponse({ id: friendId, status: 'ACTIVE', changed: false }, requestId);
+    }
+
+    const currentTime = now();
+    await env.DB.prepare(`
+        UPDATE friends SET status = 'ACTIVE', updated_at = ?
+        WHERE id = ? AND status = 'DISABLED'
+    `).bind(currentTime, friendId).run();
+
+    await env.DB.prepare(`
+        INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+        VALUES ('FRIEND_ENABLE', ?, ?, 'SUCCESS', 'friend_enabled', ?)
+    `).bind(friendId, requestId, currentTime).run();
+
+    return successResponse({ id: friendId, status: 'ACTIVE', changed: true }, requestId);
+}
+
 // GET /admin/friends/:id/devices — 设备列表
 export async function listDevices(
     env: { DB: D1Database },
