@@ -37,6 +37,7 @@ fun PageBackground(
     currentPage: Int,
     pageCount: Int,
     isDark: Boolean,
+    showColorGlow: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
@@ -47,49 +48,51 @@ fun PageBackground(
     val anim3 = remember { Animatable(0f) }
     val anim4 = remember { Animatable(0f) }
 
-    LaunchedEffect(Unit) {
-        launch {
-            while (true) {
-                anim1.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 20000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
+    LaunchedEffect(showColorGlow) {
+        if (showColorGlow) {
+            launch {
+                while (true) {
+                    anim1.animateTo(
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 20000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        )
                     )
-                )
+                }
             }
-        }
-        launch {
-            while (true) {
-                anim2.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 25000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
+            launch {
+                while (true) {
+                    anim2.animateTo(
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 25000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        )
                     )
-                )
+                }
             }
-        }
-        launch {
-            while (true) {
-                anim3.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 22000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
+            launch {
+                while (true) {
+                    anim3.animateTo(
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 22000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        )
                     )
-                )
+                }
             }
-        }
-        launch {
-            while (true) {
-                anim4.animateTo(
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 26000, easing = LinearEasing),
-                        repeatMode = RepeatMode.Reverse
+            launch {
+                while (true) {
+                    anim4.animateTo(
+                        targetValue = 1f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(durationMillis = 26000, easing = LinearEasing),
+                            repeatMode = RepeatMode.Reverse
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -157,12 +160,13 @@ fun PageBackground(
             .fillMaxSize()
             .background(bgGradient)
     ) {
-        Box(
-            modifier = Modifier
-                .width(canvasWidthDp.dp)
-                .fillMaxHeight()
-                .offset(x = offsetX)
-        ) {
+        if (showColorGlow) {
+            Box(
+                modifier = Modifier
+                    .width(canvasWidthDp.dp)
+                    .fillMaxHeight()
+                    .offset(x = offsetX)
+            ) {
             // 蓝紫色光晕（第 0 页右侧 / 第 1 页左侧）
             Orb(
                 size = 300.dp,
@@ -229,6 +233,7 @@ fun PageBackground(
             )
         }
     }
+}
 }
 
 @Composable

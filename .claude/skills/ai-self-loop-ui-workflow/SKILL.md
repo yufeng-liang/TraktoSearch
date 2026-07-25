@@ -27,7 +27,7 @@ description: Use when a UI design has been approved via brainstorming's web prot
 
 ## 环境上下文（本机命令）
 
-> 本机路径，按需调整。adp 路径示例 `H:/android/Sdk/platform-tools/adb.exe`，模拟器序列号示例 `emulator-5554`。
+> 本机路径，按需调整。adb 路径示例 `H:/android/Sdk/platform-tools/adb.exe`，模拟器序列号示例 `emulator-5554`。
 
 ### 编译安装与截图
 

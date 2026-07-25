@@ -247,6 +247,7 @@ fun MainScreen(
         TabData(Icons.Rounded.Person, R.string.tab_me),
         TabData(Icons.Rounded.Settings, R.string.tab_settings)
     )
+    val isDarkTheme = isAppDarkTheme()
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -267,7 +268,8 @@ fun MainScreen(
                 PageBackground(
                     currentPage = selectedTab,
                     pageCount = 4,
-                    isDark = isAppDarkTheme(),
+                    isDark = isDarkTheme,
+                    showColorGlow = !isDarkTheme || selectedTab == 0,
                     modifier = Modifier.fillMaxSize()
                 )
 
