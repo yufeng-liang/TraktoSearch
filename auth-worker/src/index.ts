@@ -11,6 +11,7 @@ import {
     createFriend,
     createInvite,
     disableFriend,
+    getFriendDetail,
     healthCheck,
     listAuditLogs,
     listDevices,
@@ -178,7 +179,7 @@ async function handleAdminApi(
 
     // 朋友管理
     if (path === '/admin/friends' && request.method === 'GET') {
-        return listFriends(env, requestId);
+        return listFriends(request, env, requestId);
     }
     if (path === '/admin/friends' && request.method === 'POST') {
         return createFriend(request, env, requestId);
@@ -186,6 +187,10 @@ async function handleAdminApi(
 
     // 朋友详情操作（/:id）
     const friendMatch = path.match(/^\/admin\/friends\/([^/]+)$/);
+    const friendDetailMatch = path.match(/^\/admin\/friends\/([^/]+)\/detail$/);
+    if (friendDetailMatch && request.method === 'GET') {
+        return getFriendDetail(env, requestId, friendDetailMatch[1]);
+    }
     if (friendMatch && request.method === 'PATCH') {
         return updateFriend(request, env, requestId, friendMatch[1]);
     }

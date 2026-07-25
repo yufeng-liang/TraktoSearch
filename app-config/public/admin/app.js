@@ -196,6 +196,7 @@ const Palettes = {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             panel.hidden = !panel.hidden;
+            btn.setAttribute('aria-expanded', String(!panel.hidden));
         });
 
         panel.addEventListener('click', (e) => {
@@ -203,12 +204,14 @@ const Palettes = {
             if (swatch) {
                 this.apply(swatch.dataset.palette);
                 panel.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
             }
         });
 
         document.addEventListener('click', (e) => {
             if (!panel.contains(e.target) && !btn.contains(e.target)) {
                 panel.hidden = true;
+                btn.setAttribute('aria-expanded', 'false');
             }
         });
     },
@@ -217,6 +220,13 @@ const Palettes = {
 // ===== API Client =====
 // API 根域名（部署时替换为实际 Worker 域名）
 const API_BASE = `${window.location.origin}/admin-api`;
+const REQUEST_TIMEOUT_MS = 15000;
+const activeRequestControllers = new Set();
+
+function cancelPendingRequests() {
+    activeRequestControllers.forEach((controller) => controller.abort());
+    activeRequestControllers.clear();
+}
 
 const API = {
     // Access JWT 优先读取当前域名 Cookie，避免登录切换后复用旧令牌。
@@ -236,11 +246,37 @@ const API = {
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const response = await fetch(`${API_BASE}${path}`, {
-            method,
-            headers,
-            body: body ? JSON.stringify(body) : null,
-        });
+        const controller = new AbortController();
+        activeRequestControllers.add(controller);
+        let timedOut = false;
+        const timeoutId = setTimeout(() => {
+            timedOut = true;
+            controller.abort();
+        }, REQUEST_TIMEOUT_MS);
+        let response;
+        try {
+            response = await fetch(`${API_BASE}${path}`, {
+                method,
+                headers,
+                body: body ? JSON.stringify(body) : null,
+                signal: controller.signal,
+            });
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                if (!timedOut) {
+                    const cancelledError = new Error('Request cancelled');
+                    cancelledError.code = 'REQUEST_CANCELLED';
+                    throw cancelledError;
+                }
+                const timeoutError = new Error('Request timed out');
+                timeoutError.code = 'REQUEST_TIMEOUT';
+                throw timeoutError;
+            }
+            throw error;
+        } finally {
+            clearTimeout(timeoutId);
+            activeRequestControllers.delete(controller);
+        }
 
         // 401 → Access 登录失效，跳转登录
         if (response.status === 401) {
@@ -291,35 +327,54 @@ const API = {
         };
     },
 
-    async getFriends() {
-        const data = await this.get('/admin/friends');
-        return data.friends.map((f) => ({
-            id: f.id,
-            nickname: f.nickname,
-            note: f.note,
-            status: f.status,
-            devices: f.active_devices,
-            maxDevices: f.max_devices,
-            expiresAt: f.expires_at,
-            lastSeen: f.last_seen,
-        }));
+    async getFriends(params = {}) {
+        const query = new URLSearchParams({
+            q: params.q || '',
+            status: params.status || '',
+            limit: String(params.limit || 50),
+            offset: String(params.offset || 0),
+        });
+        const data = await this.get('/admin/friends?' + query);
+        return {
+            friends: (data.friends || []).map((f) => ({
+                id: f.id,
+                nickname: f.nickname,
+                note: f.note,
+                status: f.status,
+                devices: f.active_devices,
+                maxDevices: f.max_devices,
+                expiresAt: f.expires_at,
+                lastSeen: f.last_seen,
+            })),
+            limit: data.limit || Number(params.limit) || 50,
+            offset: data.offset || Number(params.offset) || 0,
+            total: data.total || 0,
+            hasMore: Boolean(data.hasMore),
+        };
     },
 
     async getFriend(id) {
-        // 朋友详情 + 设备列表
-        const friends = await this.getFriends();
-        const f = friends.find((x) => x.id === id);
-        if (!f) throw new Error('NOT_FOUND');
-
-        const deviceData = await this.get(`/admin/friends/${id}/devices`);
-        f.devicesList = deviceData.devices.map((d) => ({
+        const data = await this.get(`/admin/friends/${id}/detail`);
+        const source = data.friend;
+        if (!source) throw new Error('NOT_FOUND');
+        const f = {
+            id: source.id,
+            nickname: source.nickname,
+            note: source.note,
+            status: source.status,
+            devices: source.active_devices,
+            maxDevices: source.max_devices,
+            expiresAt: source.expires_at,
+            lastSeen: source.last_seen,
+            devicesList: (data.devices || []).map((d) => ({
             id: d.id,
             name: d.device_name,
             appVersion: d.app_version,
             lastSeen: d.last_seen_at,
             status: d.status,
             activatedAt: d.activated_at,
-        }));
+            })),
+        };
         return f;
     },
 
@@ -389,6 +444,7 @@ const API = {
 const state = {
     route: 'dashboard',
     params: {},
+    renderToken: 0,
 };
 
 // ===== Utils =====
@@ -407,7 +463,7 @@ function formatTime(ts) {
     if (diff < 3600000) return Math.floor(diff / 60000) + ' 分钟前';
     if (diff < 86400000) return Math.floor(diff / 3600000) + ' 小时前';
     if (diff < 86400000 * 30) return Math.floor(diff / 86400000) + ' 天前';
-    return new Date(ts).toLocaleDateString('zh-CN');
+    return new Date(dateMs).toLocaleDateString('zh-CN');
 }
 
 function formatDate(ts) {
@@ -474,6 +530,7 @@ function errorMessage(error) {
         MIGRATION_DEVICE_MISMATCH: '该设备不属于此朋友，无法迁移',
         DEVICE_ALREADY_BOUND: '此设备已绑定，请改用激活邀请码或先撤销原绑定',
         MAX_DEVICES_BELOW_ACTIVE: '设备上限不能低于当前活跃设备数',
+        REQUEST_TIMEOUT: '请求超时，请检查网络后重试',
     };
     if (error?.code && codeMessages[error.code]) return codeMessages[error.code];
     return legacyErrorMessage(error);
@@ -486,11 +543,15 @@ function showFormError(form, message) {
         error.className = 'form-error';
         form.prepend(error);
     }
+    error.id = `${form.id}-error`;
+    error.setAttribute('role', 'alert');
+    form.setAttribute('aria-describedby', error.id);
     error.textContent = message;
 }
 
 function clearFormError(form) {
     form.querySelector('.form-error')?.remove();
+    form.removeAttribute('aria-describedby');
 }
 
 let modalFormId = 0;
@@ -637,14 +698,25 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 function navigate(route, params = {}) {
     state.route = route;
     state.params = params;
-    window.location.hash = '#/' + route + (params.id ? '/' + params.id : '');
+    const nextHash = '#/' + route + (params.id ? '/' + params.id : '');
+    if (window.location.hash === nextHash) {
+        updateActiveNav();
+        render();
+        return;
+    }
+    window.location.hash = nextHash;
     updateActiveNav();
-    render();
 }
 
 function updateActiveNav() {
     document.querySelectorAll('.nav-link, .sidebar-link').forEach(el => {
-        el.classList.toggle('active', el.dataset.route === state.route);
+        const active = el.dataset.route === state.route;
+        el.classList.toggle('active', active);
+        if (active) {
+            el.setAttribute('aria-current', 'page');
+        } else {
+            el.removeAttribute('aria-current');
+        }
     });
 }
 
@@ -656,13 +728,32 @@ function parseHash() {
 }
 
 // ===== Sidebar toggle =====
-document.getElementById('menuToggle').addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('open');
+const menuToggle = document.getElementById('menuToggle');
+const sidebar = document.getElementById('sidebar');
+const sidebarScrim = document.getElementById('sidebarScrim');
+function closeSidebar({ restoreFocus = true } = {}) {
+    sidebar.classList.remove('open');
+    sidebarScrim.hidden = true;
+    menuToggle.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) menuToggle.focus();
+}
+function openSidebar() {
+    sidebar.classList.add('open');
+    sidebarScrim.hidden = false;
+    menuToggle.setAttribute('aria-expanded', 'true');
+}
+menuToggle.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) closeSidebar({ restoreFocus: false });
+    else openSidebar();
 });
+sidebarScrim.addEventListener('click', () => closeSidebar());
 document.getElementById('sidebar').addEventListener('click', (e) => {
     if (e.target.closest('.sidebar-link')) {
-        document.getElementById('sidebar').classList.remove('open');
+        closeSidebar({ restoreFocus: false });
     }
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) closeSidebar();
 });
 
 // ===== Theme toggle =====
@@ -686,22 +777,25 @@ if (window.__ADMIN_EMAIL__) {
 // ===== Render router =====
 function render() {
     const main = document.getElementById('mainContent');
+    cancelPendingRequests();
+    const renderToken = ++state.renderToken;
     main.style.opacity = '0';
     setTimeout(() => {
+        if (renderToken !== state.renderToken) return;
         main.innerHTML = '';
         switch (state.route) {
-            case 'dashboard': renderDashboard(main); break;
-            case 'friends': renderFriends(main); break;
-            case 'friend-detail': renderFriendDetail(main); break;
-            case 'audit': renderAudit(main); break;
-            default: renderDashboard(main);
+            case 'dashboard': renderDashboard(main, renderToken); break;
+            case 'friends': renderFriends(main, renderToken); break;
+            case 'friend-detail': renderFriendDetail(main, renderToken); break;
+            case 'audit': renderAudit(main, renderToken); break;
+            default: renderDashboard(main, renderToken);
         }
         main.style.opacity = '1';
     }, 100);
 }
 
 // ===== Dashboard =====
-function renderDashboard(container) {
+function renderDashboard(container, renderToken) {
     const title = document.createElement('div');
     title.innerHTML = `<h1 class="section-title">仪表盘</h1><p class="section-subtitle">授权系统概览</p>`;
     container.appendChild(title);
@@ -725,44 +819,66 @@ function renderDashboard(container) {
     `;
     container.appendChild(grid);
 
-    Promise.all([API.getStats(), API.getAuditLogs({ limit: 50, offset: 0 })]).then(([s, auditPage]) => {
-        const logs = auditPage.logs;
-        stats.innerHTML = `
-            <div class="stat-card"><div class="stat-label">活跃朋友</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
-            <div class="stat-card"><div class="stat-label">活跃设备</div><div class="stat-value stat-success">${s.activeDevices}</div><div class="stat-hint">在线设备</div></div>
-            <div class="stat-card"><div class="stat-label">24h 失败</div><div class="stat-value ${s.recentFailures > 0 ? 'stat-danger' : ''}">${s.recentFailures}</div><div class="stat-hint">需关注</div></div>
-            <div class="stat-card"><div class="stat-label">网关状态</div><div class="stat-value" style="font-size:20px">${s.gatewayHealth === 'ok' ? '🟢 正常' : '🔴 异常'}</div><div class="stat-hint">所有服务</div></div>
-        `;
-        const failures = logs.filter(l => l.result === 'FAILURE').slice(0, 5);
-        grid.innerHTML = `
-            <div class="card">
-                <div class="card-header"><span class="card-title">最近授权失败</span><a href="#/audit" class="btn btn-ghost btn-sm">查看全部</a></div>
-                ${failures.length === 0 ? '<div class="empty-state"><div class="empty-title">无失败记录</div><div class="empty-desc">系统运行正常</div></div>' :
-                `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${failures.map(l => `<tr><td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatTime(l.createdAt)}</td><td>${eventLabel(l.eventType)}</td><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td><td style="color:var(--danger)">${escapeHtml(l.errorCode || '—')}</td></tr>`).join('')}</tbody></table></div>`}
-            </div>
-            <div class="card">
-                <div class="card-header"><span class="card-title">网关健康</span></div>
-                <div class="health-indicator"><span class="health-dot ${s.gatewayHealth === 'ok' ? 'ok' : 'fail'}"></span><span>${s.gatewayHealth === 'ok' ? '所有服务正常' : '检测到异常'}</span></div>
-                <div style="margin-top:16px">
-                    <div class="health-row"><span>授权网关</span><span style="color:${s.gatewayHealth === 'ok' ? 'var(--success)' : 'var(--danger)'}">${s.gatewayHealth === 'ok' ? '● 正常' : '● 异常'}</span></div>
-                    <div class="health-row"><span>TMDB 代理</span><span style="color:var(--text-dim)">由网关转发</span></div>
-                    <div class="health-row"><span>Trakt 代理</span><span style="color:var(--text-dim)">由网关转发</span></div>
-                    <div class="health-row"><span>豆瓣代理</span><span style="color:var(--text-dim)">由网关转发</span></div>
-                </div>
-            </div>
-        `;
-    }).catch(err => {
-        stats.innerHTML = `<div class="error-banner" style="grid-column:1/-1"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="dashboardRetry">重试</button></div>`;
-        grid.innerHTML = '';
-        stats.querySelector('#dashboardRetry')?.addEventListener('click', () => {
-            container.innerHTML = '';
-            renderDashboard(container);
-        });
+    Promise.allSettled([API.getStats(), API.getAuditLogs({ limit: 50, offset: 0 })]).then(([statsResult, auditResult]) => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+
+        if (statsResult.status === 'fulfilled') {
+            const s = statsResult.value;
+            stats.innerHTML = `
+                <div class="stat-card"><div class="stat-label">活跃朋友</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
+                <div class="stat-card"><div class="stat-label">活跃设备</div><div class="stat-value stat-success">${s.activeDevices}</div><div class="stat-hint">在线设备</div></div>
+                <div class="stat-card"><div class="stat-label">24h 失败</div><div class="stat-value ${s.recentFailures > 0 ? 'stat-danger' : ''}">${s.recentFailures}</div><div class="stat-hint">需关注</div></div>
+                <div class="stat-card"><div class="stat-label">管理服务</div><div class="stat-value" style="font-size:20px">${s.gatewayHealth === 'ok' ? '🟢 正常' : '🔴 异常'}</div><div class="stat-hint">D1 与统计查询</div></div>
+            `;
+            grid.innerHTML = dashboardHealthCard(s);
+        } else {
+            stats.innerHTML = dashboardErrorCard('统计加载失败', statsResult.reason, container, renderToken);
+        }
+
+        if (auditResult.status === 'fulfilled') {
+            const failures = auditResult.value.logs.filter(l => l.result === 'FAILURE').slice(0, 5);
+            grid.insertAdjacentHTML('afterbegin', dashboardFailuresCard(failures));
+        } else {
+            grid.insertAdjacentHTML('afterbegin', dashboardErrorCard('失败记录加载失败', auditResult.reason, container, renderToken));
+        }
     });
 }
 
+function dashboardHealthCard(stats) {
+    const healthy = stats.gatewayHealth === 'ok';
+    return `<div class="card">
+        <div class="card-header"><span class="card-title">管理服务健康</span></div>
+        <div class="health-indicator"><span class="health-dot ${healthy ? 'ok' : 'fail'}"></span><span>${healthy ? 'D1 与统计查询正常' : '管理服务异常'}</span></div>
+        <div style="margin-top:16px">
+            <div class="health-row"><span>D1 数据库</span><span style="color:${healthy ? 'var(--success)' : 'var(--danger)'}">${healthy ? '● 正常' : '● 异常'}</span></div>
+            <div class="health-row"><span>上游代理</span><span style="color:var(--text-dim)">未在此页探测</span></div>
+        </div>
+    </div>`;
+}
+
+function dashboardFailuresCard(failures) {
+    return `<div class="card">
+        <div class="card-header"><span class="card-title">最近授权失败</span><a href="#/audit" class="btn btn-ghost btn-sm">查看全部</a></div>
+        ${failures.length === 0 ? '<div class="empty-state"><div class="empty-title">无失败记录</div><div class="empty-desc">系统运行正常</div></div>' :
+        `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${failures.map(l => `<tr><td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatTime(l.createdAt)}</td><td>${eventLabel(l.eventType)}</td><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td><td style="color:var(--danger)">${escapeHtml(l.errorCode || '—')}</td></tr>`).join('')}</tbody></table></div>`}
+    </div>`;
+}
+
+function dashboardErrorCard(title, error, container, renderToken) {
+    const retryId = `dashboard-retry-${Math.random().toString(36).slice(2)}`;
+    setTimeout(() => {
+        const retry = document.getElementById(retryId);
+        retry?.addEventListener('click', () => {
+            if (renderToken !== state.renderToken || !container?.isConnected) return;
+            container.innerHTML = '';
+            renderDashboard(container, renderToken);
+        });
+    }, 0);
+    return `<div class="card"><div class="error-banner"><span class="error-text">${escapeHtml(title)}：${escapeHtml(errorMessage(error))}</span><button class="btn btn-sm btn-ghost" id="${retryId}">重试</button></div></div>`;
+}
+
 // ===== Friends list =====
-function renderFriends(container) {
+function renderFriends(container, renderToken) {
     const header = document.createElement('div');
     header.innerHTML = `<h1 class="section-title">朋友</h1><p class="section-subtitle">管理朋友白名单和设备</p>`;
     container.appendChild(header);
@@ -770,9 +886,9 @@ function renderFriends(container) {
     const toolbar = document.createElement('div');
     toolbar.className = 'toolbar';
     toolbar.innerHTML = `
-        <div class="toolbar-search"><input type="text" class="form-input" id="searchInput" placeholder="搜索昵称或备注..."></div>
+        <div class="toolbar-search"><input type="search" class="form-input" id="searchInput" aria-label="搜索朋友" autocomplete="off" placeholder="搜索昵称或备注..."></div>
         <div class="toolbar-filters">
-            <select class="form-select" id="statusFilter" style="width:auto">
+            <select class="form-select" id="statusFilter" aria-label="朋友状态筛选" style="width:auto">
                 <option value="">全部状态</option>
                 <option value="ACTIVE">活跃</option>
                 <option value="DISABLED">已禁用</option>
@@ -787,54 +903,66 @@ function renderFriends(container) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
     container.appendChild(tableWrap);
 
     const searchInput = toolbar.querySelector('#searchInput');
     const statusFilter = toolbar.querySelector('#statusFilter');
+    const pagination = tableWrap.querySelector('.friends-pagination');
+    const tbody = tableWrap.querySelector('tbody');
+    const limit = 50;
+    let offset = 0;
+    let loadSequence = 0;
     toolbar.querySelector('#createFriendBtn').addEventListener('click', showCreateFriendModal);
 
     function loadAndRender() {
-        const query = searchInput.value.toLowerCase();
+        const query = searchInput.value.trim();
         const filter = statusFilter.value;
-        API.getFriends().then(friends => {
-            let filtered = friends;
-            if (query) filtered = filtered.filter(f => f.nickname.toLowerCase().includes(query) || (f.note && f.note.toLowerCase().includes(query)));
-            if (filter) filtered = filtered.filter(f => f.status === filter);
+        const sequence = ++loadSequence;
+        pagination.innerHTML = '';
+        API.getFriends({ q: query, status: filter, limit, offset }).then(friendsPage => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
+            const friends = friendsPage.friends;
 
-            const tbody = tableWrap.querySelector('tbody');
-            if (filtered.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friends.length === 0 ? '还没有朋友' : '没有匹配结果'}</div><div class="empty-desc">${friends.length === 0 ? '点击右上角按钮创建第一个朋友' : '尝试调整搜索或筛选条件'}</div>${friends.length === 0 ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建朋友</button>' : ''}</div></td></tr>`;
+            if (friends.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friendsPage.total === 0 && !query && !filter ? '还没有朋友' : '没有匹配结果'}</div><div class="empty-desc">${friendsPage.total === 0 && !query && !filter ? '点击右上角按钮创建第一个朋友' : '尝试调整搜索或筛选条件'}</div>${friendsPage.total === 0 && !query && !filter ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建朋友</button>' : ''}</div></td></tr>`;
                 tbody.querySelector('.js-create-friend')?.addEventListener('click', showCreateFriendModal);
-                return;
+            } else {
+                tbody.innerHTML = friends.map(f => `
+                    <tr>
+                        <td><div style="font-weight:600">${escapeHtml(f.nickname)}</div>${f.note ? `<div style="font-size:12px;color:var(--text-dim)">${escapeHtml(f.note)}</div>` : ''}</td>
+                        <td>${statusBadge(f.status)}</td>
+                        <td>${f.devices}/${f.maxDevices}</td>
+                        <td>${f.maxDevices}</td>
+                        <td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatDate(f.expiresAt)}</td>
+                        <td style="color:var(--text-dim);font-size:12px">${formatTime(f.lastSeen)}</td>
+                        <td><button class="btn btn-ghost btn-sm js-friend-detail" data-id="${escapeHtml(f.id)}">详情</button></td>
+                    </tr>
+                `).join('');
+                tbody.querySelectorAll('.js-friend-detail').forEach(button => {
+                    button.addEventListener('click', () => navigate('friend-detail', { id: button.dataset.id }));
+                });
             }
-            tbody.innerHTML = filtered.map(f => `
-                <tr>
-                    <td><div style="font-weight:600">${escapeHtml(f.nickname)}</div>${f.note ? `<div style="font-size:12px;color:var(--text-dim)">${escapeHtml(f.note)}</div>` : ''}</td>
-                    <td>${statusBadge(f.status)}</td>
-                    <td>${f.devices}/${f.maxDevices}</td>
-                    <td>${f.maxDevices}</td>
-                    <td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatDate(f.expiresAt)}</td>
-                    <td style="color:var(--text-dim);font-size:12px">${formatTime(f.lastSeen)}</td>
-                    <td><button class="btn btn-ghost btn-sm js-friend-detail" data-id="${escapeHtml(f.id)}">详情</button></td>
-                </tr>
-            `).join('');
-            tbody.querySelectorAll('.js-friend-detail').forEach(button => {
-                button.addEventListener('click', () => navigate('friend-detail', { id: button.dataset.id }));
-            });
+            const end = Math.min(friendsPage.offset + friends.length, friendsPage.total);
+            pagination.innerHTML = `<span>共 ${friendsPage.total} 条${friendsPage.total ? `，第 ${friendsPage.offset + 1} - ${end} 条` : ''}</span><div><button class="btn btn-ghost btn-sm friends-prev" ${friendsPage.offset === 0 ? 'disabled' : ''}>上一页</button><button class="btn btn-ghost btn-sm friends-next" ${friendsPage.hasMore ? '' : 'disabled'}>下一页</button></div>`;
+            pagination.querySelector('.friends-prev')?.addEventListener('click', () => { offset = Math.max(0, friendsPage.offset - friendsPage.limit); loadAndRender(); });
+            pagination.querySelector('.friends-next')?.addEventListener('click', () => { if (friendsPage.hasMore) { offset = friendsPage.offset + friendsPage.limit; loadAndRender(); } });
         }).catch(err => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
             tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendsRetry">重试</button></div></td></tr>`;
             tbody.querySelector('#friendsRetry')?.addEventListener('click', loadAndRender);
         });
     }
 
-    searchInput.addEventListener('input', debounce(loadAndRender, 300));
-    statusFilter.addEventListener('change', loadAndRender);
+    searchInput.addEventListener('input', debounce(() => { offset = 0; loadAndRender(); }, 300));
+    statusFilter.addEventListener('change', () => { offset = 0; loadAndRender(); });
     loadAndRender();
 }
 
 // ===== Friend detail =====
-function renderFriendDetail(container) {
+function renderFriendDetail(container, renderToken) {
     const id = state.params.id;
     const title = document.createElement('div');
     title.className = 'detail-heading';
@@ -847,6 +975,7 @@ function renderFriendDetail(container) {
     container.appendChild(content);
 
     API.getFriend(id).then(f => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
         title.querySelector('#detailSubtitle').textContent = `${f.nickname} · ${f.devices} 台设备`;
         const editButton = title.querySelector('#editBtn');
         const disableButton = title.querySelector('#disableBtn');
@@ -892,14 +1021,15 @@ function renderFriendDetail(container) {
         inviteSection.id = 'inviteSection';
         inviteSection.className = 'card invite-management-card';
         content.appendChild(inviteSection);
-        loadInvitesSection(f.id, inviteSection);
+        loadInvitesSection(f.id, inviteSection, renderToken);
     }).catch(err => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
         content.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendDetailRetry">重试</button></div>`;
         content.querySelector('#friendDetailRetry')?.addEventListener('click', () => navigate('friend-detail', { id: state.params.id }));
     });
 }
 
-function loadInvitesSection(friendId, section) {
+function loadInvitesSection(friendId, section, renderToken) {
     let status = 'ALL';
     let offset = 0;
     const limit = 50;
@@ -909,6 +1039,7 @@ function loadInvitesSection(friendId, section) {
     };
 
     const render = (data) => {
+        if (renderToken !== state.renderToken || !section.isConnected) return;
         const summary = data.summary || {};
         const invites = data.invites || [];
         const rows = invites.length === 0
@@ -962,12 +1093,14 @@ function loadInvitesSection(friendId, section) {
     };
 
     const renderError = (err) => {
+        if (renderToken !== state.renderToken || !section.isConnected) return;
         section.innerHTML = '<div class="card-header"><span class="card-title">邀请码</span></div><div class="error-banner"><span class="error-text">加载失败：' +
             escapeHtml(errorMessage(err)) + '</span><button class="btn btn-sm btn-ghost invite-retry">重试</button></div>';
         section.querySelector('.invite-retry').addEventListener('click', load);
     };
 
     const load = () => {
+        if (renderToken !== state.renderToken || !section.isConnected) return;
         renderLoading();
         API.getInvites(friendId, { status, limit, offset }).then(render).catch(renderError);
     };
@@ -1006,7 +1139,7 @@ function showRevokeInviteModal(inviteId, reload) {
 }
 
 // ===== Audit logs =====
-function renderAudit(container) {
+function renderAudit(container, renderToken) {
     const title = document.createElement('div');
     title.innerHTML = `<h1 class="section-title">审计日志</h1><p class="section-subtitle">安全事件记录（保留 90 天）</p>`;
     container.appendChild(title);
@@ -1014,7 +1147,7 @@ function renderAudit(container) {
     const toolbar = document.createElement('div');
     toolbar.className = 'toolbar';
     toolbar.innerHTML = `
-        <select class="form-select" id="eventFilter" style="width:auto">
+        <select class="form-select" id="eventFilter" aria-label="事件类型筛选" style="width:auto">
             <option value="">全部事件</option>
             <option value="ACTIVATE">激活</option>
             <option value="MIGRATE">迁移</option>
@@ -1027,12 +1160,12 @@ function renderAudit(container) {
             <option value="INVITE_CREATE">生成邀请码</option>
             <option value="INVITE_REVOKE">撤销邀请码</option>
         </select>
-        <select class="form-select" id="resultFilter" style="width:auto">
+        <select class="form-select" id="resultFilter" aria-label="结果筛选" style="width:auto">
             <option value="">全部结果</option>
             <option value="SUCCESS">成功</option>
             <option value="FAILURE">失败</option>
         </select>
-        <select class="form-select" id="timeFilter" style="width:auto">
+        <select class="form-select" id="timeFilter" aria-label="时间范围筛选" style="width:auto">
             <option value="24h">最近 24 小时</option>
             <option value="7d">最近 7 天</option>
             <option value="30d">最近 30 天</option>
@@ -1066,6 +1199,7 @@ function renderAudit(container) {
         if (rFilter) params.result = rFilter;
 
         API.getAuditLogs(params).then(page => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
             const logs = page.logs;
 
             const tbody = tableWrap.querySelector('tbody');
@@ -1090,6 +1224,7 @@ function renderAudit(container) {
             pagination.querySelector('.audit-prev')?.addEventListener('click', () => loadAndRender(Math.max(0, page.offset - page.limit)));
             pagination.querySelector('.audit-next')?.addEventListener('click', () => loadAndRender(page.offset + page.limit));
         }).catch(err => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
             const tbody = tableWrap.querySelector('tbody');
             tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="auditRetry">重试</button></div></td></tr>`;
             tbody.querySelector('#auditRetry')?.addEventListener('click', () => loadAndRender(0));
@@ -1107,9 +1242,9 @@ function showCreateFriendModal() {
     const form = document.createElement('form');
     form.noValidate = true;
     form.innerHTML = `
-        <div class="form-group"><label class="form-label">昵称 *</label><input class="form-input" name="nickname" maxlength="32" placeholder="例如：小明"></div>
-        <div class="form-group"><label class="form-label">备注</label><input class="form-input" name="note" maxlength="64" placeholder="可选，如：大学同学"></div>
-        <div class="form-group"><label class="form-label">设备上限</label><input class="form-input" name="maxDevices" type="number" min="1" max="10" value="2"></div>
+        <div class="form-group"><label class="form-label" for="create-friend-nickname">昵称 *</label><input class="form-input" id="create-friend-nickname" name="nickname" maxlength="32" autocomplete="nickname" placeholder="例如：小明"></div>
+        <div class="form-group"><label class="form-label" for="create-friend-note">备注</label><input class="form-input" id="create-friend-note" name="note" maxlength="64" autocomplete="off" placeholder="可选，如：大学同学"></div>
+        <div class="form-group"><label class="form-label" for="create-friend-max-devices">设备上限</label><input class="form-input" id="create-friend-max-devices" name="maxDevices" type="number" min="1" max="10" value="2" autocomplete="off"></div>
         <p class="form-hint">朋友长期有效；邀请码单独设置有效期。</p>
     `;
 
@@ -1174,10 +1309,10 @@ function showEditFriendModal(friend) {
     const form = document.createElement('form');
     form.noValidate = true;
     form.innerHTML = `
-        <div class="form-group"><label class="form-label">昵称 *</label><input class="form-input" name="nickname" maxlength="32" value="${escapeHtml(friend.nickname)}"></div>
-        <div class="form-group"><label class="form-label">备注</label><input class="form-input" name="note" maxlength="64" value="${escapeHtml(friend.note || '')}"></div>
-        <div class="form-group"><label class="form-label">设备上限</label><input class="form-input" name="maxDevices" type="number" min="1" max="10" value="${Number(friend.maxDevices) || 1}"><p class="form-hint">不能低于当前活跃设备数（${Number(friend.devices) || 0} 台）。</p></div>
-        <div class="form-group"><label class="form-label">有效期至</label><div style="display:flex;align-items:center;gap:10px"><input class="form-input" name="expiresAt" type="datetime-local" style="flex:1"><label style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:var(--text-muted)"><input name="noExpiry" type="checkbox">长期有效</label></div></div>
+        <div class="form-group"><label class="form-label" for="edit-friend-nickname">昵称 *</label><input class="form-input" id="edit-friend-nickname" name="nickname" maxlength="32" autocomplete="nickname" value="${escapeHtml(friend.nickname)}"></div>
+        <div class="form-group"><label class="form-label" for="edit-friend-note">备注</label><input class="form-input" id="edit-friend-note" name="note" maxlength="64" autocomplete="off" value="${escapeHtml(friend.note || '')}"></div>
+        <div class="form-group"><label class="form-label" for="edit-friend-max-devices">设备上限</label><input class="form-input" id="edit-friend-max-devices" name="maxDevices" type="number" min="1" max="10" value="${Number(friend.maxDevices) || 1}" autocomplete="off"><p class="form-hint">不能低于当前活跃设备数（${Number(friend.devices) || 0} 台）。</p></div>
+        <div class="form-group"><label class="form-label" for="edit-friend-expires-at">有效期至</label><div style="display:flex;align-items:center;gap:10px"><input class="form-input" id="edit-friend-expires-at" name="expiresAt" type="datetime-local" autocomplete="off" style="flex:1"><label for="edit-friend-no-expiry" style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:var(--text-muted)"><input id="edit-friend-no-expiry" name="noExpiry" type="checkbox">长期有效</label></div></div>
     `;
 
     const expiresInput = form.expiresAt;
@@ -1261,14 +1396,14 @@ function showEditFriendModal(friend) {
 function showCreateInviteModal(friendId, friendName, activeDeviceCount = 0) {
     const form = document.createElement('form');
     form.innerHTML = `
-        <div class="form-group"><label class="form-label">邀请类型</label>
-            <select class="form-select" name="kind">
+        <div class="form-group"><label class="form-label" for="invite-kind">邀请类型</label>
+            <select class="form-select" id="invite-kind" name="kind">
                 <option value="ACTIVATION">激活（新朋友）</option>
                 <option value="MIGRATION">迁移（现有设备）</option>
             </select>
         </div>
-        <div class="form-group"><label class="form-label">有效期</label>
-            <select class="form-select" name="expiresIn">
+        <div class="form-group"><label class="form-label" for="invite-expires-in">有效期</label>
+            <select class="form-select" id="invite-expires-in" name="expiresIn">
                 <option value="1">1 天</option>
                 <option value="7" selected>7 天</option>
                 <option value="30">30 天</option>
@@ -1329,6 +1464,33 @@ function showCreateInviteModal(friendId, friendName, activeDeviceCount = 0) {
     });
 }
 
+async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+        try {
+            await navigator.clipboard.writeText(text);
+            return;
+        } catch {
+            // 非安全上下文或浏览器权限拒绝时继续使用传统复制方式。
+        }
+    }
+
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    let copied = false;
+    try {
+        copied = document.execCommand('copy');
+    } finally {
+        textarea.remove();
+    }
+    if (!copied) throw new Error('Clipboard unavailable');
+}
+
 function showInviteCodeResult(code, expiresAt) {
     const body = document.createElement('div');
     body.innerHTML = `
@@ -1352,14 +1514,18 @@ function showInviteCodeResult(code, expiresAt) {
     });
 
     modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
-    copyBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(code).then(() => {
+    copyBtn.addEventListener('click', async () => {
+        copyBtn.disabled = true;
+        try {
+            await copyText(code);
             copyBtn.textContent = '已复制 ✓';
             showToast('邀请码已复制');
             setTimeout(() => { copyBtn.textContent = '复制邀请码'; }, 2000);
-        }).catch(() => {
+        } catch {
             showToast('复制失败，请手动选择文本复制', 'error');
-        });
+        } finally {
+            copyBtn.disabled = false;
+        }
     });
 }
 

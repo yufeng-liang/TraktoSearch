@@ -6,20 +6,75 @@ import { generateId, sha256, generateInviteCode } from '../util/crypto';
 // === 朋友管理 ===
 
 // GET /admin/friends — 朋友列表
-export async function listFriends(env: { DB: D1Database }, requestId: string): Promise<Response> {
+export async function listFriends(request: Request, env: { DB: D1Database }, requestId: string): Promise<Response> {
+    const url = new URL(request.url);
+    const query = (url.searchParams.get('q') || '').trim().slice(0, 64);
+    const requestedStatus = (url.searchParams.get('status') || '').toUpperCase();
+    if (requestedStatus && requestedStatus !== 'ACTIVE' && requestedStatus !== 'DISABLED') {
+        throw new AppError('INVALID_REQUEST', 'Invalid friend status', 400);
+    }
+    const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+    const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 50) : 50;
+    const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
+    const queryPattern = `%${query}%`;
+    const conditions = `
+        (? = '' OR f.status = ?)
+        AND (? = '' OR LOWER(f.nickname) LIKE LOWER(?) OR LOWER(COALESCE(f.note, '')) LIKE LOWER(?))
+    `;
+    const values = [requestedStatus, requestedStatus, query, queryPattern, queryPattern];
+
     const { results } = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
                f.created_at, f.updated_at,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE') as active_devices,
                (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id) as last_seen
         FROM friends f
+        WHERE ${conditions}
         ORDER BY f.created_at DESC
-    `).all();
+        LIMIT ? OFFSET ?
+    `).bind(...values, limit, offset).all();
 
-    return successResponse({ friends: results }, requestId);
+    const countResult = await env.DB.prepare(`
+        SELECT COUNT(*) AS count FROM friends f WHERE ${conditions}
+    `).bind(...values).first<{ count: number }>();
+    const total = Number(countResult?.count || 0);
+
+    return successResponse({
+        friends: results,
+        limit,
+        offset,
+        total,
+        hasMore: offset + results.length < total,
+    }, requestId);
 }
 
-// POST /admin/friends — 创建朋友
+// GET /admin/friends/:id/detail - 按需返回朋友与设备详情
+export async function getFriendDetail(
+    env: { DB: D1Database },
+    requestId: string,
+    friendId: string,
+): Promise<Response> {
+    const friend = await env.DB.prepare(`
+        SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE') AS active_devices,
+               (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id) AS last_seen
+        FROM friends f
+        WHERE f.id = ?
+    `).bind(friendId).first();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+
+    const { results: devices } = await env.DB.prepare(`
+        SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at
+        FROM devices
+        WHERE friend_id = ?
+        ORDER BY activated_at DESC
+    `).bind(friendId).all();
+
+    return successResponse({ friend, devices }, requestId);
+}
+
+// POST /admin/friends - 创建朋友
 export async function createFriend(
     request: Request,
     env: { DB: D1Database },

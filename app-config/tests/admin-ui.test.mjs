@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const appSource = fs.readFileSync(path.join(root, 'public/admin/app.js'), 'utf8');
+const htmlSource = fs.readFileSync(path.join(root, 'public/admin/index.html'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, '../auth-worker/src/admin/admin.ts'), 'utf8');
 const proxySource = fs.readFileSync(path.join(root, 'functions/admin-api/[[path]].js'), 'utf8');
 const indexSource = fs.readFileSync(path.join(root, '../auth-worker/src/index.ts'), 'utf8');
@@ -18,7 +19,9 @@ const stringSources = ['values', 'values-zh', 'values-ja', 'values-ko'].map((dir
 test('朋友创建不提交朋友到期时间，邀请码单独携带有效期', () => {
     assert.match(appSource, /朋友长期有效；邀请码单独设置有效期/);
     assert.match(appSource, /const code = invite\.inviteCode \|\| invite\.code/);
-    assert.doesNotMatch(appSource, /name="expiresAt"/);
+    const createFriendModal = appSource.match(/function showCreateFriendModal\([\s\S]*?function showEditFriendModal\(/);
+    assert.ok(createFriendModal, 'create friend modal should exist');
+    assert.doesNotMatch(createFriendModal[0], /name="expiresAt"/);
     assert.match(workerSource, /VALUES \(\?, \?, \?, 'ACTIVE', \?, NULL, \?, \?\)/);
 });
 
@@ -27,12 +30,12 @@ test('后台表单和仪表盘关键错误不会静默失败', () => {
     assert.match(appSource, /showFormError\(form, '请输入昵称。'/);
     assert.match(appSource, /bindSubmitButton\(form, submitBtn\)/);
     assert.match(appSource, /s\.totalFriends/);
-    assert.match(appSource, /Promise\.all\(\[API\.getStats\(\), API\.getAuditLogs\(\)\]\)/);
+    assert.match(appSource, /Promise\.allSettled\(\[API\.getStats\(\), API\.getAuditLogs\(\{ limit: 50, offset: 0 \}\)\]\)/);
     assert.match(appSource, /auditRetry/);
 });
 
 test('创建朋友后使用与路由解析器一致的 hash 格式', () => {
-    assert.match(appSource, /window\.location\.hash = '#\/' \+ route/);
+    assert.match(appSource, /const nextHash = '#\/' \+ route/);
 });
 
 test('管理代理清理认证和长度头并返回上游降级响应', () => {
@@ -119,4 +122,89 @@ test('friend detail uses full-width lists and places disable action in the headi
     assert.doesNotMatch(appSource, /content\.firstElementChild\?\.appendChild\(inviteSection\)/);
     assert.match(stylesSource, /\.friend-detail-grid \{\s*grid-template-columns: minmax\(0, 1fr\);/);
     assert.match(stylesSource, /\.detail-heading \{/);
+});
+
+test('formatTime uses normalized milliseconds for dates beyond 30 days', () => {
+    assert.match(appSource, /return new Date\(dateMs\)\.toLocaleDateString\('zh-CN'\)/);
+});
+
+test('navigation renders once through hashchange for a changed route', () => {
+    const navigateBlock = appSource.match(/function navigate\([\s\S]*?\n}\n/);
+    assert.ok(navigateBlock, 'navigate function should exist');
+    assert.doesNotMatch(navigateBlock[0], /window\.location\.hash = nextHash;[\s\S]*?render\(\);/);
+});
+
+test('admin API requests have a timeout', () => {
+    assert.match(appSource, /new AbortController\(\)/);
+    assert.match(appSource, /timedOut = true;[\s\S]*?controller\.abort\(\)/);
+    assert.match(appSource, /REQUEST_TIMEOUT_MS/);
+});
+
+test('toast entrance animation uses milliseconds', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(stylesSource, /animation: toast-in 250ms/);
+});
+
+test('friend list delegates search and pagination to the server', () => {
+    assert.match(appSource, /API\.getFriends\(\{ q: query, status: filter, limit, offset \}\)/);
+    assert.match(appSource, /friendsPage\.total/);
+    assert.match(workerSource, /LIMIT \? OFFSET \?/);
+    assert.match(workerSource, /nickname LIKE|LOWER\(f\.nickname\)/);
+});
+
+test('admin status and reduced motion states are accessible', () => {
+    assert.match(htmlSource, /id="toastContainer"[^>]*role="status"[^>]*aria-live="polite"/);
+    assert.match(appSource, /setAttribute\('aria-current', 'page'\)/);
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(stylesSource, /\.main\s*\{\s*scroll-behavior: auto;/);
+});
+
+test('admin forms expose labels, autocomplete intent and inline error semantics', () => {
+    assert.match(appSource, /label class="form-label" for="create-friend-nickname"/);
+    assert.match(appSource, /id="create-friend-nickname"[^>]*autocomplete="nickname"/);
+    assert.match(appSource, /label class="form-label" for="edit-friend-expires-at"/);
+    assert.match(appSource, /error\.id = `\$\{form\.id\}-error`/);
+    assert.match(appSource, /form\.setAttribute\('aria-describedby', error\.id\)/);
+});
+
+test('mobile sidebar has an accessible scrim and escape close behavior', () => {
+    assert.match(htmlSource, /id="sidebarScrim"[^>]*aria-label="关闭侧栏"/);
+    assert.match(htmlSource, /id="menuToggle"[^>]*aria-controls="sidebar"[^>]*aria-expanded="false"/);
+    assert.match(appSource, /e\.key === 'Escape'[\s\S]*?closeSidebar\(\)/);
+    assert.match(appSource, /sidebarScrim.*addEventListener\('click'/);
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(stylesSource, /\.sidebar-scrim\[hidden\]\s*\{\s*display:\s*none/);
+});
+
+test('invite copy falls back when Clipboard API is unavailable', () => {
+    assert.match(appSource, /async function copyText\(text\)/);
+    assert.match(appSource, /document\.execCommand\('copy'\)/);
+    assert.match(appSource, /await copyText\(code\)/);
+});
+
+test('dashboard retry preserves render context for partial failures', () => {
+    assert.match(appSource, /dashboardErrorCard\('失败记录加载失败', auditResult\.reason, container, renderToken\)/);
+});
+
+test('friend detail uses the targeted aggregate endpoint', () => {
+    assert.match(appSource, /this\.get\(`\/admin\/friends\/\$\{id\}\/detail`\)/);
+    assert.match(appSource, /maxDevices: source\.max_devices/);
+    assert.match(appSource, /expiresAt: source\.expires_at/);
+    assert.match(workerSource, /export async function getFriendDetail/);
+    assert.match(indexSource, /const friendDetailMatch = path\.match/);
+    assert.match(indexSource, /getFriendDetail\(env, requestId, friendDetailMatch\[1\]\)/);
+});
+
+test('page transitions cancel in-flight admin requests', () => {
+    assert.match(appSource, /const activeRequestControllers = new Set\(\)/);
+    assert.match(appSource, /activeRequestControllers\.add\(controller\)/);
+    assert.match(appSource, /function cancelPendingRequests\(\)/);
+    assert.match(appSource, /cancelPendingRequests\(\);\s*const renderToken/);
+});
+
+test('toolbar controls expose accessible names and expanded state', () => {
+    assert.match(htmlSource, /id="paletteBtn"[^>]*aria-controls="palettePanel"[^>]*aria-expanded="false"/);
+    assert.match(appSource, /searchInput.*aria-label/);
+    assert.match(appSource, /statusFilter.*aria-label/);
+    assert.match(appSource, /btn\.setAttribute\('aria-expanded', String\(!panel\.hidden\)\)/);
 });
