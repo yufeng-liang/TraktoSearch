@@ -3,13 +3,19 @@ package com.tracktosearch.data.util
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -232,6 +238,36 @@ class PersistentTtlCacheTest {
         assertThat(cache.getSizeBytes()).isEqualTo(0L)
     }
 
+    @Test
+    fun loadFromDisk_doesNotOverwriteValueWrittenWhileLoading() = runTest {
+        val oldSnapshot = mutablePreferencesOf(
+            stringPreferencesKey("v12:k1") to """{"name":"old","value":1}""",
+            longPreferencesKey("v12:k1:exp") to System.currentTimeMillis() + 60_000
+        )
+        val dataStore = BlockingSnapshotDataStore(oldSnapshot)
+        val cache = createCache(dataStore, "v12", backgroundScope)
+
+        val loadJob = launch { cache.loadFromDisk() }
+        runCurrent()
+        cache.put("k1", PersistentTestItem("new", 2))
+        dataStore.release.complete(Unit)
+        loadJob.join()
+
+        assertThat(cache.get("k1")).isEqualTo(PersistentTestItem("new", 2))
+    }
+
+    @Test
+    fun clearAll_preventsQueuedOldGenerationWriteFromRestoringDiskValue() = runTest {
+        val dataStore = InMemoryDataStore()
+        val cache = createCache(dataStore, "v13", backgroundScope)
+
+        cache.put("k1", PersistentTestItem("old", 1))
+        cache.clearAll()
+        runCurrent()
+
+        assertThat(cache.snapshotFromDisk()).isEmpty()
+    }
+
     // ==================== 辅助方法 ====================
 
     @Suppress("unused")
@@ -260,5 +296,35 @@ class PersistentTtlCacheTest {
             keyPrefix = keyPrefix,
             scope = scope
         )
+    }
+
+    /** 固定返回加载开始前的磁盘快照，便于确定性复现读盘与写入竞争。 */
+    private class BlockingSnapshotDataStore(
+        private var current: Preferences
+    ) : DataStore<Preferences> {
+        val release = CompletableDeferred<Unit>()
+        private val snapshot = current
+
+        override val data: Flow<Preferences> = flow {
+            release.await()
+            emit(snapshot)
+        }
+
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+            current = transform(current)
+            return current
+        }
+    }
+
+    private class InMemoryDataStore(initial: Preferences = emptyPreferences()) : DataStore<Preferences> {
+        private val preferences = MutableStateFlow(initial)
+
+        override val data: Flow<Preferences> = preferences
+
+        override suspend fun updateData(transform: suspend (t: Preferences) -> Preferences): Preferences {
+            val updated = transform(preferences.value)
+            preferences.value = updated
+            return updated
+        }
     }
 }

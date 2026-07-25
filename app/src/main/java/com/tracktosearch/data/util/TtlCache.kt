@@ -32,6 +32,22 @@ open class TtlCache<T>(
     /** 飞行中请求追踪：同一 key 的并发调用共享同一个 CompletableDeferred */
     private val inFlightRequests = ConcurrentHashMap<String, CompletableDeferred<T>>()
 
+    /**
+     * 清理时递增。飞行中请求只能在其开始时所属的代次内提交缓存结果。
+     * 这把「旧请求不能在 clear 后写回」的语义收敛到缓存模块内。
+     */
+    private val generation = AtomicLong(0L)
+    private val generationLock = Any()
+
+    /** 子类在需要同时维护自身状态时，必须先持有此锁以保持统一锁顺序。 */
+    protected fun <R> withGenerationLock(block: () -> R): R = synchronized(generationLock, block)
+
+    /** 供子类将异步副作用绑定到当前缓存代次。 */
+    protected fun currentGeneration(): Long = generation.get()
+
+    /** 供子类在异步副作用提交前确认其所属代次仍有效。 */
+    protected fun isCurrentGeneration(value: Long): Boolean = generation.get() == value
+
     open fun get(key: String): T? {
         val entry = cache[key] ?: return null
         // Long.MAX_VALUE 表示永不过期，跳过过期检查
@@ -49,10 +65,12 @@ open class TtlCache<T>(
     }
 
     open fun put(key: String, value: T) {
-        val now = System.currentTimeMillis()
-        // 防止 now + ttlMillis 溢出（Long.MAX_VALUE 作为"永不过期"时会导致溢出为负数，缓存立即失效）
-        val expireAt = if (ttlMillis >= Long.MAX_VALUE - now) Long.MAX_VALUE else now + ttlMillis
-        putInternal(key, value, expireAt)
+        synchronized(generationLock) {
+            val now = System.currentTimeMillis()
+            // 防止 now + ttlMillis 溢出（Long.MAX_VALUE 作为"永不过期"时会导致溢出为负数，缓存立即失效）
+            val expireAt = if (ttlMillis >= Long.MAX_VALUE - now) Long.MAX_VALUE else now + ttlMillis
+            putInternal(key, value, expireAt)
+        }
     }
 
     /** 子类专用：用指定 expireAt 写入（如 PersistentTtlCache 从磁盘恢复时保留原始过期时间） */
@@ -84,19 +102,42 @@ open class TtlCache<T>(
         if (!skipCache) {
             get(key)?.let { return it }
         }
-        // 尝试注册为飞行中请求的发起者
-        val deferred = CompletableDeferred<T>()
-        // fetch lambda 被 cancel 时（即使永远不抛异常也不返回）也能清理 inFlight 槽位（#37）
-        deferred.invokeOnCompletion { inFlightRequests.remove(key, deferred) }
-        val existing = inFlightRequests.putIfAbsent(key, deferred)
-        if (existing != null) {
-            // 已有飞行中请求，等待其结果
-            return existing.await()
+        var requestGeneration = 0L
+        lateinit var deferred: CompletableDeferred<T>
+        while (true) {
+            // 记录请求所属代次；clear 后旧请求仍可返回给原调用者，但不得重新填充缓存。
+            val candidateGeneration = generation.get()
+            // 尝试注册为飞行中请求的发起者
+            val candidateDeferred = CompletableDeferred<T>()
+            // fetch lambda 被 cancel 时（即使永远不抛异常也不返回）也能清理 inFlight 槽位（#37）
+            candidateDeferred.invokeOnCompletion { inFlightRequests.remove(key, candidateDeferred) }
+
+            var generationChanged = false
+            val existing = synchronized(generationLock) {
+                if (generation.get() != candidateGeneration) {
+                    generationChanged = true
+                    null
+                } else {
+                    inFlightRequests.putIfAbsent(key, candidateDeferred)
+                }
+            }
+            if (generationChanged) continue
+            if (existing != null) {
+                // 已有同代次飞行中请求，等待其结果。
+                return existing.await()
+            }
+            requestGeneration = candidateGeneration
+            deferred = candidateDeferred
+            break
         }
         // 当前协程负责 fetch
         return try {
             val value = fetch()
-            put(key, value)
+            synchronized(generationLock) {
+                if (generation.get() == requestGeneration) {
+                    put(key, value)
+                }
+            }
             deferred.complete(value)
             value
         } catch (e: CancellationException) {
@@ -112,11 +153,13 @@ open class TtlCache<T>(
         }
     }
 
-    fun clear() {
-        cache.clear()
-        // 清除飞行中请求追踪，防止 clear 后旧请求完成时把旧数据写回缓存，
-        // 也防止新调用方 join 到已失效的飞行中请求
-        inFlightRequests.clear()
+    open fun clear() {
+        synchronized(generationLock) {
+            generation.incrementAndGet()
+            cache.clear()
+            // 旧请求仍会完成，但 generation 校验会阻止其写回；新请求也不会 join 旧 deferred。
+            inFlightRequests.clear()
+        }
     }
 
     private fun trimToSize() {
