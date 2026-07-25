@@ -61,7 +61,9 @@ import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
-import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.auth.AuthManager
+import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
@@ -74,6 +76,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 import java.util.Locale
 import javax.inject.Inject
 import kotlin.math.pow
@@ -133,7 +136,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     @Inject
-    lateinit var tokenStorage: TokenStorage
+    lateinit var authManager: AuthManager
+
+    @Inject
+    lateinit var traktAuthManager: TraktAuthManager
 
     @Inject
     lateinit var guestModeStorage: GuestModeStorage
@@ -158,6 +164,7 @@ class MainActivity : AppCompatActivity() {
 
     // 全局 scrollToTop 提供者
     private val scrollToTopProvider = ScrollToTopProvider()
+    private var authInitializationJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val splashStartTime = System.currentTimeMillis()
@@ -189,18 +196,23 @@ class MainActivity : AppCompatActivity() {
         var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        var isTraktConnected by mutableStateOf(false)
 
-        lifecycleScope.launch {
+        authInitializationJob = lifecycleScope.launch {
             val splashStartTime = System.currentTimeMillis()
-            val isValid = tokenStorage.isTokenValid()
-            val isGuest = guestModeStorage.isGuestMode.first()
+            authManager.initialize()
+            val authState = authManager.authState.value
+            val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
+            // 网关激活与 Trakt OAuth 是两套独立会话。启动时必须真实检查 Trakt，
+            // 否则激活成功会被误当成 Trakt 已登录，直接跳过原有登录页。
+            isTraktConnected = isAuthorized && traktRepository.checkTraktConnection()
             startDest = when {
-                isValid -> Routes.MAIN
-                isGuest -> Routes.MAIN
+                !isAuthorized -> Routes.AUTH
+                isTraktConnected -> Routes.MAIN
                 else -> Routes.LOGIN
             }
             // 已登录时读取用户设置的默认启动页，未登录时使用搜索页（0）
-            initialTab = if (isValid || isGuest) {
+            initialTab = if (isTraktConnected) {
                 defaultTabStorage.defaultTab.first()
             } else {
                 0
@@ -214,11 +226,11 @@ class MainActivity : AppCompatActivity() {
 
             // Splash 期间并行预取默认首页数据，结果写入 Repository 内存缓存供 MainScreen 复用
             val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
-            if (isValid) {
+            if (isTraktConnected) {
                 prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) } })
+                prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
+                prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
             }
-            prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
-            prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
 
             // Activity 重建时跳过开屏等待，直接进入
             if (savedInstanceState == null) {
@@ -257,21 +269,15 @@ class MainActivity : AppCompatActivity() {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
-                        com.tracktosearch.ui.navigation.AuthStateHolder(tokenStorage)
+                        com.tracktosearch.ui.navigation.AuthStateHolder(authManager, traktAuthManager)
                     }
                     AppNavigation(
                         startDestination = currentDestination,
                         initialTab = initialTab,
+                        initialTraktLoggedIn = isTraktConnected,
                         authStateHolder = authStateHolder,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN
-                        },
-                        onLogout = {
-                            lifecycleScope.launch {
-                                tokenStorage.clearTokens()
-                                guestModeStorage.setGuestMode(false)
-                                currentDestination = Routes.LOGIN
-                            }
                         }
                     )
                 } else {
@@ -442,6 +448,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         JPushHelper.onResume(this)
+        lifecycleScope.launch {
+            authInitializationJob?.join()
+            if (authManager.authState.value != AuthState.UNAUTHORIZED) {
+                authManager.check()
+            }
+        }
     }
 
     private var statusBarHeight: Int = 0

@@ -13,6 +13,7 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.tracktosearch.di.DoubanIdMapping
 import com.tracktosearch.di.NetworkModule
+import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
@@ -39,6 +40,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var baseOkHttpClient: OkHttpClient
     @Inject lateinit var notificationScheduler: NotificationScheduler
+    @Inject lateinit var authCheckScheduler: AuthCheckScheduler
     @Inject lateinit var tmdbRepository: TmdbRepository
     @Inject lateinit var traktRepository: TraktRepository
     @Inject lateinit var doubanHotCache: PersistentTtlCache<DoubanHotData>
@@ -63,14 +65,14 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
+            // 授权撤销最多 15 分钟内生效；网络不可用时由 AuthManager 保留离线宽限策略。
+            Thread { authCheckScheduler.schedulePeriodicCheck() }.start()
             // 上传未发送的崩溃日志到云端
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
                 CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
             }
 
-            // 远程配置初始化(拉取云端 API key/base URL),放在其他持久化缓存加载之前
-            // ApiKeyInterceptor/BaseUrlInterceptor 在首次网络请求时就能用到缓存配置
-            // 不阻塞 UI 线程:内部用 IO 协程,首次请求若未初始化完成会回退 BuildConfig 兜底
+            // 远程配置初始化，用于非敏感运行参数；上游 key 不进入 APK
             remoteConfigManager.initialize()
             // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
             // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存

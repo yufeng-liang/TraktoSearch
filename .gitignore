@@ -49,6 +49,11 @@ backup.kt
 # Local directories (not tracked in git)
 docs/
 .superpowers/
+auth-worker/node_modules/
+
+# Cloudflare Wrangler local state
+auth-worker/.wrangler/
+gateway-pages/.wrangler/
 
 # Perfetto / ART trace files (large, local performance analysis only)
 *.trace
@@ -66,3 +71,6 @@ docs/
 /ui-*.txt
 /nul
 /%SystemDrive%/
+
+# Local verification screenshots and reports
+verification-artifacts/

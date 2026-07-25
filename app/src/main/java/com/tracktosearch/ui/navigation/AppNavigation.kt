@@ -31,7 +31,9 @@ import dev.chrisbanes.haze.hazeSource
 import com.tracktosearch.DeepLinkNavigator
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
-import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.auth.AuthManager
+import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -48,6 +50,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
+import com.tracktosearch.ui.screen.auth.AuthScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -62,6 +65,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -84,6 +88,7 @@ interface GuestModeEntryPoint {
 }
 
 object Routes {
+    const val AUTH = "auth"
     const val LOGIN = "login"
     const val MAIN = "main"
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
@@ -138,9 +143,14 @@ object Routes {
 }
 
 class AuthStateHolder @Inject constructor(
-    private val tokenStorage: TokenStorage
+    private val authManager: AuthManager,
+    private val traktAuthManager: TraktAuthManager
 ) {
-    val isLoggedIn: kotlinx.coroutines.flow.StateFlow<Boolean> = tokenStorage.isLoggedInState
+    val authState: kotlinx.coroutines.flow.StateFlow<AuthState> = authManager.authState
+    val isLoggedIn: kotlinx.coroutines.flow.Flow<Boolean> = authManager.authState
+        .map { it == AuthState.AUTHORIZED || it == AuthState.OFFLINE }
+
+    suspend fun disconnectTrakt() = traktAuthManager.disconnect()
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -148,9 +158,9 @@ class AuthStateHolder @Inject constructor(
 fun AppNavigation(
     startDestination: String,
     initialTab: Int = 0,
+    initialTraktLoggedIn: Boolean = false,
     authStateHolder: AuthStateHolder,
-    onLoginSuccess: () -> Unit = {},
-    onLogout: () -> Unit = {}
+    onLoginSuccess: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -176,12 +186,29 @@ fun AppNavigation(
         mainInitialTab = storedDefaultTab
     }
     val scope = rememberCoroutineScope()
+    val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
+    // Trakt OAuth 与网关激活分开维护；网关 AUTHORIZED 不代表 Trakt 已登录。
+    var isTraktLoggedIn by remember { mutableStateOf(initialTraktLoggedIn) }
+
+    LaunchedEffect(currentAuthState) {
+        if (currentAuthState == AuthState.OFFLINE) {
+            Toast.makeText(context, context.getString(R.string.auth_offline_mode), Toast.LENGTH_LONG).show()
+        }
+        if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
+            navController.currentDestination?.route == Routes.MAIN
+        ) {
+            currentStartDest = Routes.AUTH
+            navController.navigate(Routes.AUTH) {
+                popUpTo(Routes.MAIN) { inclusive = true }
+            }
+        }
+    }
 
     // 监听通知深链路导航指令（上映/新季通知点击后跳转详情页）
     // 直接读 StateFlow.value 避免 Compose 状态捕获问题
     LaunchedEffect(Unit) {
         DeepLinkNavigator.pendingNavigation.collect { target ->
-            if (target != null && authStateHolder.isLoggedIn.value) {
+            if (target != null && (authStateHolder.authState.value == AuthState.AUTHORIZED || authStateHolder.authState.value == AuthState.OFFLINE)) {
                 navController.navigate(
                     Routes.detailRoute(target.type, target.traktId, target.tmdbId, target.title)
                 )
@@ -208,12 +235,27 @@ fun AppNavigation(
                 navController = navController,
                 startDestination = currentStartDest
             ) {
+                composable(Routes.AUTH) {
+                    val expired = currentAuthState == AuthState.EXPIRED
+                    AuthScreen(
+                        expired = expired,
+                        onActivated = {
+                            // 激活只建立网关会话，仍需完成原有 Trakt OAuth 登录。
+                            isTraktLoggedIn = false
+                            currentStartDest = Routes.LOGIN
+                            navController.navigate(Routes.LOGIN) {
+                                popUpTo(Routes.AUTH) { inclusive = true }
+                            }
+                        }
+                    )
+                }
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val fromGuestMode = navController.previousBackStackEntry?.destination?.route == Routes.MAIN
                         LoginScreen(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
+                                isTraktLoggedIn = true
                                 onLoginSuccess()
                                 // 登录成功后清除访客模式标记
                                 val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
@@ -247,8 +289,6 @@ fun AppNavigation(
 
                 composable(Routes.MAIN) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
-                        val isLoggedIn by authStateHolder.isLoggedIn.collectAsStateWithLifecycle()
-
                         // 从详情页返回时，按变更类型分别刷新想看列表或已看历史
                         // 使用 backStackEntry.savedStateHandle 而非 navController.currentBackStackEntry
                         // 后者在导航过渡期间可能为 null 或指向错误的 entry
@@ -338,7 +378,7 @@ fun AppNavigation(
 
                         MainScreen(
                             initialTab = mainInitialTab,
-                            isLoggedIn = isLoggedIn,
+                            isLoggedIn = isTraktLoggedIn,
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
@@ -374,7 +414,9 @@ fun AppNavigation(
                                 navController.navigate(Routes.listDetailRoute(listId, listName))
                             },
                             onLogout = {
-                                onLogout()
+                                // 这里是 Trakt 退出，不应清除网关激活令牌。
+                                isTraktLoggedIn = false
+                                scope.launch { authStateHolder.disconnectTrakt() }
                                 currentStartDest = Routes.LOGIN
                                 navController.navigate(Routes.LOGIN) {
                                     popUpTo(0) { inclusive = true }

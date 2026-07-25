@@ -1,0 +1,17 @@
+{
+    "name": "auth-worker",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "typecheck": "tsc -p tsconfig.json",
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy",
+        "migration:local": "wrangler d1 execute auth-db --local --file",
+        "migration:remote": "wrangler d1 execute auth-db --remote --file"
+    },
+    "devDependencies": {
+        "@cloudflare/workers-types": "^4.20250101",
+        "typescript": "^5.3.0",
+        "wrangler": "^3.0.0"
+    }
+}

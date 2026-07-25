@@ -1,70 +1,40 @@
 package com.tracktosearch.data.remote.trakt
 
-import com.tracktosearch.BuildConfig
-import com.tracktosearch.data.local.TokenStorage
-import com.tracktosearch.data.remote.trakt.dto.*
+import com.tracktosearch.data.auth.AuthApiService
+import com.tracktosearch.data.auth.TraktOAuthCodeRequest
 import kotlinx.coroutines.CancellationException
-import okhttp3.OkHttpClient
-import retrofit2.Retrofit
-import retrofit2.converter.kotlinx.serialization.asConverterFactory
-import kotlinx.serialization.json.Json
-import okhttp3.MediaType.Companion.toMediaType
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class TraktAuthManager @Inject constructor(
-    private val tokenStorage: TokenStorage,
-    baseClient: OkHttpClient
+    private val authApiService: AuthApiService
 ) {
     companion object {
-        const val AUTH_URL = "https://trakt.tv/oauth/authorize"
-        const val TOKEN_URL = "https://trakt.tv/oauth/token"
-        const val API_BASE_URL = "https://api.trakt.tv/"
     }
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
-
-    // 复用 baseClient 的连接池和 DNS,只覆盖 timeout
-    // 不挂业务拦截器(避免 TraktAuthenticator 递归调用 refreshAccessToken)
-    private val traktApiService: TraktApiService by lazy {
-        val client = baseClient.newBuilder()
-            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-            .build()
-        val retrofit = Retrofit.Builder()
-            .baseUrl(API_BASE_URL)
-            .client(client)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
-        retrofit.create(TraktApiService::class.java)
-    }
-
-    fun buildAuthorizationUrl(): String {
-        return "$AUTH_URL?response_type=code&client_id=${BuildConfig.TRAKT_CLIENT_ID}&redirect_uri=${BuildConfig.TRAKT_REDIRECT_URI}"
-    }
-
-    suspend fun exchangeCodeForToken(code: String): Result<TraktTokenResponse> {
+    suspend fun buildAuthorizationUrl(): Result<String> {
         return try {
-            val request = TraktTokenRequest(
-                code = code,
-                client_id = BuildConfig.TRAKT_CLIENT_ID,
-                client_secret = BuildConfig.TRAKT_CLIENT_SECRET,
-                redirect_uri = BuildConfig.TRAKT_REDIRECT_URI
-            )
-            val response = traktApiService.exchangeCodeForToken(request)
-            if (response.isSuccessful) {
-                val tokenResponse = response.body()
-                    ?: return Result.failure(Exception("Empty response body"))
-                tokenStorage.saveTokens(
-                    tokenResponse.access_token,
-                    tokenResponse.refresh_token,
-                    tokenResponse.expires_in
-                )
-                Result.success(tokenResponse)
+            val response = authApiService.getTraktAuthorizeUrl()
+            val url = response.body()?.data?.url
+            if (response.isSuccessful && !url.isNullOrBlank()) {
+                Result.success(url)
             } else {
-                Result.failure(Exception("Token exchange failed: ${response.code()}"))
+                Result.failure(Exception(response.body()?.message ?: "Authorization URL unavailable"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun exchangeCodeForToken(code: String): Result<Unit> {
+        return try {
+            val response = authApiService.exchangeTraktCode(TraktOAuthCodeRequest(code))
+            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
+                Result.success(Unit)
+            } else {
+                val body = response.body()
+                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Token exchange failed"}"))
             }
         } catch (e: CancellationException) {
             throw e
@@ -73,34 +43,30 @@ class TraktAuthManager @Inject constructor(
         }
     }
 
-    suspend fun refreshAccessToken(): Result<TraktTokenResponse> {
+    suspend fun refreshAccessToken(): Result<Unit> {
         return try {
-            val refreshToken = tokenStorage.getRefreshToken()
-                ?: return Result.failure(Exception("No refresh token available"))
-
-            val request = TraktRefreshTokenRequest(
-                refresh_token = refreshToken,
-                client_id = BuildConfig.TRAKT_CLIENT_ID,
-                client_secret = BuildConfig.TRAKT_CLIENT_SECRET,
-                redirect_uri = BuildConfig.TRAKT_REDIRECT_URI
-            )
-            val response = traktApiService.refreshToken(request)
-            if (response.isSuccessful) {
-                val tokenResponse = response.body()
-                    ?: return Result.failure(Exception("Empty response body"))
-                tokenStorage.saveTokens(
-                    tokenResponse.access_token,
-                    tokenResponse.refresh_token,
-                    tokenResponse.expires_in
-                )
-                Result.success(tokenResponse)
+            val response = authApiService.refreshTrakt()
+            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
+                Result.success(Unit)
             } else {
-                // 仅 400/401（refresh token 无效或过期）才清除 token；
-                // 5xx/429 等临时故障保留 refresh_token，让下次请求触发重试
-                if (response.code() == 400 || response.code() == 401) {
-                    tokenStorage.clearTokens()
-                }
-                Result.failure(Exception("Token refresh failed: ${response.code()}"))
+                val body = response.body()
+                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Token refresh failed"}"))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun disconnect(): Result<Unit> {
+        return try {
+            val response = authApiService.disconnectTrakt()
+            if (response.isSuccessful && response.body()?.code == "SUCCESS") {
+                Result.success(Unit)
+            } else {
+                val body = response.body()
+                Result.failure(Exception("${body?.code ?: response.code()}: ${body?.message ?: "Trakt disconnect failed"}"))
             }
         } catch (e: CancellationException) {
             throw e

@@ -242,6 +242,20 @@ interface TraktApiService {
         @Query("extended") extended: String = "full"
     ): Response<TraktUserProfileResponse>
 
+    // users/me 可能只返回基础资料；按用户名读取公开资料可补齐头像 URL。
+    @GET("users/{username}/profile")
+    suspend fun getUserProfileByUsername(
+        @Path("username") username: String,
+        @Query("extended") extended: String = "full"
+    ): Response<TraktUserProfileResponse>
+
+    // 部分网关或上游版本对 profile 路径返回 405，公开用户资料入口可作为兼容回退。
+    @GET("users/{username}")
+    suspend fun getUserByUsername(
+        @Path("username") username: String,
+        @Query("extended") extended: String = "full"
+    ): Response<TraktUserProfileResponse>
+
     // 用户统计
     @GET("users/{id}/stats")
     suspend fun getUserStats(

@@ -1,6 +1,23 @@
 <resources>
+    <string name="auth_offline_mode">오프라인 모드: 캐시된 데이터를 사용합니다.</string>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">발견 · 추적 · 검색</string>
+    <string name="auth_title">접근 권한 활성화</string>
+    <string name="auth_subtitle">관리자가 제공한 초대 코드를 입력하세요.</string>
+    <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
+    <string name="auth_invite_code">초대 코드</string>
+    <string name="auth_activate">활성화</string>
+    <string name="auth_error_invalid_invite">초대 코드가 올바르지 않습니다.</string>
+    <string name="auth_error_invite_used">이 초대 코드는 이미 사용되었습니다. 관리자에게 새 코드를 요청하세요.</string>
+    <string name="auth_error_invite_revoked">이 초대 코드는 취소되었습니다. 관리자에게 문의하세요.</string>
+    <string name="auth_error_invite_expired">초대 코드가 만료되었습니다.</string>
+    <string name="auth_error_device_limit">기기 한도에 도달했습니다.</string>
+    <string name="auth_error_migration_device_not_found">마이그레이션하려면 기존에 등록된 기기가 필요합니다.</string>
+    <string name="auth_error_migration_device_mismatch">이 기기는 다른 친구에 속해 있습니다.</string>
+    <string name="auth_error_device_already_bound">이 기기는 이미 등록되어 있습니다.</string>
+    <string name="auth_error_friend_disabled">이 접근 권한은 비활성화되었습니다.</string>
+    <string name="auth_error_network">네트워크에 연결할 수 없습니다. 확인 후 다시 시도하세요.</string>
+    <string name="auth_error_generic">활성화하지 못했습니다. 다시 시도하세요.</string>
 
     <!-- Main Screen -->
     <string name="tab_search">검색</string>

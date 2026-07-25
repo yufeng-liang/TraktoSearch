@@ -1,6 +1,23 @@
 <resources>
+    <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">発見 · 追跡 · 検索</string>
+    <string name="auth_title">アクセスを有効化</string>
+    <string name="auth_subtitle">管理者から提供された招待コードを入力してください。</string>
+    <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
+    <string name="auth_invite_code">招待コード</string>
+    <string name="auth_activate">有効化</string>
+    <string name="auth_error_invalid_invite">招待コードが無効です。</string>
+    <string name="auth_error_invite_used">この招待コードは使用済みです。新しいコードを管理者に依頼してください。</string>
+    <string name="auth_error_invite_revoked">この招待コードは取り消されています。管理者に連絡してください。</string>
+    <string name="auth_error_invite_expired">招待コードの有効期限が切れています。</string>
+    <string name="auth_error_device_limit">デバイス上限に達しました。</string>
+    <string name="auth_error_migration_device_not_found">移行には既存の登録デバイスが必要です。</string>
+    <string name="auth_error_migration_device_mismatch">このデバイスは別の友達に属しています。</string>
+    <string name="auth_error_device_already_bound">このデバイスはすでに登録されています。</string>
+    <string name="auth_error_friend_disabled">このアクセスは無効化されています。</string>
+    <string name="auth_error_network">ネットワークに接続できません。確認してもう一度お試しください。</string>
+    <string name="auth_error_generic">有効化に失敗しました。もう一度お試しください。</string>
 
     <!-- Main Screen -->
     <string name="tab_search">検索</string>

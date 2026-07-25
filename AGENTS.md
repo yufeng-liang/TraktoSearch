@@ -81,11 +81,19 @@
 4. 验证
 5. 有价值教训写入本文件
 
+## 授权撤销同步经验
+
+- 后台撤销设备后，App 不能只依赖进程启动时的 `AuthManager.initialize()`；前台恢复应立即调用 `check()`，并通过网络约束的 15 分钟周期 Worker 兜底。
+- Worker 返回 403 时沿用 `AuthManager.check()` 的清理逻辑，清除本地令牌并由导航状态切回激活页；撤销设备仍保留记录，重新绑定应使用迁移邀请码。
+
 ## 常见陷阱
 
+- Retrofit 的 `@GET("")` 会在进入 OkHttp 前因空 URL 失败，并被评分层的宽泛异常捕获静默降级；网关 base URL 已含 `/api/omdb/` 时应使用 `@GET(".")`，并用 MockWebServer 锁定最终路径。
+- `AuthManager.initialize()` 可能同时由 `MainActivity` 和 `AuthCheckWorker` 进入；刷新锁内必须按调用方看到的旧 access token 二次检查，避免串行等待后的第二次刷新再次轮换 refresh token。
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录
 - 授权网关调试时，App 默认应使用可直连的 Pages 代理 `https://tracktosearch-gateway.pages.dev/gateway-api`，由其转发到 `auth-worker`；不要把 `workers.dev` 直连地址写入面向普通用户的构建，否则部分网络环境会超时。
 - 若激活后短暂进入主界面又回到激活页，先核对 worktree 的 `gateway.base.url` 和构建产物中的 `GATEWAY_BASE_URL`，再检查 auth `check` 请求是否带 Bearer；不能只根据页面现象判断是邀请码失效。
+- Trakt `users/me?extended=full` 可能只返回用户名而没有头像；补拉头像时优先请求 `users/{username}/profile`，若网关或上游返回 405，再回退到 `users/{username}`，并持久化成功返回的 `images.avatar.full`。
 
 ## Git 规范
 

@@ -1,0 +1,30 @@
+name = "auth-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+# D1 数据库（授权关系数据）
+[[d1_databases]]
+binding = "DB"
+database_name = "auth-db"
+database_id = "f8db6c43-7fbe-4747-a7b7-364a5ea09d30"
+
+# KV 缓存（限流/撤销短缓存/激活挑战）
+[[kv_namespaces]]
+binding = "KV"
+id = "5e2b3731a5284fedb9d17093a86218ea"
+
+# Secrets（通过 wrangler secret put 注入）
+# JWT_SIGNING_KEY
+# TRAKT_CLIENT_ID
+# TRAKT_CLIENT_SECRET
+# TMDB_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
+# DOUBAN_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
+# OMDb_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）
+# TRAKT_CREDENTIALS_ENCRYPTION_KEY
+# ADMIN_EMAIL
+# ACCESS_TEAM_DOMAIN
+# ACCESS_AUDIENCE
+
+[vars]
+ENVIRONMENT = "production"

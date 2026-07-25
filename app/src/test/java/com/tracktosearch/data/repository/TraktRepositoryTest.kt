@@ -13,6 +13,9 @@ import com.tracktosearch.data.remote.trakt.dto.TraktHistoryMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktHistoryShow
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
+import com.tracktosearch.data.remote.trakt.dto.TraktAvatar
+import com.tracktosearch.data.remote.trakt.dto.TraktUserImages
+import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import okhttp3.Headers
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -84,7 +88,50 @@ class TraktRepositoryTest {
         return Response.success(emptyList(), headers)
     }
 
+    @Test
+    fun `getUserProfile_缓存头像为空时按用户名补拉真实头像`() = runTest {
+        val cached = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
+        val refreshed = cached.copy(
+            images = TraktUserImages(
+                avatar = TraktAvatar("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
+            )
+        )
+        coEvery { userProfileStorage.getProfile() } returns cached
+        coEvery { traktApiService.getUserProfileByUsername("yuhu", "full") } returns Response.success(refreshed)
+
+        val result = repository.getUserProfile()
+
+        assertThat(result.getOrNull()?.images?.avatar?.full)
+            .isEqualTo("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
+        coVerify(exactly = 1) { traktApiService.getUserProfileByUsername("yuhu", "full") }
+        coVerify(exactly = 1) { userProfileStorage.saveProfile(refreshed) }
+    }
+
     // ==================== parseTraktDate（反射）====================
+
+    @Test
+    fun `getUserProfile_profile接口405时回退公开用户资料`() = runTest {
+        val cached = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
+        val refreshed = cached.copy(
+            images = TraktUserImages(
+                avatar = TraktAvatar("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
+            )
+        )
+        coEvery { userProfileStorage.getProfile() } returns cached
+        coEvery {
+            traktApiService.getUserProfileByUsername("yuhu", "full")
+        } returns Response.error(405, "".toResponseBody())
+        coEvery {
+            traktApiService.getUserByUsername("yuhu", "full")
+        } returns Response.success(refreshed)
+
+        val result = repository.getUserProfile()
+
+        assertThat(result.getOrNull()?.images?.avatar?.full)
+            .isEqualTo("https://walter.trakt.tv/images/users/yuhu/avatar.jpg")
+        coVerify(exactly = 1) { traktApiService.getUserByUsername("yuhu", "full") }
+        coVerify(exactly = 1) { userProfileStorage.saveProfile(refreshed) }
+    }
 
     private fun parseTraktDate(dateStr: String?): Long {
         val method = TraktRepository::class.java.getDeclaredMethod("parseTraktDate", String::class.java)
