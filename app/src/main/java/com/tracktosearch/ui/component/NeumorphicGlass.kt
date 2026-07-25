@@ -29,20 +29,27 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.materials.HazeMaterials
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /** 供跨窗口弹窗和底部抽屉共享当前页面背景的 Haze 状态。 */
 val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
+
+const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
 /** 标题栏使用普通 thin 模糊，不对模糊强度做渐进处理。 */
 @Composable
 fun Modifier.hazeProgressiveTopBar(
     state: HazeState,
-    style: HazeStyle = HazeMaterials.thin(),
+    style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp
-): Modifier = hazeEffect(state = state, style = style)
+): Modifier = hazeEffect(state = state) {
+    blurEffect {
+        this.style = style
+    }
+}
 
 /** 弹窗/底部抽屉统一使用较厚模糊，避免每个页面重复配置。 */
 @Composable
@@ -59,7 +66,11 @@ fun Modifier.hazeModalSurface(
     }
     val shape = RoundedCornerShape(28.dp)
     return clip(shape)
-        .hazeEffect(state = state, style = style)
+        .hazeEffect(state = state) {
+            blurEffect {
+                this.style = style
+            }
+        }
         .clip(shape)
 }
 
@@ -79,7 +90,7 @@ fun Modifier.hazeBottomSheetSurface(
 
 /** 底部抽屉内容占满可用窗口，避免 Surface 与屏幕底部之间出现空隙。 */
 fun Modifier.hazeBottomSheetContent(): Modifier =
-    fillMaxWidth().fillMaxHeight()
+    fillMaxWidth().fillMaxHeight(MODAL_BOTTOM_SHEET_HEIGHT_FRACTION)
 
 /**
  * C方案拟态外阴影：dropShadow 画右下暗投影（位于组件外部，不受clip影响）
@@ -256,14 +267,18 @@ fun NeumorphicFrostedSurface(
     darkShadowAlpha: Float = if (isDark) 0.5f else 0.12f,
     lightShadowAlpha: Float = if (isDark) 0.10f else 0.85f,
     hazeState: HazeState? = null,
-    hazeStyle: HazeStyle? = null,
+    hazeStyle: HazeBlurStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
-        Modifier.hazeEffect(state = hazeState, style = resolvedHazeStyle)
+        Modifier.hazeEffect(state = hazeState) {
+            blurEffect {
+                style = resolvedHazeStyle
+            }
+        }
     } else Modifier
 
     Box(

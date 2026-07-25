@@ -529,11 +529,11 @@ internal fun StatisticsCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                          else Color.White.copy(alpha = 0.55f),
+                          else Color.White.copy(alpha = 0.70f),
         borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
-                      else Color.White.copy(alpha = 0.75f),
-        elevation = 4.dp,
-        blurRadius = 16.dp,
+                      else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+        elevation = 6.dp,
+        blurRadius = 18.dp,
         hazeState = hazeState,
         hazeStyle = HazeMaterials.thin()
     ) {

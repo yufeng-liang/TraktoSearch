@@ -650,11 +650,12 @@ fun SettingsScreen(
                                         }
                                     },
                                     onClick = {
-                                        // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
-                                        if (viewModel.isCheckRunning()) {
+                                        if (!doubanLoggedIn) {
+                                            showDoubanLoginPrompt = true
+                                        } else if (viewModel.isCheckRunning()) {
+                                            // 检查已运行时直接弹窗恢复进度；未运行时先弹二次确认
                                             showConsistencyDialog = true
                                         } else {
-                                            // 异步读取上次检查时间并格式化，然后弹二次确认
                                             scope.launch {
                                                 val lastMs = viewModel.getLastConsistencyCheckAt()
                                                 lastCheckTimeText = formatLastCheckTime(lastMs, context)
@@ -1168,8 +1169,12 @@ fun SettingsScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showConsistencyConfirm = false
-                    viewModel.startManualConsistencyCheck()
-                    showConsistencyDialog = true
+                    if (doubanLoggedIn) {
+                        viewModel.startManualConsistencyCheck()
+                        showConsistencyDialog = true
+                    } else {
+                        showDoubanLoginPrompt = true
+                    }
                 }) {
                     Text(stringResource(R.string.consistency_check_confirm_button))
                 }
@@ -1389,11 +1394,11 @@ private fun MarkRecordsEntryCard(
         isDark = isDark,
         shape = RoundedCornerShape(20.dp),
         backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                          else Color.White.copy(alpha = 0.55f),
+                          else Color.White.copy(alpha = 0.70f),
         borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
-                      else Color.White.copy(alpha = 0.75f),
-        elevation = 4.dp,
-        blurRadius = 16.dp,
+                      else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+        elevation = 6.dp,
+        blurRadius = 18.dp,
         hazeState = hazeState,
         hazeStyle = HazeMaterials.thin()
     ) {

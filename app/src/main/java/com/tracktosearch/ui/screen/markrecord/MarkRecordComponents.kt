@@ -383,7 +383,12 @@ fun FilterSheetContent(
     var showEndDatePicker by remember { mutableStateOf(false) }
     val dateFormatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()) }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.8f)
+            .padding(16.dp)
+    ) {
         // 媒体类型
         Text(
             stringResource(R.string.mark_records_filter_media_type),

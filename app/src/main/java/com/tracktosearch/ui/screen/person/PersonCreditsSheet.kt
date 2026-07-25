@@ -81,7 +81,7 @@ internal fun AllMovieCreditsSheet(
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.85f),
+                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -166,7 +166,7 @@ internal fun AllTvCreditsSheet(
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxHeight(0.85f),
+                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

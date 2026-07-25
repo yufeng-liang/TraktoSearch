@@ -1658,6 +1658,7 @@ private fun FailureFilterSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight(0.8f)
             .padding(horizontal = 16.dp, vertical = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
