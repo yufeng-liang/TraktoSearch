@@ -231,7 +231,14 @@ class AuthManager @Inject constructor(
             val hasRefreshSession = !deviceId.isNullOrBlank() &&
                 !tokenStorage.getRefreshToken().isNullOrBlank()
             if (hasRefreshSession) {
-                refresh()
+                // 多个初始化入口可能同时看到过期 token；刷新锁内复用已轮换的新 token。
+                val failedAccessToken = tokenStorage.getCachedAccessToken().orEmpty()
+                refreshCoordinator.refreshIfNeeded(
+                    failedAccessToken = failedAccessToken,
+                    currentAccessToken = tokenStorage::getCachedAccessToken
+                ) {
+                    refreshLocked().isSuccess
+                }
             } else {
                 _authState.value = AuthState.UNAUTHORIZED
             }

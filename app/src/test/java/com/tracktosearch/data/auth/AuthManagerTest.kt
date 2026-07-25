@@ -1,17 +1,33 @@
 package com.tracktosearch.data.auth
 
+import android.util.Base64
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.TokenStorage
+import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 import retrofit2.Response
 
 class AuthManagerTest {
+    @Before
+    fun setUp() {
+        mockkStatic(Base64::class)
+        every { Base64.encodeToString(any(), any()) } returns "signature"
+    }
+
+    @After
+    fun tearDown() {
+        unmockkStatic(Base64::class)
+    }
+
     @Test
     fun initialize_refreshesExpiredAccessTokenBeforeDeclaringUnauthorized() = runTest {
         val api = mockk<AuthApiService>()
@@ -23,6 +39,7 @@ class AuthManagerTest {
         every { storage.getCachedDeviceId() } returns "device-id"
         every { storage.getCachedNextCheckAt() } returns 0L
         every { storage.getCachedLastOnlineAt() } returns 1_000L
+        every { storage.getCachedAccessToken() } returns "old-access"
         coEvery { storage.isTokenValid() } returns false
         coEvery { storage.getRefreshToken() } returns "refresh-token"
         every { keyManager.sign(any()) } returns ByteArray(64)
