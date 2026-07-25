@@ -1886,20 +1886,64 @@ class TraktRepository @Inject constructor(
     @Volatile
     private var userProfileCache: TraktUserProfileResponse? = null
 
+    private fun TraktUserProfileResponse.hasAvatarUrl(): Boolean =
+        images.avatar.full.isNotBlank()
+
+    /** 基础资料缺少头像时，按用户名补拉公开资料并保留已有账户状态。 */
+    private suspend fun enrichUserProfileAvatar(
+        profile: TraktUserProfileResponse
+    ): TraktUserProfileResponse {
+        if (profile.hasAvatarUrl() || profile.username.isBlank()) return profile
+        var detailed: TraktUserProfileResponse? = try {
+            traktApiService.getUserProfileByUsername(profile.username)
+                .body()
+                ?.takeIf { response -> response.hasAvatarUrl() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+        if (detailed == null) {
+            detailed = try {
+                traktApiService.getUserByUsername(profile.username)
+                    .body()
+                    ?.takeIf { response -> response.hasAvatarUrl() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+        }
+        return detailed?.copy(
+            username = detailed.username.ifBlank { profile.username },
+            name = detailed.name.ifBlank { profile.name },
+            vip = detailed.vip || profile.vip,
+            vip_ep = detailed.vip_ep || profile.vip
+        ) ?: profile
+    }
+
     suspend fun getUserProfile(): Result<TraktUserProfileResponse> {
         // 1. 内存缓存
-        userProfileCache?.let { return Result.success(it) }
+        userProfileCache?.let { cached ->
+            if (cached.hasAvatarUrl()) return Result.success(cached)
+            val enriched = enrichUserProfileAvatar(cached)
+            userProfileCache = enriched
+            if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
+            return Result.success(enriched)
+        }
         // 2. DataStore 持久化缓存（重启 app 后仍可用）
         val persisted = userProfileStorage.getProfile()
         if (persisted != null) {
-            userProfileCache = persisted
-            return Result.success(persisted)
+            val enriched = enrichUserProfileAvatar(persisted)
+            userProfileCache = enriched
+            if (enriched.hasAvatarUrl()) userProfileStorage.saveProfile(enriched)
+            return Result.success(enriched)
         }
         // 3. 网络请求
         return try {
             val response = traktApiService.getUserProfile()
             if (response.isSuccessful) {
-                val profile = response.body() ?: TraktUserProfileResponse()
+                val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
                 userProfileCache = profile
                 userProfileStorage.saveProfile(profile)
                 Result.success(profile)

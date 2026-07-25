@@ -89,6 +89,7 @@
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录
 - 授权网关调试时，App 默认应使用可直连的 Pages 代理 `https://tracktosearch-gateway.pages.dev/gateway-api`，由其转发到 `auth-worker`；不要把 `workers.dev` 直连地址写入面向普通用户的构建，否则部分网络环境会超时。
 - 若激活后短暂进入主界面又回到激活页，先核对 worktree 的 `gateway.base.url` 和构建产物中的 `GATEWAY_BASE_URL`，再检查 auth `check` 请求是否带 Bearer；不能只根据页面现象判断是邀请码失效。
+- Trakt `users/me?extended=full` 可能只返回用户名而没有头像；补拉头像时优先请求 `users/{username}/profile`，若网关或上游返回 405，再回退到 `users/{username}`，并持久化成功返回的 `images.avatar.full`。
 
 ## Git 规范
 
