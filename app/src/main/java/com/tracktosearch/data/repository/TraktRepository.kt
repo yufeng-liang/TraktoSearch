@@ -208,7 +208,7 @@ class TraktRepository @Inject constructor(
     fun getWatchlistWatchedIds(): WatchlistWatchedIds? = watchlistWatchedIds
 
     /** 清除全局想看/已看缓存及所有用户私有内存缓存（退出登录时调用） */
-    fun clearWatchlistWatchedCache() {
+    suspend fun clearWatchlistWatchedCache() {
         synchronized(watchlistWatchedIdsLock) { watchlistWatchedIds = null }
         // 清除所有用户私有内存缓存，避免下一用户看到上一用户的历史/评分/想看列表
         commentsCache.clear()
@@ -225,10 +225,8 @@ class TraktRepository @Inject constructor(
         // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
         notFoundTmdbIds.clear()
         notFoundImdbIds.clear()
-        // 同步清除持久化缓存，避免下次登录仍读到旧账号数据
-        persistentScope.launch {
-            try { watchlistWatchedIdsCache.clearAll() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
-        }
+        // 等待持久化删除完成，避免下一会话先读到旧账号数据。
+        try { watchlistWatchedIdsCache.clearAll() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
     }
 
     /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */

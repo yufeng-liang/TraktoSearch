@@ -6,7 +6,6 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import org.junit.Ignore
 import org.junit.Test
 import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
@@ -183,7 +182,6 @@ class TtlCacheTest {
      *
      * @Ignore 因为当前实现下此测试会失败（put 写回发生）。
      */
-    @Ignore("P1: clear() 后旧 inFlight fetch 完成仍会 put 写回缓存，与注释承诺不符")
     @Test
     fun clear_afterInFlightStarted_oldResultNotWrittenBack() = runTest {
         val cache = TtlCache<String>(ttlMillis = 60_000)
