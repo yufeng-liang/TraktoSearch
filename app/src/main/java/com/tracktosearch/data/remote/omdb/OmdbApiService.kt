@@ -6,7 +6,7 @@ import retrofit2.http.Query
 
 interface OmdbApiService {
     // 使用相对路径，保留 Retrofit base URL 中的 /api/omdb/ 前缀。
-    @GET("")
+    @GET(".")
     suspend fun getByImdbId(
         @Query("i") imdbId: String,
         @Query("plot") plot: String = "short"
