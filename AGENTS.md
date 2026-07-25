@@ -84,6 +84,7 @@
 
 ## 常见陷阱
 
+- Retrofit 的 `@GET("")` 会在进入 OkHttp 前因空 URL 失败，并被评分层的宽泛异常捕获静默降级；网关 base URL 已含 `/api/omdb/` 时应使用 `@GET(".")`，并用 MockWebServer 锁定最终路径。
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录
 - 授权网关调试时，App 默认应使用可直连的 Pages 代理 `https://tracktosearch-gateway.pages.dev/gateway-api`，由其转发到 `auth-worker`；不要把 `workers.dev` 直连地址写入面向普通用户的构建，否则部分网络环境会超时。
 - 若激活后短暂进入主界面又回到激活页，先核对 worktree 的 `gateway.base.url` 和构建产物中的 `GATEWAY_BASE_URL`，再检查 auth `check` 请求是否带 Bearer；不能只根据页面现象判断是邀请码失效。
