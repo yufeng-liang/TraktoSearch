@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.douban
 import com.tracktosearch.ui.component.hazeModalSurface
+import com.tracktosearch.ui.theme.RatingGold
 
 import android.content.ActivityNotFoundException
 import android.content.ClipData
@@ -1841,7 +1842,7 @@ private fun DoubanStarRating(rating: Int, textColor: Color) {
             Icon(
                 imageVector = if (i <= rating) Icons.Rounded.Star else Icons.Rounded.Star,
                 contentDescription = null,
-                tint = if (i <= rating) Color(0xFFFFC107) else textColor.copy(alpha = 0.4f),
+                tint = if (i <= rating) RatingGold else textColor.copy(alpha = 0.4f),
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -1875,7 +1876,7 @@ private fun DoubanRatingRow(rating: Double, ratingCount: Int?, textColor: Color)
             text = String.format(LocalLocale.current.platformLocale, "%.1f", rating),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFFFC107)
+            color = RatingGold
         )
         Spacer(modifier = Modifier.width(4.dp))
         // 5 星按 10 分制映射:每星 2 分,半星用 alpha 0.5 区分
@@ -1883,8 +1884,8 @@ private fun DoubanRatingRow(rating: Double, ratingCount: Int?, textColor: Color)
         val hasHalf = (rating / 2.0) - filledStars >= 0.5
         for (i in 1..5) {
             val tint = when {
-                i <= filledStars -> Color(0xFFFFC107)
-                i == filledStars + 1 && hasHalf -> Color(0xFFFFC107).copy(alpha = 0.5f)
+                i <= filledStars -> RatingGold
+                i == filledStars + 1 && hasHalf -> RatingGold.copy(alpha = 0.5f)
                 else -> textColor.copy(alpha = 0.3f)
             }
             Icon(

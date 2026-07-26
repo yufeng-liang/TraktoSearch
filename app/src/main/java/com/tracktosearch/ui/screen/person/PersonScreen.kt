@@ -95,7 +95,7 @@ fun PersonScreen(
     var showAllMovies by rememberSaveable { mutableStateOf(false) }
     var showAllTvShows by rememberSaveable { mutableStateOf(false) }
     var showAllPersonImages by rememberSaveable { mutableStateOf(false) }
-    var selectedPersonImageIndex by remember { mutableIntStateOf(-1) }
+    var selectedPersonImageIndex by rememberSaveable { mutableIntStateOf(-1) }
     // 将 gridState 提升到屏幕级，使用 rememberSaveable 保留导航往返后的滚动位置
     val movieCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }
     val tvCreditsGridState = rememberSaveable(saver = LazyGridState.Saver) { LazyGridState() }

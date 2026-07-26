@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.detail
 import com.tracktosearch.ui.component.hazeModalSurface
+import com.tracktosearch.ui.theme.RatingGold
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -175,7 +176,7 @@ internal fun UserRatingBar(
     isRatingLoading: Boolean,
     onClick: () -> Unit
 ) {
-    val starColor = Color(0xFFFFC107)
+    val starColor = RatingGold
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
 
     Column(
@@ -257,7 +258,7 @@ internal fun RatingDialog(
     var commentText by remember(initialComment) {
         androidx.compose.runtime.mutableStateOf(initialComment ?: "")
     }
-    val starColor = Color(0xFFFFC107)
+    val starColor = RatingGold
     val emptyColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
     val ratingView = LocalView.current
 
@@ -377,7 +378,7 @@ internal fun RatingDialog(
                         Text(
                             text = stringResource(R.string.detail_rating_comment_hint),
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                         )
                     },
                     textStyle = MaterialTheme.typography.bodySmall,

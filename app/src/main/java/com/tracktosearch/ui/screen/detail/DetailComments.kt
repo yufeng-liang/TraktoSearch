@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.detail
 
 import androidx.compose.foundation.clickable
+import com.tracktosearch.ui.theme.RatingGold
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -84,7 +85,7 @@ internal fun CommentItem(
                         Icons.Rounded.Star,
                         contentDescription = null,
                         modifier = Modifier.size(12.dp),
-                        tint = Color(0xFFFFC107)
+                        tint = RatingGold
                     )
                     Text(
                         text = String.format("%.0f", comment.user_rating),

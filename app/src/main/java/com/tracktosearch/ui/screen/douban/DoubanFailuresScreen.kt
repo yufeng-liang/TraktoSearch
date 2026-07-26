@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.douban
 
 import android.content.Context
+import com.tracktosearch.ui.theme.RatingGold
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -790,7 +791,7 @@ fun DoubanFailuresScreen(
                                                     Text(
                                                         stringResource(R.string.douban_failure_search_hint),
                                                         style = MaterialTheme.typography.bodyMedium,
-                                                        color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                                     )
                                                 },
                                                 trailingIcon = {
@@ -1494,7 +1495,7 @@ private fun FailureCard(
                         imageVector = Icons.Rounded.Star,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = Color(0xFFFFC107)
+                        tint = RatingGold
                     )
                     Text(
                         text = "$rating",
@@ -1502,7 +1503,7 @@ private fun FailureCard(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = Color(0xFFFFC107)
+                        color = RatingGold
                     )
                 }
             }
@@ -1523,7 +1524,7 @@ private fun FailureCard(
                         imageVector = Icons.Rounded.Star,
                         contentDescription = null,
                         modifier = Modifier.size(11.dp),
-                        tint = Color(0xFFFFC107)
+                        tint = RatingGold
                     )
                     Text(
                         text = String.format("%.1f", rating),
@@ -1531,7 +1532,7 @@ private fun FailureCard(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = Color(0xFFFFC107)
+                        color = RatingGold
                     )
                 }
             }

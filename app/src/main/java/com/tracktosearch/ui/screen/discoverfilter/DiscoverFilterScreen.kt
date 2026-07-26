@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
+import com.tracktosearch.ui.theme.RatingGold
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
@@ -751,7 +752,7 @@ private fun DiscoverFilterListItem(
                 Icon(
                     Icons.Rounded.Star,
                     contentDescription = null,
-                    tint = Color(0xFFFFC107),
+                    tint = RatingGold,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
