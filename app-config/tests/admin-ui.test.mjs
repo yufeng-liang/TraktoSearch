@@ -11,7 +11,7 @@ const workerSource = fs.readFileSync(path.join(root, '../auth-worker/src/admin/a
 const proxySource = fs.readFileSync(path.join(root, 'functions/admin-api/[[path]].js'), 'utf8');
 const indexSource = fs.readFileSync(path.join(root, '../auth-worker/src/index.ts'), 'utf8');
 const migrationSource = fs.readFileSync(path.join(root, '../auth-worker/migrations/0003_invite_code_mask.sql'), 'utf8');
-const authScreenSource = fs.readFileSync(path.join(root, '../app/src/main/java/com/tracktosearch/ui/screen/auth/AuthScreen.kt'), 'utf8');
+const authScreenSource = fs.readFileSync(path.join(root, '../app/src/main/java/com/tracktosearch/ui/screen/login/ActivationLoginScreen.kt'), 'utf8');
 const stringSources = ['values', 'values-zh', 'values-ja', 'values-ko'].map((dir) =>
     fs.readFileSync(path.join(root, `../app/src/main/res/${dir}/strings.xml`), 'utf8')
 );

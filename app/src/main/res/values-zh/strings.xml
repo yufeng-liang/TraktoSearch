@@ -5,7 +5,7 @@
     <string name="auth_title">激活访问权限</string>
     <string name="auth_subtitle">请输入管理员提供的邀请码。</string>
     <string name="auth_expired_message">请连接网络后重新激活访问权限。</string>
-    <string name="auth_invite_code">邀请码</string>
+    <string name="auth_invite_code">输入 12 位激活码</string>
     <string name="auth_activate">激活</string>
     <string name="auth_error_invalid_invite">邀请码无效。</string>
     <string name="auth_error_invite_used">邀请码已被使用，请向管理员索取新的邀请码。</string>
@@ -214,7 +214,7 @@
 
     <!-- Login Screen -->
     <string name="login_title">TraktToSearch</string>
-    <string name="login_subtitle">从想看到资源，一步到位</string>
+    <string name="login_subtitle">从观影清单到网盘资源</string>
     <string name="login_button">使用 Trakt 登录</string>
     <string name="login_connecting">正在连接 Trakt…</string>
     <string name="login_connecting_hint">请稍候，正在获取你的账号信息</string>
@@ -225,6 +225,10 @@
     <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
+    <string name="login_activation_hint">激活后同步你的 Trakt 想看列表</string>
+    <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
+    <string name="login_activation_success">已激活 · 现在可以继续</string>
+    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
     <string name="douban_import_require_trakt_title">需要先登录 Trakt 账号</string>
     <string name="douban_import_require_trakt_desc">从豆瓣导入标记需要先登录 Trakt 账号,标记会同步到你的 Trakt 想看/已看列表。是否现在登录 Trakt?</string>
     <string name="douban_import_require_trakt_login">登录 Trakt</string>
@@ -463,6 +467,7 @@
     <string name="settings_accent_color">应用色调</string>
     <string name="settings_accent_dynamic">跟随壁纸取色</string>
     <!-- 应用色调 -->
+    <string name="accent_vintage_ticket">复古票根</string>
     <string name="accent_water_lily">睡莲紫</string>
     <string name="accent_sunrise">日出橙</string>
     <string name="accent_japanese_bridge">日本桥绿</string>

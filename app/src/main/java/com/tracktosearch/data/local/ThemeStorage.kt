@@ -30,8 +30,8 @@ class ThemeStorage @Inject constructor(
     private val _themeMode = MutableStateFlow(MODE_SYSTEM)
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
-    /** null = 动态壁纸取色（默认） */
-    private val _accentColor = MutableStateFlow<MonetAccent?>(null)
+    /** null = 用户主动选择动态壁纸取色；未配置时使用复古票根主题。 */
+    private val _accentColor = MutableStateFlow<MonetAccent?>(MonetAccent.VINTAGE_TICKET)
     val accentColor: StateFlow<MonetAccent?> = _accentColor.asStateFlow()
 
     init {
@@ -39,8 +39,11 @@ class ThemeStorage @Inject constructor(
         scope.launch {
             val prefs = context.themeDataStore.data.first()
             _themeMode.value = prefs[KEY_THEME_MODE] ?: MODE_SYSTEM
-            _accentColor.value = prefs[KEY_ACCENT_COLOR]?.let { name ->
-                runCatching { MonetAccent.valueOf(name) }.getOrNull()
+            _accentColor.value = when (val name = prefs[KEY_ACCENT_COLOR]) {
+                DYNAMIC_ACCENT -> null
+                null -> MonetAccent.VINTAGE_TICKET
+                else -> runCatching { MonetAccent.valueOf(name) }
+                    .getOrElse { MonetAccent.VINTAGE_TICKET }
             }
         }
     }
@@ -54,8 +57,7 @@ class ThemeStorage @Inject constructor(
 
     suspend fun setAccentColor(accent: MonetAccent?) {
         context.themeDataStore.edit { prefs ->
-            if (accent == null) prefs.remove(KEY_ACCENT_COLOR)
-            else prefs[KEY_ACCENT_COLOR] = accent.name
+            prefs[KEY_ACCENT_COLOR] = accent?.name ?: DYNAMIC_ACCENT
         }
         _accentColor.value = accent
     }
@@ -64,6 +66,7 @@ class ThemeStorage @Inject constructor(
         const val MODE_SYSTEM = "system"
         const val MODE_DARK = "dark"
         const val MODE_LIGHT = "light"
+        private const val DYNAMIC_ACCENT = "dynamic"
         private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         private val KEY_ACCENT_COLOR = stringPreferencesKey("accent_color")
     }

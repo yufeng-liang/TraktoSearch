@@ -29,6 +29,7 @@ val DarkCard = Color(0xFF242442)
 
 // 莫奈/印象派主题色
 enum class MonetAccent(@StringRes val labelResId: Int, val light: Color, val dark: Color, val lightOn: Color = Color.White, val darkOn: Color = Color.White) {
+    VINTAGE_TICKET(R.string.accent_vintage_ticket, Color(0xFF356B83), Color(0xFFA6D1E2)),
     WATER_LILY(R.string.accent_water_lily, Color(0xFF7B68AE), Color(0xFF9B8EC4)),
     SUNRISE(R.string.accent_sunrise, Color(0xFFE8915A), Color(0xFFF4A460)),
     JAPANESE_BRIDGE(R.string.accent_japanese_bridge, Color(0xFF5A8F6B), Color(0xFF7AB68A)),
