@@ -1066,15 +1066,75 @@ tbody tr:last-child td { border-bottom: none; }
     .form-row { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-    .main { padding: 20px 16px; }
+    .main { padding: 20px 16px; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
     .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
     .stat-value { font-size: 24px; }
     .stat-card { padding: 16px; }
-    .toolbar { flex-direction: column; align-items: stretch; }
+    .toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
     .admin-email { display: none; }
-    .topbar { padding: 0 16px; }
+    .topbar { padding: 0 12px; padding-top: env(safe-area-inset-top, 0px); height: calc(var(--topbar-h) + env(safe-area-inset-top, 0px)); }
+    .topbar-right { gap: 6px; margin-left: auto; }
+    .topbar-left { gap: 8px; }
+    .brand { font-size: 15px; gap: 8px; }
+    .brand-mark { width: 26px; height: 26px; }
+    .menu-toggle { padding: 10px; min-width: 44px; min-height: 44px; display: flex; align-items: center; justify-content: center; }
+    .theme-toggle { width: 36px; height: 36px; min-width: 44px; min-height: 44px; }
+    .theme-toggle svg { width: 16px; height: 16px; }
+    .palette-btn { padding: 6px 8px; min-height: 36px; }
+    .palette-current { width: 12px; height: 12px; }
+    .palette-btn svg { width: 12px; height: 12px; }
+    .btn { padding: 9px 14px; min-height: 44px; }
+    .btn-sm { padding: 7px 12px; min-height: 36px; font-size: 12px; }
+    #logoutBtn { padding: 7px 10px; min-width: 44px; min-height: 44px; }
     .card-header .invite-status-filter { width: 160px; flex-basis: 160px; }
-    .detail-heading-actions { flex-wrap: wrap; justify-content: flex-end; }
+    .detail-heading-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+    .card { padding: 16px; }
+    .card-header { margin-bottom: 14px; }
+    .section-title { font-size: 20px; }
+    .section-subtitle { font-size: 12px; margin-bottom: 18px; }
+    th, td { padding: 12px 14px; font-size: 12px; }
+    .form-input, .form-select { padding: 11px 14px; min-height: 44px; font-size: 16px; }
+    .palette-panel { right: 0; left: auto; min-width: 200px; padding: 12px; }
+    .palette-swatch { padding: 8px 4px; }
+    .modal-overlay { padding: 12px; align-items: flex-end; }
+    .modal { max-height: 85vh; border-radius: 16px 16px 8px 8px; animation: mobile-modal-in 280ms cubic-bezier(0.4, 0, 0.2, 1); }
+    .modal-header { padding: 16px 18px; }
+    .modal-body { padding: 18px; }
+    .modal-footer { padding: 14px 18px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .toast-container { top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 12px); right: 12px; left: 12px; }
+    .toast { min-width: auto; max-width: none; }
+    .stat-card,
+    .card,
+    .table-wrap,
+    .error-banner,
+    .toast,
+    .modal,
+    .palette-panel {
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+    }
+    .sidebar {
+        width: 280px;
+        max-width: 85vw;
+        background: var(--surface-solid);
+        backdrop-filter: blur(24px) saturate(160%);
+        -webkit-backdrop-filter: blur(24px) saturate(160%);
+        box-shadow: 8px 0 32px var(--shadow);
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .sidebar-list { padding: 12px 10px; }
+    .sidebar-link { padding: 14px 14px; min-height: 48px; font-size: 15px; }
+    .sidebar-footer { padding: 14px; padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+    .sidebar-scrim:not([hidden]) {
+        inset: 0;
+        padding-top: calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
 }
 
 /* ===== Focus ===== */
@@ -1112,18 +1172,9 @@ tbody tr:last-child td { border-bottom: none; }
     letter-spacing: 0;
 }
 
-@media (max-width: 640px) {
-    .glass,
-    .palette-panel,
-    .stat-card,
-    .card,
-    .table-wrap,
-    .error-banner,
-    .toast,
-    .modal {
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
-    }
+@keyframes mobile-modal-in {
+    from { opacity: 0; transform: translateY(100%); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 /* ===== Reduced motion ===== */

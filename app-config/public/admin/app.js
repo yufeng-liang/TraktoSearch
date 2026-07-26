@@ -760,6 +760,86 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && sidebar.classList.contains('open')) closeSidebar();
 });
 
+// ===== Mobile touch gestures =====
+(function initTouchGestures() {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchCurrentX = 0;
+    let isSwiping = false;
+    const swipeThreshold = 60;
+    const sideEdgeThreshold = 30;
+
+    sidebar.addEventListener('touchstart', (e) => {
+        if (!sidebar.classList.contains('open')) return;
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchCurrentX = touchStartX;
+        isSwiping = false;
+    }, { passive: true });
+
+    sidebar.addEventListener('touchmove', (e) => {
+        if (!sidebar.classList.contains('open')) return;
+        const touch = e.touches[0];
+        touchCurrentX = touch.clientX;
+        const deltaX = touchCurrentX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+
+        if (deltaX < -10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+            isSwiping = true;
+            sidebar.style.transition = 'none';
+            sidebar.style.transform = `translateX(${Math.min(0, deltaX)}px)`;
+            sidebarScrim.style.opacity = String(Math.max(0, 1 + deltaX / 200));
+        }
+    }, { passive: true });
+
+    sidebar.addEventListener('touchend', () => {
+        if (!sidebar.classList.contains('open')) {
+            sidebar.style.transition = '';
+            sidebar.style.transform = '';
+            return;
+        }
+        sidebar.style.transition = '';
+        sidebar.style.transform = '';
+        sidebarScrim.style.opacity = '';
+
+        if (isSwiping && touchStartX - touchCurrentX > swipeThreshold) {
+            closeSidebar({ restoreFocus: false });
+        }
+        isSwiping = false;
+    }, { passive: true });
+
+    document.addEventListener('touchstart', (e) => {
+        if (sidebar.classList.contains('open')) return;
+        const touch = e.touches[0];
+        if (touch.clientX <= sideEdgeThreshold) {
+            touchStartX = touch.clientX;
+            touchStartY = touch.clientY;
+            isSwiping = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (sidebar.classList.contains('open')) return;
+        if (touchStartX > sideEdgeThreshold) return;
+        const touch = e.touches[0];
+        const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+
+        if (deltaX > 10 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+            isSwiping = true;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', () => {
+        if (!sidebar.classList.contains('open') && isSwiping && touchCurrentX - touchStartX > swipeThreshold * 1.5) {
+            openSidebar();
+        }
+        touchStartX = 999;
+        isSwiping = false;
+    }, { passive: true });
+})();
+
 // ===== Theme toggle =====
 document.getElementById('themeToggle').addEventListener('click', () => Theme.toggle());
 
