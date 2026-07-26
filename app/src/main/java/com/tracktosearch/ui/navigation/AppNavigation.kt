@@ -87,7 +87,6 @@ interface GuestModeEntryPoint {
 }
 
 object Routes {
-    const val AUTH = "auth"
     const val LOGIN = "login"
     const val MAIN = "main"
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
@@ -196,8 +195,8 @@ fun AppNavigation(
         if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
             navController.currentDestination?.route == Routes.MAIN
         ) {
-            currentStartDest = Routes.AUTH
-            navController.navigate(Routes.AUTH) {
+            currentStartDest = Routes.LOGIN
+            navController.navigate(Routes.LOGIN) {
                 popUpTo(Routes.MAIN) { inclusive = true }
             }
         }
@@ -234,25 +233,12 @@ fun AppNavigation(
                 navController = navController,
                 startDestination = currentStartDest
             ) {
-                composable(Routes.AUTH) {
-                    val expired = currentAuthState == AuthState.EXPIRED
-                    ActivationLoginScreen(
-                        expired = expired,
-                        onActivated = {
-                            // 激活只建立网关会话，仍需完成原有 Trakt OAuth 登录。
-                            isTraktLoggedIn = false
-                            currentStartDest = Routes.LOGIN
-                            navController.navigate(Routes.LOGIN) {
-                                popUpTo(Routes.AUTH) { inclusive = true }
-                            }
-                        }
-                    )
-                }
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val fromGuestMode = navController.previousBackStackEntry?.destination?.route == Routes.MAIN
                         ActivationLoginScreen(
                             redirectToBrowser = fromGuestMode,
+                            expired = currentAuthState == AuthState.EXPIRED,
                             onLoginSuccess = {
                                 isTraktLoggedIn = true
                                 onLoginSuccess()

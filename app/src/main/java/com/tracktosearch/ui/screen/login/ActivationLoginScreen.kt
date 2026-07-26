@@ -75,7 +75,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun ActivationLoginScreen(
     onLoginSuccess: () -> Unit = {},
-    onActivated: (() -> Unit)? = null,
     onGuestMode: () -> Unit = {},
     onDoubanImport: () -> Unit = {},
     redirectToBrowser: Boolean = false,
@@ -138,10 +137,6 @@ fun ActivationLoginScreen(
                 onLoginSuccess()
             }
         }
-    }
-
-    LaunchedEffect(authState.activated) {
-        if (authState.activated) onActivated?.invoke()
     }
 
     Surface(
