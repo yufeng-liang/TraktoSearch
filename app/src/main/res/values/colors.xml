@@ -2,7 +2,6 @@
 <resources>
     <color name="ic_launcher_background">#4787F4</color>
     <!-- 启动页背景（蓝色渐变起点色，作为纯色背景被系统 splash 使用） -->
-    <color name="splash_background">#4B88E6</color>
+    <color name="splash_background">#F7EFE2</color>
     <!-- 启动页图标底衬色（半透明白色光晕） -->
-    <color name="splash_icon_background">#33FFFFFF</color>
 </resources>

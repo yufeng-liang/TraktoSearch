@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="192dp"
+    android:height="192dp"
+    android:viewportWidth="192"
+    android:viewportHeight="192">
+
+    <group android:name="clapper_body">
+        <path
+            android:fillColor="#996345"
+            android:pathData="M56,73h80a16,16 0,0 1,16 16v46a16,16 0,0 1,-16 16H56a16,16 0,0 1,-16 -16V89a16,16 0,0 1,16 -16z" />
+        <path
+            android:fillColor="#3D2E27"
+            android:pathData="M56,73h80a16,16 0,0 1,16 16v1H40v-1a16,16 0,0 1,16 -16z" />
+        <path
+            android:fillColor="#F7EFE2"
+            android:fillAlpha="0.24"
+            android:pathData="M58,132h76v2H58z" />
+    </group>
+
+    <group
+        android:name="clapper_bar"
+        android:pivotX="48"
+        android:pivotY="73"
+        android:rotation="-40">
+        <path
+            android:fillColor="#996345"
+            android:strokeColor="#76503B"
+            android:strokeWidth="1"
+            android:pathData="M56,55h80a16,16 0,0 1,16 16v2H40v-2a16,16 0,0 1,16 -16z" />
+        <path
+            android:fillColor="#F7EFE2"
+            android:pathData="M68,55h12l-6,18H62zM92,55h12l-6,18H86zM116,55h12l-6,18H110z" />
+    </group>
+</vector>

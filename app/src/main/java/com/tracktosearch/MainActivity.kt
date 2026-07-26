@@ -12,51 +12,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Easing
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.os.LocaleListCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.GuestModeStorage
 import com.tracktosearch.data.local.LanguageStorage
@@ -73,13 +39,12 @@ import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ScrollToTopProvider
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import java.util.Locale
 import javax.inject.Inject
-import kotlin.math.pow
 
 // 全局共享的 OAuth 结果，供 MainActivity 传递给 LoginViewModel
 // 用 StateFlow 替代 @Volatile var，避免 LoginScreen 轮询 300ms 延迟
@@ -126,13 +91,9 @@ object DeepLinkNavigator {
 class MainActivity : AppCompatActivity() {
 
     companion object {
+        private const val MIN_SYSTEM_SPLASH_DURATION_MS = 1350L
         // 最小 splash 显示时间（动画时长），实际切换条件 = max(最小时间, 预取数据就绪)
-        private const val MIN_SPLASH_DURATION_MS = 800L
         // 启动动画时序：各元素入场延迟（ms）
-        private const val SPLASH_GLOW_DELAY_MS = 100L
-        private const val SPLASH_TITLE_DELAY_MS = 200L
-        private const val SPLASH_SLOGAN_DELAY_MS = 400L
-        private const val SPLASH_VERSION_DELAY_MS = 600L
     }
 
     @Inject
@@ -167,12 +128,11 @@ class MainActivity : AppCompatActivity() {
     private var authInitializationJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splashStartTime = System.currentTimeMillis()
+        var isReady by mutableStateOf(false)
         // 安装 SplashScreen，处理系统默认启动页到自定义 splash 的平滑过渡
         val splashScreen = installSplashScreen()
         // 使用 mutableStateOf 让 Compose 能观察到变化
-        var keepSplashOnScreen by mutableStateOf(savedInstanceState == null)
-        splashScreen.setKeepOnScreenCondition { keepSplashOnScreen }
+        splashScreen.setKeepOnScreenCondition { !isReady }
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
@@ -193,7 +153,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        var isReady by mutableStateOf(false)
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
         var isTraktConnected by mutableStateOf(false)
@@ -207,7 +166,7 @@ class MainActivity : AppCompatActivity() {
             // 否则激活成功会被误当成 Trakt 已登录，直接跳过原有登录页。
             isTraktConnected = isAuthorized && traktRepository.checkTraktConnection()
             startDest = when {
-                !isAuthorized -> Routes.AUTH
+                !isAuthorized -> Routes.LOGIN
                 isTraktConnected -> Routes.MAIN
                 else -> Routes.LOGIN
             }
@@ -235,14 +194,15 @@ class MainActivity : AppCompatActivity() {
             // Activity 重建时跳过开屏等待，直接进入
             if (savedInstanceState == null) {
                 // 冷启动：等最小 splash 时间后再切主界面
-                val elapsed = System.currentTimeMillis() - splashStartTime
-                val remaining = MIN_SPLASH_DURATION_MS - elapsed
-                if (remaining > 0) delay(remaining)
             }
             // 不强制等待所有预取完成，最多再等 500ms（避免个别慢请求阻塞首屏）
             kotlinx.coroutines.withTimeoutOrNull(if (savedInstanceState == null) 500L else 200L) {
                 prefetchJobs.forEach { it.join() }
             }
+
+            val elapsed = System.currentTimeMillis() - splashStartTime
+            val remaining = MIN_SYSTEM_SPLASH_DURATION_MS - elapsed
+            if (remaining > 0) delay(remaining)
 
             // 切换到主界面
             isReady = true
@@ -263,9 +223,6 @@ class MainActivity : AppCompatActivity() {
             TraktToSearchTheme(themeMode = themeMode, accentColor = accentColor) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 // 自定义启动页渲染后，系统启动页立即消失
-                LaunchedEffect(Unit) {
-                    keepSplashOnScreen = false
-                }
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
@@ -280,7 +237,8 @@ class MainActivity : AppCompatActivity() {
                             currentDestination = Routes.MAIN
                         }
                     )
-                } else {
+                }
+                /*
                     // 自定义开屏页 + 连贯弹性动画
                     val iconScale = remember { Animatable(0.5f) }
                     val iconAlpha = remember { Animatable(0f) }
@@ -440,6 +398,7 @@ class MainActivity : AppCompatActivity() {
                         )
                     }
                 }
+                */
                 } // CompositionLocalProvider
             }
         }
