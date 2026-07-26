@@ -661,6 +661,10 @@
     <string name="douban_batch_removal_cancel">취소</string>
     <string name="douban_batch_removal_cancelling">취소 중...</string>
     <string name="douban_batch_removal_complete">더우반 표시 제거 완료, 성공 %1$d건, 실패/건너뜀 %2$d건</string>
+    <string name="batch_removal_phase_removing">제거 중</string>
+    <string name="batch_removal_phase_cancelling">취소 중...</string>
+    <string name="batch_removal_phase_done">완료</string>
+    <string name="batch_removal_phase_cancelled">취소됨</string>
     <string name="consistency_check_phase_crawl">더우반 목록 가져오는 중</string>
     <string name="consistency_check_phase_compare">상태 비교 중</string>
     <string name="consistency_check_phase_update_trakt">Trakt 업데이트 중</string>
@@ -683,6 +687,7 @@
     <string name="settings_douban_import_failures">JSON에서 실패 항목 가져오기</string>
     <string name="settings_douban_import_failures_desc">다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와서 여기서 보기</string>
     <string name="screen_douban_failures_title">동기화 실패 항목</string>
+    <string name="share_failures_json">실패 항목 JSON 공유</string>
 
     <!-- 클라우드 실패 데이터 동기화 -->
     <string name="cloud_failures_detected_title">클라우드 실패 데이터 감지</string>
@@ -955,6 +960,7 @@
     <string name="common_open_failed">이 링크를 열 수 없습니다</string>
     <string name="common_done">완료</string>
     <string name="error_load_failed">로드 실패</string>
+    <string name="error_network_timeout">네트워크 요청 시간이 초과되었습니다. 다시 시도해 주세요</string>
     <string name="error_search_failed">검색 실패</string>
     <string name="error_search_timeout">검색 시간이 초과되었습니다. 네트워크 연결을 확인한 후 다시 시도해 주세요</string>
     <string name="search_retrying">재시도 중 (시도 %d회)...</string>
@@ -972,6 +978,7 @@
     <string name="error_not_imdb_csv">유효한 IMDb CSV가 아닙니다 (필수 열 Title, Created, Title Type 누락)</string>
     <string name="error_empty_csv">파일이 비어 있거나 데이터 행이 없습니다</string>
     <string name="error_parse_failed">파일 파싱 실패: %1$s</string>
+    <string name="error_read_file_failed">파일을 읽을 수 없습니다</string>
     <string name="error_invalid_json_format">실패 항목 JSON 파일 형식이 잘못되었습니다</string>
     <string name="snackbar_cache_cleared">캐시 삭제 완료</string>
     <string name="snackbar_cache_clear_failed">캐시 삭제 실패</string>

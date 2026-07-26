@@ -790,6 +790,10 @@ Config:
     <string name="douban_batch_removal_cancel">Cancel</string>
     <string name="douban_batch_removal_cancelling">Cancelling...</string>
     <string name="douban_batch_removal_complete">Douban mark removal complete, %1$d succeeded, %2$d failed/skipped</string>
+    <string name="batch_removal_phase_removing">Removing</string>
+    <string name="batch_removal_phase_cancelling">Cancelling...</string>
+    <string name="batch_removal_phase_done">Done</string>
+    <string name="batch_removal_phase_cancelled">Cancelled</string>
     <string name="consistency_check_phase_crawl">Crawling Douban lists</string>
     <string name="consistency_check_phase_compare">Comparing statuses</string>
     <string name="consistency_check_phase_update_trakt">Updating Trakt</string>
@@ -812,6 +816,7 @@ Config:
     <string name="settings_douban_import_failures">Import failures from JSON</string>
     <string name="settings_douban_import_failures_desc">Import a failures JSON file exported from another device to view here</string>
     <string name="screen_douban_failures_title">Sync failures</string>
+    <string name="share_failures_json">Share failures JSON</string>
 
     <!-- Cloud failure sync -->
     <string name="cloud_failures_detected_title">Cloud failures detected</string>
@@ -1079,6 +1084,7 @@ Config:
     <string name="common_open_failed">Cannot open this link</string>
     <string name="common_done">Done</string>
     <string name="error_load_failed">Load failed</string>
+    <string name="error_network_timeout">Network request timed out, please try again</string>
     <string name="error_search_failed">Search failed</string>
     <string name="error_search_timeout">Search timed out, please check your network connection and try again</string>
     <string name="search_retrying">Retrying (attempt %d)...</string>
@@ -1096,6 +1102,7 @@ Config:
     <string name="error_not_imdb_csv">Not a valid IMDb CSV (missing required columns: Title, Created, Title Type)</string>
     <string name="error_empty_csv">File is empty or has no data rows</string>
     <string name="error_parse_failed">Failed to parse file: %1$s</string>
+    <string name="error_read_file_failed">Unable to read file</string>
     <string name="error_invalid_json_format">Invalid JSON format for failures file</string>
     <string name="snackbar_cache_cleared">Cache cleared</string>
     <string name="snackbar_cache_clear_failed">Failed to clear cache</string>
