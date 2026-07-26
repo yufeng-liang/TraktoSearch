@@ -14,7 +14,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,7 +34,6 @@ fun SectionHeader(
     onActionClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isAppDarkTheme()
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -47,7 +45,7 @@ fun SectionHeader(
             text = title,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = if (isDark) Color.White else Color(0xFF1A1A2E)
+            color = MaterialTheme.colorScheme.onBackground
         )
         if (actionText != null && onActionClick != null) {
             val actionColor = MaterialTheme.colorScheme.primary

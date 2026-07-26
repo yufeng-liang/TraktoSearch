@@ -30,6 +30,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
@@ -56,6 +58,43 @@ private sealed class DownloadState {
     data class Completed(val file: File) : DownloadState()
     data class Error(val message: String) : DownloadState()
 }
+
+/**
+ * DownloadState 的 Saver,用于 rememberSaveable 保留旋屏后的下载状态。
+ *
+ * - Idle: 保存为 "idle"
+ * - Downloading: 保存为 "downloading:{progress}"（旋屏后 job 丢失,会触发重置为 Idle）
+ * - Completed: 保存为 "completed:{file.absolutePath}"（保留文件路径,可重新唤起安装）
+ * - Error: 保存为 "error:{message}"（保留错误信息,用户可重试）
+ */
+private val DownloadStateSaver = Saver<DownloadState, String>(
+    save = { state ->
+        when (state) {
+            is DownloadState.Idle -> "idle"
+            is DownloadState.Downloading -> "downloading:${state.progress}"
+            is DownloadState.Completed -> "completed:${state.file.absolutePath}"
+            is DownloadState.Error -> "error:${state.message}"
+        }
+    },
+    restore = { saved ->
+        when {
+            saved == "idle" || saved.isBlank() -> DownloadState.Idle
+            saved.startsWith("downloading:") -> {
+                val progress = saved.removePrefix("downloading:").toFloatOrNull() ?: 0f
+                DownloadState.Downloading(progress)
+            }
+            saved.startsWith("completed:") -> {
+                val path = saved.removePrefix("completed:")
+                DownloadState.Completed(File(path))
+            }
+            saved.startsWith("error:") -> {
+                val message = saved.removePrefix("error:")
+                DownloadState.Error(message)
+            }
+            else -> DownloadState.Idle
+        }
+    }
+)
 
 /**
  * 轻量级更新日志渲染：
@@ -326,8 +365,17 @@ fun UpdateDialog(
     val context = LocalContext.current
     val downloadFailedMsg = stringResource(R.string.update_download_failed)
     val scope = rememberCoroutineScope()
-    var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
+    // 下载状态用 rememberSaveable 保留旋屏后的状态（Completed/Error 不丢失）；
+    // Downloading 状态旋屏后 job 丢失，下方 LaunchedEffect 会重置为 Idle
+    var downloadState by rememberSaveable(stateSaver = DownloadStateSaver) { mutableStateOf(DownloadState.Idle) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
+
+    // 旋屏后 downloadJob 为 null，若 downloadState 仍是 Downloading，重置为 Idle（下载已实际停止）
+    LaunchedEffect(downloadState, downloadJob) {
+        if (downloadState is DownloadState.Downloading && downloadJob == null) {
+            downloadState = DownloadState.Idle
+        }
+    }
 
     // 组件销毁时取消下载
     DisposableEffect(Unit) {

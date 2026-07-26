@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -63,8 +64,11 @@ fun OnboardingOverlay(
     var currentStep by remember { mutableIntStateOf(0) }
     val totalSteps = targetRects.size
 
+    // 完成回调用 LaunchedEffect 包裹,避免在组合体内直接调用副作用(每次重组都触发)
     if (currentStep >= totalSteps) {
-        onComplete()
+        LaunchedEffect(Unit) {
+            onComplete()
+        }
         return
     }
 
