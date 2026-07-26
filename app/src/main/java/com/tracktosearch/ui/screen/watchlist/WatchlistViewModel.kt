@@ -251,7 +251,7 @@ class WatchlistViewModel @Inject constructor(
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
                 // 同步进行中或已完成 → 暴露给 UI 显示横幅
                 if (progress.isRunning || progress.isComplete) {
-                    _uiState.value = _uiState.value.copy(doubanSyncProgress = progress)
+                    _uiState.update { it.copy(doubanSyncProgress = progress) }
                     // 完成且有成功条目，触发静默刷新（保留已有数据避免闪烁）
                     if (progress.isComplete && progress.successCount > 0) {
                         refreshIfLoaded(silent = true)
@@ -260,7 +260,7 @@ class WatchlistViewModel @Inject constructor(
                     if (progress.isComplete) {
                         _syncCompleteEvent.emit(Unit)
                         delay(5000)
-                        _uiState.value = _uiState.value.copy(doubanSyncProgress = null)
+                        _uiState.update { it.copy(doubanSyncProgress = null) }
                         // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗
                         doubanSyncManager.resetProgress()
                     }
@@ -272,7 +272,7 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             statusConsistencyChecker.checkProgress.collect { progress: ConsistencyCheckResult ->
                 if (progress.isRunning || progress.isComplete) {
-                    _uiState.value = _uiState.value.copy(consistencyCheckProgress = progress)
+                    _uiState.update { it.copy(consistencyCheckProgress = progress) }
                     if (progress.isRunning) {
                         // 新检查开始，允许本次完成再次自动弹窗
                         checkCompleteHandled = false
@@ -293,11 +293,11 @@ class WatchlistViewModel @Inject constructor(
         viewModelScope.launch {
             doubanBatchRemovalManager.progress.collect { progress: BatchRemovalProgress ->
                 if (progress.isRunning || progress.isComplete) {
-                    _uiState.value = _uiState.value.copy(batchRemovalProgress = progress)
+                    _uiState.update { it.copy(batchRemovalProgress = progress) }
                     if (progress.isComplete) {
                         // 完成后 5 秒横幅消失
                         delay(5000)
-                        _uiState.value = _uiState.value.copy(batchRemovalProgress = null)
+                        _uiState.update { it.copy(batchRemovalProgress = null) }
                         // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复显示横幅
                         doubanBatchRemovalManager.resetProgress()
                     }

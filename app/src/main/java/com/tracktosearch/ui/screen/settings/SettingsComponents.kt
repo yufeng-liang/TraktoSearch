@@ -441,8 +441,7 @@ internal fun SearchSourceCard(
             )
             if (onConfigClick != null) {
                 IconButton(
-                    onClick = { view.performHaptic(HapticType.CLICK); onConfigClick() },
-                    modifier = Modifier.size(28.dp)
+                    onClick = { view.performHaptic(HapticType.CLICK); onConfigClick() }
                 ) {
                     Icon(
                         Icons.Rounded.Tune,

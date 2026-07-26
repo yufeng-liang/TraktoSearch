@@ -788,7 +788,7 @@ class SettingsViewModel @Inject constructor(
     private fun readUriContent(uri: Uri): String {
         return context.contentResolver.openInputStream(uri)?.use { inputStream ->
             inputStream.bufferedReader(Charsets.UTF_8).readText()
-        } ?: throw Exception("无法读取文件")
+        } ?: throw Exception(context.getString(R.string.error_read_file_failed))
     }
 
     private fun TraktWatchlistMovieItem.toExportItem() = ExportItem(

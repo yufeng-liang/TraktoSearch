@@ -1,7 +1,9 @@
 package com.tracktosearch.ui.screen.markrecord
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tracktosearch.R
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
@@ -10,6 +12,7 @@ import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.data.util.UserActionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,7 +72,8 @@ data class MarkRecordUiState(
 class MarkRecordViewModel @Inject constructor(
     private val markActionRecordDao: MarkActionRecordDao,
     private val traktRepository: TraktRepository,
-    val posterColorExtractor: PosterColorExtractor
+    val posterColorExtractor: PosterColorExtractor,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MarkRecordUiState(isLoading = true))
@@ -248,7 +252,33 @@ class MarkRecordViewModel @Inject constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _uiState.update { it.copy(isLoading = false, isLoadingMore = false, error = e.message ?: "加载失败") }
+            // U-F46: 映射网络异常为用户友好的本地化提示,不暴露英文异常信息
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isLoadingMore = false,
+                    error = mapToFriendlyError(e)
+                )
+            }
+        }
+    }
+
+    /** 将异常映射为用户友好的本地化错误提示。
+     *  网络类异常(DNS 解析失败、连接超时等)映射为对应中文提示,其他异常使用通用加载失败。 */
+    private fun mapToFriendlyError(e: Exception): String {
+        val msg = e.message.orEmpty()
+        return when {
+            msg.contains("resolve", ignoreCase = true) ||
+            msg.contains("address", ignoreCase = true) ||
+            msg.contains("unreachable", ignoreCase = true) ||
+            msg.contains("unable to connect", ignoreCase = true) -> {
+                context.getString(R.string.auth_error_network)
+            }
+            msg.contains("timeout", ignoreCase = true) ||
+            msg.contains("timed out", ignoreCase = true) -> {
+                context.getString(R.string.error_network_timeout)
+            }
+            else -> context.getString(R.string.error_load_failed)
         }
     }
 

@@ -142,6 +142,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.repository.BatchRemovalPhase
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
@@ -278,7 +279,8 @@ fun WatchlistScreen(
         }
     }
 
-    var searchQuery by remember { mutableStateOf("") }
+    // 用 rememberSaveable 而非 remember：旋屏/进程恢复后保留搜索关键词，与同文件其他 UI 状态保持一致
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     var isRefreshing by remember { mutableStateOf(false) }
     // 弹性下拉刷新状态
     var overscrollOffset by remember { mutableStateOf(0f) }
@@ -350,7 +352,10 @@ fun WatchlistScreen(
         else -> historyShowGridState
     }
 
-    DisposableEffect(selectedMode) {
+    // key 必须同时包含 selectedMode 和 selectedTab：
+    // currentGridState 由两者共同决定，缺任一 key 都会导致切 tab 后回调里仍持有旧的 gridState，
+    // 「回到顶部」操作滚到不可见列表上
+    DisposableEffect(selectedMode, selectedTab) {
         scrollToTopProvider.register {
             gridCoroutineScope.launch {
                 currentGridState.animateScrollToItem(0)
@@ -595,7 +600,7 @@ fun WatchlistScreen(
                         start = 8.dp,
                         end = 8.dp,
                         top = 170.dp + statusBarHeight,
-                        bottom = if (isMultiSelectMode) 80.dp else 80.dp
+                        bottom = 80.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1077,6 +1082,13 @@ fun WatchlistScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
+                                            // phase 是 enum,映射到本地化字符串避免直接显示 enum 名违反 i18n
+                                            val removalPhaseText = when (removalProgress.phase) {
+                                                BatchRemovalPhase.REMOVING -> stringResource(R.string.batch_removal_phase_removing)
+                                                BatchRemovalPhase.CANCELLING -> stringResource(R.string.batch_removal_phase_cancelling)
+                                                BatchRemovalPhase.DONE -> stringResource(R.string.batch_removal_phase_done)
+                                                BatchRemovalPhase.CANCELLED -> stringResource(R.string.batch_removal_phase_cancelled)
+                                            }
                                             Text(
                                                 text = if (removalProgress.isComplete) {
                                                     stringResource(
@@ -1087,9 +1099,9 @@ fun WatchlistScreen(
                                                 } else if (removalProgress.isCancelling) {
                                                     stringResource(R.string.douban_batch_removal_cancelling)
                                                 } else if (removalProgress.total > 0) {
-                                                    "${removalProgress.phase} (${removalProgress.current}/${removalProgress.total})"
+                                                    "$removalPhaseText (${removalProgress.current}/${removalProgress.total})"
                                                 } else {
-                                                    removalProgress.phase
+                                                    removalPhaseText
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = MaterialTheme.colorScheme.onSecondaryContainer
@@ -1147,14 +1159,13 @@ fun WatchlistScreen(
                                             modifier = Modifier.weight(1f)
                                         )
                                         IconButton(
-                                            onClick = { posterErrorDismissed = true },
-                                            modifier = Modifier.size(20.dp)
+                                            onClick = { posterErrorDismissed = true }
                                         ) {
                                             Icon(
                                                 Icons.Rounded.Close,
-                                                contentDescription = null,
+                                                contentDescription = stringResource(R.string.detail_close),
                                                 tint = MaterialTheme.colorScheme.onErrorContainer,
-                                                modifier = Modifier.size(16.dp)
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }

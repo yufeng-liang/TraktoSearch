@@ -225,9 +225,11 @@ fun SettingsScreen(
     // 注意:不在此处刷新冷却期状态。冷却期数据(跨设备 lastFullSyncAt)仅在以下时机请求 gitee:
     // 1. 豆瓣登录后拉取云端数据时一并刷新 meta
     // 2. 用户点击「重新同步豆瓣」弹出模式选择对话框前刷新一次
-    val cacheRefreshed by rememberSaveable { mutableStateOf(false) }
+    // 注意:必须用 var 而非 val，否则无法在 LaunchedEffect 内置 true，防重复刷新逻辑会失效
+    var cacheRefreshed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!cacheRefreshed) {
+            cacheRefreshed = true
             viewModel.refreshCacheInfo()
             doubanRetryViewModel.refreshRetryState()
             // 仅从本地读取冷却期状态(不发网络请求),云端 meta 已在豆瓣登录后刷新
@@ -1040,6 +1042,7 @@ fun SettingsScreen(
 
     // 豆瓣重试入口:有失败项时弹选择对话框(重试上次失败/导入 JSON/导出失败记录)
     if (showDoubanRetryDialog) {
+        val shareFailuresJsonTitle = stringResource(R.string.share_failures_json)
         DoubanRetryDialog(
             onDismiss = { showDoubanRetryDialog = false },
             onRetryLocal = { selectedReasons ->
@@ -1067,7 +1070,7 @@ fun SettingsScreen(
                             putExtra(android.content.Intent.EXTRA_STREAM, uri)
                             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
-                        context.startActivity(android.content.Intent.createChooser(shareIntent, "分享失败项 JSON"))
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, shareFailuresJsonTitle))
                     }
                 }
             },
