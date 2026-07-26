@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import com.tracktosearch.MainActivity
+import com.tracktosearch.data.repository.BatchRemovalPhase
 import com.tracktosearch.data.repository.BatchRemovalProgress
 import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import dagger.hilt.android.AndroidEntryPoint
@@ -71,7 +72,7 @@ class DoubanBatchRemovalService : Service() {
                     val cancellingNotif = buildNotification(
                         batchRemovalManager.progress.value.current,
                         batchRemovalManager.progress.value.total,
-                        "正在取消..."
+                        BatchRemovalPhase.CANCELLING
                     )
                     getSystemService(NotificationManager::class.java).notify(NOTIF_ID, cancellingNotif)
                 } catch (_: Exception) {}
@@ -80,7 +81,8 @@ class DoubanBatchRemovalService : Service() {
             }
             ACTION_START -> {
                 try {
-                    val notif = buildNotification(0, 0, "准备移除豆瓣标记...")
+                    // 初始通知用"准备中"文案,后续 collectLatest 会用 Manager 的 phase 替换
+                    val notif = buildNotification(0, 0, BatchRemovalPhase.REMOVING)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
                     } else {
@@ -110,7 +112,13 @@ class DoubanBatchRemovalService : Service() {
     }
 
     /** 构建进度通知（委托 LiveUpdateNotificationBuilder，Android 16+ 自动升级 Live Update） */
-    private fun buildNotification(current: Int, total: Int, phase: String): Notification {
+    private fun buildNotification(current: Int, total: Int, phase: BatchRemovalPhase): Notification {
+        val phaseText = when (phase) {
+            BatchRemovalPhase.REMOVING -> getString(com.tracktosearch.R.string.batch_removal_phase_removing)
+            BatchRemovalPhase.CANCELLING -> getString(com.tracktosearch.R.string.batch_removal_phase_cancelling)
+            BatchRemovalPhase.DONE -> getString(com.tracktosearch.R.string.batch_removal_phase_done)
+            BatchRemovalPhase.CANCELLED -> getString(com.tracktosearch.R.string.batch_removal_phase_cancelled)
+        }
         val contentIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
@@ -125,7 +133,7 @@ class DoubanBatchRemovalService : Service() {
             context = this,
             channelId = CHANNEL_ID,
             title = getString(com.tracktosearch.R.string.douban_batch_removal_title),
-            phase = phase,
+            phase = phaseText,
             current = current,
             total = total,
             contentIntent = contentIntent,

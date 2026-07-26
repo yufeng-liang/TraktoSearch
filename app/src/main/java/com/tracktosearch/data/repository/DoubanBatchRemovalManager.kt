@@ -22,9 +22,27 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * 批量移除豆瓣标记的阶段。
+ *
+ * UI 层（Compose）用 `when (phase)` 映射 `stringResource`，
+ * Service 层用 `context.getString` 映射，避免中文硬编码违反 i18n 硬约束。
+ */
+enum class BatchRemovalPhase {
+    /** 移除中：正在批量移除豆瓣标记 */
+    REMOVING,
+    /** 取消中：用户点击取消,等待正在执行的条目完成 */
+    CANCELLING,
+    /** 完成（未取消） */
+    DONE,
+    /** 已取消 */
+    CANCELLED
+}
 
 /**
  * 批量移除豆瓣标记进度（兼进度数据类）。
@@ -42,7 +60,7 @@ data class BatchRemovalProgress(
     val failCount: Int = 0,
     val skipCount: Int = 0,          // 找不到 doubanId 跳过的条目
     val currentTitle: String? = null,
-    val phase: String = "",         // "移除豆瓣标记" / "正在取消..." / "完成"
+    val phase: BatchRemovalPhase = BatchRemovalPhase.REMOVING,
     val delayInfo: DelayInfo? = null,
     val cookieExpired: Boolean = false,
     val startTimeMs: Long = 0
@@ -95,8 +113,10 @@ class DoubanBatchRemovalManager @Inject constructor(
     @Volatile
     private var removalJob: Job? = null
 
-    @Volatile
-    private var cancelled = false
+    /** F-01: 改用 AtomicBoolean 避免 check-then-act 竞态。
+     *  原实现 @Volatile var Boolean 在 cancel() 写入与 startRemoval() 重置之间存在非原子窗口,
+     *  AtomicBoolean 的 set/get 本身原子,语义更明确。 */
+    private val cancelled = AtomicBoolean(false)
 
     /** WakeLock:移除期间保持 CPU 唤醒,避免息屏 Doze 模式下网络请求 timeout */
     private var wakeLock: PowerManager.WakeLock? = null
@@ -121,10 +141,10 @@ class DoubanBatchRemovalManager @Inject constructor(
 
     /** 取消正在进行的移除 */
     fun cancel() {
-        cancelled = true
+        cancelled.set(true)
         _progress.value = _progress.value.copy(
             isCancelling = true,
-            phase = "正在取消...",
+            phase = BatchRemovalPhase.CANCELLING,
             delayInfo = null
         )
     }
@@ -142,7 +162,7 @@ class DoubanBatchRemovalManager @Inject constructor(
         // 未登录豆瓣时静默跳过（Trakt 已移除，不阻塞用户）
         val cred = doubanAuthStorage.getCredentials() ?: return false
 
-        cancelled = false
+        cancelled.set(false)
         acquireWakeLock()
         val mediaTypeStr = if (isMovie) "movie" else "show"
         val total = items.size
@@ -151,7 +171,7 @@ class DoubanBatchRemovalManager @Inject constructor(
             _progress.value = BatchRemovalProgress(
                 isRunning = true,
                 total = total,
-                phase = "移除豆瓣标记",
+                phase = BatchRemovalPhase.REMOVING,
                 startTimeMs = System.currentTimeMillis()
             )
             val successCount = AtomicInteger(0)
@@ -166,7 +186,7 @@ class DoubanBatchRemovalManager @Inject constructor(
                         async {
                             semaphore.withPermit {
                                 // 用户取消时立即停止派发新条目
-                                if (cancelled) return@withPermit
+                                if (cancelled.get()) return@withPermit
 
                                 // 更新当前条目（UI 展示）
                                 val cur = current.get()
@@ -227,7 +247,7 @@ class DoubanBatchRemovalManager @Inject constructor(
                     isCancelling = false,
                     currentTitle = null,
                     current = total,
-                    phase = if (cancelled) "已取消" else "完成"
+                    phase = if (cancelled.get()) BatchRemovalPhase.CANCELLED else BatchRemovalPhase.DONE
                 )
                 Log.i(TAG, "豆瓣批量移除完成: 成功 ${successCount.get()}, 失败 ${failCount.get()}, 跳过 ${skipCount.get()}, 共 $total 条")
             }
