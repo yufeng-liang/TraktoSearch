@@ -157,7 +157,11 @@ open class TtlCache<T>(
         synchronized(generationLock) {
             generation.incrementAndGet()
             cache.clear()
-            // 旧请求仍会完成，但 generation 校验会阻止其写回；新请求也不会 join 旧 deferred。
+            // 旧请求的 deferred 用异常完成,避免等待方永久挂起在 await() 上
+            // (generation 校验只阻止其写回缓存,但不会唤醒等待方)
+            inFlightRequests.values.forEach { deferred ->
+                deferred.completeExceptionally(IOException("Cache cleared"))
+            }
             inFlightRequests.clear()
         }
     }

@@ -1,5 +1,6 @@
 package com.tracktosearch.data.util
 
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -8,10 +9,12 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -70,7 +73,7 @@ class PersistentTtlCache<T>(
      * 从磁盘加载所有条目到内存缓存。
      * 应在 Application 启动时调用（后台线程，不阻塞 UI）。
      */
-    suspend fun loadFromDisk() {
+    suspend fun loadFromDisk() = withContext(Dispatchers.IO) {
         loadMutex.withLock {
             val loadId = beginDiskLoad()
             try {
@@ -94,10 +97,12 @@ class PersistentTtlCache<T>(
                         putDiskValueIfCurrent(loadId, cacheKey, item, expireAt)
                     } catch (e: CancellationException) { throw e } catch (e: Exception) {
                         // 反序列化失败（数据格式变更），跳过该条目
+                        Log.w("PersistentTtlCache", "loadFromDisk decode failed for key=$keyStr: ${e.message}")
                     }
                 }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // 磁盘读取失败不阻塞应用启动
+                Log.w("PersistentTtlCache", "loadFromDisk failed for prefix=$keyPrefix: ${e.message}")
             } finally {
                 finishDiskLoad(loadId)
                 loadedDeferred.complete(Unit)
@@ -233,8 +238,9 @@ class PersistentTtlCache<T>(
                         }
                     }
                 }
-            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 // 磁盘写入失败静默
+                Log.w("PersistentTtlCache", "putAll DataStore write failed for prefix=$keyPrefix: ${e.message}")
             }
             written
         }
@@ -257,6 +263,7 @@ class PersistentTtlCache<T>(
             }
             total
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w("PersistentTtlCache", "getSizeBytes failed for prefix=$keyPrefix: ${e.message}")
             0L
         }
     }
