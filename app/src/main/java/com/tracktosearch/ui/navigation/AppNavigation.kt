@@ -50,7 +50,6 @@ import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
 import com.tracktosearch.ui.screen.login.LoginScreen
-import com.tracktosearch.ui.screen.auth.AuthScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -88,7 +87,6 @@ interface GuestModeEntryPoint {
 }
 
 object Routes {
-    const val AUTH = "auth"
     const val LOGIN = "login"
     const val MAIN = "main"
     const val DETAIL = "detail/{type}/{traktId}/{tmdbId}/{title}/{imdbId}/{traktRating}?inWatchlist={inWatchlist}&isWatched={isWatched}"
@@ -197,8 +195,8 @@ fun AppNavigation(
         if ((currentAuthState == AuthState.UNAUTHORIZED || currentAuthState == AuthState.EXPIRED) &&
             navController.currentDestination?.route == Routes.MAIN
         ) {
-            currentStartDest = Routes.AUTH
-            navController.navigate(Routes.AUTH) {
+            currentStartDest = Routes.LOGIN
+            navController.navigate(Routes.LOGIN) {
                 popUpTo(Routes.MAIN) { inclusive = true }
             }
         }

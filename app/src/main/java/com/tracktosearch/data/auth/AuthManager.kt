@@ -43,13 +43,16 @@ class AuthManager @Inject constructor(
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
-    // 设备 ID（激活后缓存）
+    // 设备 ID（激活后缓存）。@Volatile：WorkManager 线程写入对主线程可见
+    @Volatile
     private var deviceId: String? = null
 
-    // 下次校验时间（Unix 秒）
+    // 下次校验时间（Unix 秒）。@Volatile：跨线程可见，避免误判 EXPIRED
+    @Volatile
     private var nextCheckAt: Long = 0L
 
-    // 最后在线时间（Unix 秒）
+    // 最后在线时间（Unix 秒）。@Volatile：跨线程可见，避免误判 UNAUTHORIZED
+    @Volatile
     private var lastOnlineAt: Long = 0L
 
     // 离线宽限期（3 天 = 259200 秒）
