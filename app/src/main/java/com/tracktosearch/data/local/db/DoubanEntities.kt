@@ -51,9 +51,10 @@ interface DoubanSyncedItemDao {
     @Query("SELECT COUNT(*) FROM douban_synced_items")
     suspend fun count(): Int
 
-    /** 状态统一检查后回写本地表 status（豆瓣侧标记成功后同步本地记录） */
-    @Query("UPDATE douban_synced_items SET status = :status WHERE doubanId = :doubanId")
-    suspend fun updateStatus(doubanId: String, status: String)
+    /** 状态统一检查后回写本地表 status（豆瓣侧标记成功后同步本地记录）。
+     *  F-11: 同步刷新 syncedAt 时间戳,便于后续排查"最近一次同步时间" */
+    @Query("UPDATE douban_synced_items SET status = :status, syncedAt = :now WHERE doubanId = :doubanId")
+    suspend fun updateStatus(doubanId: String, status: String, now: Long = System.currentTimeMillis())
 
     /** 替换全部同步记录（事务包装，避免 clearAll 后 insertAll 失败导致数据丢失） */
     @Transaction

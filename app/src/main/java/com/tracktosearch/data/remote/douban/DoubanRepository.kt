@@ -25,8 +25,9 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
-/** 豆瓣 Cookie 过期异常（401/403 或响应为登录页） */
-class DoubanCookieExpiredException(message: String = "豆瓣登录已过期") : Exception(message)
+/** 豆瓣 Cookie 过期异常（401/403 或响应为登录页）。
+ *  message 默认英文（ViewModel error 用英文规范），UI 层基于异常类型映射本地化文案。 */
+class DoubanCookieExpiredException(message: String = "Douban cookie expired") : Exception(message)
 
 /**
  * 延时信息(用于同步进度弹窗展示倒计时)。
@@ -243,7 +244,15 @@ class DoubanRepository(
         onProgress: (phase: String, title: String?) -> Unit = { _, _ -> }
     ): Pair<DoubanDetailInfo?, Boolean> {
         // 从 URL 解析 doubanId 作为缓存 key
-        val doubanId = Regex("""subject/(\d+)""").find(doubanUrl)?.groupValues?.get(1) ?: doubanUrl
+        // F-40: regex 未匹配时,输入可能是裸 doubanId(纯数字)或异常 URL。
+        // 裸 doubanId 直接用作 key；异常 URL 记录警告,仍用原值作 key 保持向后兼容(避免功能损失)。
+        val regexMatch = Regex("""subject/(\d+)""").find(doubanUrl)?.groupValues?.get(1)
+        val doubanId = regexMatch ?: if (doubanUrl.all { it.isDigit() }) {
+            doubanUrl  // 裸 doubanId(纯数字),直接用作 key
+        } else {
+            android.util.Log.w("DoubanRepository", "fetchDetail: 无法从 URL 解析 doubanId,缓存 key 退化为原始 URL: $doubanUrl")
+            doubanUrl  // 向后兼容:仍用原值作 key,但记录警告便于排查异常 URL
+        }
 
         // forceRefresh=true 时跳过缓存和全局池,直接爬取豆瓣(用于"重新爬取"按钮)
         if (!forceRefresh) {

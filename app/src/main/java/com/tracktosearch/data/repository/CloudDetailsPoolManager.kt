@@ -297,6 +297,11 @@ class CloudDetailsPoolManager @Inject constructor(
         lock.withLock {
             // 构造仅含 isTvShow + mediaType 的条目；其他字段尝试保留池中原值
             val existing = downloadShardUnlocked(shard) ?: emptyMap()
+            // F-42: 清除标注(mediaType=null)且池中无该条目时,无需上传空条目,直接返回成功
+            if (mediaType == null && existing[doubanId] == null) {
+                Log.d(TAG, "用户清除 $doubanId mediaType 但池中无该条目,跳过上传")
+                return@withLock true
+            }
             val existingEntry = existing[doubanId]
             // 清除标注(null)时保留池中原 isTvShow;标注非null时按 mediaType 推导;池中无条目且清除时默认 false
             val isTvShow = when {
@@ -376,15 +381,26 @@ class CloudDetailsPoolManager @Inject constructor(
         }
     }
 
-    /** 内容级等价比较：跳过 List 引用/顺序等物理差异，仅比较业务字段 */
+    /** 内容级等价比较：跳过 List 引用/顺序等物理差异，仅比较业务字段。
+     *  set-like List 字段(genres/countries/directors/aka/writers/cast/languages/initialReleaseDates)先排序再比较，
+     *  避免顺序差异导致 isSameContent 恒假、触发不必要的分片上传。
+     *  ratingDistribution(评分分布,位置敏感)与 celebrities(演职员,按番位排序)保留原始顺序比较。 */
     private fun DoubanDetailCacheEntry.isSameContent(other: DoubanDetailCacheEntry): Boolean {
         return imdbId == other.imdbId && isTvShow == other.isTvShow && title == other.title &&
-            posterUrl == other.posterUrl && genres == other.genres && year == other.year &&
-            countries == other.countries && directors == other.directors && mediaType == other.mediaType &&
+            posterUrl == other.posterUrl && year == other.year && mediaType == other.mediaType &&
             doubanRating == other.doubanRating && ratingCount == other.ratingCount && summary == other.summary &&
-            episodeCount == other.episodeCount && episodeDuration == other.episodeDuration && aka == other.aka &&
-            runtime == other.runtime && writers == other.writers && cast == other.cast &&
-            languages == other.languages && initialReleaseDates == other.initialReleaseDates &&
+            episodeCount == other.episodeCount && episodeDuration == other.episodeDuration &&
+            runtime == other.runtime &&
+            // set-like 字段：排序后比较，顺序无关
+            genres.sorted() == other.genres.sorted() &&
+            countries.sorted() == other.countries.sorted() &&
+            directors.sorted() == other.directors.sorted() &&
+            aka.sorted() == other.aka.sorted() &&
+            writers.sorted() == other.writers.sorted() &&
+            cast.sorted() == other.cast.sorted() &&
+            languages.sorted() == other.languages.sorted() &&
+            initialReleaseDates.sorted() == other.initialReleaseDates.sorted() &&
+            // 位置敏感字段：保留原始顺序比较
             ratingDistribution == other.ratingDistribution && celebrities == other.celebrities
     }
 
