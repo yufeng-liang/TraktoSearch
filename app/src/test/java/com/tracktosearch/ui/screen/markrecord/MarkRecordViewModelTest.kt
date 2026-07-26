@@ -1,6 +1,8 @@
 package com.tracktosearch.ui.screen.markrecord
 
+import android.content.Context
 import com.google.common.truth.Truth.assertThat
+import com.tracktosearch.R
 import com.tracktosearch.data.local.db.MarkActionRecordDao
 import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
@@ -8,6 +10,7 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +31,7 @@ class MarkRecordViewModelTest {
 
     private lateinit var dao: MarkActionRecordDao
     private lateinit var traktRepo: TraktRepository
+    private lateinit var context: Context
     private lateinit var viewModel: MarkRecordViewModel
 
     @Before
@@ -35,11 +39,18 @@ class MarkRecordViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         dao = mockk(relaxed = true)
         traktRepo = mockk(relaxed = true)
+        context = mockk(relaxed = true)
+        every { context.getString(R.string.error_load_failed) } returns "Load failed"
         coEvery { dao.count() } returns 0
         coEvery {
             dao.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
         } returns emptyList()
-        viewModel = MarkRecordViewModel(dao, traktRepo, mockk(relaxed = true))
+        viewModel = MarkRecordViewModel(
+            dao,
+            traktRepo,
+            mockk(relaxed = true),
+            context
+        )
     }
 
     @After
@@ -386,7 +397,7 @@ class MarkRecordViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.error).isNotNull()
-        assertThat(viewModel.uiState.value.error).contains("network error")
+        assertThat(viewModel.uiState.value.error).isEqualTo("Load failed")
     }
 
     @Test
