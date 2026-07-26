@@ -59,6 +59,42 @@ private val LightColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFE8E8E8),
 )
 
+private fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.ColorScheme = if (dark) {
+    darkColorScheme(
+        primary = Color(0xFFC48763),
+        onPrimary = Color(0xFF3E2518),
+        primaryContainer = Color(0xFF754832),
+        onPrimaryContainer = Color(0xFFFFDBCA),
+        secondary = Color(0xFFE5B5C1),
+        onSecondary = Color(0xFF44232D),
+        background = Color(0xFF241B16),
+        onBackground = Color(0xFFF7EDE3),
+        surface = Color(0xFF32251E),
+        onSurface = Color(0xFFF7EDE3),
+        surfaceVariant = Color(0xFF4A382E),
+        onSurfaceVariant = Color(0xFFD9C8BA),
+        outline = Color(0xFFA98A74),
+        outlineVariant = Color(0xFF685244),
+    )
+} else {
+    lightColorScheme(
+        primary = Color(0xFF9A6242),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFE9E2D4),
+        onPrimaryContainer = Color(0xFF5D4638),
+        secondary = Color(0xFFD9D2C6),
+        onSecondary = Color.White,
+        background = Color(0xFFF7EFE2),
+        onBackground = Color(0xFF5D4638),
+        surface = Color(0xFFF6F2E9),
+        onSurface = Color(0xFF5D4638),
+        surfaceVariant = Color(0xFFE9E2D4),
+        onSurfaceVariant = Color(0xFF806F63),
+        outline = Color(0xFFC9C0B2),
+        outlineVariant = Color(0xFFD9D2C6),
+    )
+}
+
 /** 根据种子色生成自定义 colorScheme */
 private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.material3.ColorScheme {
     val primary = seed
@@ -122,6 +158,7 @@ fun TraktToSearchTheme(
         else -> isSystemInDarkTheme()
     }
     val colorScheme = when {
+        accentColor == MonetAccent.VINTAGE_TICKET -> vintageTicketColorScheme(darkTheme)
         // 自定义莫奈主题色：直接用种子色生成 scheme，忽略动态壁纸
         accentColor != null -> monetColorScheme(
             seed = if (darkTheme) accentColor.dark else accentColor.light,

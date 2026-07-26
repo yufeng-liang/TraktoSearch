@@ -5,10 +5,10 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,23 +18,19 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.CameraAlt
-import androidx.compose.material.icons.rounded.ConfirmationNumber
-import androidx.compose.material.icons.rounded.LocalMovies
-import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.Star
-import androidx.compose.material.icons.rounded.Videocam
+import androidx.compose.material.icons.rounded.HelpOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,11 +44,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
@@ -146,9 +151,21 @@ fun ActivationLoginScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(state = hazeState)
         ) {
-            MovieBackdrop()
+            // 独立的背景 source 容器，确保自定义绘制内容完整进入 Haze 的采样层。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState, zIndex = 0f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    MovieBackdrop(modifier = Modifier.fillMaxSize())
+                }
+            }
 
             TextButton(
                 onClick = { showWhatIsTraktDialog = true },
@@ -159,7 +176,7 @@ fun ActivationLoginScreen(
             ) {
                 Text(stringResource(R.string.login_what_is_trakt))
                 Spacer(modifier = Modifier.size(4.dp))
-                Icon(Icons.Rounded.Movie, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(Icons.Rounded.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
             }
 
             Column(
@@ -168,22 +185,20 @@ fun ActivationLoginScreen(
                     .verticalScroll(scrollState)
                     .imePadding()
                     .navigationBarsPadding()
-                    .padding(horizontal = 28.dp, vertical = 28.dp),
+                    .padding(horizontal = 18.dp, vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding().height(38.dp))
-                Icon(
-                    imageVector = Icons.Rounded.Movie,
-                    contentDescription = null,
-                    modifier = Modifier.size(76.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.statusBarsPadding().height(24.dp))
+                CinemaClapperIcon()
+                Spacer(modifier = Modifier.height(22.dp))
                 Text(
                     text = stringResource(R.string.login_title),
-                    style = MaterialTheme.typography.displaySmall,
+                    fontSize = 34.sp,
+                    lineHeight = 41.sp,
+                    letterSpacing = (-2.04f).sp,
                     color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Serif
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
@@ -193,12 +208,13 @@ fun ActivationLoginScreen(
                     textAlign = TextAlign.Center
                 )
 
-                Spacer(modifier = Modifier.height(64.dp))
+                Spacer(modifier = Modifier.height(90.dp))
                 Text(
                     text = stringResource(
                         if (expired) R.string.auth_expired_message else R.string.login_activation_hint
                     ),
-                    style = MaterialTheme.typography.bodyLarge,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
@@ -206,33 +222,14 @@ fun ActivationLoginScreen(
                     authState = authState,
                     authViewModel = authViewModel,
                     hazeState = hazeState,
+                    loginState = loginState,
+                    onLoginClick = { launchAuthorization() },
+                    canUseActions = isActivated,
                     modifier = Modifier
                         .padding(top = 14.dp)
                 )
 
                 val canUseActions = isActivated
-                val loginButtonColors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                )
-                Button(
-                    onClick = { launchAuthorization() },
-                    enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(top = 10.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = loginButtonColors
-                ) {
-                    when (loginState) {
-                        LoginState.CONNECTING -> CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
-                        LoginState.ERROR -> Text(stringResource(R.string.login_retry))
-                        else -> Text(stringResource(R.string.login_button))
-                    }
-                }
-
                 if (loginState == LoginState.ERROR) {
                     Text(
                         text = errorMessage?.ifEmpty { stringResource(R.string.login_failed) }
@@ -244,28 +241,26 @@ fun ActivationLoginScreen(
                     )
                 }
 
-                Text(
-                    text = stringResource(R.string.login_sync_hint),
-                    modifier = Modifier.padding(top = 12.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            if (loginViewModel.isTraktLoggedIn()) onDoubanImport()
-                            else showDoubanImportRequireLoginDialog = true
-                        }
-                    },
-                    enabled = canUseActions,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.login_douban_import)) }
-                TextButton(
-                    onClick = onGuestMode,
-                    enabled = canUseActions,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text(stringResource(R.string.login_guest)) }
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                if (loginViewModel.isTraktLoggedIn()) onDoubanImport()
+                                else showDoubanImportRequireLoginDialog = true
+                            }
+                        },
+                        enabled = canUseActions,
+                        modifier = Modifier.weight(1f)
+                    ) { Text(stringResource(R.string.login_douban_import)) }
+                    TextButton(
+                        onClick = onGuestMode,
+                        enabled = canUseActions,
+                        modifier = Modifier.weight(1f)
+                    ) { Text(stringResource(R.string.login_guest)) }
+                }
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
@@ -313,53 +308,156 @@ fun ActivationLoginScreen(
     }
 }
 
+/** v7 原型中的场记板图标：三条斜切片、圆角棕色底和双层镜头圆环。 */
+@Composable
+private fun CinemaClapperIcon() {
+    val accent = MaterialTheme.colorScheme.primary
+    val paper = MaterialTheme.colorScheme.surface
+    Box(
+        modifier = Modifier.size(width = 84.dp, height = 66.dp),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Box(
+            modifier = Modifier
+                .size(width = 84.dp, height = 66.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(accent)
+                .drawBehind {
+                    val bandWidth = 9.dp.toPx()
+                    val bandStep = 19.dp.toPx()
+                    val firstBand = 21.dp.toPx()
+                    drawLine(
+                        color = accent,
+                        start = Offset(0f, 0f),
+                        end = Offset(size.width, 0f),
+                        strokeWidth = 1.dp.toPx()
+                    )
+                    repeat(3) { index ->
+                        val left = firstBand + index * bandStep
+                        val path = Path().apply {
+                            moveTo(left + 6.dp.toPx(), 0f)
+                            lineTo(left + bandWidth + 6.dp.toPx(), 0f)
+                            lineTo(left + bandWidth, 12.dp.toPx())
+                            lineTo(left, 12.dp.toPx())
+                            close()
+                        }
+                        drawPath(path = path, color = paper)
+                    }
+                }
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 12.dp)
+                .width(60.dp)
+                .height(2.dp)
+                .background(paper.copy(alpha = 0.28f))
+        )
+    }
+}
+
 @Composable
 private fun ActivationCard(
     authState: com.tracktosearch.ui.screen.auth.AuthUiState,
     authViewModel: com.tracktosearch.ui.screen.auth.AuthViewModel,
     hazeState: HazeState,
+    loginState: LoginState,
+    onLoginClick: () -> Unit,
+    canUseActions: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val shape = RoundedCornerShape(24.dp)
-    val hazeStyle = HazeMaterials.thick(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f))
+    val shape = RoundedCornerShape(20.dp)
+    val accent = MaterialTheme.colorScheme.primary
+    val hazeStyle = HazeMaterials.thin(
+        MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
+    )
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
+            .zIndex(1f)
             .hazeEffect(state = hazeState) {
-                blurEffect { style = hazeStyle }
+                blurEffect {
+                    style = hazeStyle
+                    blurRadius = 36.dp
+                    noiseFactor = 0f
+                    blurEnabled = true
+                }
             }
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f), shape)
-            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)), shape)
-            .padding(16.dp)
+            .background(Color.Transparent, shape)
+            .border(BorderStroke(1.dp, accent.copy(alpha = 0.30f)), shape)
+            .padding(horizontal = 18.dp, vertical = 16.dp)
     ) {
         Text(
             text = stringResource(R.string.login_personal_cinema_access),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                letterSpacing = 1.43.sp
+            ),
+            color = accent,
             fontWeight = FontWeight.Bold
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(top = 10.dp),
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
+            val inputShape = RoundedCornerShape(13.dp)
+            BasicTextField(
                 value = authState.inviteCode,
                 onValueChange = authViewModel::updateInviteCode,
-                modifier = Modifier.weight(1f),
-                label = { Text(stringResource(R.string.auth_invite_code)) },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+                    .clip(inputShape)
+                    .background(Color.White.copy(alpha = 0.68f), inputShape)
+                    .border(
+                        width = 1.dp,
+                        color = if (authState.error != null) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            accent.copy(alpha = 0.30f)
+                        },
+                        shape = inputShape
+                    )
+                    .padding(horizontal = 14.dp),
                 singleLine = true,
-                isError = authState.error != null
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp
+                ),
+                cursorBrush = SolidColor(accent),
+                decorationBox = { innerTextField ->
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (authState.inviteCode.isEmpty()) {
+                            Text(
+                                text = stringResource(R.string.auth_invite_code),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp
+                            )
+                        }
+                        innerTextField()
+                    }
+                }
             )
             Button(
                 onClick = authViewModel::activate,
                 enabled = !authState.isLoading,
                 modifier = Modifier
                     .padding(start = 8.dp)
-                    .height(56.dp),
-                shape = RoundedCornerShape(14.dp)
+                    .height(48.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accent,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
             ) {
                 if (authState.isLoading) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 else Text(stringResource(R.string.auth_activate))
@@ -378,19 +476,86 @@ private fun ActivationCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        val loginButtonColors = ButtonDefaults.buttonColors(
+            containerColor = accent,
+            disabledContainerColor = Color(0xFFDED6CE),
+            disabledContentColor = Color(0xFF9A9189)
+        )
+        Button(
+            onClick = onLoginClick,
+            enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+                .height(48.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = loginButtonColors
+        ) {
+            when (loginState) {
+                LoginState.CONNECTING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                LoginState.ERROR -> Text(stringResource(R.string.login_retry))
+                else -> Text(stringResource(R.string.login_button))
+            }
+        }
     }
 }
 
 @Composable
-private fun MovieBackdrop() {
-    val iconColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-    Box(Modifier.fillMaxSize()) {
-        Icon(Icons.Rounded.ConfirmationNumber, null, Modifier.align(Alignment.TopStart).padding(top = 110.dp, start = 18.dp).size(34.dp), tint = iconColor)
-        Icon(Icons.Rounded.Videocam, null, Modifier.align(Alignment.TopEnd).padding(top = 180.dp, end = 18.dp).size(40.dp), tint = iconColor)
-        Icon(Icons.Rounded.LocalMovies, null, Modifier.align(Alignment.CenterStart).padding(start = 20.dp).size(38.dp), tint = iconColor)
-        Icon(Icons.Rounded.CameraAlt, null, Modifier.align(Alignment.CenterEnd).padding(end = 20.dp).size(34.dp), tint = iconColor)
-        Icon(Icons.Rounded.Star, null, Modifier.align(Alignment.BottomStart).padding(bottom = 150.dp, start = 26.dp).size(30.dp), tint = iconColor)
-        Icon(Icons.Rounded.Movie, null, Modifier.align(Alignment.BottomEnd).padding(bottom = 120.dp, end = 24.dp).size(42.dp), tint = iconColor)
+private fun MovieBackdrop(modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    val motifColor = primary.copy(alpha = 0.45f)
+    val reelColor = primary.copy(alpha = 0.24f)
+    val dotColor = primary.copy(alpha = 0.13f)
+    Box(
+        modifier
+            .fillMaxSize()
+            .drawBehind {
+                val step = 22.dp.toPx()
+                var y = step / 2f
+                while (y < size.height) {
+                    var x = step / 2f
+                    while (x < size.width) {
+                        drawCircle(dotColor, radius = 0.7.dp.toPx(), center = Offset(x, y))
+                        x += step
+                    }
+                    y += step
+                }
+            }
+    ) {
+        Text(text = "🎟", modifier = Modifier.align(Alignment.TopStart).padding(top = 150.dp, start = 22.dp).rotate(-18f), fontSize = 32.sp, color = motifColor)
+        Text(text = "🍿", modifier = Modifier.align(Alignment.TopEnd).padding(top = 194.dp, end = 26.dp).rotate(16f), fontSize = 32.sp, color = motifColor)
+        Text(text = "🎞", modifier = Modifier.align(Alignment.BottomStart).padding(bottom = 175.dp, start = 25.dp).rotate(22f), fontSize = 32.sp, color = motifColor)
+        Text(text = "🎬", modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 132.dp, end = 24.dp).rotate(-14f), fontSize = 32.sp, color = motifColor)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 315.dp)
+                .size(105.dp)
+                .rotate(15f)
+                .drawBehind {
+                    drawCircle(
+                        color = reelColor,
+                        radius = size.minDimension / 2f - 7.dp.toPx(),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 13.dp.toPx(), pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 5.dp.toPx())))
+                    )
+                }
+        )
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(36.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            repeat(10) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 25.dp, height = 36.dp)
+                        .background(reelColor)
+                )
+            }
+        }
     }
 }
 

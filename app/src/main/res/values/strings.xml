@@ -5,7 +5,7 @@
     <string name="auth_title">Activate access</string>
     <string name="auth_subtitle">Enter the invitation code provided by the administrator.</string>
     <string name="auth_expired_message">Connect to the internet and activate access again.</string>
-    <string name="auth_invite_code">Invitation code</string>
+    <string name="auth_invite_code">Enter 12-digit activation code</string>
     <string name="auth_activate">Activate</string>
     <string name="auth_error_invalid_invite">This invitation code is invalid.</string>
     <string name="auth_error_invite_used">This invitation code has already been used. Please request a new one.</string>
@@ -226,9 +226,9 @@
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
-    <string name="login_activation_locked">Not activated · the actions below are locked</string>
+    <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
     <string name="login_activation_success">Activated · you can now continue</string>
-    <string name="login_personal_cinema_access">Personal cinema access</string>
+    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>
@@ -467,6 +467,7 @@
     <string name="settings_accent_color">Accent Color</string>
     <string name="settings_accent_dynamic">Dynamic</string>
     <!-- Accent Color Names -->
+    <string name="accent_vintage_ticket">Vintage Ticket</string>
     <string name="accent_water_lily">Water Lily Purple</string>
     <string name="accent_sunrise">Sunrise Orange</string>
     <string name="accent_japanese_bridge">Japanese Bridge Green</string>

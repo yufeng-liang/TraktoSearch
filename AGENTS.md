@@ -124,3 +124,10 @@
 ## 不确定就主动问
 
 不要瞎猜，讲清楚权衡。有问题明说，有更简单做法直说，该反对时反对。
+
+## 可视化伴侣踩坑经验
+
+- 头脑风暴可视化伴侣重启后可能创建新的 session 目录，同时复用原端口和 key；不要只根据旧的 `server-info` 判断当前服务状态。
+- 排查时要确认当前端口对应的监听 Node 进程，以及最新 session 的 `server-info` 中的 `screen_dir`。如果 HTML 写在旧 session 目录，带 key 的请求可能成功但页面仍只显示 waiting。
+- 发现 session 不一致时，将 HTML 同步到实际运行 session 的 `screen_dir`，并用带 key 的会话验证 `/files/<filename>` 与首页内容都能返回。
+- key URL 首次访问会写入同源 cookie 后跳转到裸地址，这是伴侣的正常 bootstrap 流程；若浏览器没有保留 cookie，应继续提供完整 key URL。

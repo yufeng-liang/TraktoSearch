@@ -5,7 +5,7 @@
     <string name="auth_title">접근 권한 활성화</string>
     <string name="auth_subtitle">관리자가 제공한 초대 코드를 입력하세요.</string>
     <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
-    <string name="auth_invite_code">초대 코드</string>
+    <string name="auth_invite_code">12자리 활성화 코드 입력</string>
     <string name="auth_activate">활성화</string>
     <string name="auth_error_invalid_invite">초대 코드가 올바르지 않습니다.</string>
     <string name="auth_error_invite_used">이 초대 코드는 이미 사용되었습니다. 관리자에게 새 코드를 요청하세요.</string>
@@ -251,6 +251,7 @@
     <string name="settings_accent_color">액센트 색상</string>
     <string name="settings_accent_dynamic">다이나믹</string>
     <!-- 액센트 색상 -->
+    <string name="accent_vintage_ticket">레트로 티켓</string>
     <string name="accent_water_lily">연꽃 보라</string>
     <string name="accent_sunrise">일출 주황</string>
     <string name="accent_japanese_bridge">일본교 녹색</string>
@@ -466,9 +467,9 @@
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
     <string name="login_activation_hint">액세스를 활성화하면 Trakt 관심목록을 동기화할 수 있습니다</string>
-    <string name="login_activation_locked">미활성화 · 아래 작업이 잠겨 있습니다</string>
+    <string name="login_activation_locked">○ 미활성화 · 코드를 입력해 관람 공간 잠금 해제</string>
     <string name="login_activation_success">활성화됨 · 계속할 수 있습니다</string>
-    <string name="login_personal_cinema_access">Personal cinema access</string>
+    <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">Trakt에 로그인</string>
