@@ -49,8 +49,7 @@ import com.tracktosearch.ui.screen.douban.DoubanSpiderTestScreen
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
 import com.tracktosearch.ui.screen.help.HelpScreen
 import com.tracktosearch.ui.screen.listdetail.TraktListDetailScreen
-import com.tracktosearch.ui.screen.login.LoginScreen
-import com.tracktosearch.ui.screen.auth.AuthScreen
+import com.tracktosearch.ui.screen.login.ActivationLoginScreen
 import com.tracktosearch.ui.screen.main.MainScreen
 import com.tracktosearch.ui.screen.markrecord.MarkRecordScreen
 import com.tracktosearch.ui.screen.person.PersonScreen
@@ -237,7 +236,7 @@ fun AppNavigation(
             ) {
                 composable(Routes.AUTH) {
                     val expired = currentAuthState == AuthState.EXPIRED
-                    AuthScreen(
+                    ActivationLoginScreen(
                         expired = expired,
                         onActivated = {
                             // 激活只建立网关会话，仍需完成原有 Trakt OAuth 登录。
@@ -252,7 +251,7 @@ fun AppNavigation(
                 composable(Routes.LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         val fromGuestMode = navController.previousBackStackEntry?.destination?.route == Routes.MAIN
-                        LoginScreen(
+                        ActivationLoginScreen(
                             redirectToBrowser = fromGuestMode,
                             onLoginSuccess = {
                                 isTraktLoggedIn = true

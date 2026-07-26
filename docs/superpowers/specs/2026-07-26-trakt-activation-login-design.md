@@ -68,7 +68,7 @@
 ## 实现边界
 
 - 复用现有 `AuthViewModel` 激活协议、错误映射和 `LoginScreen` Trakt OAuth 流程。
-- 修改 `AuthScreen`/登录导航状态和相关 Compose UI，不修改网关 API 协议。
+- 修改 `ActivationLoginScreen`/登录导航状态和相关 Compose UI，删除旧的独立 `AuthScreen`，不修改网关 API 协议。
 - 同步更新 values、values-zh、values-ja、values-ko 的用户可见文案资源。
 - 不在源码、BuildConfig、APK 或 Pages 文件中加入任何密钥。
 

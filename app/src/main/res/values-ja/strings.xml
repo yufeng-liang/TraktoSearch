@@ -465,6 +465,10 @@
     <string name="login_denied">認証が拒否されました</string>
     <string name="login_success">ログイン成功、読み込み中…</string>
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
+    <string name="login_activation_hint">アクセスを有効にするとTraktのウォッチリストを同期できます</string>
+    <string name="login_activation_locked">未有効化 · 以下の操作はロックされています</string>
+    <string name="login_activation_success">有効化済み · 続行できます</string>
+    <string name="login_personal_cinema_access">Personal cinema access</string>
 
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">Traktにログイン</string>

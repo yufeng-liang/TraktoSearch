@@ -465,6 +465,10 @@
     <string name="login_denied">인증이 거부되었습니다</string>
     <string name="login_success">로그인 성공, 로딩 중…</string>
     <string name="login_sync_hint">로그인 후 Trakt 관심목록이 동기화됩니다</string>
+    <string name="login_activation_hint">액세스를 활성화하면 Trakt 관심목록을 동기화할 수 있습니다</string>
+    <string name="login_activation_locked">미활성화 · 아래 작업이 잠겨 있습니다</string>
+    <string name="login_activation_success">활성화됨 · 계속할 수 있습니다</string>
+    <string name="login_personal_cinema_access">Personal cinema access</string>
 
     <!-- Login Prompt Screen -->
     <string name="login_prompt_title">Trakt에 로그인</string>

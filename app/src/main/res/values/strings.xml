@@ -214,7 +214,7 @@
 
     <!-- Login Screen -->
     <string name="login_title">TraktToSearch</string>
-    <string name="login_subtitle">From watchlist to resources, one step away</string>
+    <string name="login_subtitle">From watchlist to cloud resources</string>
     <string name="login_button">Sign in with Trakt</string>
     <string name="login_connecting">Connecting to Trakt…</string>
     <string name="login_connecting_hint">Please wait, fetching your account info</string>
@@ -225,6 +225,10 @@
     <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
+    <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
+    <string name="login_activation_locked">Not activated · the actions below are locked</string>
+    <string name="login_activation_success">Activated · you can now continue</string>
+    <string name="login_personal_cinema_access">Personal cinema access</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>
     <string name="douban_import_require_trakt_login">Login Trakt</string>
