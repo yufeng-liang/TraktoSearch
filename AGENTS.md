@@ -89,6 +89,8 @@
 ## 常见陷阱
 
 - Retrofit 的 `@GET("")` 会在进入 OkHttp 前因空 URL 失败，并被评分层的宽泛异常捕获静默降级；网关 base URL 已含 `/api/omdb/` 时应使用 `@GET(".")`，并用 MockWebServer 锁定最终路径。
+- Brainstorm Companion 预览依赖 URL 查询参数 `?key=`；部分应用内浏览器会把链接重写为不带 key 的裸地址，导致 Companion 显示等待页或返回 403。先用 `Invoke-WebRequest` 验证带 key 地址；若服务端正常而浏览器丢 key，应改用独立的本地静态预览服务器，不要反复重启同一个 Companion 会话。
+- Android/Gradle 测试和构建可能超过默认工具超时但仍在运行；使用较长的单次超时，超时后先检查 Gradle 进程、`app/build/test-results`、`app/build/reports` 和 APK 输出，再判断成功或失败。不要把工具层 timeout 直接等同于 Gradle 失败。
 - `AuthManager.initialize()` 可能同时由 `MainActivity` 和 `AuthCheckWorker` 进入；刷新锁内必须按调用方看到的旧 access token 二次检查，避免串行等待后的第二次刷新再次轮换 refresh token。
 - Git worktree 建新分支后 `local.properties` 不在版本库，需手动从 `F:\trae-project\local.properties` 复制到 worktree 目录
 - 授权网关调试时，App 默认应使用可直连的 Pages 代理 `https://tracktosearch-gateway.pages.dev/gateway-api`，由其转发到 `auth-worker`；不要把 `workers.dev` 直连地址写入面向普通用户的构建，否则部分网络环境会超时。
@@ -123,3 +125,10 @@
 ## 不确定就主动问
 
 不要瞎猜，讲清楚权衡。有问题明说，有更简单做法直说，该反对时反对。
+
+## 可视化伴侣踩坑经验
+
+- 头脑风暴可视化伴侣重启后可能创建新的 session 目录，同时复用原端口和 key；不要只根据旧的 `server-info` 判断当前服务状态。
+- 排查时要确认当前端口对应的监听 Node 进程，以及最新 session 的 `server-info` 中的 `screen_dir`。如果 HTML 写在旧 session 目录，带 key 的请求可能成功但页面仍只显示 waiting。
+- 发现 session 不一致时，将 HTML 同步到实际运行 session 的 `screen_dir`，并用带 key 的会话验证 `/files/<filename>` 与首页内容都能返回。
+- key URL 首次访问会写入同源 cookie 后跳转到裸地址，这是伴侣的正常 bootstrap 流程；若浏览器没有保留 cookie，应继续提供完整 key URL。
