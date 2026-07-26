@@ -50,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
@@ -164,10 +165,12 @@ fun ActivationLoginScreen(
 
             TextButton(
                 onClick = { showWhatIsTraktDialog = true },
+                enabled = true,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(end = 12.dp),
+                    .padding(end = 12.dp)
+                    .zIndex(2f),
             ) {
                 Text(stringResource(R.string.login_what_is_trakt))
                 Spacer(modifier = Modifier.size(4.dp))
@@ -183,7 +186,7 @@ fun ActivationLoginScreen(
                     .padding(horizontal = 18.dp, vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Spacer(modifier = Modifier.statusBarsPadding().height(24.dp))
+                Spacer(modifier = Modifier.statusBarsPadding().height(53.dp))
                 CinemaClapperIcon()
                 Spacer(modifier = Modifier.height(22.dp))
                 Text(
@@ -198,21 +201,24 @@ fun ActivationLoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.login_subtitle),
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
 
                 Spacer(modifier = Modifier.height(90.dp))
-                Text(
-                    text = stringResource(
-                        if (expired) R.string.auth_expired_message else R.string.login_activation_hint
-                    ),
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                if (expired) {
+                    Text(
+                        text = stringResource(R.string.auth_expired_message),
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
                 ActivationCard(
                     authState = authState,
                     authViewModel = authViewModel,
@@ -220,8 +226,7 @@ fun ActivationLoginScreen(
                     loginState = loginState,
                     onLoginClick = { launchAuthorization() },
                     canUseActions = isActivated,
-                    modifier = Modifier
-                        .padding(top = 14.dp)
+                    modifier = Modifier.padding(top = if (expired) 14.dp else 0.dp)
                 )
 
                 val canUseActions = isActivated
@@ -363,6 +368,18 @@ private fun ActivationCard(
 ) {
     val shape = RoundedCornerShape(20.dp)
     val accent = MaterialTheme.colorScheme.primary
+    val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val inputFillColor = if (isDarkTheme) {
+        Color.Black.copy(alpha = 0.72f)
+    } else {
+        Color.White.copy(alpha = 0.68f)
+    }
+    val inputTextColor = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
+    val inputPlaceholderColor = if (isDarkTheme) {
+        Color(0xFFBDBDBD)
+    } else {
+        accent.copy(alpha = 0.72f)
+    }
     val hazeStyle = HazeMaterials.thin(
         MaterialTheme.colorScheme.surface.copy(alpha = 0.48f)
     )
@@ -407,7 +424,7 @@ private fun ActivationCard(
                     .weight(1f)
                     .height(48.dp)
                     .clip(inputShape)
-                    .background(Color.White.copy(alpha = 0.68f), inputShape)
+                    .background(inputFillColor, inputShape)
                     .border(
                         width = 1.dp,
                         color = if (authState.error != null) {
@@ -420,7 +437,7 @@ private fun ActivationCard(
                     .padding(horizontal = 14.dp),
                 singleLine = true,
                 textStyle = TextStyle(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = inputTextColor,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 13.sp
                 ),
@@ -433,7 +450,7 @@ private fun ActivationCard(
                         if (authState.inviteCode.isEmpty()) {
                             Text(
                                 text = stringResource(R.string.auth_invite_code),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = inputPlaceholderColor,
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
                             )
