@@ -495,6 +495,8 @@ class TraktRepository @Inject constructor(
 
     suspend fun searchByTmdb(tmdbId: Int, type: MediaType): Result<List<TraktSearchResult>> {
         val key = "${tmdbId}_${type.name}"
+        // 启动期间磁盘未加载完时等待加载完成,避免绕过缓存发网络请求
+        searchByTmdbCache.awaitLoaded()
         searchByTmdbCache.get(key)?.let { return Result.success(it) }
         return try {
             val typeStr = when (type) {
@@ -529,6 +531,8 @@ class TraktRepository @Inject constructor(
     /** 通过 imdbId 反查 Trakt 条目（用于豆瓣→Trakt 同步）。仅支持 movie/show */
     suspend fun searchByImdb(imdbId: String, type: MediaType): Result<List<TraktSearchResult>> {
         val key = "${imdbId}_${type.name}"
+        // 启动期间磁盘未加载完时等待加载完成,避免绕过缓存发网络请求
+        searchByImdbCache.awaitLoaded()
         searchByImdbCache.get(key)?.let { return Result.success(it) }
         return try {
             val typeStr = when (type) {

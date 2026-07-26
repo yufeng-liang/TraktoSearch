@@ -58,6 +58,17 @@ class TmdbRepository @Inject constructor(
     /** 构造带语言后缀的缓存 key，避免切换语言后命中旧语言缓存 */
     private suspend fun langKey(id: Any): String = "${id}_${getTmdbLanguage()}"
 
+    /**
+     * TMDB 图片接口的 include_image_language 参数。
+     *
+     * 图片接口的 language 参数与详情接口不同：它接受 "zh,null" 这种"主语言,null"格式，
+     * 表示"返回主语言图片 + 原始语言图片"。若硬编码 "zh,null" 会导致非中文用户剧照请求失效，
+     * 且因缓存 key 含语言后缀，同一张剧照会在不同语言下各存一份。
+     *
+     * 返回值示例：zh-CN,null / en-US,null / ja-JP,null / ko-KR,null
+     */
+    private suspend fun getTmdbImageLanguage(): String = "${getTmdbLanguage()},null"
+
     /** 根据当前语言设置返回 TMDB alternative_titles 的 country 参数 */
     private suspend fun getTmdbCountry(): String {
         val lang = languageStorage.language.first()
@@ -463,7 +474,8 @@ class TmdbRepository @Inject constructor(
                     MediaType.DISK -> return@getOrAwait null
                 }
                 if (response.isSuccessful) {
-                    response.body()?.also { reviewsCache.put(key, it) }
+                    // getOrAwait 内部已 put,无需 .also { reviewsCache.put(key, it) }
+                    response.body()
                 } else null
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 null
@@ -777,7 +789,7 @@ class TmdbRepository @Inject constructor(
         val key = langKey(id)
         return movieImagesCache.getOrAwait(key) {
             try {
-                val response = tmdbApiService.getMovieImages(id, "zh,null")
+                val response = tmdbApiService.getMovieImages(id, getTmdbImageLanguage())
                 if (response.isSuccessful) response.body()?.backdrops ?: emptyList()
                 else emptyList()
             } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
