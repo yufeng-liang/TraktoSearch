@@ -1,8 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="720"
-    android:interpolator="@android:interpolator/fast_out_slow_in"
-    android:propertyName="rotation"
-    android:valueFrom="-40"
-    android:valueTo="0"
-    android:valueType="floatType" />
+<set xmlns:android="http://schemas.android.com/apk/res/android"
+    android:ordering="together">
+    <objectAnimator
+        android:duration="720"
+        android:startOffset="150"
+        android:interpolator="@interpolator/splash_clapper_free_fall"
+        android:propertyName="rotation"
+        android:valueFrom="-40"
+        android:valueTo="0"
+        android:valueType="floatType" />
+    <objectAnimator
+        android:duration="720"
+        android:startOffset="150"
+        android:interpolator="@interpolator/splash_clapper_free_fall"
+        android:propertyName="translateX"
+        android:valueFrom="-13"
+        android:valueTo="0"
+        android:valueType="floatType" />
+    <objectAnimator
+        android:duration="720"
+        android:startOffset="150"
+        android:interpolator="@interpolator/splash_clapper_free_fall"
+        android:propertyName="translateY"
+        android:valueFrom="-9"
+        android:valueTo="0"
+        android:valueType="floatType" />
+</set>

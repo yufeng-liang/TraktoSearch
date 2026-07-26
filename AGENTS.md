@@ -117,6 +117,13 @@
 - 若 Gradle 提示 `minSdkVersion` 不兼容，仍应直接用 `adb -s <serial> install -r <apk>` 做一次事实核验；本项目曾出现 Gradle 报 API 21、但 ADB 直接安装返回 `Success` 的不一致情况。
 - 安装成功后必须继续执行 `am start`、UI 树检查、`screencap` 后 `adb pull` 截图和 `logcat -b crash`，不能仅凭安装成功宣称功能通过。若系统属性与用户描述不一致，保留命令输出并报告差异。
 
+## Android 开屏截图验收经验
+
+- 开屏视觉验收必须记录设备实际分辨率、密度、API、安装结果、主 Activity、启动进程、UI 树和 `logcat -b crash`；构建成功不等于真机视觉通过。
+- Windows PowerShell 直接用 `>` 接收 `adb exec-out screencap -p` 可能破坏 PNG 二进制；截图应通过 `cmd.exe /c` 或其他二进制安全方式保存，保存后用图片解析确认尺寸和格式。
+- 系统 Splash 的底部 `branding_image` 虚线框是原型中的安全区域标记，复刻时必须保留；系统 branding 区域有尺寸限制，不能靠盲目放大资源实现网页全宽，必要时应改用自定义 Compose 启动内容。
+- 对照动画时至少抓取初始、延迟后、闭合后和进入首屏四个时间点；拍板图标需要同时核对 stick 的棕色上沿、白色斜纹、旋转轴和场记板主体的嵌入关系。
+
 ## 安全意识
 
 - 不硬编码密码、密钥

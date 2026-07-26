@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.SolidColor
@@ -187,27 +188,31 @@ fun ActivationLoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.statusBarsPadding().height(53.dp))
-                CinemaClapperIcon()
-                Spacer(modifier = Modifier.height(22.dp))
-                Text(
-                    text = stringResource(R.string.login_title),
-                    fontSize = 34.sp,
-                    lineHeight = 41.sp,
-                    letterSpacing = (-2.04f).sp,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Serif
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.login_subtitle),
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
+                Box(modifier = Modifier.offset(y = 15.dp)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CinemaClapperIcon()
+                        Spacer(modifier = Modifier.height(22.dp))
+                        Text(
+                            text = stringResource(R.string.login_title),
+                            fontSize = 34.sp,
+                            lineHeight = 41.sp,
+                            letterSpacing = (-2.04f).sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.login_subtitle),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(90.dp))
                 if (expired) {
@@ -325,7 +330,7 @@ private fun CinemaClapperIcon() {
                 .drawBehind {
                     val bandWidth = 9.dp.toPx()
                     val bandStep = 19.dp.toPx()
-                    val firstBand = 21.dp.toPx()
+                    val firstBand = 16.dp.toPx()
                     drawLine(
                         color = accent,
                         start = Offset(0f, 0f),
