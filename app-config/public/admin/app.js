@@ -937,6 +937,7 @@ function renderDashboard(container, renderToken) {
         if (auditResult.status === 'fulfilled') {
             const failures = auditResult.value.logs.filter(l => l.result === 'FAILURE').slice(0, 5);
             grid.insertAdjacentHTML('afterbegin', dashboardFailuresCard(failures));
+            grid.querySelector('.js-view-all-failures')?.addEventListener('click', showAllFailuresModal);
         } else {
             grid.insertAdjacentHTML('afterbegin', dashboardErrorCard('失败记录加载失败', auditResult.reason, container, renderToken));
         }
@@ -957,10 +958,57 @@ function dashboardHealthCard(stats) {
 
 function dashboardFailuresCard(failures) {
     return `<div class="card">
-        <div class="card-header"><span class="card-title">最近授权失败</span><a href="#/audit" class="btn btn-ghost btn-sm">查看全部</a></div>
+        <div class="card-header"><span class="card-title">最近授权失败</span><button type="button" class="btn btn-ghost btn-sm js-view-all-failures">查看全部</button></div>
         ${failures.length === 0 ? '<div class="empty-state"><div class="empty-title">无失败记录</div><div class="empty-desc">系统运行正常</div></div>' :
         `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${failures.map(l => `<tr><td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatTime(l.createdAt)}</td><td>${eventLabel(l.eventType)}</td><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td><td style="color:var(--danger)">${escapeHtml(l.errorCode || '—')}</td></tr>`).join('')}</tbody></table></div>`}
     </div>`;
+}
+
+function showAllFailuresModal() {
+    const limit = 10;
+    const modalPanel = modal.overlay.querySelector('.modal');
+    modalPanel?.classList.add('failure-log-modal');
+    const body = document.createElement('div');
+    const closeButton = Object.assign(document.createElement('button'), {
+        className: 'btn btn-ghost',
+        textContent: '关闭',
+        type: 'button',
+    });
+    modal.open({
+        title: '全部授权失败',
+        body,
+        footer: [closeButton],
+        onClose: () => modalPanel?.classList.remove('failure-log-modal'),
+    });
+    closeButton.addEventListener('click', () => modal.close());
+
+    const renderPage = (page) => {
+        const rows = page.logs.length === 0
+            ? '<tr><td colspan="4"><div class="empty-state"><div class="empty-title">暂无失败记录</div><div class="empty-desc">审计保留期内没有授权失败</div></div></td></tr>'
+            : page.logs.map(log => `
+                <tr>
+                    <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${formatTime(log.createdAt)}</td>
+                    <td>${eventLabel(log.eventType)}</td>
+                    <td>${entityCell(log.friendName, log.friendId, '未知朋友')}</td>
+                    <td style="color:var(--danger);font-size:12px">${escapeHtml(log.errorCode || '—')}</td>
+                </tr>
+            `).join('');
+        const end = Math.min(page.offset + page.logs.length, page.total);
+        body.innerHTML = `
+            <div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${rows}</tbody></table></div>
+            <div class="invite-pagination failure-modal-pagination"><span>共 ${page.total} 条，${page.total ? `第 ${page.offset + 1} - ${end} 条` : '暂无记录'}</span><div><button type="button" class="btn btn-ghost btn-sm failure-prev" ${page.offset === 0 ? 'disabled' : ''}>上一页</button><button type="button" class="btn btn-ghost btn-sm failure-next" ${page.hasMore ? '' : 'disabled'}>下一页</button></div></div>
+        `;
+        body.querySelector('.failure-prev')?.addEventListener('click', () => loadPage(Math.max(0, page.offset - limit)));
+        body.querySelector('.failure-next')?.addEventListener('click', () => loadPage(page.offset + limit));
+    };
+    const loadPage = (offset) => {
+        body.innerHTML = '<div class="loading-skeleton" style="height:240px"></div>';
+        API.getAuditLogs({ result: 'FAILURE', limit, offset }).then(renderPage).catch(error => {
+            body.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(error))}</span><button type="button" class="btn btn-sm btn-ghost failure-retry">重试</button></div>`;
+            body.querySelector('.failure-retry')?.addEventListener('click', () => loadPage(offset));
+        });
+    };
+    loadPage(0);
 }
 
 function dashboardErrorCard(title, error, container, renderToken) {

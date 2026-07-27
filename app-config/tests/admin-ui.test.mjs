@@ -35,6 +35,14 @@ test('后台表单和仪表盘关键错误不会静默失败', () => {
     assert.match(appSource, /auditRetry/);
 });
 
+test('dashboard failure view opens an all-time paginated modal', () => {
+    assert.match(appSource, /js-view-all-failures/);
+    assert.doesNotMatch(appSource, /href="#\/audit" class="btn btn-ghost btn-sm">查看全部/);
+    assert.match(appSource, /function showAllFailuresModal/);
+    assert.match(appSource, /API\.getAuditLogs\(\{ result: 'FAILURE', limit, offset \}\)/);
+    assert.match(appSource, /failure-modal-pagination/);
+});
+
 test('创建朋友后使用与路由解析器一致的 hash 格式', () => {
     assert.match(appSource, /const nextHash = '#\/' \+ route/);
 });

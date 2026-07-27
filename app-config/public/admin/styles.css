@@ -898,6 +898,7 @@ tbody tr:last-child td { border-bottom: none; }
     pointer-events: none;
     opacity: 0.8;
 }
+.failure-log-modal { max-width: 880px; }
 .modal-header {
     display: flex;
     align-items: center;
