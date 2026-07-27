@@ -101,6 +101,7 @@ test('friend detail exposes device identity and recovery summaries', () => {
     assert.match(workerSource, /recovery_count/);
     assert.match(workerSource, /has_recovery_identity/);
     assert.match(appSource, /device-summary-grid/);
+    assert.match(appSource, /设备列表[\s\S]*device-summary-grid[\s\S]*设备总数/);
     assert.match(appSource, /possibleDuplicate/);
     assert.match(appSource, /REINSTALL_RECOVER/);
     assert.match(workerSource, /export async function listDevices/);

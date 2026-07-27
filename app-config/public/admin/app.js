@@ -1093,6 +1093,12 @@ function renderFriendDetail(container, renderToken) {
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         生成邀请码
                     </button></div>
+                    <div class="device-summary-grid">
+                        <div><span>设备总数</span><strong>${f.totalDevices}</strong></div>
+                        <div><span>活跃设备</span><strong>${f.activeDevices}</strong></div>
+                        <div><span>已失效</span><strong>${f.revokedDevices}</strong></div>
+                        <div><span>恢复次数</span><strong>${f.recoveryCount}</strong></div>
+                    </div>
                     <div class="table-scroll"><table><thead><tr><th>设备名称</th><th>App 版本</th><th>状态</th><th>最后活动</th><th>操作</th></tr></thead><tbody>
                         ${f.devicesList.map(d => `
                             <tr>
@@ -1106,14 +1112,6 @@ function renderFriendDetail(container, renderToken) {
                     </tbody></table></div>
                 </div>
         `;
-        content.insertAdjacentHTML('afterbegin', `
-            <div class="device-summary-grid">
-                <div><span>设备总数</span><strong>${f.totalDevices}</strong></div>
-                <div><span>活跃设备</span><strong>${f.activeDevices}</strong></div>
-                <div><span>已失效</span><strong>${f.revokedDevices}</strong></div>
-                <div><span>恢复次数</span><strong>${f.recoveryCount}</strong></div>
-            </div>
-        `);
         const deviceRows = content.querySelectorAll('tbody tr');
         deviceRows.forEach((row, index) => {
             const device = f.devicesList[index];
