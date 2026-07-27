@@ -5,6 +5,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+test('admin branding uses the app icon for both logo and favicon', () => {
+    assert.match(htmlSource, /<img class="brand-mark" src="app-icon\.png"/);
+    assert.match(htmlSource, /<link rel="icon" type="image\/png" href="app-icon\.png">/);
+});
 const appSource = fs.readFileSync(path.join(root, 'public/admin/app.js'), 'utf8');
 const htmlSource = fs.readFileSync(path.join(root, 'public/admin/index.html'), 'utf8');
 const workerSource = fs.readFileSync(path.join(root, '../auth-worker/src/admin/admin.ts'), 'utf8');
