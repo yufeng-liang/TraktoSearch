@@ -30,8 +30,6 @@
             android:rotation="-40">
             <path
                 android:fillColor="#996345"
-                android:strokeColor="#996345"
-                android:strokeWidth="1"
                 android:pathData="M53,46h86a20,20 0,0 1,20 18H33a20,20 0 0 1,20 -18z" />
             <path
                 android:fillColor="#F7EFE2"
