@@ -119,6 +119,7 @@ test('revoked device records can be soft-deleted from the admin UI', () => {
     assert.match(appSource, /async deleteDevice\(deviceId\)/);
     assert.match(appSource, /showDeleteDeviceModal/);
     assert.match(appSource, /js-delete-device/);
+    assert.match(appSource, /btn-danger btn-sm js-delete-device/);
 });
 
 test('invite lifecycle keeps expired and used records read-only', () => {

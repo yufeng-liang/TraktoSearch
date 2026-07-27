@@ -1111,7 +1111,7 @@ function renderFriendDetail(container, renderToken) {
                                 <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(d.appVersion || '—')}</td>
                                 <td>${statusBadge(d.status)}</td>
                                 <td style="color:var(--text-dim);font-size:12px">${formatTime(d.lastSeen)}</td>
-                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-danger btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : `<button class="btn btn-ghost btn-sm js-delete-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">删除记录</button>`}</td>
+                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-danger btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : `<button class="btn btn-danger btn-sm js-delete-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">删除记录</button>`}</td>
                             </tr>
                         `).join('')}
                     </tbody></table></div>
