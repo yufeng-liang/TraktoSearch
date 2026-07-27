@@ -11,6 +11,7 @@ import { verifyAccessJWT } from './admin/access';
 import {
     createFriend,
     createInvite,
+    deleteDevice,
     disableFriend,
     enableFriend,
     getFriendDetail,
@@ -228,6 +229,11 @@ async function handleAdminApi(
     const deviceMatch = path.match(/^\/admin\/devices\/([^/]+)\/revoke$/);
     if (deviceMatch && request.method === 'POST') {
         return revokeDevice(env, requestId, deviceMatch[1]);
+    }
+
+    const deviceDeleteMatch = path.match(/^\/admin\/devices\/([^/]+)$/);
+    if (deviceDeleteMatch && request.method === 'DELETE') {
+        return deleteDevice(env, requestId, deviceDeleteMatch[1]);
     }
 
     // 邀请码创建

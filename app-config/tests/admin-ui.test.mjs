@@ -11,6 +11,7 @@ const workerSource = fs.readFileSync(path.join(root, '../auth-worker/src/admin/a
 const proxySource = fs.readFileSync(path.join(root, 'functions/admin-api/[[path]].js'), 'utf8');
 const indexSource = fs.readFileSync(path.join(root, '../auth-worker/src/index.ts'), 'utf8');
 const migrationSource = fs.readFileSync(path.join(root, '../auth-worker/migrations/0003_invite_code_mask.sql'), 'utf8');
+const softDeleteMigrationSource = fs.readFileSync(path.join(root, '../auth-worker/migrations/0008_device_soft_delete.sql'), 'utf8');
 const authScreenSource = fs.readFileSync(path.join(root, '../app/src/main/java/com/tracktosearch/ui/screen/login/ActivationLoginScreen.kt'), 'utf8');
 const stringSources = ['values', 'values-zh', 'values-ja', 'values-ko'].map((dir) =>
     fs.readFileSync(path.join(root, `../app/src/main/res/${dir}/strings.xml`), 'utf8')
@@ -107,6 +108,17 @@ test('friend detail exposes device identity and recovery summaries', () => {
     assert.match(workerSource, /export async function listDevices/);
     assert.match(workerSource, /summary: friend/);
     assert.match(workerSource, /recovery_id_hmac IS NOT NULL AS has_recovery_identity/);
+});
+
+test('revoked device records can be soft-deleted from the admin UI', () => {
+    assert.match(softDeleteMigrationSource, /ALTER TABLE devices ADD COLUMN deleted_at INTEGER/);
+    assert.match(workerSource, /export async function deleteDevice/);
+    assert.match(workerSource, /deleted_at IS NULL/);
+    assert.match(workerSource, /DEVICE_DELETE/);
+    assert.match(indexSource, /request\.method === 'DELETE'/);
+    assert.match(appSource, /async deleteDevice\(deviceId\)/);
+    assert.match(appSource, /showDeleteDeviceModal/);
+    assert.match(appSource, /js-delete-device/);
 });
 
 test('invite lifecycle keeps expired and used records read-only', () => {

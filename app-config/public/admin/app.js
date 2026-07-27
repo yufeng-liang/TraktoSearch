@@ -443,6 +443,10 @@ const API = {
         return this.post(`/admin/devices/${deviceId}/revoke`, {});
     },
 
+    async deleteDevice(deviceId) {
+        return this.request('DELETE', `/admin/devices/${deviceId}`);
+    },
+
     async disableFriend(friendId) {
         return this.post(`/admin/friends/${friendId}/disable`, {});
     },
@@ -591,7 +595,7 @@ function eventLabel(type) {
     const map = {
         REINSTALL_RECOVER: '卸载重装恢复',
         ACTIVATE: '激活', MIGRATE: '迁移', REFRESH: '刷新令牌', REFRESH_REPLAY: '重放检测',
-        DEVICE_REVOKE: '撤销设备', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友', FRIEND_UPDATE: '更新朋友',
+        DEVICE_REVOKE: '撤销设备', DEVICE_DELETE: '删除设备记录', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友', FRIEND_UPDATE: '更新朋友',
         INVITE_CREATE: '生成邀请码', INVITE_REVOKE: '撤销邀请码',
     };
     return escapeHtml(map[type] || type);
@@ -607,6 +611,7 @@ function auditDetail(log) {
         friend_created: '朋友已创建',
         friend_disabled: '朋友已禁用',
         device_revoked: '设备已撤销',
+        device_deleted: '设备记录已软删除',
         'refresh:rotated': '刷新成功，旧刷新令牌已轮换',
         'refresh:invalid_signature': '客户端签名校验失败',
         'refresh:invalid_challenge': '刷新挑战已过期或与设备不匹配',
@@ -1106,7 +1111,7 @@ function renderFriendDetail(container, renderToken) {
                                 <td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(d.appVersion || '—')}</td>
                                 <td>${statusBadge(d.status)}</td>
                                 <td style="color:var(--text-dim);font-size:12px">${formatTime(d.lastSeen)}</td>
-                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-danger btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : '—'}</td>
+                                <td>${d.status === 'ACTIVE' ? `<button class="btn btn-danger btn-sm js-revoke-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">撤销</button>` : `<button class="btn btn-ghost btn-sm js-delete-device" data-device-id="${escapeHtml(d.id)}" data-device-name="${escapeHtml(d.name || '—')}">删除记录</button>`}</td>
                             </tr>
                         `).join('')}
                     </tbody></table></div>
@@ -1139,6 +1144,9 @@ function renderFriendDetail(container, renderToken) {
         });
         content.querySelectorAll('.js-revoke-device').forEach(button => {
             button.addEventListener('click', () => showRevokeDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
+        });
+        content.querySelectorAll('.js-delete-device').forEach(button => {
+            button.addEventListener('click', () => showDeleteDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
         });
         const inviteSection = document.createElement('div');
         inviteSection.id = 'inviteSection';
@@ -1687,6 +1695,42 @@ function showRevokeDeviceModal(deviceId, deviceName) {
             confirmBtn.disabled = false;
             confirmBtn.textContent = '确认撤销';
             showToast('撤销失败: ' + errorMessage(err), 'error');
+        }
+    });
+}
+
+function showDeleteDeviceModal(deviceId, deviceName) {
+    const body = document.createElement('div');
+    body.innerHTML = `
+        <div class="confirm-danger-text">确定要删除设备记录 <strong>${escapeHtml(deviceName)}</strong> 吗？</div>
+        <div class="confirm-danger-impact">删除后仅从设备列表隐藏，授权和审计记录不会恢复或清除。</div>
+    `;
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.className = 'btn btn-danger';
+    confirmBtn.textContent = '确认删除';
+    modal.open({
+        title: '删除设备记录',
+        body,
+        footer: [
+            Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
+            confirmBtn,
+        ],
+    });
+
+    modal.footer.querySelector('.btn-ghost').addEventListener('click', () => modal.close());
+    confirmBtn.addEventListener('click', async () => {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '删除中...';
+        try {
+            await API.deleteDevice(deviceId);
+            modal.close();
+            showToast('设备记录已删除');
+            navigate('friend-detail', { id: state.params.id });
+        } catch (err) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '确认删除';
+            showToast('删除失败: ' + errorMessage(err), 'error');
         }
     });
 }

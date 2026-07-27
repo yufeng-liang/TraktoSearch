@@ -27,8 +27,8 @@ export async function listFriends(request: Request, env: { DB: D1Database }, req
     const { results } = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
                f.created_at, f.updated_at,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE') as active_devices,
-               (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id) as last_seen
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) as active_devices,
+               (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) as last_seen
         FROM friends f
         WHERE ${conditions}
         ORDER BY f.created_at DESC
@@ -57,12 +57,12 @@ export async function getFriendDetail(
 ): Promise<Response> {
     const friend = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id) AS total_devices,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE') AS active_devices,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'REVOKED') AS revoked_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) AS total_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) AS active_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'REVOKED' AND d.deleted_at IS NULL) AS revoked_devices,
                (SELECT COUNT(*) FROM audit_logs a WHERE a.friend_id = f.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS recovery_count,
                (SELECT MAX(a.created_at) FROM audit_logs a WHERE a.friend_id = f.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at,
-               (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id) AS last_seen
+               (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) AS last_seen
         FROM friends f
         WHERE f.id = ?
     `).bind(friendId).first();
@@ -74,7 +74,7 @@ export async function getFriendDetail(
                (SELECT MAX(a.created_at) FROM audit_logs a
                 WHERE a.device_id = devices.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at
         FROM devices
-        WHERE friend_id = ?
+        WHERE friend_id = ? AND deleted_at IS NULL
         ORDER BY activated_at DESC
     `).bind(friendId).all();
 
@@ -83,6 +83,7 @@ export async function getFriendDetail(
         FROM devices
         WHERE friend_id = ?
           AND recovery_id_hmac IS NULL
+          AND deleted_at IS NULL
           AND device_name IS NOT NULL
           AND TRIM(device_name) != ''
         GROUP BY LOWER(TRIM(device_name))
@@ -289,9 +290,9 @@ export async function listDevices(
 ): Promise<Response> {
     const friend = await env.DB.prepare(`
         SELECT id,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id) AS total_devices,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'ACTIVE') AS active_devices,
-               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'REVOKED') AS revoked_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.deleted_at IS NULL) AS total_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) AS active_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'REVOKED' AND d.deleted_at IS NULL) AS revoked_devices,
                (SELECT COUNT(*) FROM audit_logs a WHERE a.friend_id = friends.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS recovery_count
         FROM friends
         WHERE id = ?
@@ -304,7 +305,7 @@ export async function listDevices(
                (SELECT MAX(a.created_at) FROM audit_logs a
                 WHERE a.device_id = devices.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at
         FROM devices
-        WHERE friend_id = ?
+        WHERE friend_id = ? AND deleted_at IS NULL
         ORDER BY activated_at DESC
     `).bind(friendId).all();
 
@@ -313,6 +314,7 @@ export async function listDevices(
         FROM devices
         WHERE friend_id = ?
           AND recovery_id_hmac IS NULL
+          AND deleted_at IS NULL
           AND device_name IS NOT NULL
           AND TRIM(device_name) != ''
         GROUP BY LOWER(TRIM(device_name))
@@ -340,7 +342,7 @@ export async function revokeDevice(
     const currentTime = now();
 
     const device = await env.DB.prepare(`
-        SELECT id, status FROM devices WHERE id = ?
+        SELECT id, status FROM devices WHERE id = ? AND deleted_at IS NULL
     `).bind(deviceId).first<{ id: string; status: string }>();
 
     if (!device) {
@@ -365,6 +367,37 @@ export async function revokeDevice(
     `).bind(deviceId, requestId, currentTime).run();
 
     return successResponse({ id: deviceId, status: 'REVOKED' }, requestId);
+}
+
+// DELETE /admin/devices/:id - 软删除已撤销的设备记录
+export async function deleteDevice(
+    env: { DB: D1Database },
+    requestId: string,
+    deviceId: string
+): Promise<Response> {
+    const currentTime = now();
+    const device = await env.DB.prepare(`
+        SELECT id, friend_id, status FROM devices
+        WHERE id = ? AND deleted_at IS NULL
+    `).bind(deviceId).first<{ id: string; friend_id: string; status: string }>();
+
+    if (!device) throw new AppError('DEVICE_NOT_FOUND', 'Device not found', 404);
+    if (device.status !== 'REVOKED') {
+        throw new AppError('DEVICE_NOT_REVOKED', 'Only revoked devices can be deleted', 400);
+    }
+
+    const result = await env.DB.prepare(`
+        UPDATE devices SET deleted_at = ?
+        WHERE id = ? AND status = 'REVOKED' AND deleted_at IS NULL
+    `).bind(currentTime, deviceId).run();
+    if (result.meta.changes !== 1) throw new AppError('DEVICE_NOT_FOUND', 'Device not found', 404);
+
+    await env.DB.prepare(`
+        INSERT INTO audit_logs (event_type, friend_id, device_id, request_id, result, detail, created_at)
+        VALUES ('DEVICE_DELETE', ?, ?, ?, 'SUCCESS', 'device_deleted', ?)
+    `).bind(device.friend_id, deviceId, requestId, currentTime).run();
+
+    return successResponse({ id: deviceId, deleted: true }, requestId);
 }
 
 // === 邀请码管理 ===
