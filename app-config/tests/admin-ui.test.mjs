@@ -95,6 +95,19 @@ test('invite management UI renders masked records, summary, filtering, paginatio
     assert.match(appSource, /INVITE_REVOKE/);
 });
 
+test('friend detail exposes device identity and recovery summaries', () => {
+    assert.match(workerSource, /active_devices/);
+    assert.match(workerSource, /revoked_devices/);
+    assert.match(workerSource, /recovery_count/);
+    assert.match(workerSource, /has_recovery_identity/);
+    assert.match(appSource, /device-summary-grid/);
+    assert.match(appSource, /possibleDuplicate/);
+    assert.match(appSource, /REINSTALL_RECOVER/);
+    assert.match(workerSource, /export async function listDevices/);
+    assert.match(workerSource, /summary: friend/);
+    assert.match(workerSource, /recovery_id_hmac IS NOT NULL AS has_recovery_identity/);
+});
+
 test('invite lifecycle keeps expired and used records read-only', () => {
     assert.match(workerSource, /INVITE_EXPIRED/);
     assert.match(workerSource, /invite\.expires_at < currentTime/);

@@ -364,6 +364,11 @@ const API = {
             status: source.status,
             devices: source.active_devices,
             maxDevices: source.max_devices,
+            totalDevices: Number(source.total_devices || 0),
+            activeDevices: Number(source.active_devices || 0),
+            revokedDevices: Number(source.revoked_devices || 0),
+            recoveryCount: Number(source.recovery_count || 0),
+            lastRecoveryAt: source.last_recovery_at,
             expiresAt: source.expires_at,
             lastSeen: source.last_seen,
             devicesList: (data.devices || []).map((d) => ({
@@ -373,6 +378,9 @@ const API = {
             lastSeen: d.last_seen_at,
             status: d.status,
             activatedAt: d.activated_at,
+            hasRecoveryIdentity: Boolean(d.has_recovery_identity),
+            lastRecoveryAt: d.last_recovery_at,
+            possibleDuplicate: Boolean(d.possible_duplicate),
             })),
         };
         return f;
@@ -581,6 +589,7 @@ function inviteKindLabel(kind) {
 
 function eventLabel(type) {
     const map = {
+        REINSTALL_RECOVER: '卸载重装恢复',
         ACTIVATE: '激活', MIGRATE: '迁移', REFRESH: '刷新令牌', REFRESH_REPLAY: '重放检测',
         DEVICE_REVOKE: '撤销设备', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友', FRIEND_UPDATE: '更新朋友',
         INVITE_CREATE: '生成邀请码', INVITE_REVOKE: '撤销邀请码',
@@ -591,6 +600,7 @@ function eventLabel(type) {
 function auditDetail(log) {
     const detail = log.detail || '';
     const details = {
+        recovery_id_version: '已更新设备连续性身份并恢复授权',
         'invite_kind:ACTIVATION': '邀请码类型：激活',
         'invite_kind:MIGRATION': '邀请码类型：迁移',
         invite_revoked: '邀请码已撤销',
@@ -1096,6 +1106,33 @@ function renderFriendDetail(container, renderToken) {
                     </tbody></table></div>
                 </div>
         `;
+        content.insertAdjacentHTML('afterbegin', `
+            <div class="device-summary-grid">
+                <div><span>设备总数</span><strong>${f.totalDevices}</strong></div>
+                <div><span>活跃设备</span><strong>${f.activeDevices}</strong></div>
+                <div><span>已失效</span><strong>${f.revokedDevices}</strong></div>
+                <div><span>恢复次数</span><strong>${f.recoveryCount}</strong></div>
+            </div>
+        `);
+        const deviceRows = content.querySelectorAll('tbody tr');
+        deviceRows.forEach((row, index) => {
+            const device = f.devicesList[index];
+            if (!device) return;
+            const nameCell = row.querySelector('td');
+            if (device.possibleDuplicate && nameCell) {
+                const marker = document.createElement('span');
+                marker.className = 'device-possible-duplicate';
+                marker.textContent = '可能重复';
+                nameCell.appendChild(marker);
+            }
+            const statusCell = row.querySelector('td:nth-child(3)');
+            if (device.hasRecoveryIdentity && device.lastRecoveryAt && statusCell) {
+                const recovery = document.createElement('div');
+                recovery.className = 'device-recovery-meta';
+                recovery.textContent = `最近恢复 ${formatTime(device.lastRecoveryAt)}`;
+                statusCell.appendChild(recovery);
+            }
+        });
         editButton.addEventListener('click', () => showEditFriendModal(f));
         content.querySelector('#createInviteBtn')?.addEventListener('click', () => showCreateInviteModal(f.id, f.nickname, f.devices));
         disableButton.addEventListener('click', () => {
@@ -1276,6 +1313,7 @@ function renderAudit(container, renderToken) {
     const eventFilter = toolbar.querySelector('#eventFilter');
     const resultFilter = toolbar.querySelector('#resultFilter');
     const timeFilter = toolbar.querySelector('#timeFilter');
+    eventFilter.insertAdjacentHTML('beforeend', '<option value="REINSTALL_RECOVER">卸载重装恢复</option>');
 
     function loadAndRender(offset = 0) {
         const eFilter = eventFilter.value;

@@ -57,7 +57,11 @@ export async function getFriendDetail(
 ): Promise<Response> {
     const friend = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id) AS total_devices,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE') AS active_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'REVOKED') AS revoked_devices,
+               (SELECT COUNT(*) FROM audit_logs a WHERE a.friend_id = f.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS recovery_count,
+               (SELECT MAX(a.created_at) FROM audit_logs a WHERE a.friend_id = f.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at,
                (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id) AS last_seen
         FROM friends f
         WHERE f.id = ?
@@ -65,13 +69,34 @@ export async function getFriendDetail(
     if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
 
     const { results: devices } = await env.DB.prepare(`
-        SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at
+        SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at,
+               recovery_id_hmac IS NOT NULL AS has_recovery_identity,
+               (SELECT MAX(a.created_at) FROM audit_logs a
+                WHERE a.device_id = devices.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at
         FROM devices
         WHERE friend_id = ?
         ORDER BY activated_at DESC
     `).bind(friendId).all();
 
-    return successResponse({ friend, devices }, requestId);
+    const duplicateRows = await env.DB.prepare(`
+        SELECT LOWER(TRIM(device_name)) AS device_key, COUNT(*) AS count
+        FROM devices
+        WHERE friend_id = ?
+          AND recovery_id_hmac IS NULL
+          AND device_name IS NOT NULL
+          AND TRIM(device_name) != ''
+        GROUP BY LOWER(TRIM(device_name))
+        HAVING COUNT(*) > 1
+    `).bind(friendId).all<{ device_key: string; count: number }>();
+    const duplicateKeys = new Set((duplicateRows.results || []).map(row => row.device_key));
+    const decoratedDevices = devices.map((device: Record<string, unknown>) => ({
+        ...device,
+        possible_duplicate: !device.has_recovery_identity
+            && typeof device.device_name === 'string'
+            && duplicateKeys.has(device.device_name.trim().toLowerCase()),
+    }));
+
+    return successResponse({ friend, devices: decoratedDevices }, requestId);
 }
 
 // POST /admin/friends - 创建朋友
@@ -262,17 +287,46 @@ export async function listDevices(
     requestId: string,
     friendId: string
 ): Promise<Response> {
-    const friend = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    const friend = await env.DB.prepare(`
+        SELECT id,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id) AS total_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'ACTIVE') AS active_devices,
+               (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'REVOKED') AS revoked_devices,
+               (SELECT COUNT(*) FROM audit_logs a WHERE a.friend_id = friends.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS recovery_count
+        FROM friends
+        WHERE id = ?
+    `).bind(friendId).first();
     if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
 
     const { results } = await env.DB.prepare(`
-        SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at
+        SELECT id, device_name, status, app_version, last_seen_at, activated_at, revoked_at,
+               recovery_id_hmac IS NOT NULL AS has_recovery_identity,
+               (SELECT MAX(a.created_at) FROM audit_logs a
+                WHERE a.device_id = devices.id AND a.event_type = 'REINSTALL_RECOVER' AND a.result = 'SUCCESS') AS last_recovery_at
         FROM devices
         WHERE friend_id = ?
         ORDER BY activated_at DESC
     `).bind(friendId).all();
 
-    return successResponse({ friendId, devices: results }, requestId);
+    const duplicateRows = await env.DB.prepare(`
+        SELECT LOWER(TRIM(device_name)) AS device_key
+        FROM devices
+        WHERE friend_id = ?
+          AND recovery_id_hmac IS NULL
+          AND device_name IS NOT NULL
+          AND TRIM(device_name) != ''
+        GROUP BY LOWER(TRIM(device_name))
+        HAVING COUNT(*) > 1
+    `).bind(friendId).all<{ device_key: string }>();
+    const duplicateKeys = new Set((duplicateRows.results || []).map(row => row.device_key));
+    const devices = results.map((device: Record<string, unknown>) => ({
+        ...device,
+        possible_duplicate: !device.has_recovery_identity
+            && typeof device.device_name === 'string'
+            && duplicateKeys.has(device.device_name.trim().toLowerCase()),
+    }));
+
+    return successResponse({ friendId, summary: friend, devices }, requestId);
 }
 
 // === 设备管理 ===
