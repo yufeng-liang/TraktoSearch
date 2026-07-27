@@ -41,14 +41,23 @@ val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
 /** 标题栏使用普通 thin 模糊，不对模糊强度做渐进处理。 */
+internal fun isContentUnderTopBar(
+    firstVisibleItemOffsetPx: Int?,
+    topBarHeightPx: Int
+): Boolean = topBarHeightPx > 0 && firstVisibleItemOffsetPx != null && firstVisibleItemOffsetPx < topBarHeightPx
+
 @Composable
 fun Modifier.hazeProgressiveTopBar(
     state: HazeState,
     style: HazeBlurStyle = HazeMaterials.thin(),
-    blurRadius: Dp = 24.dp
-): Modifier = hazeEffect(state = state) {
-    blurEffect {
-        this.style = style
+    blurRadius: Dp = 24.dp,
+    isContentUnderTopBar: Boolean = true
+): Modifier {
+    if (!isContentUnderTopBar) return this
+    return hazeEffect(state = state) {
+        blurEffect {
+            this.style = style
+        }
     }
 }
 

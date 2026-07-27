@@ -99,6 +99,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -120,6 +121,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -161,6 +163,7 @@ import com.tracktosearch.ui.component.hazeBottomSheetSurface
 import com.tracktosearch.ui.component.hazeBottomSheetContent
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.isContentUnderTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
@@ -350,6 +353,15 @@ fun WatchlistScreen(
         selectedMode == 0 && selectedTab == 1 -> showGridState
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
         else -> historyShowGridState
+    }
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val hasContentUnderTopBar by remember(currentGridState) {
+        derivedStateOf {
+            isContentUnderTopBar(
+                firstVisibleItemOffsetPx = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.y,
+                topBarHeightPx = topBarHeightPx
+            )
+        }
     }
 
     // key 必须同时包含 selectedMode 和 selectedTab：
@@ -663,10 +675,14 @@ fun WatchlistScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .onGloballyPositioned { coordinates ->
+                            topBarHeightPx = coordinates.size.height
+                        }
                         .hazeProgressiveTopBar(
                             state = hazeState,
                             style = hazeStyle,
-                            blurRadius = 24.dp
+                            blurRadius = 24.dp,
+                            isContentUnderTopBar = hasContentUnderTopBar
                         )
                 ) {
                     // 搜索框 + Tab 栏（非多选模式时显示）

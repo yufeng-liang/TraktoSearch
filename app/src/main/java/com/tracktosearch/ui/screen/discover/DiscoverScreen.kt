@@ -43,7 +43,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +59,7 @@ import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -82,6 +85,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.isContentUnderTopBar
 import com.tracktosearch.ui.component.neumorphicInnerShadow
 import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
@@ -170,6 +174,15 @@ fun DiscoverScreen(
     val discoverHazeState = remember { HazeState() }
     val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
+    var discoverTopBarHeightPx by remember { mutableIntStateOf(0) }
+    val discoverHasContentUnderTopBar by remember {
+        derivedStateOf {
+            isContentUnderTopBar(
+                firstVisibleItemOffsetPx = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                topBarHeightPx = discoverTopBarHeightPx
+            )
+        }
+    }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val coroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -728,10 +741,14 @@ fun DiscoverScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        discoverTopBarHeightPx = coordinates.size.height
+                    }
                     .hazeProgressiveTopBar(
                         state = discoverHazeState,
                         style = discoverHazeStyle,
-                        blurRadius = 24.dp
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = discoverHasContentUnderTopBar
                     )
             ) {
                 Column {

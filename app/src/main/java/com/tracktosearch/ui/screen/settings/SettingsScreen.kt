@@ -71,7 +71,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -80,6 +82,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -88,6 +91,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.isContentUnderTopBar
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
@@ -330,6 +334,15 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
+    var settingsTopBarHeightPx by remember { mutableIntStateOf(0) }
+    val settingsHasContentUnderTopBar by remember {
+        derivedStateOf {
+            isContentUnderTopBar(
+                firstVisibleItemOffsetPx = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                topBarHeightPx = settingsTopBarHeightPx
+            )
+        }
+    }
     val scrollToTopProvider = LocalScrollToTopProvider.current
     val settingsCoroutineScope = rememberCoroutineScope()
     DisposableEffect(Unit) {
@@ -788,10 +801,14 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        settingsTopBarHeightPx = coordinates.size.height
+                    }
                     .hazeProgressiveTopBar(
                         state = settingsHazeState,
                         style = settingsHazeStyle,
-                        blurRadius = 24.dp
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = settingsHasContentUnderTopBar
                     )
             ) {
                 Column {
