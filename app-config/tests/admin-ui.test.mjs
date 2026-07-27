@@ -129,7 +129,7 @@ test('formatTime uses normalized milliseconds for dates beyond 30 days', () => {
 });
 
 test('navigation renders once through hashchange for a changed route', () => {
-    const navigateBlock = appSource.match(/function navigate\([\s\S]*?\n}\n/);
+    const navigateBlock = appSource.match(/function navigate\([\s\S]*?\r?\n}\r?\n/);
     assert.ok(navigateBlock, 'navigate function should exist');
     assert.doesNotMatch(navigateBlock[0], /window\.location\.hash = nextHash;[\s\S]*?render\(\);/);
 });
