@@ -28,8 +28,12 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.remote.douban.DoubanHotApiService
+import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.util.CrashLogUploader
+import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
@@ -117,7 +121,10 @@ class MainActivity : AppCompatActivity() {
     lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
 
     @Inject
-    lateinit var tmdbRepository: com.tracktosearch.data.repository.TmdbRepository
+    lateinit var doubanHotApi: DoubanHotApiService
+
+    @Inject
+    lateinit var sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
 
     @Inject
     lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
@@ -182,17 +189,19 @@ class MainActivity : AppCompatActivity() {
             // 预加载首页所需数据
             sharedTransitionStorage.preloadAndGetValue()
 
-            // 已登录且激活时，等待 Repository 预取完成后再结束 Splash
-            val prefetchJobs = mutableListOf<kotlinx.coroutines.Job>()
+            // 已登录且激活时，在后台启动发现页新片榜和口碑榜预取；它们不阻塞 Splash 退出。
             if (isTraktConnected) {
-                prefetchJobs.add(launch { runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) } })
-                prefetchJobs.add(launch { runCatching { tmdbRepository.getPopularMovies() } })
-                prefetchJobs.add(launch { runCatching { tmdbRepository.getUpcomingMovies() } })
+                this@MainActivity.lifecycleScope.launch {
+                    runCatching { prefetchDoubanHotCategory("douban-movie") }
+                }
+                this@MainActivity.lifecycleScope.launch {
+                    runCatching { prefetchDoubanHotCategory("douban-weekly") }
+                }
             }
 
             if (isTraktConnected) {
-                // 等待首页预取任务完成
-                prefetchJobs.forEach { it.join() }
+                // Trakt 想看列表是进入主界面的必要数据，只有它完成后才结束 Splash。
+                runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) }
             } else {
                 // 未登录或未激活时，保证 Splash 至少展示指定时长
                 val elapsed = System.currentTimeMillis() - splashStartTime
@@ -236,6 +245,38 @@ class MainActivity : AppCompatActivity() {
 
                 } // CompositionLocalProvider
             }
+        }
+    }
+
+    /** 预热发现页新片榜/口碑榜的共享缓存，进入页面后由 DiscoverViewModel 直接复用。 */
+    private suspend fun prefetchDoubanHotCategory(categoryId: String) {
+        val cacheKey = "${categoryId}_1_10_v2"
+        sharedDoubanHotCache.awaitLoaded()
+        sharedDoubanHotCache.getOrAwait(cacheKey) {
+            val response = when (categoryId) {
+                "douban-movie" -> doubanHotApi.getChart()
+                "douban-weekly" -> doubanHotApi.getWeekly()
+                else -> error("Unsupported Douban hot category: $categoryId")
+            }
+            DoubanHotData(
+                items = response.data.map { item ->
+                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") {
+                        "【${item.rating}】"
+                    } else {
+                        ""
+                    }
+                    DoubanHotItem(
+                        id = item.id.hashCode(),
+                        title = "$ratingText${item.title}",
+                        cover = item.poster,
+                        desc = item.ratingCount,
+                        rating = item.rating,
+                        url = item.url,
+                        tmdbId = item.tmdbId
+                    )
+                },
+                total = response.total
+            )
         }
     }
 
