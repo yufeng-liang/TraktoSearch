@@ -24,6 +24,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktListIds
 import com.tracktosearch.data.remote.trakt.dto.TraktListUser
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingListResponse
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.ui.screen.search.DoubanHotCategory
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import io.mockk.every
@@ -215,6 +216,52 @@ class DiscoverScreenTest {
     }
 
     @Test
+    fun `鍗冲皢涓婃槧澶辫触_鐐瑰嚮鍔犺浇澶辫触鎵撳紑閿欒璇︽儏`() {
+        val rawError = "Fetch cancelled"
+        composeRule.setContent {
+            DiscoverScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                viewModel = createMockDiscoverViewModel(
+                    uiState = DiscoverUiState(upcomingError = rawError),
+                    sectionIds = listOf("tmdb-upcoming")
+                )
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(context.getString(R.string.common_load_failed)).performClick()
+        composeRule.onNodeWithText(rawError).assertIsDisplayed()
+    }
+
+    @Test
+    fun `璞嗙摚鐑澶辫触_鐐瑰嚮淇℃伅鍥炬爣鎵撳紑閿欒璇︽儏`() {
+        val rawError = "Douban request failed"
+        composeRule.setContent {
+            DiscoverScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                viewModel = createMockDiscoverViewModel(
+                    uiState = DiscoverUiState(
+                        doubanHotCategories = listOf(
+                            DoubanHotCategory(
+                                id = "douban-movie",
+                                label = "",
+                                error = rawError
+                            )
+                        )
+                    ),
+                    sectionIds = listOf("douban-movie")
+                )
+            )
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithContentDescription(context.getString(R.string.error_detail_title)).performClick()
+        composeRule.onNodeWithText(rawError).assertIsDisplayed()
+    }
+
+    @Test
     fun `onMovieClick_为空实现时不崩溃`() {
         composeRule.setContent {
             DiscoverScreen(
@@ -334,13 +381,14 @@ class DiscoverScreenTest {
      * 默认 sectionConfigs 包含所有栏目且可见,确保各栏目路径都会被组合。
      */
     private fun createMockDiscoverViewModel(
-        uiState: DiscoverUiState = DiscoverUiState()
+        uiState: DiscoverUiState = DiscoverUiState(),
+        sectionIds: List<String> = DiscoverSectionStorage.ALL_SECTION_IDS
     ): DiscoverViewModel {
         val mock = mockk<DiscoverViewModel>(relaxed = true)
         every { mock.uiState } returns MutableStateFlow(uiState)
         // 默认所有栏目可见,顺序与 DiscoverSectionStorage.ALL_SECTION_IDS 一致
         every { mock.sectionConfigs } returns MutableStateFlow(
-            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
+            sectionIds.mapIndexed { index, id ->
                 DiscoverSectionConfig(id = id, visible = true, order = index)
             }
         )

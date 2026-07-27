@@ -324,6 +324,7 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
     ) {
         Text(
             text = stringResource(R.string.common_load_failed),
+            modifier = Modifier.clickable { showError = true },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error
         )
@@ -334,7 +335,7 @@ internal fun ErrorRetryRow(error: String, onRetry: () -> Unit) {
         ) {
             Icon(
                 Icons.Rounded.Info,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.error_detail_title),
                 modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.error
             )

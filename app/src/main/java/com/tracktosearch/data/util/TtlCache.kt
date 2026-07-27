@@ -2,6 +2,7 @@ package com.tracktosearch.data.util
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.yield
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -124,7 +125,15 @@ open class TtlCache<T>(
             if (generationChanged) continue
             if (existing != null) {
                 // 已有同代次飞行中请求，等待其结果。
-                return existing.await()
+                try {
+                    return existing.await()
+                } catch (e: IOException) {
+                    // 发起方被取消时，取消标记不应污染后续等待者；重新抢占并发起请求。
+                    if (e.message != FETCH_CANCELLED_MESSAGE) throw e
+                    inFlightRequests.remove(key, existing)
+                    yield()
+                }
+                continue
             }
             requestGeneration = candidateGeneration
             deferred = candidateDeferred
@@ -142,7 +151,7 @@ open class TtlCache<T>(
             value
         } catch (e: CancellationException) {
             // 发起方协程被取消：用普通异常通知等待方，避免级联取消不相关协程
-            deferred.completeExceptionally(IOException("Fetch cancelled"))
+            deferred.completeExceptionally(IOException(FETCH_CANCELLED_MESSAGE))
             throw e
         } catch (e: Exception) {
             deferred.completeExceptionally(e)
@@ -179,5 +188,9 @@ open class TtlCache<T>(
         if (toRemoveCount <= 0) return
         val toRemove = cache.entries.sortedBy { it.value.accessSeq }.take(toRemoveCount)
         toRemove.forEach { cache.remove(it.key) }
+    }
+
+    private companion object {
+        const val FETCH_CANCELLED_MESSAGE = "Fetch cancelled"
     }
 }

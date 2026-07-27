@@ -1508,25 +1508,10 @@ fun DoubanHotCategorySection(
                 }
             }
         } else if (category.error != null) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.common_load_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error
-                )
-                Spacer(Modifier.width(12.dp))
-                TextButton(onClick = onRetry, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
-                    Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.error_retry), style = MaterialTheme.typography.labelSmall)
-                }
-            }
+            com.tracktosearch.ui.screen.discover.ErrorRetryRow(
+                error = category.error,
+                onRetry = onRetry
+            )
         } else {
             androidx.compose.foundation.lazy.LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)

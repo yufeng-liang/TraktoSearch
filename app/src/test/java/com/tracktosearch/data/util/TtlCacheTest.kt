@@ -3,8 +3,10 @@ package com.tracktosearch.data.util
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import java.io.IOException
@@ -161,6 +163,29 @@ class TtlCacheTest {
         val result = cache.getOrAwait("k") { invoked = true; "ok" }
         assertThat(invoked).isTrue()
         assertThat(result).isEqualTo("ok")
+    }
+
+    /** 已有等待者不应收到发起方取消时的内部占位错误，而应重新发起请求。 */
+    @Test
+    fun getOrAwait_waiterRetriesAfterFetcherCancellation() = runTest {
+        val cache = TtlCache<String>(ttlMillis = 60_000)
+        val fetchStarted = CompletableDeferred<Unit>()
+        val first = launch {
+            cache.getOrAwait("k") {
+                fetchStarted.complete(Unit)
+                delay(10_000)
+                "never"
+            }
+        }
+        fetchStarted.await()
+
+        val second = async {
+            cache.getOrAwait("k") { "retried" }
+        }
+        yield()
+        first.cancel()
+
+        assertThat(second.await()).isEqualTo("retried")
     }
 
     // ==================== clear ====================

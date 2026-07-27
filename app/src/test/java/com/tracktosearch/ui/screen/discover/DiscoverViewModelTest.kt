@@ -29,6 +29,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -167,6 +168,16 @@ class DiscoverViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.upcomingError).isNotNull()
+    }
+
+    @Test
+    fun `loadTmdbUpcoming 被取消时不展示内部取消错误`() = runTest {
+        coEvery { tmdbRepository.getUpcomingMovies() } throws CancellationException("Fetch cancelled")
+
+        viewModel.loadTmdbUpcoming()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.upcomingError).isNull()
     }
 
     // ===== Trakt 加载测试 =====

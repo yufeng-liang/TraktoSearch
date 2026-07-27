@@ -643,6 +643,8 @@ class DiscoverViewModel @Inject constructor(
                     isLoadingUpcoming = false,
                     upcomingError = if (movies.isEmpty()) context.getString(R.string.error_no_data) else null
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoadingUpcoming = false,
