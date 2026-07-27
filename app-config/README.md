@@ -5,6 +5,9 @@ TrackToSearch App 的云端配置服务,部署在 Cloudflare Pages。
 ## 部署流程
 
 1. 编辑 `scripts/config.plain.json`,填入真实 API key
+
+   GitHub Actions 的 `APP_CONFIG_PLAIN` Secret 可保存原文 JSON，也可保存
+   `base64 -w 0 scripts/config.plain.json` 的结果；workflow 会自动识别并解码。
 2. 生成 AES key(32 字节 hex,64 个字符):
 
    ```bash
