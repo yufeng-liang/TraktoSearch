@@ -344,6 +344,7 @@ export async function createInvite(
     if (kind !== 'ACTIVATION' && kind !== 'MIGRATION') {
         throw new AppError('INVALID_REQUEST', 'kind must be ACTIVATION or MIGRATION', 400);
     }
+    let migrationDeviceId: string | null = null;
     if (kind === 'MIGRATION') {
         const activeDevice = await env.DB.prepare(`
             SELECT id FROM devices
@@ -357,6 +358,7 @@ export async function createInvite(
                 400
             );
         }
+        migrationDeviceId = activeDevice.id;
     }
     if (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365) {
         throw new AppError('INVALID_REQUEST', 'expiresInDays must be an integer between 1 and 365', 400);
@@ -369,9 +371,9 @@ export async function createInvite(
     const expiresAt = currentTime + expiresInDays * 24 * 60 * 60;
 
     await env.DB.prepare(`
-        INSERT INTO invites (id, friend_id, kind, code_hash, code_mask, expires_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, friendId, kind, codeHash, codeMask, expiresAt, currentTime).run();
+        INSERT INTO invites (id, friend_id, kind, code_hash, code_mask, device_id, expires_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, friendId, kind, codeHash, codeMask, migrationDeviceId, expiresAt, currentTime).run();
 
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)

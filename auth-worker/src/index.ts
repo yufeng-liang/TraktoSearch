@@ -6,6 +6,7 @@ import { handleActivate } from './auth/activate';
 import { handleChallenge } from './auth/challenge';
 import { handleRefresh } from './auth/refresh';
 import { handleCheck } from './auth/check';
+import { handleRecover, handleRecoveryChallenge } from './auth/recover';
 import { verifyAccessJWT } from './admin/access';
 import {
     createFriend,
@@ -31,6 +32,7 @@ export interface Env {
     DB: D1Database;
     KV: KVNamespace;
     JWT_SIGNING_KEY: string;
+    DEVICE_RECOVERY_HMAC_KEY: string;
     TRAKT_CLIENT_ID: string;
     TRAKT_CLIENT_SECRET: string;
     TRAKT_CREDENTIALS_ENCRYPTION_KEY: string;
@@ -119,6 +121,12 @@ async function handleAuthApi(
     // 公开端点（无需 JWT）
     if (path === '/api/auth/activate' && request.method === 'POST') {
         return handleActivate(request, env, requestId);
+    }
+    if (path === '/api/auth/recover/challenge' && request.method === 'POST') {
+        return handleRecoveryChallenge(request, env, requestId);
+    }
+    if (path === '/api/auth/recover' && request.method === 'POST') {
+        return handleRecover(request, env, requestId);
     }
     if (path === '/api/auth/challenge' && request.method === 'POST') {
         return handleChallenge(request, env, requestId);

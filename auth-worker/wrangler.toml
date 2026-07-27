@@ -16,6 +16,7 @@ id = "5e2b3731a5284fedb9d17093a86218ea"
 
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY
+# DEVICE_RECOVERY_HMAC_KEY
 # TRAKT_CLIENT_ID
 # TRAKT_CLIENT_SECRET
 # TMDB_API_KEY（兼容单值、JSON 数组、逗号/换行分隔的多 key）

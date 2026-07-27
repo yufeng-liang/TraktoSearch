@@ -2,6 +2,11 @@
 
 import { AppError, successResponse, now } from '../util/errors';
 import { firstRow } from '../util/db';
+import { hmacDeviceContinuityId } from '../util/crypto';
+
+interface CheckRequest {
+    androidId?: string;
+}
 
 interface CheckResponse {
     authorized: boolean;
@@ -15,20 +20,23 @@ interface CheckResponse {
 
 export async function handleCheck(
     request: Request,
-    env: { DB: D1Database },
+    env: { DB: D1Database; DEVICE_RECOVERY_HMAC_KEY: string },
     requestId: string,
     payload: { sub: string; device: string }
 ): Promise<Response> {
     const currentTime = now();
+    const body = await readOptionalBody(request);
 
     // 查询朋友 + 设备状态
     const result = await firstRow<{
         friend_id: string; nickname: string; friend_status: string;
         device_id: string; device_status: string;
         friend_expires_at: number | null;
+        recovery_id_hmac: string | null;
     }>(env.DB.prepare(`
         SELECT f.id as friend_id, f.nickname, f.status as friend_status,
                f.expires_at as friend_expires_at,
+               d.recovery_id_hmac,
                d.id as device_id, d.status as device_status
         FROM friends f
         JOIN devices d ON d.friend_id = f.id
@@ -47,9 +55,18 @@ export async function handleCheck(
     }
 
     // 更新设备最后活动时间
-    await env.DB.prepare(`
+    const statements = [env.DB.prepare(`
         UPDATE devices SET last_seen_at = ? WHERE id = ?
-    `).bind(currentTime, payload.device).run();
+    `).bind(currentTime, payload.device)];
+    if (body.androidId && !result.recovery_id_hmac) {
+        const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
+        statements.push(env.DB.prepare(`
+            UPDATE devices
+            SET recovery_id_hmac = ?, recovery_id_version = 1, recovery_updated_at = ?
+            WHERE id = ? AND recovery_id_hmac IS NULL
+        `).bind(recoveryIdHmac, currentTime, payload.device));
+    }
+    await env.DB.batch(statements);
 
     const nextCheckAt = currentTime + 24 * 60 * 60; // 24 小时后
 
@@ -64,4 +81,14 @@ export async function handleCheck(
     };
 
     return successResponse(response, requestId);
+}
+
+async function readOptionalBody(request: Request): Promise<CheckRequest> {
+    const raw = await request.text();
+    if (!raw.trim()) return {};
+    try {
+        return JSON.parse(raw) as CheckRequest;
+    } catch {
+        return {};
+    }
 }

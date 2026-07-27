@@ -1,4 +1,5 @@
 <resources>
+    <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的邀请码继续。</string>
     <string name="auth_offline_mode">当前处于离线模式，将使用本地缓存数据。</string>
     <string name="app_name">TraktToSearch</string>
     <string name="splash_slogan">发现 · 追踪 · 搜索</string>

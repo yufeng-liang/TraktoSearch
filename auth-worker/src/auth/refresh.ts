@@ -167,7 +167,7 @@ async function logSecurityEvent(
     `).bind(eventType, friendId, deviceId, requestId, result, errorCode, detail, now()).run();
 }
 
-async function verifyClientSignature(publicKeyBase64: string, signatureBase64: string, nonce: string): Promise<boolean> {
+export async function verifyClientSignature(publicKeyBase64: string, signatureBase64: string, nonce: string): Promise<boolean> {
     try {
         const publicKey = await crypto.subtle.importKey(
             'spki',

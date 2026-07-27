@@ -13,8 +13,14 @@ interface AuthApiService {
     @POST("api/auth/activate")
     suspend fun activate(@Body request: ActivateRequest): Response<GatewayResponse<ActivateResponse>>
 
+    @POST("api/auth/recover/challenge")
+    suspend fun recoveryChallenge(@Body request: RecoveryChallengeRequest): Response<GatewayResponse<RecoveryChallengeResponse>>
+
+    @POST("api/auth/recover")
+    suspend fun recover(@Body request: RecoveryRequest): Response<GatewayResponse<ActivateResponse>>
+
     @POST("api/auth/check")
-    suspend fun check(): Response<GatewayResponse<CheckResponse>>
+    suspend fun check(@Body request: CheckRequest = CheckRequest()): Response<GatewayResponse<CheckResponse>>
 
     @POST("api/auth/challenge")
     suspend fun challenge(@Body request: ChallengeRequest): Response<GatewayResponse<ChallengeResponse>>
@@ -51,8 +57,36 @@ data class ActivateRequest(
     val publicKey: String,
     val deviceName: String,
     val appVersion: String,
+    val packageName: String,
+    val androidId: String? = null
+)
+
+@Serializable
+data class RecoveryChallengeRequest(
+    val androidId: String,
+    val publicKey: String,
     val packageName: String
 )
+
+@Serializable
+data class RecoveryChallengeResponse(
+    val nonce: String,
+    val expiresAt: Long
+)
+
+@Serializable
+data class RecoveryRequest(
+    val androidId: String,
+    val publicKey: String,
+    val nonce: String,
+    val signature: String,
+    val deviceName: String,
+    val appVersion: String,
+    val packageName: String
+)
+
+@Serializable
+data class CheckRequest(val androidId: String? = null)
 
 @Serializable
 data class ActivateResponse(

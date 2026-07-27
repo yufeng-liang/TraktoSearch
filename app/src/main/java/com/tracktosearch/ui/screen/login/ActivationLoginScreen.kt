@@ -415,6 +415,14 @@ private fun ActivationCard(
             color = accent,
             fontWeight = FontWeight.Bold
         )
+        if (authState.requiresMigrationInvite) {
+            Text(
+                text = stringResource(R.string.auth_migration_invite_hint),
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()

@@ -1,6 +1,9 @@
 package com.tracktosearch.data.auth
 
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.BuildConfig
+import android.os.Build
+import android.util.Base64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +38,7 @@ enum class AuthState {
 class AuthManager @Inject constructor(
     private val authApiService: AuthApiService,
     private val deviceKeyManager: DeviceKeyManager,
+    private val deviceContinuityManager: DeviceContinuityManager,
     private val tokenStorage: TokenStorage,
     private val json: Json
 ) {
@@ -42,6 +46,9 @@ class AuthManager @Inject constructor(
 
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    private val _recoveryFailure = MutableStateFlow<String?>(null)
+    val recoveryFailure: StateFlow<String?> = _recoveryFailure.asStateFlow()
 
     // 设备 ID（激活后缓存）。@Volatile：WorkManager 线程写入对主线程可见
     @Volatile
@@ -69,7 +76,8 @@ class AuthManager @Inject constructor(
                 publicKey = publicKey,
                 deviceName = deviceName,
                 appVersion = appVersion,
-                packageName = packageName
+                packageName = packageName,
+                androidId = deviceContinuityManager.getAndroidId(),
             )
             val response = authApiService.activate(request)
             if (response.isSuccessful) {
@@ -95,7 +103,7 @@ class AuthManager @Inject constructor(
      */
     suspend fun check(): Result<CheckResponse> {
         return try {
-            val response = authApiService.check()
+            val response = authApiService.check(CheckRequest(deviceContinuityManager.getAndroidId()))
             if (response.isSuccessful) {
                 val body = response.body()?.data ?: return Result.failure(Exception(response.errorMessage("Empty response")))
                 deviceId = body.deviceId.ifBlank { deviceId }
@@ -245,6 +253,9 @@ class AuthManager @Inject constructor(
             } else {
                 _authState.value = AuthState.UNAUTHORIZED
             }
+            if (_authState.value == AuthState.UNAUTHORIZED) {
+                recoverSilently()
+            }
             return
         }
         check()
@@ -258,6 +269,59 @@ class AuthManager @Inject constructor(
         deviceId = null
         nextCheckAt = 0L
         _authState.value = AuthState.UNAUTHORIZED
+    }
+
+    private suspend fun recoverSilently(): Result<ActivateResponse> {
+        _recoveryFailure.value = null
+        if (BuildConfig.DEBUG) return Result.failure(Exception("RECOVERY_RELEASE_ONLY"))
+        val androidId = deviceContinuityManager.getAndroidId()
+            ?: return recoveryFailure("RECOVERY_ID_UNAVAILABLE")
+        return try {
+            val publicKey = deviceKeyManager.getPublicKeyBase64()
+            val challengeResponse = authApiService.recoveryChallenge(
+                RecoveryChallengeRequest(androidId, publicKey, BuildConfig.APPLICATION_ID)
+            )
+            if (!challengeResponse.isSuccessful) {
+                return recoveryFailure(challengeResponse.errorMessage("Recovery challenge failed: ${challengeResponse.code()}"))
+            }
+            val nonce = challengeResponse.body()?.data?.nonce
+                ?: return recoveryFailure("Recovery challenge is empty")
+            val signature = Base64.encodeToString(
+                deviceKeyManager.sign(nonce.toByteArray()),
+                Base64.NO_WRAP,
+            )
+            val response = authApiService.recover(
+                RecoveryRequest(
+                    androidId = androidId,
+                    publicKey = publicKey,
+                    nonce = nonce,
+                    signature = signature,
+                    deviceName = "${Build.MANUFACTURER} ${Build.MODEL}",
+                    appVersion = BuildConfig.VERSION_NAME,
+                    packageName = BuildConfig.APPLICATION_ID,
+                )
+            )
+            if (!response.isSuccessful) {
+                return recoveryFailure(response.errorMessage("Recovery failed: ${response.code()}"))
+            }
+            val body = response.body()?.data
+                ?: return recoveryFailure("Recovery response is empty")
+            tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+            deviceId = body.deviceId
+            nextCheckAt = body.nextCheckAt
+            lastOnlineAt = System.currentTimeMillis() / 1000
+            tokenStorage.saveSessionMetadata(body.deviceId, lastOnlineAt, nextCheckAt)
+            _authState.value = AuthState.AUTHORIZED
+            Result.success(body)
+        } catch (e: Exception) {
+            _recoveryFailure.value = e.message ?: "RECOVERY_FAILED"
+            Result.failure(e)
+        }
+    }
+
+    private fun recoveryFailure(message: String): Result<ActivateResponse> {
+        _recoveryFailure.value = message
+        return Result.failure(Exception(message))
     }
 
     // === Getters ===

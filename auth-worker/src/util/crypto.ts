@@ -9,6 +9,20 @@ export async function sha256(input: string): Promise<string> {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// 使用 Worker Secret 生成设备连续性指纹，原始标识不落库。
+export async function hmacDeviceContinuityId(deviceId: string, secret: string): Promise<string> {
+    if (!deviceId || !secret) throw new Error('Device continuity HMAC is not configured');
+    const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+    );
+    const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(deviceId));
+    return Array.from(new Uint8Array(signature), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
 // 生成安全随机令牌（32 字节，hex 编码）
 export function generateSecureToken(length: number = 32): string {
     const bytes = new Uint8Array(length);

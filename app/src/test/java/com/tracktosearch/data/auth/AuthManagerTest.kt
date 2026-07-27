@@ -32,8 +32,9 @@ class AuthManagerTest {
     fun initialize_refreshesExpiredAccessTokenBeforeDeclaringUnauthorized() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, storage, Json)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
@@ -42,6 +43,7 @@ class AuthManagerTest {
         every { storage.getCachedAccessToken() } returns "old-access"
         coEvery { storage.isTokenValid() } returns false
         coEvery { storage.getRefreshToken() } returns "refresh-token"
+        every { continuityManager.getAndroidId() } returns "android-id"
         every { keyManager.sign(any()) } returns ByteArray(64)
         coEvery { storage.saveTokens(any(), any(), any()) } returns Unit
         coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit

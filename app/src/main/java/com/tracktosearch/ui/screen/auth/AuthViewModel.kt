@@ -10,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -17,7 +18,8 @@ data class AuthUiState(
     val inviteCode: String = "",
     val isLoading: Boolean = false,
     val error: String? = null,
-    val activated: Boolean = false
+    val activated: Boolean = false,
+    val requiresMigrationInvite: Boolean = false
 )
 
 @HiltViewModel
@@ -28,6 +30,16 @@ class AuthViewModel @Inject constructor(
         AuthUiState(activated = authManager.authState.value.isActivated())
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            authManager.recoveryFailure.collectLatest { failure ->
+                if (failure != null && !authManager.authState.value.isActivated()) {
+                    _uiState.value = _uiState.value.copy(requiresMigrationInvite = true)
+                }
+            }
+        }
+    }
 
     private fun AuthState.isActivated(): Boolean = this == AuthState.AUTHORIZED || this == AuthState.OFFLINE
 
@@ -50,7 +62,11 @@ class AuthViewModel @Inject constructor(
                 packageName = BuildConfig.APPLICATION_ID
             )
             _uiState.value = if (result.isSuccess) {
-                _uiState.value.copy(isLoading = false, activated = true)
+                _uiState.value.copy(
+                    isLoading = false,
+                    activated = true,
+                    requiresMigrationInvite = false
+                )
             } else {
                 _uiState.value.copy(
                     isLoading = false,

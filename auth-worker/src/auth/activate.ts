@@ -1,7 +1,7 @@
 // POST /api/auth/activate — 邀请码激活 + 设备绑定 + JWT 发放
 
 import { AppError, successResponse, now } from '../util/errors';
-import { sha256, generateSecureToken, generateId } from '../util/crypto';
+import { sha256, generateSecureToken, generateId, hmacDeviceContinuityId } from '../util/crypto';
 import { signAccessToken } from '../util/jwt';
 import { firstRow } from '../util/db';
 
@@ -11,6 +11,7 @@ interface ActivateRequest {
     deviceName?: string;
     appVersion?: string;
     packageName?: string;
+    androidId?: string;
 }
 
 interface ActivateResponse {
@@ -24,7 +25,7 @@ interface ActivateResponse {
 
 export async function handleActivate(
     request: Request,
-    env: { DB: D1Database; JWT_SIGNING_KEY: string },
+    env: { DB: D1Database; JWT_SIGNING_KEY: string; DEVICE_RECOVERY_HMAC_KEY: string },
     requestId: string
 ): Promise<Response> {
     const body = await request.json() as ActivateRequest;
@@ -40,11 +41,11 @@ export async function handleActivate(
     // 查找有效邀请码
     const invite = await firstRow<{
         id: string; friend_id: string; kind: string; expires_at: number;
-        used_at: number | null; revoked_at: number | null;
+        used_at: number | null; revoked_at: number | null; device_id: string | null;
         code_mask: string | null;
         friend_status: string; max_devices: number; friend_expires_at: number | null;
     }>(env.DB.prepare(`
-        SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at, i.code_mask,
+        SELECT i.id, i.friend_id, i.kind, i.expires_at, i.used_at, i.revoked_at, i.code_mask, i.device_id,
                f.status as friend_status, f.max_devices, f.expires_at as friend_expires_at
         FROM invites i
         JOIN friends f ON i.friend_id = f.id
@@ -75,11 +76,32 @@ export async function handleActivate(
     }
 
     // 检查设备上限（事务中）
-    const existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
+    let existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
         SELECT id, friend_id, status
         FROM devices
         WHERE public_key = ?
     `).bind(body.publicKey));
+
+    if (invite.kind === 'MIGRATION' && invite.device_id && existingDevice && existingDevice.id !== invite.device_id) {
+        return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_MISMATCH', 'Public key belongs to another device', invite, existingDevice.id);
+    }
+
+    if (invite.kind === 'MIGRATION' && !existingDevice && invite.device_id) {
+        existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
+            SELECT id, friend_id, status
+            FROM devices
+            WHERE id = ?
+    `).bind(invite.device_id));
+    }
+
+    if (invite.kind === 'MIGRATION' && !existingDevice && body.androidId) {
+        const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
+        existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
+            SELECT id, friend_id, status
+            FROM devices
+            WHERE recovery_id_hmac = ?
+        `).bind(recoveryIdHmac));
+    }
 
     if (invite.kind === 'MIGRATION' && !existingDevice) {
         return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', invite);
@@ -134,9 +156,9 @@ export async function handleActivate(
         existingDevice
             ? env.DB.prepare(`
             UPDATE devices
-            SET friend_id = ?, device_name = ?, status = 'ACTIVE', app_version = ?, revoked_at = NULL
+            SET friend_id = ?, public_key = ?, device_name = ?, status = 'ACTIVE', app_version = ?, revoked_at = NULL
             WHERE id = ?
-        `).bind(invite.friend_id, body.deviceName || null, body.appVersion || null, deviceId)
+        `).bind(invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, deviceId)
             : env.DB.prepare(`
             INSERT INTO devices (id, friend_id, public_key, device_name, status, app_version, activated_at)
             VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)
@@ -169,6 +191,15 @@ export async function handleActivate(
             currentTime,
         ),
     ];
+
+    if (body.androidId) {
+        const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
+        statements.push(env.DB.prepare(`
+            UPDATE devices
+            SET recovery_id_hmac = ?, recovery_id_version = 1, recovery_updated_at = ?
+            WHERE id = ?
+        `).bind(recoveryIdHmac, currentTime, deviceId));
+    }
 
     await env.DB.batch(statements);
 
