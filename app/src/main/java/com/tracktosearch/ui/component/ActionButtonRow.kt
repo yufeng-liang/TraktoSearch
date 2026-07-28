@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,9 +31,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.blur.materials.HazeMaterials
 
 /**
  * 详情页操作按钮组（想看 / 已看 / 评分）
@@ -76,12 +72,6 @@ fun ActionButtonRow(
             } else {
                 MaterialTheme.colorScheme.onSurface
             }
-            val shadow = if (action.selected && !action.isDestructive) 8.dp else 0.dp
-            val hazeStyle = if (action.selected || isLight) {
-                null
-            } else {
-                HazeMaterials.thin(MaterialTheme.colorScheme.background)
-            }
             val contentAlpha = if (action.enabled && !action.isLoading) 1f else 0.5f
 
             Column(
@@ -90,17 +80,16 @@ fun ActionButtonRow(
                     .weight(1f)
                     .padding(horizontal = 4.dp)
                     .scale(scale)
-                    .shadow(shadow, RoundedCornerShape(14.dp))
-                    .clip(RoundedCornerShape(14.dp))
-                    .then(
-                        if (hazeStyle != null) {
-                            Modifier.hazeEffect(state = hazeState) {
-                                blurEffect { style = hazeStyle }
-                            }
-                        } else {
-                            Modifier
-                        }
+                    .neumorphicShadow(
+                        shape = RoundedCornerShape(14.dp),
+                        isDark = !isLight,
+                        elevation = 4.dp,
+                        darkAlpha = if (isLight) 0.18f else 0.35f,
+                        lightAlpha = if (isLight) 0.55f else 0.10f,
+                        blurRadius = 10.dp,
+                        shadowOffset = 4.dp
                     )
+                    .clip(RoundedCornerShape(14.dp))
                     .background(bg)
                     .clickable(
                         interactionSource = interactionSource,
@@ -109,7 +98,7 @@ fun ActionButtonRow(
                         onClick = action.onClick
                     )
                     .alpha(contentAlpha)
-                    .padding(vertical = 10.dp)
+                    .padding(vertical = 5.dp)
             ) {
                 if (action.isLoading) {
                     CircularProgressIndicator(
