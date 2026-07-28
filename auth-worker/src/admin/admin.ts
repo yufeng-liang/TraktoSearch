@@ -728,10 +728,13 @@ export async function listFriendIpLogs(
     requestId: string,
     friendId: string
 ): Promise<Response> {
+    const friend = await env.DB.prepare('SELECT id FROM friends WHERE id = ?').bind(friendId).first<{ id: string }>();
+    if (!friend) throw new AppError('NOT_FOUND', 'Friend not found', 404);
+
     const url = new URL(request.url);
     const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
     const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
-    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 200) : 50;
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 100) : 50;
     const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
 
     const { results } = await env.DB.prepare(`
