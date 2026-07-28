@@ -1,0 +1,70 @@
+package com.tracktosearch.data.repository
+
+import com.tracktosearch.data.remote.feedback.FeedbackApiService
+import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
+import com.tracktosearch.data.remote.feedback.FeedbackListItem
+import com.tracktosearch.data.remote.feedback.FeedbackResponse
+import com.tracktosearch.data.remote.feedback.MineResponse
+import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
+import kotlinx.coroutines.test.runTest
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import retrofit2.Response
+
+class FeedbackRepositoryTest {
+
+    private val friendNickname = "测试朋友"
+
+    @Test
+    fun `submit success returns id`() = runTest {
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", com.tracktosearch.data.remote.feedback.UploadScreenshotResponse("k1"))
+            )
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", SubmitFeedbackResponse("fb1", 1700000000L))
+            )
+            override suspend fun getMine(limit: Int, offset: Int) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", MineResponse(emptyList(), 20, 0, 0, false))
+            )
+            override suspend fun getDetail(id: String) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", FeedbackDetailResponse(
+                    com.tracktosearch.data.remote.feedback.FeedbackDetail("fb1", "f1", friendNickname, null, null, null, "BUG", "content", null, null, "1.0", "14", "Pixel", "PENDING", 1700000000L),
+                    emptyList()
+                ))
+            )
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.submit(
+            type = "BUG",
+            content = "test content",
+            contact = null,
+            screenshots = emptyList(),
+            friendNickname = friendNickname,
+            traktUsername = null,
+            doubanUsername = null,
+            appVersion = "1.0",
+            osVersion = "14",
+            deviceModel = "Pixel"
+        )
+        assertTrue(result.isSuccess)
+        assertEquals("fb1", result.getOrNull()?.id)
+    }
+
+    @Test
+    fun `submit network error returns failure`() = runTest {
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("network")
+            override suspend fun getMine(limit: Int, offset: Int) = error("not used")
+            override suspend fun getDetail(id: String) = error("not used")
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.submit("BUG", "test", null, emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
+        assertTrue(result.isFailure)
+    }
+}
