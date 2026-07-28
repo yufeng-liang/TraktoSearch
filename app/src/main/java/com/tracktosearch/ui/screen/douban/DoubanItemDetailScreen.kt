@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.douban
-import com.tracktosearch.ui.component.hazeModalSurface
 import com.tracktosearch.ui.theme.RatingGold
 
 import android.content.ActivityNotFoundException
@@ -1413,9 +1412,7 @@ fun DoubanItemDetailScreen(
         if (failure != null) {
             AlertDialog(
                 onDismissRequest = { viewModel.showSubtitleDialog(false) },
-                modifier = Modifier.hazeModalSurface(ultraThick = true),
-                shape = MaterialTheme.shapes.extraLarge,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
                 title = { Text(stringResource(R.string.screen_douban_item_detail_subtitle_edit)) },
                 text = {
                     OutlinedTextField(
@@ -1448,9 +1445,7 @@ fun DoubanItemDetailScreen(
     if (showRemoveConfirm) {
         AlertDialog(
             onDismissRequest = { showRemoveConfirm = false },
-                modifier = Modifier.hazeModalSurface(ultraThick = true),
-                shape = MaterialTheme.shapes.extraLarge,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_writeback_remove_confirm_title)) },
             text = { Text(stringResource(R.string.douban_writeback_remove_confirm_text)) },
             confirmButton = {

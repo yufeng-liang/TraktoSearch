@@ -40,7 +40,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -52,10 +51,11 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -159,8 +159,6 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.hazeBottomSheetSurface
-import com.tracktosearch.ui.component.hazeBottomSheetContent
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.isContentUnderTopBar
@@ -1672,22 +1670,18 @@ private fun WatchlistFilterSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onApply,
-        modifier = Modifier.hazeBottomSheetSurface(),
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         // 统一背景色与发现页查看全部 sheet 一致
-        // 由 HazeMaterials.thick 负责染色，避免再叠加一层实色遮罩。
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
         // 去除默认 drag 条,内容更紧凑
-        scrimColor = Color.Black.copy(alpha = 0.32f),
         dragHandle = null
     ) {
-        LazyColumn(
+        Column(
             modifier = Modifier
-                .hazeBottomSheetContent()
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            item {
-                Column(modifier = Modifier.fillMaxWidth()) {
             // 类型多选(chip 按估算宽度降序排列:长块先占位,短块填缝,行数少且每行数量均衡)
             // 估算宽度 = 中文字符数 * 14dp + 24dp(chip 内边距)
             val sortedGenres = remember(availableGenres) {
@@ -1937,20 +1931,18 @@ private fun WatchlistFilterSheet(
             Spacer(modifier = Modifier.height(24.dp))
 
             // 重置 + 应用
-                Row(
+            Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(onClick = onReset) {
-                        Text(stringResource(R.string.filter_reset))
-                    }
-                    Button(onClick = onApply) {
-                        Text(stringResource(R.string.filter_apply))
-                    }
+            ) {
+                TextButton(onClick = onReset) {
+                    Text(stringResource(R.string.filter_reset))
+                }
+                Button(onClick = onApply) {
+                    Text(stringResource(R.string.filter_apply))
                 }
             }
         }
-    }
     }
 }
 

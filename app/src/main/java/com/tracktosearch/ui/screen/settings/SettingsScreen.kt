@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.settings
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.content.Intent
 import android.net.Uri
@@ -882,9 +881,7 @@ fun SettingsScreen(
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_account)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
@@ -908,9 +905,7 @@ fun SettingsScreen(
     if (showDoubanLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_account_douban)) },
             text = { Text(stringResource(R.string.settings_logout_confirm)) },
             confirmButton = {
@@ -944,9 +939,7 @@ fun SettingsScreen(
     if (showClearCacheDialog) {
         AlertDialog(
             onDismissRequest = { showClearCacheDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_cache)) },
             text = {
                 Column {
@@ -982,9 +975,7 @@ fun SettingsScreen(
                 showClearCategoryDialog = false
                 pendingClearCategory = null
             },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_cache_clear_category_confirm)) },
             text = {
                 val cat = pendingClearCategory!!
@@ -1126,9 +1117,7 @@ fun SettingsScreen(
                 showCooldownGuidance = false
                 pendingCooldownMode = null
             },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.cooldown_guidance_title)) },
             text = { Text(stringResource(R.string.cooldown_guidance_message)) },
             confirmButton = {
@@ -1167,9 +1156,7 @@ fun SettingsScreen(
     if (showConsistencyConfirm) {
         AlertDialog(
             onDismissRequest = { showConsistencyConfirm = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.consistency_check_confirm_title)) },
             text = {
                 Column {
@@ -1228,9 +1215,7 @@ fun SettingsScreen(
     if (showDoubanLoginPrompt) {
         AlertDialog(
             onDismissRequest = { showDoubanLoginPrompt = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_douban_not_logged_in_title)) },
             text = { Text(stringResource(R.string.settings_douban_not_logged_in_message)) },
             confirmButton = {
@@ -1360,9 +1345,7 @@ private fun SearchSourcesItem(
     showDeleteCustomSource?.let { source ->
         AlertDialog(
             onDismissRequest = { showDeleteCustomSource = null },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.settings_delete_source)) },
             text = { Text(stringResource(R.string.settings_delete_source_confirm, source.name)) },
             confirmButton = {
@@ -1979,9 +1962,7 @@ private fun CloudSyncCompareDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(titleRes)) },
         text = {
             Column(

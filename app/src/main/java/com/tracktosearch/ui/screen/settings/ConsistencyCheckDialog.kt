@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.settings
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -71,9 +70,7 @@ fun ConsistencyCheckDialog(
             // 检查运行中不允许点击外部关闭（需点「转后台」或「取消」）
             if (!p.isRunning) onDismiss()
         },
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = {
             Text(text = stringResource(R.string.consistency_check_title))
         },

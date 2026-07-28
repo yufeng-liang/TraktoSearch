@@ -35,7 +35,6 @@
 
     <!-- Search Screen -->
     <string name="search_title">Search</string>
-    <string name="search_subtitle">Discover your next watch</string>
     <string name="hot_search">Hot Searches</string>
     <string name="search_back">Back</string>
     <string name="search_placeholder">Enter movie title to search cloud resources</string>
@@ -687,20 +686,13 @@ Config:
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_next">Next</string>
     <string name="onboarding_done">Got it</string>
+    <string name="onboarding_choose_theme">Choose your preferred theme color</string>
     <string name="onboarding_step1_title">Search</string>
-    <string name="onboarding_step1_desc">Search for movies and shows across multiple cloud drive sources</string>
+    <string name="onboarding_step1_desc">Search by movie, TV show, person, or resource category</string>
     <string name="onboarding_step2_title">Discover</string>
-    <string name="onboarding_step2_desc">Browse trending lists from Douban and TMDB</string>
+    <string name="onboarding_step2_desc">Browse personalized recommendations (generated after Douban login) and other charts</string>
     <string name="onboarding_step3_title">My List</string>
-    <string name="onboarding_step3_desc">Manage your watchlist and watched history after logging in</string>
-    <string name="onboarding_step4_title">Settings</string>
-    <string name="onboarding_step4_desc">Customize theme, language, search sources, and more</string>
-    <string name="onboarding_step5_title">Statistics</string>
-    <string name="onboarding_step5_desc">View watch data and heatmap from the first row of \"Settings\" page. TV show count requires a full season completed</string>
-    <string name="onboarding_step6_title">Detail Page</string>
-    <string name="onboarding_step6_desc">Tap poster for fullscreen view and save to gallery; tap cast avatar for actor\'s works; rating supports half-star</string>
-    <string name="onboarding_step7_title">More Tips</string>
-    <string name="onboarding_step7_desc">Customize detail page sections in Settings; long-press movie card for multi-select mode; some features (trailers, Trakt, TMDB) require VPN for access</string>
+    <string name="onboarding_step3_desc">View your Trakt watchlist and watched lists, including content imported from Douban</string>
     <string name="settings_licenses">Open Source Licenses</string>
     <string name="settings_cache">Cache</string>
     <string name="settings_cache_clear">Clear</string>
@@ -1375,7 +1367,7 @@ Config:
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · Logged in</string>
-    <string name="settings_account_douban_login">Login to Douban</string>
+    <string name="settings_account_douban_login">Login</string>
     <string name="settings_account_douban_logout">Logout</string>
     <string name="settings_douban_logout_done">Douban logged out</string>
     <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>

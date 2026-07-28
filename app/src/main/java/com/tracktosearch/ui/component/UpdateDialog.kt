@@ -393,9 +393,7 @@ fun UpdateDialog(
 
     AlertDialog(
         onDismissRequest = { if (canDismiss) onDismiss() },
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = null,
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {

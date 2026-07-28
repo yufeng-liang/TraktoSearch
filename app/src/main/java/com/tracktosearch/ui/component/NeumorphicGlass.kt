@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,9 +40,6 @@ import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import java.util.concurrent.atomic.AtomicBoolean
 
 private const val NEUMORPHIC_GLASS_TAG = "NeumorphicGlass"
-
-/** 供跨窗口弹窗和底部抽屉共享当前页面背景的 Haze 状态。 */
-val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
@@ -74,29 +70,6 @@ fun Modifier.hazeProgressiveTopBar(
             this.style = style
         }
     }
-}
-
-/** 弹窗/底部抽屉统一使用较厚模糊，避免每个页面重复配置。 */
-@Composable
-fun Modifier.hazeModalSurface(
-    ultraThick: Boolean,
-    blurRadius: Dp = 40.dp
-): Modifier {
-    val state = LocalModalHazeState.current ?: return this
-    val surface = MaterialTheme.colorScheme.surfaceVariant
-    val style = if (ultraThick) {
-        HazeMaterials.ultraThick(surface.copy(alpha = 0.82f))
-    } else {
-        HazeMaterials.thick(surface.copy(alpha = 0.68f))
-    }
-    val shape = RoundedCornerShape(28.dp)
-    return clip(shape)
-        .hazeEffect(state = state) {
-            blurEffect {
-                this.style = style
-            }
-        }
-        .clip(shape)
 }
 
 /** 底部抽屉恢复普通 surfaceVariant 填充，只裁剪顶部圆角以保持贴底布局。 */

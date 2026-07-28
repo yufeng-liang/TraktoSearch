@@ -59,7 +59,7 @@ private val LightColorScheme = lightColorScheme(
     outlineVariant = Color(0xFFE8E8E8),
 )
 
-private fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.ColorScheme = if (dark) {
+internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.ColorScheme = if (dark) {
     darkColorScheme(
         primary = Color(0xFFC48763),
         onPrimary = Color(0xFF3E2518),
@@ -67,9 +67,10 @@ private fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.
         onPrimaryContainer = Color(0xFFFFDBCA),
         secondary = Color(0xFFE5B5C1),
         onSecondary = Color(0xFF44232D),
-        background = Color(0xFF241B16),
+        background = CinemaBackground,
         onBackground = Color(0xFFF7EDE3),
-        surface = Color(0xFF32251E),
+        // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
+        surface = CinemaSurface,
         onSurface = Color(0xFFF7EDE3),
         surfaceVariant = Color(0xFF4A382E),
         onSurfaceVariant = Color(0xFFD9C8BA),
@@ -84,11 +85,12 @@ private fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3.
         onPrimaryContainer = Color(0xFF5D4638),
         secondary = Color(0xFFD9D2C6),
         onSecondary = Color.White,
-        background = Color(0xFFF7EFE2),
+        background = Color.White,
         onBackground = Color(0xFF5D4638),
-        surface = Color(0xFFF6F2E9),
+        // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
+        surface = Color.White,
         onSurface = Color(0xFF5D4638),
-        surfaceVariant = Color(0xFFE9E2D4),
+        surfaceVariant = Color(0xFFEFE9DF),
         onSurfaceVariant = Color(0xFF806F63),
         outline = Color(0xFFC9C0B2),
         outlineVariant = Color(0xFFD9D2C6),
