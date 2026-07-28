@@ -12,6 +12,7 @@ import com.tracktosearch.data.remote.feedback.FeedbackListItem
 import com.tracktosearch.data.repository.FeedbackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -60,13 +61,16 @@ class FeedbackViewModel @Inject constructor(
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
 
+    private var loadListJob: Job? = null
+
     /** 加载我的反馈列表 */
     fun loadList(refresh: Boolean = false) {
         val currentOffset = (_listState.value as? ListState.Success)?.offset ?: 0
         val offset = if (refresh) 0 else currentOffset
         if (refresh) _listState.value = ListState.Loading
 
-        viewModelScope.launch {
+        loadListJob?.cancel()
+        loadListJob = viewModelScope.launch {
             try {
                 val result = feedbackRepository.getMine(limit = 20, offset = offset)
                 result.onSuccess { response ->
@@ -74,12 +78,12 @@ class FeedbackViewModel @Inject constructor(
                     val items = if (refresh) response.feedbacks else prev + response.feedbacks
                     _listState.value = ListState.Success(items, response.hasMore, offset + response.feedbacks.size)
                 }.onFailure { e ->
-                    _listState.value = ListState.Error(e.message ?: "加载失败")
+                    _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _listState.value = ListState.Error(e.message ?: "加载失败")
+                _listState.value = ListState.Error(e.message ?: "LOAD_FAILED")
             }
         }
     }
@@ -91,11 +95,11 @@ class FeedbackViewModel @Inject constructor(
             try {
                 val result = feedbackRepository.getDetail(id)
                 result.onSuccess { _detailState.value = DetailState.Success(it) }
-                    .onFailure { e -> _detailState.value = DetailState.Error(e.message ?: "加载失败") }
+                    .onFailure { e -> _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _detailState.value = DetailState.Error(e.message ?: "加载失败")
+                _detailState.value = DetailState.Error(e.message ?: "LOAD_FAILED")
             }
         }
     }
@@ -118,14 +122,14 @@ class FeedbackViewModel @Inject constructor(
                     val keyResult = feedbackRepository.uploadScreenshot(bytes, mimeType)
                     keyResult.onSuccess { screenshotKeys.add(it) }
                         .onFailure {
-                            _submitState.value = SubmitState.Error("截图上传失败：${it.message}")
+                            _submitState.value = SubmitState.Error("SCREENSHOT_UPLOAD_FAILED: ${it.message}")
                             return@launch
                         }
                 }
 
                 // 提交
                 _submitState.value = SubmitState.Submitting
-                val friendNickname = authManager.nickname.value ?: "未知"
+                val friendNickname = authManager.nickname.value ?: "UNKNOWN"
                 val traktUsername = userProfileStorage.getProfile()?.username?.takeIf { it.isNotBlank() }
                 // 豆瓣用户名：从 DoubanAuthStorage.doubanProfile 取 nickname
                 // （若未登录豆瓣或 nickname 为空，传 null）
@@ -145,11 +149,11 @@ class FeedbackViewModel @Inject constructor(
                     deviceModel = "${Build.MANUFACTURER} ${Build.MODEL}"
                 )
                 result.onSuccess { _submitState.value = SubmitState.Success(it.id) }
-                    .onFailure { _submitState.value = SubmitState.Error(it.message ?: "提交失败") }
+                    .onFailure { _submitState.value = SubmitState.Error(it.message ?: "SUBMIT_FAILED") }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _submitState.value = SubmitState.Error(e.message ?: "提交失败")
+                _submitState.value = SubmitState.Error(e.message ?: "SUBMIT_FAILED")
             }
         }
     }
