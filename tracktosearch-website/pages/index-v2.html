@@ -1,0 +1,1898 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light" data-dom-id="document">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrackToSearch — 从观影清单到网盘资源</title>
+    <style id="theme-vars">
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=JetBrains+Mono:wght@400;500;600&family=Caveat:wght@400;500;600;700&family=Ma+Shan+Zheng&display=swap');
+
+/* ===== TrackToSearch Official Website — Editorial Swiss Revival ===== */
+:root {
+  --tts-paper: #F6F2E9;
+  --tts-paper-deep: #E9E2D4;
+  --tts-ink: #1D1C19;
+  --tts-ink-muted: #6D685F;
+  --tts-ink-faint: #9B9588;
+  --tts-line: #C9C0B2;
+  --tts-line-soft: #D9D2C6;
+  --tts-ticket: #D95532;
+  --tts-ticket-dark: #A83E27;
+  --tts-ticket-soft: rgba(217, 85, 50, 0.08);
+  --tts-background: var(--tts-paper);
+  --tts-foreground: var(--tts-ink);
+  --tts-card: var(--tts-paper-deep);
+  --tts-card-foreground: var(--tts-ink);
+  --tts-popover: var(--tts-paper);
+  --tts-popover-foreground: var(--tts-ink);
+  --tts-primary: var(--tts-ticket);
+  --tts-primary-foreground: #FFFFFF;
+  --tts-secondary: var(--tts-paper-deep);
+  --tts-secondary-foreground: var(--tts-ink);
+  --tts-muted: var(--tts-paper-deep);
+  --tts-muted-foreground: var(--tts-ink-muted);
+  --tts-accent: var(--tts-paper-deep);
+  --tts-accent-foreground: var(--tts-ink);
+  --tts-border: var(--tts-line);
+  --tts-input: var(--tts-line);
+  --tts-ring: var(--tts-ticket);
+  --tts-destructive: #B5432A;
+  --tts-destructive-foreground: #FFFFFF;
+  --tts-radius-sm: 2px;
+  --tts-radius-md: 4px;
+  --tts-radius-lg: 8px;
+  --tts-radius-xl: 0px;
+  --tts-font-serif: "Fraunces", "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+  --tts-font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --tts-font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "Consolas", Menlo, monospace;
+}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--tts-background);
+    --color-foreground: var(--tts-foreground);
+    --color-card: var(--tts-card);
+    --color-card-foreground: var(--tts-card-foreground);
+    --color-popover: var(--tts-popover);
+    --color-popover-foreground: var(--tts-popover-foreground);
+    --color-primary: var(--tts-primary);
+    --color-primary-foreground: var(--tts-primary-foreground);
+    --color-secondary: var(--tts-secondary);
+    --color-secondary-foreground: var(--tts-secondary-foreground);
+    --color-muted: var(--tts-muted);
+    --color-muted-foreground: var(--tts-muted-foreground);
+    --color-accent: var(--tts-accent);
+    --color-accent-foreground: var(--tts-accent-foreground);
+    --color-destructive: var(--tts-destructive);
+    --color-destructive-foreground: var(--tts-destructive-foreground);
+    --color-border: var(--tts-border);
+    --color-input: var(--tts-input);
+    --color-ring: var(--tts-ring);
+    --radius-sm: var(--tts-radius-sm);
+    --radius-md: var(--tts-radius-md);
+    --radius-lg: var(--tts-radius-lg);
+    --radius-xl: var(--tts-radius-xl);
+  }
+  @layer base {
+    body { background: var(--tts-background); color: var(--tts-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--tts-background); }
+      .text-background { color: var(--tts-background); }
+      .border-background { border-color: var(--tts-background); }
+      .ring-background { --tw-ring-color: var(--tts-background); }
+      .bg-foreground { background-color: var(--tts-foreground); }
+      .text-foreground { color: var(--tts-foreground); }
+      .border-foreground { border-color: var(--tts-foreground); }
+      .ring-foreground { --tw-ring-color: var(--tts-foreground); }
+      .bg-card { background-color: var(--tts-card); }
+      .text-card { color: var(--tts-card); }
+      .border-card { border-color: var(--tts-card); }
+      .ring-card { --tw-ring-color: var(--tts-card); }
+      .bg-card-foreground { background-color: var(--tts-card-foreground); }
+      .text-card-foreground { color: var(--tts-card-foreground); }
+      .border-card-foreground { border-color: var(--tts-card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--tts-card-foreground); }
+      .bg-popover { background-color: var(--tts-popover); }
+      .text-popover { color: var(--tts-popover); }
+      .border-popover { border-color: var(--tts-popover); }
+      .ring-popover { --tw-ring-color: var(--tts-popover); }
+      .bg-popover-foreground { background-color: var(--tts-popover-foreground); }
+      .text-popover-foreground { color: var(--tts-popover-foreground); }
+      .border-popover-foreground { border-color: var(--tts-popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--tts-popover-foreground); }
+      .bg-primary { background-color: var(--tts-primary); }
+      .text-primary { color: var(--tts-primary); }
+      .border-primary { border-color: var(--tts-primary); }
+      .ring-primary { --tw-ring-color: var(--tts-primary); }
+      .bg-primary-foreground { background-color: var(--tts-primary-foreground); }
+      .text-primary-foreground { color: var(--tts-primary-foreground); }
+      .border-primary-foreground { border-color: var(--tts-primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--tts-primary-foreground); }
+      .bg-secondary { background-color: var(--tts-secondary); }
+      .text-secondary { color: var(--tts-secondary); }
+      .border-secondary { border-color: var(--tts-secondary); }
+      .ring-secondary { --tw-ring-color: var(--tts-secondary); }
+      .bg-secondary-foreground { background-color: var(--tts-secondary-foreground); }
+      .text-secondary-foreground { color: var(--tts-secondary-foreground); }
+      .border-secondary-foreground { border-color: var(--tts-secondary-foreground); }
+      .ring-secondary-foreground { --tw-ring-color: var(--tts-secondary-foreground); }
+      .bg-muted { background-color: var(--tts-muted); }
+      .text-muted { color: var(--tts-muted); }
+      .border-muted { border-color: var(--tts-muted); }
+      .ring-muted { --tw-ring-color: var(--tts-muted); }
+      .bg-muted-foreground { background-color: var(--tts-muted-foreground); }
+      .text-muted-foreground { color: var(--tts-muted-foreground); }
+      .border-muted-foreground { border-color: var(--tts-muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--tts-muted-foreground); }
+      .bg-accent { background-color: var(--tts-accent); }
+      .text-accent { color: var(--tts-accent); }
+      .border-accent { border-color: var(--tts-accent); }
+      .ring-accent { --tw-ring-color: var(--tts-accent); }
+      .bg-accent-foreground { background-color: var(--tts-accent-foreground); }
+      .text-accent-foreground { color: var(--tts-accent-foreground); }
+      .border-accent-foreground { border-color: var(--tts-accent-foreground); }
+      .ring-accent-foreground { --tw-ring-color: var(--tts-accent-foreground); }
+      .bg-destructive { background-color: var(--tts-destructive); }
+      .text-destructive { color: var(--tts-destructive); }
+      .border-destructive { border-color: var(--tts-destructive); }
+      .ring-destructive { --tw-ring-color: var(--tts-destructive); }
+      .bg-destructive-foreground { background-color: var(--tts-destructive-foreground); }
+      .text-destructive-foreground { color: var(--tts-destructive-foreground); }
+      .border-destructive-foreground { border-color: var(--tts-destructive-foreground); }
+      .ring-destructive-foreground { --tw-ring-color: var(--tts-destructive-foreground); }
+      .bg-border { background-color: var(--tts-border); }
+      .text-border { color: var(--tts-border); }
+      .border-border { border-color: var(--tts-border); }
+      .ring-border { --tw-ring-color: var(--tts-border); }
+      .bg-input { background-color: var(--tts-input); }
+      .text-input { color: var(--tts-input); }
+      .border-input { border-color: var(--tts-input); }
+      .ring-input { --tw-ring-color: var(--tts-input); }
+      .bg-ring { background-color: var(--tts-ring); }
+      .text-ring { color: var(--tts-ring); }
+      .border-ring { border-color: var(--tts-ring); }
+      .ring-ring { --tw-ring-color: var(--tts-ring); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body class="min-h-screen antialiased">
+    <main>
+
+<!-- ===== NAVIGATION ===== -->
+<header id="site-nav" class="tts-nav">
+  <div class="tts-nav-inner">
+    <a href="#top" class="tts-wordmark tts-wordmark-flex" aria-label="TrackToSearch 首页">
+      <img src="../assets/IMG_20260727_204104.png" alt="" class="tts-logo-img">
+      <span class="tts-wordmark-mark">TrackToSearch</span>
+    </a>
+    <nav class="tts-nav-links" aria-label="主导航">
+      <a href="#section-search" class="tts-nav-link" data-nav-link="section-search">功能</a>
+      <a href="#section-detail" class="tts-nav-link" data-nav-link="section-detail">详情</a>
+      <a href="#section-download" class="tts-nav-link" data-nav-link="section-download">下载</a>
+      <a href="https://github.com/yufeng-liang/TrackToSearch/releases" target="_blank" rel="noopener noreferrer" class="tts-btn tts-btn-outline tts-nav-cta">
+        <i data-lucide="download" style="width:14px;height:14px;"></i>
+        <span>下载</span>
+      </a>
+    </nav>
+    <button class="tts-nav-toggle" data-dom-id="nav-toggle" aria-label="打开菜单" aria-expanded="false">
+      <i data-lucide="menu" style="width:20px;height:20px;"></i>
+    </button>
+  </div>
+  <div class="tts-mobile-menu" id="mobile-menu" aria-hidden="true">
+    <a href="#section-search" class="tts-mobile-link">功能</a>
+    <a href="#section-detail" class="tts-mobile-link">详情</a>
+    <a href="#section-download" class="tts-mobile-link">下载</a>
+    <a href="https://github.com/yufeng-liang/TrackToSearch/releases" target="_blank" rel="noopener noreferrer" class="tts-btn tts-btn-primary tts-mobile-cta">
+      <i data-lucide="download" style="width:16px;height:16px;"></i>
+      <span>下载 APK</span>
+    </a>
+  </div>
+</header>
+
+<!-- ===== HERO ===== -->
+<section class="tts-hero" id="top">
+  <div class="tts-container">
+    <div class="tts-hero-grid">
+      <div class="tts-hero-rail">
+        <span class="tts-hero-vertical">FROM WATCHLIST TO WATCHABLE</span>
+      </div>
+      <div class="tts-hero-copy" style="position:relative;">
+        <div class="ck-char ck-hero-chiikawa-love" id="ck-hero-chiikawa-love" data-dom-id="ck-hero-chiikawa-love" aria-hidden="true">
+          <img src="../assets/chiikawa/ai-chiikawa-love.png" alt="" class="ck-char-img">
+        </div>
+        <h1 class="tts-hero-title tts-reveal">
+          把想看的电影，<br>变成找得到的资源。
+        </h1>
+        <p class="tts-hero-lede tts-reveal" style="--reveal-delay:1;">
+          TrackToSearch 把观影清单、影视详情和多源资源搜索放进同一个 Android 工具。
+        </p>
+        <div class="tts-hero-actions tts-reveal" style="--reveal-delay:2;">
+          <a href="https://github.com/yufeng-liang/TrackToSearch/releases" target="_blank" rel="noopener noreferrer" class="tts-btn tts-btn-primary" data-dom-id="hero-download-btn" id="hero-download-btn">
+            <i data-lucide="download" style="width:16px;height:16px;"></i>
+            <span>下载 Android APK</span>
+          </a>
+          <a href="#section-search" class="tts-text-link" data-dom-id="hero-features">
+            <span>查看产品功能</span>
+            <i data-lucide="arrow-right" style="width:16px;height:16px;"></i>
+          </a>
+        </div>
+      </div>
+      <div class="tts-hero-shot tts-reveal" style="--reveal-delay:2;">
+        <div class="tts-shot-frame">
+          <span class="tts-shot-marker">01 / 05</span>
+          <img src="../assets/hero-screen.png" alt="TrackToSearch 应用主界面截图" loading="eager" class="tts-shot-img">
+          <!-- Chiikawa: 吉伊从截图框右上角探出头挥手 -->
+          <div class="ck-char ck-hero-chiikawa clickable" id="ck-hero-chiikawa" data-dom-id="ck-hero-chiikawa" aria-label="点击吉伊打招呼" role="button" tabindex="0">
+            <img src="../assets/chiikawa/ai-chiikawa-wave.png" alt="吉伊" class="ck-char-img">
+            <div class="ck-bubble ck-bubble-hero">下载试试？<span class="ck-bubble-tail"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tts-hero-meta tts-reveal" style="--reveal-delay:3;">
+      <span class="tts-meta-item">ANDROID 8.0+</span>
+      <span class="tts-meta-sep"></span>
+      <span class="tts-meta-item">当前版本以 Releases 为准</span>
+    </div>
+    <div class="tts-scroll-hint" aria-hidden="true">
+      <span class="tts-scroll-hint-line"></span>
+      <span class="tts-scroll-hint-label">01 / 搜索</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SECTION 01 / 搜索 ===== -->
+<section class="tts-section" id="section-search" data-dom-id="section-search">
+  <div class="tts-container">
+    <div class="tts-feature-grid tts-feature-a">
+      <div class="tts-feature-text">
+        <div class="tts-archive-num tts-sticky-archive">
+          <span class="tts-archive-digit">01</span>
+          <span class="tts-archive-label">SEARCH</span>
+        </div>
+        <div class="tts-feature-copy" style="position:relative;">
+          <div class="ck-char ck-search-detective" id="ck-search-detective" data-dom-id="ck-search-detective" aria-hidden="true">
+            <img src="../assets/chiikawa/ai-hachiware-detective.png" alt="" class="ck-char-img">
+          </div>
+          <h2 class="tts-section-heading">从片名开始，<br>少一点来回切换。</h2>
+          <p class="tts-section-body">
+            直接搜索电影、剧集和人物。多源结果聚合展示，从搜索列表即可进入详情页，不用在多个应用间反复跳转。
+            片名匹配更准确，找对那部作品，再谈后续的资源与收藏。
+          </p>
+          <ul class="tts-feature-list">
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 电影 / 剧集 / 人物 多类型搜索</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 搜索结果直达详情页</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 历史记录与快速补全</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tts-feature-shot">
+        <div class="tts-shot-frame tts-shot-plain">
+          <img src="../assets/search-screen.png" alt="搜索界面截图，展示电影搜索结果列表" loading="lazy" class="tts-shot-img">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SECTION 02 / 发现 ===== -->
+<section class="tts-section" id="section-discover">
+  <div class="tts-container">
+    <div class="tts-feature-grid tts-feature-b">
+      <div class="tts-feature-shot">
+        <div class="tts-shot-frame tts-shot-plain" style="position:relative;">
+          <img src="../assets/discover-screen.png" alt="发现界面截图，展示热门与即将上映影视" loading="lazy" class="tts-shot-img">
+          <!-- Chiikawa: 乌萨奇在截图旁跳舞 -->
+          <div class="ck-char ck-discover-usagi" id="ck-discover-usagi" data-dom-id="ck-discover-usagi" aria-hidden="true">
+            <div class="ck-sprite ck-sprite-dance"></div>
+            <div class="ck-bubble ck-bubble-small">呜哈！<span class="ck-bubble-tail"></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="tts-feature-text">
+        <div class="tts-archive-num tts-sticky-archive">
+          <span class="tts-archive-digit">02</span>
+          <span class="tts-archive-label">DISCOVER</span>
+        </div>
+        <div class="tts-feature-copy" style="position:relative;">
+          <div class="ck-char ck-discover-usagi-curious" id="ck-discover-usagi-curious" data-dom-id="ck-discover-usagi-curious" aria-hidden="true">
+            <img src="../assets/chiikawa/ai-usagi-curious.png" alt="" class="ck-char-img">
+          </div>
+          <h2 class="tts-section-heading">把"随便看看"<br>变成一张有方向的片单。</h2>
+          <p class="tts-section-body">
+            热门趋势、即将上映、分类浏览都在同一处。按类型、地区、评分、年代筛选，
+            从"不知道看什么"到"今晚就看这部"，路径更短。
+          </p>
+          <ul class="tts-feature-list">
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 热门趋势 / 即将上映 / 分类浏览</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 按类型、地区、评分、年代筛选</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 发现后可直接加入清单或搜索资源</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SECTION 03 / 管理 ===== -->
+<section class="tts-section" id="section-library">
+  <div class="tts-container">
+    <div class="tts-feature-grid tts-feature-a">
+      <div class="tts-feature-text">
+        <div class="tts-archive-num tts-sticky-archive">
+          <span class="tts-archive-digit">03</span>
+          <span class="tts-archive-label">LIBRARY</span>
+        </div>
+        <div class="tts-feature-copy" style="position:relative;">
+          <div class="ck-char ck-library-chiikawa-star" id="ck-library-chiikawa-star" data-dom-id="ck-library-chiikawa-star" aria-hidden="true">
+            <img src="../assets/chiikawa/ai-chiikawa-star.png" alt="" class="ck-char-img">
+          </div>
+          <h2 class="tts-section-heading">收藏不是终点，<br>下一次打开时还找得到。</h2>
+          <p class="tts-section-body">
+            Trakt 双向同步，想看 / 已看清晰分区。观影数据自动统计，从资源页一键关联到清单条目，
+            收藏过的作品不会在下次想翻出来时消失在信息洪流里。
+          </p>
+          <ul class="tts-feature-list">
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> Trakt 双向同步，想看 / 已看分离</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 观影数据统计与回顾</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 资源页自动关联清单条目</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tts-feature-shot">
+        <div class="tts-shot-frame tts-shot-plain">
+          <img src="../assets/watchlist-screen.png" alt="观影清单界面截图，展示想看列表与管理功能" loading="lazy" class="tts-shot-img">
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== SECTION 04 / 详情 ===== -->
+<section class="tts-section" id="section-detail">
+  <div class="tts-container">
+    <div class="tts-feature-grid tts-feature-b">
+      <div class="tts-feature-shot">
+        <div class="tts-shot-frame tts-shot-plain" style="position:relative;">
+          <img src="../assets/detail-screen.png" alt="详情页截图，展示影片评分、演职员与季集信息" loading="lazy" class="tts-shot-img">
+        </div>
+      </div>
+      <div class="tts-feature-text">
+        <div class="tts-archive-num tts-sticky-archive">
+          <span class="tts-archive-digit">04</span>
+          <span class="tts-archive-label">DETAIL</span>
+        </div>
+        <div class="tts-feature-copy" style="position:relative;">
+          <div class="ck-char ck-detail-usagi-thumbsup" id="ck-detail-usagi-thumbsup" data-dom-id="ck-detail-usagi-thumbsup" aria-hidden="true">
+            <img src="../assets/chiikawa/ai-usagi-thumbsup.png" alt="" class="ck-char-img">
+          </div>
+          <h2 class="tts-section-heading">在决定播放之前，<br>把这部作品看明白。</h2>
+          <p class="tts-section-body">
+            TMDB、OMDb、豆瓣评分一屏呈现。季集进度、完整演职员、相关推荐全部就位，
+            看清一部作品再决定是否播放，减少点进去又退出来的浪费。
+          </p>
+          <ul class="tts-feature-list">
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> TMDB / OMDb / 豆瓣 多源评分</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 季集进度、完整演职员表</li>
+            <li><i data-lucide="check" style="width:14px;height:14px;"></i> 相关推荐与相似作品</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== DOWNLOAD ===== -->
+<section class="tts-section tts-download-section" id="section-download">
+  <div class="tts-container">
+    <div class="tts-download-card" style="position:relative;">
+      <img src="../assets/IMG_20260727_204104.png" alt="TrackToSearch 应用图标" class="tts-app-icon" width="64" height="64">
+      <h2 class="tts-download-heading tts-download-heading-flex"><img src="../assets/IMG_20260727_204104.png" alt="" class="tts-logo-img">开始使用 TrackToSearch</h2>
+      <p class="tts-download-note">
+        下载 APK 后，在 Android 设备上完成安装；首次使用部分同步功能需要登录 Trakt。
+      </p>
+      <div class="tts-download-actions" style="position:relative;">
+        <div class="ck-char ck-download-chiikawa" id="ck-download-chiikawa" data-dom-id="ck-download-chiikawa" aria-hidden="true">
+          <img src="../assets/chiikawa/ai-chiikawa-cheer.png" alt="" class="ck-char-img">
+        </div>
+        <a href="https://github.com/yufeng-liang/TrackToSearch/releases" target="_blank" rel="noopener noreferrer" class="tts-btn tts-btn-primary" data-dom-id="download-github" id="download-github-btn">
+          <i data-lucide="github" style="width:18px;height:18px;"></i>
+          <span>GitHub Releases</span>
+        </a>
+        <a href="https://gitee.com/yufeng-liang/TrackToSearch-release/releases" target="_blank" rel="noopener noreferrer" class="tts-btn tts-btn-outline" data-dom-id="download-gitee">
+          <span>Gitee Releases</span>
+        </a>
+        <div class="ck-char ck-download-usagi" id="ck-download-usagi" data-dom-id="ck-download-usagi" aria-hidden="true">
+          <img src="../assets/chiikawa/ai-usagi-excited.png" alt="" class="ck-char-img">
+        </div>
+      </div>
+      <!-- Chiikawa CTA: 三小只欢迎派对（按钮与下载 meta 之间） -->
+      <div class="ck-cta-party" aria-hidden="true">
+        <div class="ck-char ck-cta-hachiware-walk" id="ck-cta-hachiware-walk">
+          <div class="ck-sprite ck-sprite-walk"></div>
+        </div>
+        <div class="ck-char ck-cta-chiikawa clickable" id="ck-cta-chiikawa" data-dom-id="ck-cta-chiikawa" aria-label="点击吉伊打招呼" role="button" tabindex="0">
+          <img src="../assets/chiikawa/ai-chiikawa-cheer.png" alt="吉伊" class="ck-char-img">
+          <div class="ck-bubble ck-bubble-cta">一起<br>看电影吧！<span class="ck-bubble-tail"></span></div>
+          <div class="ck-hearts" aria-hidden="true"><span>♥</span><span>♥</span><span>♥</span></div>
+        </div>
+        <div class="ck-char ck-cta-usagi" id="ck-cta-usagi">
+          <div class="ck-sprite ck-sprite-swirl"></div>
+          <div class="ck-bubble ck-bubble-small ck-bubble-usagi">呀哈！<span class="ck-bubble-tail"></span></div>
+        </div>
+      </div>
+      <p class="tts-download-meta">
+        <span class="tts-meta-item">ANDROID 8.0+</span>
+        <span class="tts-meta-sep"></span>
+        <span class="tts-meta-item">APK 直装</span>
+        <span class="tts-meta-sep"></span>
+        <span class="tts-meta-item">无内购 / 无广告</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer class="tts-footer">
+  <div class="tts-container">
+    <div class="tts-footer-grid">
+      <div class="tts-footer-brand">
+        <span class="tts-wordmark-mark tts-wordmark-footer tts-wordmark-flex"><img src="../assets/IMG_20260727_204104.png" alt="" class="tts-logo-img"><span>TrackToSearch</span></span>
+        <p class="tts-footer-tagline">从观影清单到网盘资源</p>
+      </div>
+      <div class="tts-footer-links">
+        <a href="https://github.com/yufeng-liang/TrackToSearch" target="_blank" rel="noopener noreferrer" class="tts-footer-link">
+          <i data-lucide="github" style="width:14px;height:14px;"></i>
+          <span>GitHub 仓库</span>
+        </a>
+        <span class="tts-footer-sep"></span>
+        <span class="tts-footer-text">不收集个人观影数据</span>
+        <span class="tts-footer-sep"></span>
+        <span class="tts-footer-text">开源项目</span>
+        <span class="tts-footer-sep"></span>
+        <a href="https://github.com/yufeng-liang/TrackToSearch/releases" target="_blank" rel="noopener noreferrer" class="tts-footer-link">版本信息见 Releases 页面</a>
+      </div>
+    </div>
+    <div class="tts-footer-bottom">
+      <!-- Chiikawa 页脚小剧场：三小只围坐看屏幕 -->
+      <div class="ck-footer-theater" aria-hidden="true">
+        <img src="../assets/chiikawa/ai-three-watching.png" alt="三小只一起看电影" class="ck-footer-theater-img">
+        <div class="ck-theater-glow"></div>
+      </div>
+      <span class="tts-meta-item">&copy; 2026 TrackToSearch</span>
+      <!-- Chiikawa 版权声明 -->
+      <span class="ck-footer-credit">Characters from Chiikawa (C) nagano / ちいかわ製作委員会</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ===== CRITICAL LAYOUT CSS ===== -->
+<style id="critical-layout">
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body {
+  background: var(--tts-paper);
+  color: var(--tts-ink);
+  font-family: var(--tts-font-sans);
+  font-size: 16px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; cursor: pointer; background: none; border: none; color: inherit; }
+ul { list-style: none; }
+
+.tts-container { max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px); }
+
+/* Nav */
+.tts-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: var(--tts-paper);
+  transition: border-color 0.3s ease;
+  border-bottom: 1px solid transparent;
+}
+.tts-nav.tts-nav-scrolled { border-bottom-color: var(--tts-line); }
+.tts-nav-inner {
+  max-width: 1440px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 48px);
+  height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 24px;
+}
+.tts-wordmark-mark {
+  font-family: var(--tts-font-serif); font-size: 20px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--tts-ink);
+}
+.tts-wordmark-flex { display: inline-flex; align-items: center; gap: 8px; }
+.tts-logo-img { height: clamp(28px, 3.6vw, 40px); width: auto; display: block; }
+.tts-nav-links { display: flex; align-items: center; gap: 32px; }
+.tts-nav-link {
+  font-family: var(--tts-font-sans); font-size: 14px; color: var(--tts-ink-muted);
+  transition: color 0.2s ease; padding: 4px 0; position: relative;
+}
+.tts-nav-link:hover, .tts-nav-link.tts-active { color: var(--tts-ink); }
+.tts-nav-link.tts-active::after {
+  content: ''; position: absolute; bottom: -2px; left: 0; right: 0;
+  height: 1px; background: var(--tts-ticket);
+}
+.tts-nav-cta { margin-left: 8px; }
+.tts-nav-toggle {
+  display: none; width: 44px; height: 44px; align-items: center; justify-content: center;
+  color: var(--tts-ink); border-radius: 2px;
+}
+.tts-nav-toggle:hover { background: var(--tts-ticket-soft); }
+.tts-nav-toggle:focus-visible { outline: 2px solid var(--tts-ticket); outline-offset: 2px; }
+.tts-mobile-menu {
+  display: none; flex-direction: column; gap: 0;
+  padding: 8px clamp(16px, 4vw, 48px) 24px;
+  border-top: 1px solid var(--tts-line); background: var(--tts-paper);
+}
+.tts-mobile-menu.tts-mobile-open { display: flex; }
+.tts-mobile-link {
+  font-family: var(--tts-font-sans); font-size: 18px; color: var(--tts-ink);
+  padding: 14px 0; border-bottom: 1px solid var(--tts-line-soft); transition: color 0.2s ease;
+}
+.tts-mobile-link:hover { color: var(--tts-ticket); }
+.tts-mobile-cta { margin-top: 16px; justify-content: center; }
+
+/* Buttons */
+.tts-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px;
+  font-family: var(--tts-font-sans); font-size: 15px; font-weight: 500;
+  border-radius: 2px; transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  white-space: nowrap; min-height: 44px; justify-content: center;
+}
+.tts-btn:focus-visible { outline: 2px solid var(--tts-ticket); outline-offset: 2px; }
+.tts-btn-primary { background: var(--tts-ticket); color: #fff; }
+.tts-btn-primary:hover { background: var(--tts-ticket-dark); transform: translateY(-1px); }
+.tts-btn-primary:active { transform: translateY(0); }
+.tts-btn-outline { background: transparent; color: var(--tts-ink); border: 1px solid var(--tts-ink); }
+.tts-btn-outline:hover { background: var(--tts-ink); color: var(--tts-paper); transform: translateY(-1px); }
+.tts-btn-outline:active { transform: translateY(0); }
+.tts-text-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--tts-font-sans); font-size: 15px; color: var(--tts-ink);
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px;
+  transition: color 0.2s ease, gap 0.2s ease; padding: 12px 0;
+}
+.tts-text-link:hover { color: var(--tts-ticket); gap: 10px; }
+.tts-text-link:focus-visible { outline: 2px solid var(--tts-ticket); outline-offset: 2px; }
+
+/* Hero */
+.tts-hero { padding-top: calc(64px + clamp(40px, 6vw, 80px)); padding-bottom: clamp(48px, 8vw, 96px); position: relative; }
+.tts-hero-grid {
+  display: grid; grid-template-columns: 48px 1fr 1fr;
+  gap: clamp(24px, 3vw, 48px); align-items: start;
+}
+.tts-hero-rail { display: flex; justify-content: center; padding-top: 8px; }
+.tts-hero-vertical {
+  font-family: var(--tts-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.25em; text-transform: uppercase; color: var(--tts-ticket);
+  writing-mode: vertical-rl; text-orientation: mixed; line-height: 48px;
+}
+.tts-hero-copy { padding-top: clamp(16px, 3vw, 32px); }
+.tts-hero-title {
+  font-family: var(--tts-font-serif); font-size: clamp(36px, 5vw, 64px); font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.02em; color: var(--tts-ink);
+  text-wrap: balance; word-break: keep-all; margin-bottom: 24px;
+}
+.tts-hero-lede {
+  font-family: var(--tts-font-sans); font-size: clamp(15px, 1.6vw, 18px); line-height: 1.7;
+  color: var(--tts-ink-muted); max-width: 480px; margin-bottom: 32px;
+}
+.tts-hero-actions { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.tts-hero-shot { display: flex; justify-content: flex-end; }
+.tts-shot-frame {
+  position: relative; background: var(--tts-paper-deep); border: 1px solid var(--tts-line);
+  padding: 16px; max-width: 100%; width: 100%; overflow: visible;
+}
+.tts-shot-plain { padding: 12px; overflow: visible; }
+.tts-shot-marker {
+  position: absolute; top: 12px; right: 16px;
+  font-family: var(--tts-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.15em; color: var(--tts-ticket); text-transform: uppercase;
+  z-index: 2; background: var(--tts-paper-deep); padding: 2px 6px;
+}
+.tts-shot-img { width: 60%; height: auto; display: block; margin: 0 auto; }
+
+.tts-hero-meta {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: clamp(32px, 5vw, 56px); padding-top: 20px; border-top: 1px solid var(--tts-line);
+}
+.tts-meta-item {
+  font-family: var(--tts-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--tts-ink-faint);
+}
+.tts-meta-sep { width: 4px; height: 4px; background: var(--tts-line); border-radius: 50%; }
+.tts-scroll-hint { display: flex; align-items: center; gap: 16px; margin-top: clamp(40px, 6vw, 72px); }
+.tts-scroll-hint-line { display: block; width: clamp(32px, 5vw, 64px); height: 1px; background: var(--tts-line); }
+.tts-scroll-hint-label {
+  font-family: var(--tts-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--tts-ink-faint);
+}
+
+/* Sections */
+.tts-section { padding: clamp(48px, 8vw, 120px) 0; border-top: 1px solid var(--tts-line); }
+.tts-feature-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: clamp(32px, 5vw, 64px); align-items: start;
+}
+.tts-feature-a .tts-feature-text { order: 1; }
+.tts-feature-a .tts-feature-shot { order: 2; }
+.tts-feature-b .tts-feature-shot { order: 1; }
+.tts-feature-b .tts-feature-text { order: 2; }
+.tts-feature-text {
+  display: grid; grid-template-columns: 80px 1fr;
+  gap: clamp(16px, 2vw, 32px); align-items: start;
+}
+.tts-archive-num { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; position: relative; }
+.tts-sticky-archive { position: sticky; top: 96px; }
+.tts-archive-digit {
+  font-family: var(--tts-font-serif); font-size: clamp(48px, 6vw, 80px); font-weight: 500;
+  line-height: 1; color: var(--tts-ticket); letter-spacing: -0.02em;
+}
+.tts-archive-label {
+  font-family: var(--tts-font-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.25em; text-transform: uppercase; color: var(--tts-ink-muted);
+}
+.tts-archive-label::before {
+  content: ''; display: block; width: 24px; height: 1px;
+  background: var(--tts-line); margin-bottom: 8px;
+}
+.tts-feature-copy { padding-top: 12px; }
+.tts-section-heading {
+  font-family: var(--tts-font-serif); font-size: clamp(24px, 3vw, 40px); font-weight: 600;
+  line-height: 1.2; letter-spacing: -0.01em; color: var(--tts-ink);
+  text-wrap: balance; word-break: keep-all; margin-bottom: 20px;
+}
+.tts-section-body {
+  font-family: var(--tts-font-sans); font-size: clamp(15px, 1.4vw, 17px); line-height: 1.75;
+  color: var(--tts-ink-muted); margin-bottom: 24px; max-width: 480px;
+}
+.tts-feature-list { display: flex; flex-direction: column; gap: 10px; }
+.tts-feature-list li {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--tts-font-sans); font-size: 14px; color: var(--tts-ink);
+}
+.tts-feature-list li i { color: var(--tts-ticket); flex-shrink: 0; }
+.tts-feature-shot { display: flex; align-items: flex-start; }
+
+/* Download */
+.tts-download-section { padding: clamp(64px, 10vw, 120px) 0; }
+.tts-download-card {
+  max-width: 560px; margin: 0 auto; text-align: center;
+  display: flex; flex-direction: column; align-items: center;
+}
+.tts-app-icon {
+  width: 64px; height: 64px; border-radius: 12px; margin-bottom: 24px;
+  image-rendering: -webkit-optimize-contrast;
+}
+.tts-download-heading {
+  font-family: var(--tts-font-serif); font-size: clamp(28px, 3.5vw, 44px); font-weight: 600;
+  line-height: 1.2; letter-spacing: -0.01em; color: var(--tts-ink);
+  text-wrap: balance; word-break: keep-all; margin-bottom: 16px;
+}
+.tts-download-heading-flex { display: inline-flex; align-items: center; justify-content: center; gap: 10px; }
+.tts-download-note {
+  font-family: var(--tts-font-sans); font-size: 15px; line-height: 1.7;
+  color: var(--tts-ink-muted); max-width: 440px; margin-bottom: 32px;
+}
+.tts-download-actions {
+  display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin-bottom: 32px;
+}
+.tts-download-meta {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center;
+}
+
+/* Footer */
+.tts-footer { border-top: 1px solid var(--tts-line); padding: clamp(40px, 5vw, 64px) 0 32px; }
+.tts-footer-grid {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 32px; flex-wrap: wrap; margin-bottom: 32px;
+}
+.tts-footer-brand { display: flex; flex-direction: column; gap: 8px; }
+.tts-wordmark-footer { font-size: 18px; }
+.tts-footer-tagline { font-family: var(--tts-font-sans); font-size: 13px; color: var(--tts-ink-muted); }
+.tts-footer-links { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.tts-footer-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--tts-font-sans); font-size: 13px; color: var(--tts-ink-muted);
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px;
+  transition: color 0.2s ease;
+}
+.tts-footer-link:hover { color: var(--tts-ticket); }
+.tts-footer-link:focus-visible { outline: 2px solid var(--tts-ticket); outline-offset: 2px; }
+.tts-footer-text { font-family: var(--tts-font-sans); font-size: 13px; color: var(--tts-ink-faint); }
+.tts-footer-sep { width: 1px; height: 12px; background: var(--tts-line); }
+.tts-footer-bottom {
+  padding-top: 16px;
+  border-top: 1px solid var(--tts-line-soft);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+/* Scroll reveal — only active when JS adds .tts-anim */
+.tts-anim .tts-reveal {
+  opacity: 0; transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition-delay: calc(var(--reveal-delay, 0) * 100ms);
+}
+.tts-anim .tts-reveal.tts-visible { opacity: 1; transform: translateY(0); }
+.tts-anim .tts-section {
+  opacity: 0; transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.tts-anim .tts-section.tts-visible { opacity: 1; transform: translateY(0); }
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .tts-hero-grid { grid-template-columns: 40px 1fr 1fr; gap: 24px; }
+  .tts-feature-grid { grid-template-columns: 1fr; gap: 40px; }
+  .tts-feature-a .tts-feature-text,
+  .tts-feature-b .tts-feature-text,
+  .tts-feature-a .tts-feature-shot,
+  .tts-feature-b .tts-feature-shot { order: unset; }
+  .tts-feature-b .tts-feature-shot { order: 0; }
+  .tts-feature-text { grid-template-columns: 72px 1fr; }
+  .tts-sticky-archive { position: static; }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .tts-nav-links { display: none; }
+  .tts-nav-toggle { display: flex; }
+  .tts-hero-grid { grid-template-columns: 1fr; gap: 32px; }
+  .tts-hero-rail { display: none; }
+  .tts-hero-copy { padding-top: 0; }
+  .tts-hero-actions { flex-direction: column; align-items: stretch; }
+  .tts-hero-actions .tts-btn,
+  .tts-hero-actions .tts-text-link { justify-content: center; }
+  .tts-hero-shot { justify-content: center; }
+  .tts-feature-text { grid-template-columns: 1fr; gap: 0; }
+  .tts-archive-num { flex-direction: row; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .tts-archive-digit { font-size: 36px; }
+  .tts-archive-label::before { display: none; }
+  .tts-archive-label { font-size: 10px; }
+  .tts-feature-copy { padding-top: 0; }
+  .tts-section-body { max-width: 100%; }
+  .tts-download-actions { flex-direction: column; align-items: stretch; width: 100%; max-width: 320px; }
+  .tts-footer-grid { flex-direction: column; gap: 20px; }
+  .tts-footer-links { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .tts-footer-sep { display: none; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .tts-anim .tts-reveal, .tts-anim .tts-section { opacity: 1; transform: none; transition: none; }
+}
+
+a:focus-visible, button:focus-visible { outline: 2px solid var(--tts-ticket); outline-offset: 2px; }
+::selection { background: var(--tts-ticket); color: #fff; }
+
+/* ===== CHIIKAWA CHARACTERS ===== */
+:root {
+  --ck-brown: #3D2B1F;
+  --ck-blue: #1A3A5C;
+  --ck-blush: #FFB8C8;
+  --ck-cream: #FFF8F0;
+  --ck-usagi-yellow: #F5D98B;
+  --ck-hachiware-blue: #C8DCE8;
+  --mx: 0;
+  --my: 0;
+  --cf-rotate: 0;
+}
+
+.ck-char {
+  position: absolute;
+  pointer-events: none;
+  z-index: 1;
+  user-select: none;
+  -webkit-user-drag: none;
+  translate: calc(var(--mx) * 6px) calc(var(--my) * 4px);
+  rotate: calc(var(--mx) * 4deg);
+  transition: translate 0.3s ease, rotate 0.3s ease, right 0.3s ease, bottom 0.3s ease, left 0.3s ease, top 0.3s ease;
+}
+.ck-char.clickable { pointer-events: auto; cursor: pointer; z-index: 2; }
+.ck-char-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(1px 1px 0 white) drop-shadow(-1px -1px 0 white)
+          drop-shadow(1px -1px 0 white) drop-shadow(-1px 1px 0 white);
+  image-rendering: auto;
+  transform-origin: bottom center;
+  animation: ck-idle-squish 4s ease-in-out infinite;
+}
+.ck-sprite {
+  transform-origin: bottom center;
+  animation: ck-idle-squish 4s ease-in-out infinite;
+}
+
+/* Speech bubble */
+.ck-bubble {
+  position: absolute;
+  background: white;
+  border: 2px solid var(--ck-brown);
+  border-radius: 18px 22px 20px 16px / 16px 20px 18px 22px;
+  padding: 6px 12px;
+  font-family: "Caveat", "Ma Shan Zheng", cursive;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  color: var(--ck-brown);
+  font-weight: 500;
+  opacity: 0;
+  transform: scale(0.6) translateY(5px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  z-index: 20;
+}
+.ck-bubble.show { opacity: 1; transform: scale(1) translateY(0); }
+/* Hover显示气泡 - 针对不同位置设置正确的transform */
+.ck-char:hover .ck-bubble { opacity: 1; }
+.ck-char.clickable:focus-visible .ck-bubble { opacity: 1; }
+.ck-char:hover .ck-bubble-hero,
+.ck-char.clickable:focus-visible .ck-bubble-hero { transform: translateX(-50%) scale(1); }
+.ck-char:hover .ck-bubble-tiny,
+.ck-char.clickable:focus-visible .ck-bubble-tiny { transform: translateX(-50%) scale(1); }
+.ck-char:hover .ck-bubble-cta,
+.ck-char.clickable:focus-visible .ck-bubble-cta { transform: translateX(-50%) scale(1); }
+.ck-char:hover .ck-bubble-small,
+.ck-char.clickable:focus-visible .ck-bubble-small { transform: scale(1) translateY(0); }
+.ck-bubble-tail {
+  position: absolute;
+  width: 10px; height: 10px;
+  background: white;
+  border-right: 2px solid var(--ck-brown);
+  border-bottom: 2px solid var(--ck-brown);
+  transform: rotate(45deg);
+}
+.ck-bubble-small { font-size: 12px; padding: 4px 10px; }
+.ck-bubble-tiny { font-size: 11px; padding: 3px 8px; }
+
+/* Sign held by character */
+.ck-sign {
+  position: absolute;
+  background: var(--tts-ticket);
+  color: white;
+  font-family: var(--tts-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 3px 8px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  transform: rotate(-8deg);
+  white-space: nowrap;
+  box-shadow: 1px 1px 0 var(--tts-ticket-dark);
+}
+
+/* ===== Hero: Chiikawa peeking from top-right of hero screenshot ===== */
+.ck-hero-chiikawa {
+  position: absolute;
+  top: -42px;
+  right: -84px;
+  width: 174px;
+  height: auto;
+  animation: ck-pop-in 0.5s ease-out 1.2s both, ck-float 2.5s ease-in-out 2s infinite;
+  z-index: 3;
+}
+.ck-hero-chiikawa .ck-char-img { width: 174px; height: auto; }
+.ck-bubble-hero {
+  top: -50px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.6);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ck-bubble-hero.show { transform: translateX(-50%) scale(1); }
+.ck-bubble-hero .ck-bubble-tail {
+  bottom: -7px; left: 50%; transform: translateX(-50%) rotate(45deg);
+}
+/* Hearts floating from chiikawa */
+.ck-hero-chiikawa::before,
+.ck-hero-chiikawa::after {
+  content: '♥';
+  position: absolute;
+  color: var(--ck-blush);
+  font-size: 42px;
+  animation: ck-heart-float 3s ease-in-out infinite;
+  pointer-events: none;
+}
+.ck-hero-chiikawa::before { top: 0; right: -15px; animation-delay: 0s; }
+.ck-hero-chiikawa::after { top: 30px; right: -45px; font-size: 30px; animation-delay: 1.5s; }
+
+/* ===== Section 02 Discover: Usagi dancing outside bottom-right of screenshot ===== */
+.ck-discover-usagi {
+  width: 174px;
+  bottom: -60px;
+  right: -54px;
+}
+.tts-feature-shot:hover .ck-discover-usagi { right: -24px; bottom: -72px; }
+.ck-sprite {
+  width: 240px;
+  height: 240px;
+  background-repeat: no-repeat;
+  background-size: auto 100%;
+  image-rendering: pixelated;
+  image-rendering: -webkit-optimize-contrast;
+}
+.ck-sprite-dance {
+  background-image: url('../assets/chiikawa/usagi-dance.png');
+  width: 180px;
+  height: 180px;
+  background-size: calc(180px * 194) 180px;
+  animation: ck-dance 6.5s steps(194) infinite;
+  filter: drop-shadow(1px 1px 0 white) drop-shadow(-1px -1px 0 white)
+          drop-shadow(1px -1px 0 white) drop-shadow(-1px 1px 0 white);
+}
+.ck-bubble-small {
+  top: -40px;
+  right: -5px;
+}
+.ck-bubble-small .ck-bubble-tail {
+  bottom: -6px; left: 20%;
+}
+
+/* ===== CTA: Three characters party below download buttons ===== */
+.ck-cta-party {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 64px;
+  padding: 16px 0 0;
+  position: relative;
+  transform: scale(1.5);
+  transform-origin: center bottom;
+}
+
+.ck-cta-hachiware-walk {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  animation: ck-bounce 0.6s ease-in-out infinite alternate;
+}
+.ck-sprite-walk {
+  width: 50px;
+  height: 50px;
+  background-image: url('../assets/chiikawa/hachiware-walk.png');
+  background-repeat: no-repeat;
+  background-size: calc(50px * 14) 50px;
+  animation: ck-walk 0.7s steps(14) infinite;
+  image-rendering: pixelated;
+  image-rendering: -webkit-optimize-contrast;
+  filter: drop-shadow(1px 1px 0 white) drop-shadow(-1px -1px 0 white)
+          drop-shadow(1px -1px 0 white) drop-shadow(-1px 1px 0 white);
+}
+
+.ck-cta-chiikawa {
+  position: relative;
+  width: 70px;
+  animation: ck-pop-in 0.5s ease-out both, ck-float 2.5s ease-in-out 0.8s infinite;
+}
+.ck-cta-chiikawa .ck-char-img { width: 70px; height: auto; }
+.ck-bubble-cta {
+  top: -55px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.6);
+  font-size: 13px;
+  text-align: center;
+  white-space: nowrap;
+}
+.ck-bubble-cta.show { transform: translateX(-50%) scale(1); }
+.ck-bubble-cta .ck-bubble-tail {
+  bottom: -7px; left: 50%; transform: translateX(-50%) rotate(45deg);
+}
+
+.ck-cta-usagi {
+  position: relative;
+  width: 65px;
+  height: 65px;
+  animation: ck-pop-in 0.5s ease-out 0.4s both;
+}
+.ck-sprite-swirl {
+  width: 65px;
+  height: 65px;
+  background-image: url('../assets/chiikawa/usagi-swirl.png');
+  background-repeat: no-repeat;
+  background-size: calc(65px * 48) 65px;
+  animation: ck-swirl 3.2s steps(48) infinite;
+  filter: drop-shadow(1px 1px 0 white) drop-shadow(-1px -1px 0 white)
+          drop-shadow(1px -1px 0 white) drop-shadow(-1px 1px 0 white);
+}
+.ck-bubble-usagi {
+  top: -35px;
+  right: -5px;
+}
+
+
+/* Hearts floating around CTA chiikawa */
+.ck-hearts {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none;
+}
+.ck-hearts span {
+  position: absolute;
+  color: var(--ck-blush);
+  font-size: 12px;
+  animation: ck-heart-float 2.5s ease-in-out infinite;
+}
+.ck-hearts span:nth-child(1) { top: -5px; left: 10px; animation-delay: 0s; font-size: 10px; }
+.ck-hearts span:nth-child(2) { top: 5px; right: 5px; animation-delay: 0.8s; font-size: 14px; }
+.ck-hearts span:nth-child(3) { bottom: 10px; left: 0; animation-delay: 1.6s; font-size: 8px; }
+
+/* Click particles */
+.ck-particle {
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  font-size: 14px;
+  color: var(--ck-blush);
+  animation: ck-particle-float 0.9s ease-out forwards;
+}
+@keyframes ck-particle-float {
+  0% { transform: translateY(0) scale(0.6); opacity: 1; }
+  100% { transform: translateY(-45px) scale(1.2); opacity: 0; }
+}
+
+/* ===== Download section characters ===== */
+.ck-download-chiikawa {
+  position: absolute;
+  left: -120px;
+  top: -58px;
+  width: 160px;
+  rotate: -30deg;
+  z-index: 1;
+}
+.ck-download-chiikawa .ck-char-img { width: 160px; height: auto; }
+.ck-download-usagi {
+  position: absolute;
+  right: -120px;
+  top: -58px;
+  width: 160px;
+  rotate: 30deg;
+  z-index: 1;
+}
+.ck-download-usagi .ck-char-img { width: 160px; height: auto; }
+
+/* ===== New decorative characters ===== */
+.ck-hero-chiikawa-love {
+  position: absolute;
+  top: -70px;
+  right: -160px;
+  width: 100px;
+  z-index: 1;
+}
+.ck-hero-chiikawa-love .ck-char-img { width: 100px; height: auto; }
+
+.ck-search-detective {
+  position: absolute;
+  top: -60px;
+  right: -80px;
+  width: 110px;
+  z-index: 1;
+}
+.ck-search-detective .ck-char-img { width: 110px; height: auto; }
+
+.ck-discover-usagi-curious {
+  position: absolute;
+  top: -60px;
+  left: -60px;
+  width: 110px;
+  z-index: 1;
+}
+.ck-discover-usagi-curious .ck-char-img { width: 110px; height: auto; }
+
+.ck-library-chiikawa-star {
+  position: absolute;
+  top: -60px;
+  right: -80px;
+  width: 110px;
+  z-index: 1;
+}
+.ck-library-chiikawa-star .ck-char-img { width: 110px; height: auto; }
+
+.ck-detail-usagi-thumbsup {
+  position: absolute;
+  top: -60px;
+  left: -60px;
+  width: 110px;
+  z-index: 1;
+}
+.ck-detail-usagi-thumbsup .ck-char-img { width: 110px; height: auto; }
+
+/* ===== Cursor follower: Mini Usagi head ===== */
+.ck-cursor-follower {
+  position: fixed;
+  width: 24px;
+  height: 24px;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  will-change: transform;
+}
+.ck-cursor-follower img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+.ck-cursor-follower.active { opacity: 0.8; }
+@media (pointer: coarse) {
+  .ck-cursor-follower { display: none !important; }
+}
+
+/* ===== Footer credit ===== */
+.ck-footer-credit {
+  font-family: var(--tts-font-mono);
+  font-size: 9px;
+  color: var(--tts-ink-faint);
+  letter-spacing: 0.05em;
+  margin-left: 16px;
+}
+
+/* ===== Footer theater: Three characters watching screen ===== */
+.ck-footer-theater {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 12px;
+  position: relative;
+}
+.ck-footer-theater-img {
+  width: 270px;
+  height: auto;
+  opacity: 0.85;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.1));
+  animation: ck-float 4s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+.ck-theater-glow {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%) scale(1);
+  width: 180px;
+  height: 45px;
+  background: radial-gradient(ellipse at center, rgba(217,85,50,0.15) 0%, rgba(217,85,50,0.05) 40%, transparent 70%);
+  filter: blur(8px);
+  z-index: 0;
+  opacity: 0.7;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+.ck-footer-theater:hover .ck-theater-glow {
+  opacity: 1;
+  transform: translateX(-50%) scale(1.25);
+}
+
+/* ===== Peeking eyes on dividers ===== */
+.ck-peek {
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.ck-peek.show { opacity: 1; }
+.ck-peek-eyes {
+  display: flex;
+  gap: 6px;
+}
+.ck-peek-eye {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ck-brown);
+  position: relative;
+  transform-origin: center;
+  animation: ck-blink 4s ease-in-out infinite;
+}
+.ck-peek-eye:nth-child(2) { animation-delay: 0.25s; }
+.ck-peek-eye::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 4px;
+  background: var(--ck-brown);
+}
+
+/* ===== Enhanced interactions ===== */
+.tts-shot-frame {
+  transition: transform 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.45s ease;
+  transform-style: preserve-3d;
+}
+.tts-shot-frame:hover {
+  box-shadow: 0 18px 48px rgba(0,0,0,0.08);
+}
+
+.tts-feature-list li {
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+.tts-feature-list li:hover {
+  transform: translateX(8px);
+  color: var(--tts-ticket);
+}
+
+.tts-btn {
+  position: relative;
+  overflow: hidden;
+}
+.tts-btn::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  background: rgba(255,255,255,0.35);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: width 0.5s ease, height 0.5s ease, opacity 0.5s ease;
+  opacity: 0;
+  pointer-events: none;
+}
+.tts-btn-outline::after { background: rgba(217, 85, 50, 0.22); }
+.tts-btn:active::after {
+  width: 220%; height: 220%;
+  opacity: 1;
+  transition: 0s;
+}
+
+.tts-archive-digit {
+  position: relative;
+  z-index: 2;
+}
+
+.ck-confetti {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ===== Animations ===== */
+@keyframes ck-pop-in {
+  from { transform: scale(0) translateY(20px); opacity: 0; }
+  to { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes ck-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes ck-bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-6px); }
+}
+@keyframes ck-wiggle {
+  0%, 100% { transform: rotate(-8deg); }
+  50% { transform: rotate(-2deg); }
+}
+@keyframes ck-slide-right {
+  from { transform: translateX(30px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes ck-walk {
+  from { background-position: 0 0; }
+  to { background-position: calc(-50px * 14) 0; }
+}
+@keyframes ck-dance {
+  from { background-position: 0 50%; }
+  to { background-position: calc(-180px * 194) 50%; }
+}
+@keyframes ck-swirl {
+  from { background-position: 0 50%; }
+  to { background-position: calc(-65px * 48) 50%; }
+}
+@keyframes ck-heart-float {
+  0% { transform: translateY(0) scale(1); opacity: 0.8; }
+  50% { transform: translateY(-15px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-30px) scale(0.8); opacity: 0; }
+}
+@keyframes ck-idle-squish {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.04, 0.96); }
+}
+@keyframes ck-blink {
+  0%, 96%, 100% { transform: scaleY(1); }
+  98% { transform: scaleY(0.1); }
+}
+
+/* Scroll reveal for characters */
+.ck-char { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.ck-char.ck-visible { opacity: 1; transform: translateY(0); }
+/* Hero char is visible immediately */
+.ck-hero-chiikawa { opacity: 1; transform: none; }
+
+/* ===== Responsive: Tablet ===== */
+@media (max-width: 1024px) {
+  .ck-cta-party { gap: 12px; }
+}
+
+/* ===== Responsive: Mobile ===== */
+@media (max-width: 768px) {
+  .ck-hero-chiikawa { width: 132px; top: -24px; right: -30px; }
+  .ck-hero-chiikawa .ck-char-img { width: 132px; }
+  .ck-bubble-hero { font-size: 11px; padding: 4px 8px; top: -42px; }
+
+  .ck-discover-usagi { width: 138px; bottom: -36px; right: -24px; }
+  .tts-feature-shot:hover .ck-discover-usagi { right: -12px; bottom: -42px; }
+  .ck-sprite-dance { width: 144px; height: 144px; background-size: calc(144px * 194) 144px; }
+  @keyframes ck-dance { to { background-position: calc(-144px * 194) 50%; } }
+
+  .ck-cta-party { gap: 10px; margin-top: 48px; padding-top: 12px; }
+  .ck-cta-hachiware-walk { width: 40px; height: 40px; }
+  .ck-sprite-walk { width: 40px; height: 40px; background-size: calc(40px * 14) 40px; }
+  @keyframes ck-walk { to { background-position: calc(-40px * 14) 0; } }
+  .ck-cta-chiikawa { width: 56px; }
+  .ck-cta-chiikawa .ck-char-img { width: 56px; }
+  .ck-cta-usagi { width: 52px; height: 52px; }
+  .ck-sprite-swirl { width: 52px; height: 52px; background-size: calc(52px * 48) 52px; }
+  @keyframes ck-swirl { to { background-position: calc(-52px * 48) 50%; } }
+
+  .ck-footer-theater-img { width: 210px; }
+  .ck-theater-glow { width: 135px; height: 36px; }
+
+  .ck-hero-chiikawa-love { width: 60px; top: -40px; right: -10px; }
+  .ck-hero-chiikawa-love .ck-char-img { width: 60px; }
+  .ck-search-detective, .ck-library-chiikawa-star { width: 60px; top: -30px; right: -10px; left: auto; }
+  .ck-discover-usagi-curious, .ck-detail-usagi-thumbsup { width: 60px; top: -30px; left: -10px; right: auto; }
+  .ck-search-detective .ck-char-img, .ck-discover-usagi-curious .ck-char-img, .ck-library-chiikawa-star .ck-char-img, .ck-detail-usagi-thumbsup .ck-char-img { width: 60px; }
+  .ck-download-chiikawa, .ck-download-usagi { width: 80px; top: -36px; }
+  .ck-download-chiikawa { left: -40px; }
+  .ck-download-usagi { right: -40px; }
+  .ck-download-chiikawa .ck-char-img, .ck-download-usagi .ck-char-img { width: 80px; }
+
+  .ck-bubble { display: none; } /* 移动端隐藏气泡节省空间 */
+  .ck-cta-chiikawa .ck-bubble-cta { display: block; }
+
+  .ck-cursor-follower { display: none !important; }
+  .ck-peek { display: none !important; }
+  .ck-footer-credit { display: block; margin-left: 0; margin-top: 4px; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .ck-char, .ck-sprite, .ck-hero-chiikawa,
+  .ck-cta-chiikawa, .ck-cta-usagi,
+  .ck-cta-hachiware-walk, .ck-footer-theater-img, .ck-hearts span {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    transition: none !important;
+  }
+  .ck-char { opacity: 1 !important; transform: none !important; }
+  .ck-bubble { opacity: 1; transform: scale(1); }
+  .ck-cursor-follower { display: none !important; }
+  .ck-sprite-dance { background-position: 0 50% !important; }
+  .ck-sprite-swirl { background-position: 0 50% !important; }
+  .ck-sprite-walk { background-position: 0 0 !important; }
+}
+</style>
+
+<!-- Chiikawa 彩蛋：光标迷你乌萨奇 -->
+<div class="ck-cursor-follower" id="ck-cursor-follower" data-dom-id="ck-cursor-follower" aria-hidden="true">
+  <img src="../assets/chiikawa/usagi-cursor.png" alt="">
+</div>
+
+<!-- Chiikawa 彩蛋：分割线探头（由JS动态添加） -->
+
+    </main>
+
+<script>
+(function() {
+  'use strict';
+  document.documentElement.classList.add('tts-anim');
+
+  var navToggle = document.querySelector('[data-dom-id="nav-toggle"]');
+  var mobileMenu = document.getElementById('mobile-menu');
+  if (navToggle && mobileMenu) {
+    navToggle.addEventListener('click', function() {
+      var isOpen = mobileMenu.classList.toggle('tts-mobile-open');
+      navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      navToggle.setAttribute('aria-label', isOpen ? '关闭菜单' : '打开菜单');
+      mobileMenu.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      var icon = navToggle.querySelector('[data-lucide]');
+      if (icon) {
+        icon.setAttribute('data-lucide', isOpen ? 'x' : 'menu');
+        if (window.lucide) lucide.createIcons();
+      }
+    });
+    mobileMenu.querySelectorAll('a').forEach(function(link) {
+      link.addEventListener('click', function() {
+        mobileMenu.classList.remove('tts-mobile-open');
+        navToggle.setAttribute('aria-expanded', 'false');
+        navToggle.setAttribute('aria-label', '打开菜单');
+        mobileMenu.setAttribute('aria-hidden', 'true');
+        var icon = navToggle.querySelector('[data-lucide]');
+        if (icon) {
+          icon.setAttribute('data-lucide', 'menu');
+          if (window.lucide) lucide.createIcons();
+        }
+      });
+    });
+  }
+
+  var nav = document.getElementById('site-nav');
+  function updateNavScroll() {
+    if (window.scrollY > 20) { nav.classList.add('tts-nav-scrolled'); }
+    else { nav.classList.remove('tts-nav-scrolled'); }
+  }
+  window.addEventListener('scroll', updateNavScroll, { passive: true });
+  updateNavScroll();
+
+  document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+    anchor.addEventListener('click', function(e) {
+      var targetId = this.getAttribute('href');
+      if (targetId === '#') return;
+      var target = document.querySelector(targetId);
+      if (target) {
+        e.preventDefault();
+        var navHeight = nav ? nav.offsetHeight : 0;
+        var targetPos = target.getBoundingClientRect().top + window.pageYOffset - navHeight + 1;
+        window.scrollTo({ top: targetPos, behavior: 'smooth' });
+      }
+    });
+  });
+
+  var navLinks = document.querySelectorAll('[data-nav-link]');
+  var sections = [];
+  navLinks.forEach(function(link) {
+    var id = link.getAttribute('data-nav-link');
+    var sec = document.getElementById(id);
+    if (sec) sections.push({ link: link, section: sec });
+  });
+  function updateScrollSpy() {
+    var scrollPos = window.scrollY + (nav ? nav.offsetHeight : 0) + 100;
+    var current = null;
+    sections.forEach(function(item) {
+      if (item.section.offsetTop <= scrollPos) current = item;
+    });
+    navLinks.forEach(function(l) { l.classList.remove('tts-active'); });
+    if (current) current.link.classList.add('tts-active');
+  }
+  window.addEventListener('scroll', updateScrollSpy, { passive: true });
+  updateScrollSpy();
+
+  var revealSelectors = '.tts-reveal, .tts-section';
+  if ('IntersectionObserver' in window) {
+    var revealObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('tts-visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll(revealSelectors).forEach(function(el) { revealObserver.observe(el); });
+  } else {
+    document.querySelectorAll(revealSelectors).forEach(function(el) { el.classList.add('tts-visible'); });
+  }
+
+  setTimeout(function() {
+    document.querySelectorAll('.tts-hero .tts-reveal').forEach(function(el) { el.classList.add('tts-visible'); });
+  }, 100);
+
+  // ===== Chiikawa Characters Interactions =====
+  (function() {
+    'use strict';
+    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // --- Scroll reveal for characters (same pattern as existing reveal) ---
+    var ckChars = document.querySelectorAll('.ck-char:not(.ck-hero-chiikawa)');
+    if ('IntersectionObserver' in window && !reduceMotion) {
+      var ckObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('ck-visible');
+          ckObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3, rootMargin: '0px 0px -20px 0px' });
+    ckChars.forEach(function(el) { ckObserver.observe(el); });
+    } else {
+      ckChars.forEach(function(el) {
+        el.classList.add('ck-visible');
+      });
+    }
+
+    // Hero bubble show after delay
+    var heroBubble = document.querySelector('.ck-bubble-hero');
+    if (heroBubble && !reduceMotion) {
+      setTimeout(function() { heroBubble.classList.add('show'); }, 2000);
+      setTimeout(function() { heroBubble.classList.remove('show'); }, 5000);
+    } else if (heroBubble) {
+      heroBubble.classList.add('show');
+    }
+
+    // --- Download button hover: Chiikawa reacts ---
+    var heroDownloadBtn = document.getElementById('hero-download-btn');
+    var heroChiikawa = document.getElementById('ck-hero-chiikawa');
+    if (heroDownloadBtn && heroChiikawa) {
+      heroDownloadBtn.addEventListener('mouseenter', function() {
+        heroChiikawa.style.transform = 'scale(1.15) rotate(-5deg)';
+        heroChiikawa.style.transition = 'transform 0.2s ease';
+        heroBubble.classList.add('show');
+      });
+      heroDownloadBtn.addEventListener('mouseleave', function() {
+        heroChiikawa.style.transform = '';
+        heroChiikawa.style.transition = 'transform 0.3s ease';
+        setTimeout(function() { heroBubble.classList.remove('show'); }, 1000);
+      });
+    }
+
+    var ctaDownloadBtn = document.getElementById('download-github-btn');
+    var ctaChiikawa = document.getElementById('ck-cta-chiikawa');
+    var ctaBubble = ctaChiikawa ? ctaChiikawa.querySelector('.ck-bubble-cta') : null;
+    if (ctaDownloadBtn && ctaChiikawa) {
+      ctaDownloadBtn.addEventListener('mouseenter', function() {
+        ctaChiikawa.style.transform = 'scale(1.15) rotate(-5deg)';
+        ctaChiikawa.style.transition = 'transform 0.2s ease';
+        if (ctaBubble) ctaBubble.classList.add('show');
+      });
+      ctaDownloadBtn.addEventListener('mouseleave', function() {
+        ctaChiikawa.style.transform = '';
+        ctaChiikawa.style.transition = 'transform 0.3s ease';
+        if (ctaBubble) setTimeout(function() { ctaBubble.classList.remove('show'); }, 1000);
+      });
+    }
+
+    // --- Click reactions on clickable characters only ---
+    document.querySelectorAll('.ck-char.clickable').forEach(function(char) {
+      char.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Jump animation
+        char.style.transition = 'transform 0.15s ease';
+        char.style.transform = 'scale(1.3) translateY(-10px)';
+        setTimeout(function() {
+          char.style.transform = '';
+          setTimeout(function() { char.style.transition = ''; }, 300);
+        }, 150);
+        // Show bubble
+        var bubble = char.querySelector('.ck-bubble');
+        if (bubble) {
+          bubble.classList.add('show');
+          setTimeout(function() { bubble.classList.remove('show'); }, 2500);
+        }
+      });
+    });
+
+    // --- E1: Cursor follower (mini Usagi head) ---
+    var cursorFollower = document.getElementById('ck-cursor-follower');
+    if (cursorFollower && !reduceMotion && window.matchMedia('(pointer: fine)').matches) {
+      var mouseX = -100, mouseY = -100;
+      var followerX = -100, followerY = -100;
+      var followerActive = false;
+
+      document.addEventListener('mousemove', function(e) {
+        mouseX = e.clientX;
+        mouseY = e.clientY;
+        if (!followerActive) {
+          followerActive = true;
+          cursorFollower.classList.add('active');
+          followerX = mouseX;
+          followerY = mouseY;
+        }
+      });
+
+      // Hide when over buttons/links (avoid visual clutter)
+      document.addEventListener('mouseover', function(e) {
+        if (e.target.closest('a, button, input, .tts-btn')) {
+          cursorFollower.style.opacity = '0.3';
+        } else {
+          cursorFollower.style.opacity = '';
+        }
+      });
+
+      function animateCursor() {
+        var dx = mouseX - followerX;
+        var dy = mouseY - followerY;
+        followerX += dx * 0.08;
+        followerY += dy * 0.08;
+        var angle = Math.atan2(dy, dx) * 180 / Math.PI + 90;
+        cursorFollower.style.transform = 'translate(' + (followerX + 15) + 'px, ' + (followerY + 15) + 'px) rotate(' + angle.toFixed(1) + 'deg)';
+        requestAnimationFrame(animateCursor);
+      }
+      animateCursor();
+
+      // Hide when mouse leaves window
+      document.addEventListener('mouseleave', function() {
+        cursorFollower.classList.remove('active');
+        followerActive = false;
+      });
+      document.addEventListener('mouseenter', function() {
+        if (mouseX > 0) {
+          cursorFollower.classList.add('active');
+          followerActive = true;
+        }
+      });
+    }
+
+    // --- E2: Peeking eyes on section dividers ---
+    if (!reduceMotion && window.innerWidth > 768) {
+      var sections = document.querySelectorAll('.tts-section');
+      var peekPositions = [
+        { section: 0, position: '80%' },  // After section 01
+        { section: 2, position: '15%' },  // In section 03 area
+      ];
+
+      peekPositions.forEach(function(pos) {
+        var sec = sections[pos.section];
+        if (!sec) return;
+        var peek = document.createElement('div');
+        peek.className = 'ck-peek';
+        peek.style.left = pos.position;
+        peek.style.top = '-6px';
+        peek.innerHTML = '<div class="ck-peek-eyes"><span class="ck-peek-eye"></span><span class="ck-peek-eye"></span></div>';
+        sec.style.position = 'relative';
+        sec.appendChild(peek);
+
+        if ('IntersectionObserver' in window) {
+          var peekObs = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+              if (entry.isIntersecting) {
+                var rect = sec.getBoundingClientRect();
+                if (rect.top < window.innerHeight * 0.7 && rect.bottom > window.innerHeight * 0.3) {
+                  peek.classList.add('show');
+                }
+              }
+            });
+          }, { threshold: 0.2 });
+          peekObs.observe(sec);
+        } else {
+          peek.classList.add('show');
+        }
+      });
+    }
+
+    // --- E3: Mouse parallax for all characters ---
+    document.addEventListener('mousemove', function(e) {
+      var mx = (e.clientX / window.innerWidth) * 2 - 1;
+      var my = (e.clientY / window.innerHeight) * 2 - 1;
+      document.documentElement.style.setProperty('--mx', mx.toFixed(3));
+      document.documentElement.style.setProperty('--my', my.toFixed(3));
+    }, { passive: true });
+
+    // --- E4: Click particle burst on clickable characters ---
+    document.querySelectorAll('.ck-char.clickable').forEach(function(char) {
+      char.addEventListener('click', function(e) {
+        var rect = char.getBoundingClientRect();
+        var centerX = rect.width / 2;
+        var centerY = rect.height / 2;
+        var particles = ['♥', '✦', '★', '✿', '♪'];
+        var colors = ['#FFB8C8', '#F5D98B', '#C8DCE8'];
+        for (var i = 0; i < 5; i++) {
+          var p = document.createElement('span');
+          p.className = 'ck-particle';
+          p.textContent = particles[Math.floor(Math.random() * particles.length)];
+          p.style.left = (centerX + (Math.random() - 0.5) * 30) + 'px';
+          p.style.top = (centerY - 10 + (Math.random() - 0.5) * 20) + 'px';
+          p.style.animationDelay = (Math.random() * 0.2) + 's';
+          p.style.color = colors[Math.floor(Math.random() * colors.length)];
+          char.appendChild(p);
+          setTimeout(function(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }, 950, p);
+        }
+      });
+    });
+
+    // --- E5: Download button celebration for the whole CTA party ---
+    var ctaDownloadBtn2 = document.getElementById('download-github-btn');
+    var ctaPartyChars = document.querySelectorAll('.ck-cta-party .ck-char');
+    if (ctaDownloadBtn2 && ctaPartyChars.length) {
+      ctaDownloadBtn2.addEventListener('mouseenter', function() {
+        ctaPartyChars.forEach(function(c) {
+          c.style.transform = 'scale(1.12) translateY(-4px)';
+          c.style.transition = 'transform 0.2s ease';
+        });
+      });
+      ctaDownloadBtn2.addEventListener('mouseleave', function() {
+        ctaPartyChars.forEach(function(c) {
+          c.style.transform = '';
+          c.style.transition = 'transform 0.3s ease';
+        });
+      });
+    }
+
+    // --- E6: Random dialogue pools + refresh on click ---
+    var dialogueMap = {
+      'ck-hero-chiikawa': ['下载试试？', '点我一下！', '好期待呀～', '在这里哦！'],
+      'ck-discover-usagi': ['呜哈！', '这部好看！', '发现宝藏！', '快来看！'],
+      'ck-cta-chiikawa': ['一起看电影吧！', '快点下载！', '等你哦～', '开始吧！'],
+      'ck-cta-usagi': ['呀哈！', '乌拉！', '冲呀！', '好耶！']
+    };
+    function setDialogue(charId, pool) {
+      var char = document.getElementById(charId);
+      if (!char || !pool) return;
+      var bubble = char.querySelector('.ck-bubble, .ck-sign');
+      if (!bubble) return;
+      var text = pool[Math.floor(Math.random() * pool.length)];
+      if (bubble.classList.contains('ck-sign')) {
+        bubble.textContent = text;
+      } else {
+        bubble.innerHTML = text + '<span class="ck-bubble-tail"></span>';
+      }
+    }
+    Object.keys(dialogueMap).forEach(function(id) {
+      setDialogue(id, dialogueMap[id]);
+      var char = document.getElementById(id);
+      if (char) {
+        char.addEventListener('click', function() {
+          setDialogue(id, dialogueMap[id]);
+        });
+      }
+    });
+
+    // --- E7: 3D tilt on screenshot frames ---
+    document.querySelectorAll('.tts-shot-frame').forEach(function(frame) {
+      frame.addEventListener('mousemove', function(e) {
+        if (reduceMotion) return;
+        var rect = frame.getBoundingClientRect();
+        var x = (e.clientX - rect.left) / rect.width - 0.5;
+        var y = (e.clientY - rect.top) / rect.height - 0.5;
+        frame.style.transform = 'perspective(800px) rotateX(' + (-y * 6) + 'deg) rotateY(' + (x * 6) + 'deg) translateY(-4px)';
+      });
+      frame.addEventListener('mouseleave', function() {
+        frame.style.transform = '';
+      });
+    });
+
+    // --- E8: Feature list items trigger nearby character reaction ---
+    document.querySelectorAll('.tts-feature-list li').forEach(function(item) {
+      var section = item.closest('.tts-section');
+      if (!section) return;
+      var char = section.querySelector('.ck-char');
+      if (!char) return;
+      item.addEventListener('mouseenter', function() {
+        if (reduceMotion) return;
+        char.style.transform = 'scale(1.14) translateY(-5px)';
+        char.style.transition = 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)';
+      });
+      item.addEventListener('mouseleave', function() {
+        char.style.transform = '';
+      });
+    });
+
+    // --- E9: Confetti burst on download button click ---
+    function spawnConfetti(x, y, colors) {
+      colors = colors || ['#FFB8C8', '#F5D98B', '#C8DCE8', '#D95532', '#FFFFFF'];
+      for (var i = 0; i < 26; i++) {
+        var c = document.createElement('span');
+        c.className = 'ck-confetti';
+        c.style.left = x + 'px';
+        c.style.top = y + 'px';
+        c.style.width = (4 + Math.random() * 5) + 'px';
+        c.style.height = (4 + Math.random() * 5) + 'px';
+        c.style.background = colors[Math.floor(Math.random() * colors.length)];
+        c.style.borderRadius = Math.random() > 0.45 ? '50%' : '2px';
+        var angle = Math.random() * Math.PI * 2;
+        var velocity = 70 + Math.random() * 110;
+        var tx = Math.cos(angle) * velocity;
+        var ty = Math.sin(angle) * velocity - 50;
+        c.style.transition = 'transform 0.95s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.95s ease';
+        document.body.appendChild(c);
+        requestAnimationFrame(function() {
+          c.style.transform = 'translate(' + tx + 'px, ' + ty + 'px) rotate(' + (Math.random() * 720 - 360) + 'deg)';
+          c.style.opacity = '0';
+        });
+        setTimeout(function(el) { if (el && el.parentNode) el.parentNode.removeChild(el); }, 960, c);
+      }
+    }
+    document.querySelectorAll('#hero-download-btn, #download-github-btn, [data-dom-id="download-gitee"]').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var rect = btn.getBoundingClientRect();
+        spawnConfetti(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      });
+    });
+
+    // --- E10: Staggered CTA party entrance when scrolled into view ---
+    var ctaParty = document.querySelector('.ck-cta-party');
+    if (ctaParty && !reduceMotion) {
+      var ctaMembers = ctaParty.querySelectorAll('.ck-char');
+      var partyObserver = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            ctaMembers.forEach(function(m, i) {
+              m.style.animation = 'none';
+              void m.offsetWidth;
+              m.style.animation = 'ck-pop-in 0.5s ease-out ' + (i * 0.12) + 's both, ck-float 2.5s ease-in-out ' + (1 + i * 0.25) + 's infinite';
+            });
+            partyObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.4 });
+      partyObserver.observe(ctaParty);
+    }
+
+    // --- E11: Footer theater cursor glow ---
+    var footerTheater = document.querySelector('.ck-footer-theater');
+    var theaterGlow = document.querySelector('.ck-theater-glow');
+    if (footerTheater && theaterGlow && !reduceMotion && window.matchMedia('(pointer: fine)').matches) {
+      footerTheater.addEventListener('mousemove', function(e) {
+        var rect = footerTheater.getBoundingClientRect();
+        var x = (e.clientX - rect.left) / rect.width;
+        theaterGlow.style.transform = 'translateX(calc(-50% + ' + ((x - 0.5) * 50) + 'px)) scale(1.35)';
+        theaterGlow.style.opacity = '1';
+      });
+      footerTheater.addEventListener('mouseleave', function() {
+        theaterGlow.style.transform = '';
+        theaterGlow.style.opacity = '';
+      });
+    }
+
+    // --- E12: Keyboard shortcut 'C' triggers character celebration ---
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'c' || e.key === 'C') {
+        var visibleChars = document.querySelectorAll('.ck-char.ck-visible, .ck-hero-chiikawa');
+        visibleChars.forEach(function(char, i) {
+          setTimeout(function() {
+            char.style.transform = 'scale(1.25) translateY(-12px) rotate(' + (Math.random() * 12 - 6) + 'deg)';
+            char.style.transition = 'transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1)';
+            var bubble = char.querySelector('.ck-bubble, .ck-sign');
+            if (bubble) {
+              bubble.classList.add('show');
+              setTimeout(function() { bubble.classList.remove('show'); }, 1200);
+            }
+            setTimeout(function() {
+              char.style.transform = '';
+            }, 260);
+          }, i * 70);
+        });
+      }
+    });
+
+    // --- E13: Button ripple effect ---
+    document.querySelectorAll('.tts-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var rect = btn.getBoundingClientRect();
+        var ripple = document.createElement('span');
+        ripple.style.position = 'absolute';
+        ripple.style.left = (e.clientX - rect.left) + 'px';
+        ripple.style.top = (e.clientY - rect.top) + 'px';
+        ripple.style.width = '0';
+        ripple.style.height = '0';
+        ripple.style.background = 'rgba(255, 255, 255, 0.35)';
+        ripple.style.borderRadius = '50%';
+        ripple.style.transform = 'translate(-50%, -50%)';
+        ripple.style.pointerEvents = 'none';
+        ripple.style.transition = 'width 0.55s ease, height 0.55s ease, opacity 0.55s ease';
+        btn.appendChild(ripple);
+        requestAnimationFrame(function() {
+          var size = Math.max(rect.width, rect.height) * 2.2;
+          ripple.style.width = size + 'px';
+          ripple.style.height = size + 'px';
+          ripple.style.opacity = '0';
+        });
+        setTimeout(function() { if (ripple.parentNode) ripple.parentNode.removeChild(ripple); }, 560);
+      });
+    });
+  })();
+})();
+</script>
+    <script>lucide.createIcons();</script>
+</body>
+</html>

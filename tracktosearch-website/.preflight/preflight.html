@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Preflight</title>
+    <style id="theme-vars">
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+/* ===== TrackToSearch Official Website — Editorial Swiss Revival ===== */
+/* Color tokens per design spec §7.1 */
+:root {
+  /* Brand palette */
+  --tts-paper: #F6F2E9;
+  --tts-paper-deep: #E9E2D4;
+  --tts-ink: #1D1C19;
+  --tts-ink-muted: #6D685F;
+  --tts-ink-faint: #9B9588;
+  --tts-line: #C9C0B2;
+  --tts-line-soft: #D9D2C6;
+  --tts-ticket: #D95532;
+  --tts-ticket-dark: #A83E27;
+  --tts-ticket-soft: rgba(217, 85, 50, 0.08);
+
+  /* Semantic aliases for head contract */
+  --tts-background: var(--tts-paper);
+  --tts-foreground: var(--tts-ink);
+  --tts-card: var(--tts-paper-deep);
+  --tts-card-foreground: var(--tts-ink);
+  --tts-popover: var(--tts-paper);
+  --tts-popover-foreground: var(--tts-ink);
+  --tts-primary: var(--tts-ticket);
+  --tts-primary-foreground: #FFFFFF;
+  --tts-secondary: var(--tts-paper-deep);
+  --tts-secondary-foreground: var(--tts-ink);
+  --tts-muted: var(--tts-paper-deep);
+  --tts-muted-foreground: var(--tts-ink-muted);
+  --tts-accent: var(--tts-paper-deep);
+  --tts-accent-foreground: var(--tts-ink);
+  --tts-border: var(--tts-line);
+  --tts-input: var(--tts-line);
+  --tts-ring: var(--tts-ticket);
+  --tts-destructive: #B5432A;
+  --tts-destructive-foreground: #FFFFFF;
+
+  /* Radius scale */
+  --tts-radius-sm: 2px;
+  --tts-radius-md: 4px;
+  --tts-radius-lg: 8px;
+  --tts-radius-xl: 0px;
+
+  /* Typography */
+  --tts-font-serif: "Fraunces", "Noto Serif SC", "Source Han Serif SC", "Songti SC", Georgia, serif;
+  --tts-font-sans: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+  --tts-font-mono: "JetBrains Mono", "SF Mono", "Cascadia Code", "Consolas", Menlo, monospace;
+}
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.1/dist/index.global.js"></script>
+    <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+    <style type="text/tailwindcss">
+  @theme inline {
+    --color-background: var(--tts-background);
+    --color-foreground: var(--tts-foreground);
+    --color-card: var(--tts-card);
+    --color-card-foreground: var(--tts-card-foreground);
+    --color-popover: var(--tts-popover);
+    --color-popover-foreground: var(--tts-popover-foreground);
+    --color-primary: var(--tts-primary);
+    --color-primary-foreground: var(--tts-primary-foreground);
+    --color-secondary: var(--tts-secondary);
+    --color-secondary-foreground: var(--tts-secondary-foreground);
+    --color-muted: var(--tts-muted);
+    --color-muted-foreground: var(--tts-muted-foreground);
+    --color-accent: var(--tts-accent);
+    --color-accent-foreground: var(--tts-accent-foreground);
+    --color-destructive: var(--tts-destructive);
+    --color-destructive-foreground: var(--tts-destructive-foreground);
+    --color-border: var(--tts-border);
+    --color-input: var(--tts-input);
+    --color-ring: var(--tts-ring);
+    --radius-sm: var(--tts-radius-sm);
+    --radius-md: var(--tts-radius-md);
+    --radius-lg: var(--tts-radius-lg);
+    --radius-xl: var(--tts-radius-xl);
+  }
+  @layer base {
+    body { background: var(--tts-background); color: var(--tts-foreground); }
+    td, th { @apply break-words; word-break: break-all; word-break: auto-phrase; }
+    th { @apply whitespace-nowrap; }
+  }
+    </style>
+    <style id="semantic-token-fallback">
+      .bg-background { background-color: var(--tts-background); }
+      .text-background { color: var(--tts-background); }
+      .border-background { border-color: var(--tts-background); }
+      .ring-background { --tw-ring-color: var(--tts-background); }
+      .bg-foreground { background-color: var(--tts-foreground); }
+      .text-foreground { color: var(--tts-foreground); }
+      .border-foreground { border-color: var(--tts-foreground); }
+      .ring-foreground { --tw-ring-color: var(--tts-foreground); }
+      .bg-card { background-color: var(--tts-card); }
+      .text-card { color: var(--tts-card); }
+      .border-card { border-color: var(--tts-card); }
+      .ring-card { --tw-ring-color: var(--tts-card); }
+      .bg-card-foreground { background-color: var(--tts-card-foreground); }
+      .text-card-foreground { color: var(--tts-card-foreground); }
+      .border-card-foreground { border-color: var(--tts-card-foreground); }
+      .ring-card-foreground { --tw-ring-color: var(--tts-card-foreground); }
+      .bg-popover { background-color: var(--tts-popover); }
+      .text-popover { color: var(--tts-popover); }
+      .border-popover { border-color: var(--tts-popover); }
+      .ring-popover { --tw-ring-color: var(--tts-popover); }
+      .bg-popover-foreground { background-color: var(--tts-popover-foreground); }
+      .text-popover-foreground { color: var(--tts-popover-foreground); }
+      .border-popover-foreground { border-color: var(--tts-popover-foreground); }
+      .ring-popover-foreground { --tw-ring-color: var(--tts-popover-foreground); }
+      .bg-primary { background-color: var(--tts-primary); }
+      .text-primary { color: var(--tts-primary); }
+      .border-primary { border-color: var(--tts-primary); }
+      .ring-primary { --tw-ring-color: var(--tts-primary); }
+      .bg-primary-foreground { background-color: var(--tts-primary-foreground); }
+      .text-primary-foreground { color: var(--tts-primary-foreground); }
+      .border-primary-foreground { border-color: var(--tts-primary-foreground); }
+      .ring-primary-foreground { --tw-ring-color: var(--tts-primary-foreground); }
+      .bg-secondary { background-color: var(--tts-secondary); }
+      .text-secondary { color: var(--tts-secondary); }
+      .border-secondary { border-color: var(--tts-secondary); }
+      .ring-secondary { --tw-ring-color: var(--tts-secondary); }
+      .bg-secondary-foreground { background-color: var(--tts-secondary-foreground); }
+      .text-secondary-foreground { color: var(--tts-secondary-foreground); }
+      .border-secondary-foreground { border-color: var(--tts-secondary-foreground); }
+      .ring-secondary-foreground { --tw-ring-color: var(--tts-secondary-foreground); }
+      .bg-muted { background-color: var(--tts-muted); }
+      .text-muted { color: var(--tts-muted); }
+      .border-muted { border-color: var(--tts-muted); }
+      .ring-muted { --tw-ring-color: var(--tts-muted); }
+      .bg-muted-foreground { background-color: var(--tts-muted-foreground); }
+      .text-muted-foreground { color: var(--tts-muted-foreground); }
+      .border-muted-foreground { border-color: var(--tts-muted-foreground); }
+      .ring-muted-foreground { --tw-ring-color: var(--tts-muted-foreground); }
+      .bg-accent { background-color: var(--tts-accent); }
+      .text-accent { color: var(--tts-accent); }
+      .border-accent { border-color: var(--tts-accent); }
+      .ring-accent { --tw-ring-color: var(--tts-accent); }
+      .bg-accent-foreground { background-color: var(--tts-accent-foreground); }
+      .text-accent-foreground { color: var(--tts-accent-foreground); }
+      .border-accent-foreground { border-color: var(--tts-accent-foreground); }
+      .ring-accent-foreground { --tw-ring-color: var(--tts-accent-foreground); }
+      .bg-destructive { background-color: var(--tts-destructive); }
+      .text-destructive { color: var(--tts-destructive); }
+      .border-destructive { border-color: var(--tts-destructive); }
+      .ring-destructive { --tw-ring-color: var(--tts-destructive); }
+      .bg-destructive-foreground { background-color: var(--tts-destructive-foreground); }
+      .text-destructive-foreground { color: var(--tts-destructive-foreground); }
+      .border-destructive-foreground { border-color: var(--tts-destructive-foreground); }
+      .ring-destructive-foreground { --tw-ring-color: var(--tts-destructive-foreground); }
+      .bg-border { background-color: var(--tts-border); }
+      .text-border { color: var(--tts-border); }
+      .border-border { border-color: var(--tts-border); }
+      .ring-border { --tw-ring-color: var(--tts-border); }
+      .bg-input { background-color: var(--tts-input); }
+      .text-input { color: var(--tts-input); }
+      .border-input { border-color: var(--tts-input); }
+      .ring-input { --tw-ring-color: var(--tts-input); }
+      .bg-ring { background-color: var(--tts-ring); }
+      .text-ring { color: var(--tts-ring); }
+      .border-ring { border-color: var(--tts-ring); }
+      .ring-ring { --tw-ring-color: var(--tts-ring); }
+    </style>
+    <style>
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      [data-icon] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-mask-size: contain;
+        mask-size: contain;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+        -webkit-mask-position: center;
+        mask-position: center;
+        background-color: currentColor;
+      }
+    </style>
+</head>
+<body><main>Preflight check</main></body>
+</html>
