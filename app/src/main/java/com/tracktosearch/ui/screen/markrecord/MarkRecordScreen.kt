@@ -63,7 +63,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.hazeTopBar
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -115,8 +116,8 @@ fun MarkRecordScreen(
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(
                 start = 12.dp, end = 12.dp,
-                top = stickyHeaderHeight,
-                bottom = 16.dp
+                top = stickyHeaderHeight + 5.dp,
+                bottom = 40.dp
             )
         ) {
             when {
@@ -213,8 +214,7 @@ fun MarkRecordScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                .hazeProgressiveTopBar(
+                .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp
@@ -310,6 +310,15 @@ fun MarkRecordScreen(
                 }
             }
         }
+
+        ScrollToTopButton(
+            gridState = listState,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp),
+            hazeState = hazeState,
+            hazeStyle = hazeStyle
+        )
     }
 
     // 筛选弹窗
