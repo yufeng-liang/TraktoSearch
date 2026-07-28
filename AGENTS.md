@@ -139,3 +139,4 @@
 - 排查时要确认当前端口对应的监听 Node 进程，以及最新 session 的 `server-info` 中的 `screen_dir`。如果 HTML 写在旧 session 目录，带 key 的请求可能成功但页面仍只显示 waiting。
 - 发现 session 不一致时，将 HTML 同步到实际运行 session 的 `screen_dir`，并用带 key 的会话验证 `/files/<filename>` 与首页内容都能返回。
 - key URL 首次访问会写入同源 cookie 后跳转到裸地址，这是伴侣的正常 bootstrap 流程；若浏览器没有保留 cookie，应继续提供完整 key URL。
+- 授权刷新 challenge 不应使用 Cloudflare KV 做一次性凭证：KV 不保证原子读写一致性。应使用 D1 条件更新或 Durable Object 原子消费，并为重复消费保留重放检测。

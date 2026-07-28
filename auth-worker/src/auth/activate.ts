@@ -1,9 +1,19 @@
 // POST /api/auth/activate — 邀请码激活 + 设备绑定 + JWT 发放
 
-import { AppError, successResponse, now } from '../util/errors';
-import { sha256, generateSecureToken, generateId, hmacDeviceContinuityId } from '../util/crypto';
-import { signAccessToken } from '../util/jwt';
-import { firstRow } from '../util/db';
+import { AppError, successResponse, now } from '../util/errors.ts';
+import { sha256, generateSecureToken, generateId, hmacDeviceContinuityId } from '../util/crypto.ts';
+import { signAccessToken } from '../util/jwt.ts';
+import { firstRow } from '../util/db.ts';
+
+export function isActivationBindingConflict(
+    existingDevice: { status: string; deleted_at: number | null } | null,
+    inviteKind: string,
+): boolean {
+    return inviteKind !== 'MIGRATION'
+        && existingDevice !== null
+        && existingDevice.status === 'ACTIVE'
+        && existingDevice.deleted_at === null;
+}
 
 interface ActivateRequest {
     inviteCode: string;
@@ -76,8 +86,8 @@ export async function handleActivate(
     }
 
     // 检查设备上限（事务中）
-    let existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
-        SELECT id, friend_id, status
+    let existingDevice = await firstRow<{ id: string; friend_id: string; status: string; deleted_at: number | null }>(env.DB.prepare(`
+        SELECT id, friend_id, status, deleted_at
         FROM devices
         WHERE public_key = ?
     `).bind(body.publicKey));
@@ -87,8 +97,8 @@ export async function handleActivate(
     }
 
     if (invite.kind === 'MIGRATION' && !existingDevice && invite.device_id) {
-        existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
-            SELECT id, friend_id, status
+        existingDevice = await firstRow<{ id: string; friend_id: string; status: string; deleted_at: number | null }>(env.DB.prepare(`
+            SELECT id, friend_id, status, deleted_at
             FROM devices
             WHERE id = ?
     `).bind(invite.device_id));
@@ -96,8 +106,8 @@ export async function handleActivate(
 
     if (invite.kind === 'MIGRATION' && !existingDevice && body.androidId) {
         const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
-        existingDevice = await firstRow<{ id: string; friend_id: string; status: string }>(env.DB.prepare(`
-            SELECT id, friend_id, status
+        existingDevice = await firstRow<{ id: string; friend_id: string; status: string; deleted_at: number | null }>(env.DB.prepare(`
+            SELECT id, friend_id, status, deleted_at
             FROM devices
             WHERE recovery_id_hmac = ?
         `).bind(recoveryIdHmac));
@@ -109,7 +119,7 @@ export async function handleActivate(
     if (invite.kind === 'MIGRATION' && existingDevice && existingDevice.friend_id !== invite.friend_id) {
         return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_MISMATCH', 'Device belongs to another friend', invite, existingDevice.id);
     }
-    if (invite.kind !== 'MIGRATION' && existingDevice) {
+    if (isActivationBindingConflict(existingDevice, invite.kind) && existingDevice) {
         return logAndThrowActivationFailure(env, requestId, 'DEVICE_ALREADY_BOUND', 'Device is already bound', invite, existingDevice.id);
     }
 
@@ -156,9 +166,9 @@ export async function handleActivate(
         existingDevice
             ? env.DB.prepare(`
             UPDATE devices
-            SET friend_id = ?, public_key = ?, device_name = ?, status = 'ACTIVE', app_version = ?, revoked_at = NULL
+            SET friend_id = ?, public_key = ?, device_name = ?, status = 'ACTIVE', app_version = ?, activated_at = ?, revoked_at = NULL, deleted_at = NULL
             WHERE id = ?
-        `).bind(invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, deviceId)
+        `).bind(invite.friend_id, body.publicKey, body.deviceName || null, body.appVersion || null, currentTime, deviceId)
             : env.DB.prepare(`
             INSERT INTO devices (id, friend_id, public_key, device_name, status, app_version, activated_at)
             VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?)

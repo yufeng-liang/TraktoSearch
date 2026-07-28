@@ -1,9 +1,10 @@
 // POST /api/auth/refresh — 刷新令牌轮换 + 重放检测
 
-import { AppError, successResponse, now } from '../util/errors';
-import { sha256, generateSecureToken, generateId } from '../util/crypto';
-import { signAccessToken } from '../util/jwt';
-import { firstRow } from '../util/db';
+import { AppError, successResponse, now } from '../util/errors.ts';
+import { sha256, generateSecureToken, generateId } from '../util/crypto.ts';
+import { signAccessToken } from '../util/jwt.ts';
+import { firstRow } from '../util/db.ts';
+import { consumeAuthChallenge } from './challenge.ts';
 
 interface RefreshRequest {
     deviceId: string;
@@ -21,7 +22,7 @@ interface RefreshResponse {
 
 export async function handleRefresh(
     request: Request,
-    env: { DB: D1Database; KV: KVNamespace; JWT_SIGNING_KEY: string },
+    env: { DB: D1Database; JWT_SIGNING_KEY: string },
     requestId: string
 ): Promise<Response> {
     const body = await request.json() as RefreshRequest;
@@ -32,17 +33,20 @@ export async function handleRefresh(
 
     const currentTime = now();
     const tokenHash = await sha256(body.refreshToken);
-    const nonceHash = await sha256(body.nonce);
+    const challengeConsumed = await consumeAuthChallenge(
+        env.DB,
+        body.nonce,
+        'REFRESH',
+        body.deviceId,
+        currentTime,
+    );
 
     // 验证 nonce 存在且未过期
-    const nonceDeviceId = await env.KV.get(`challenge:${nonceHash}`);
-    if (!nonceDeviceId || nonceDeviceId !== body.deviceId) {
+    if (!challengeConsumed) {
         await logSecurityEvent(env, requestId, 'REFRESH', body.deviceId, 'FAILURE', 'INVALID_SIGNATURE', null, 'refresh:invalid_challenge');
         throw new AppError('INVALID_SIGNATURE', 'Invalid or expired challenge', 400);
     }
     // 消费 nonce（一次性）
-    await env.KV.delete(`challenge:${nonceHash}`);
-
     // 查找刷新会话
     const session = await firstRow<{
         id: string; device_id: string; expires_at: number; revoked_at: number | null;

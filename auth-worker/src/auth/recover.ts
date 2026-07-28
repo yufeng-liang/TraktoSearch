@@ -1,13 +1,13 @@
 // 重装恢复：用设备连续性指纹匹配原设备，并轮换当前安装的公钥与会话。
 
-import { AppError, successResponse, now } from '../util/errors';
-import { generateId, generateSecureToken, hmacDeviceContinuityId, sha256 } from '../util/crypto';
-import { signAccessToken } from '../util/jwt';
-import { firstRow } from '../util/db';
-import { verifyClientSignature } from './refresh';
+import { AppError, successResponse, now } from '../util/errors.ts';
+import { generateId, generateSecureToken, hmacDeviceContinuityId, sha256 } from '../util/crypto.ts';
+import { signAccessToken } from '../util/jwt.ts';
+import { firstRow } from '../util/db.ts';
+import { verifyClientSignature } from './refresh.ts';
+import { buildRecoveryChallengeSubject, consumeAuthChallenge, createAuthChallenge } from './challenge.ts';
 
 const EXPECTED_PACKAGE_NAME = 'com.tracktosearch';
-const CHALLENGE_TTL_SECONDS = 600;
 const RATE_LIMIT_WINDOW_SECONDS = 300;
 const RATE_LIMIT_MAX_REQUESTS = 5;
 
@@ -27,11 +27,6 @@ interface RecoveryChallengeRequest {
     packageName?: string;
 }
 
-interface RecoveryChallenge {
-    recoveryIdHmac: string;
-    publicKey: string;
-}
-
 interface RecoveryEnv {
     DB: D1Database;
     KV: KVNamespace;
@@ -48,16 +43,10 @@ export async function handleRecoveryChallenge(
     validateCommonRequest(body);
     await enforceRateLimit(env, request, 'challenge');
 
-    const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
-    const nonce = generateSecureToken(16);
-    const nonceHash = await sha256(nonce);
-    await env.KV.put(
-        `recover-challenge:${nonceHash}`,
-        JSON.stringify({ recoveryIdHmac, publicKey: body.publicKey } satisfies RecoveryChallenge),
-        { expirationTtl: CHALLENGE_TTL_SECONDS },
-    );
+    const challengeSubject = await buildRecoveryChallengeSubject(body.androidId, body.publicKey);
+    const { nonce, expiresAt } = await createAuthChallenge(env.DB, 'RECOVERY', challengeSubject);
 
-    return successResponse({ nonce, expiresAt: now() + CHALLENGE_TTL_SECONDS }, requestId);
+    return successResponse({ nonce, expiresAt }, requestId);
 }
 
 export async function handleRecover(
@@ -72,34 +61,28 @@ export async function handleRecover(
     }
     await enforceRateLimit(env, request, 'recover');
 
-    const nonceHash = await sha256(body.nonce);
-    const challengeKey = `recover-challenge:${nonceHash}`;
-    const rawChallenge = await env.KV.get(challengeKey);
-    if (!rawChallenge) {
-        throw new AppError('INVALID_SIGNATURE', 'Invalid or expired recovery challenge', 400);
-    }
-    await env.KV.delete(challengeKey);
-
-    let challenge: RecoveryChallenge;
-    try {
-        challenge = JSON.parse(rawChallenge) as RecoveryChallenge;
-    } catch {
+    const challengeSubject = await buildRecoveryChallengeSubject(body.androidId, body.publicKey);
+    const challengeConsumed = await consumeAuthChallenge(
+        env.DB,
+        body.nonce,
+        'RECOVERY',
+        challengeSubject,
+    );
+    if (!challengeConsumed) {
         throw new AppError('INVALID_SIGNATURE', 'Invalid recovery challenge', 400);
-    }
-    if (challenge.publicKey !== body.publicKey) {
-        throw new AppError('INVALID_SIGNATURE', 'Recovery key does not match challenge', 400);
     }
     if (!(await verifyClientSignature(body.publicKey, body.signature, body.nonce))) {
         throw new AppError('INVALID_SIGNATURE', 'Invalid recovery signature', 400);
     }
 
+    const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
     const matches = await env.DB.prepare(`
         SELECT d.id as device_id, d.friend_id, d.status as device_status,
                f.status as friend_status, f.expires_at as friend_expires_at
         FROM devices d
         JOIN friends f ON f.id = d.friend_id
         WHERE d.recovery_id_hmac = ?
-    `).bind(challenge.recoveryIdHmac).all<{
+    `).bind(recoveryIdHmac).all<{
         device_id: string;
         friend_id: string;
         device_status: string;

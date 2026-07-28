@@ -25,7 +25,7 @@ function createDb() {
                         bindings,
                         async first() { return null; },
                         async all() { return { results: [] }; },
-                        async run() { return { success: true }; },
+                        async run() { return { success: true, meta: { changes: 0 } }; },
                     };
                 },
             };

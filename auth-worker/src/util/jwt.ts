@@ -1,6 +1,6 @@
 // JWT 签名与验证（HMAC-SHA256）
 
-import { timingSafeEqual } from './crypto';
+import { timingSafeEqual } from './crypto.ts';
 
 const alg = { name: 'HMAC', hash: 'SHA-256' };
 
