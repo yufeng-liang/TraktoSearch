@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.douban
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -277,9 +276,7 @@ fun DoubanRetryDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_retry_title)) },
         text = {
             Column {
@@ -369,9 +366,7 @@ fun DoubanRetryDialog(
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_retry_clear)) },
             text = { Text(stringResource(R.string.douban_retry_clear_confirm)) },
             confirmButton = {
@@ -410,9 +405,7 @@ private fun FailureReasonPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_retry_select_reasons)) },
         text = {
             Column {

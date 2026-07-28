@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.douban
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
@@ -60,9 +59,7 @@ fun DoubanSyncModePickerDialog(
     if (showFullRewriteConfirm) {
         AlertDialog(
             onDismissRequest = { showFullRewriteConfirm = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_sync_mode_c_title)) },
             text = { Text(stringResource(R.string.douban_sync_mode_warning_c)) },
             confirmButton = {
@@ -85,9 +82,7 @@ fun DoubanSyncModePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {
@@ -224,9 +219,7 @@ fun DoubanFirstSyncGuideDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         icon = { Icon(Icons.Rounded.AddCircle, contentDescription = null) },
         title = { Text(stringResource(R.string.douban_first_sync_title)) },
         text = { Text(stringResource(R.string.douban_first_sync_message)) },

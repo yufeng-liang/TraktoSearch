@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.douban
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,9 +51,7 @@ fun DoubanPendingItemsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_resume_title)) },
         text = {
             Column {
@@ -120,9 +117,7 @@ fun DoubanRollbackDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.hazeModalSurface(ultraThick = true),
-        shape = MaterialTheme.shapes.extraLarge,
-        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(R.string.douban_rollback_title)) },
         text = {
             Column {

@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.login
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
@@ -393,9 +392,7 @@ fun LoginScreen(
     if (showDoubanImportRequireLoginDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanImportRequireLoginDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_import_require_trakt_title)) },
             text = { Text(stringResource(R.string.douban_import_require_trakt_desc)) },
             confirmButton = {
@@ -427,9 +424,7 @@ fun LoginScreen(
     if (showWhatIsTraktDialog) {
         AlertDialog(
             onDismissRequest = { showWhatIsTraktDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
-            shape = MaterialTheme.shapes.extraLarge,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(

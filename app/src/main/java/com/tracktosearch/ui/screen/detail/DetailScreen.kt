@@ -1,5 +1,4 @@
 package com.tracktosearch.ui.screen.detail
-import com.tracktosearch.ui.component.hazeModalSurface
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -940,9 +939,7 @@ fun DetailScreen(
             if (uiState.showLoginPrompt) {
                 AlertDialog(
                     onDismissRequest = { viewModel.dismissLoginPrompt() },
-                modifier = Modifier.hazeModalSurface(ultraThick = true),
-                shape = MaterialTheme.shapes.extraLarge,
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.60f),
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
                     title = { Text(stringResource(R.string.detail_login_required_title)) },
                     text = { Text(stringResource(R.string.detail_login_required_message)) },
                     confirmButton = {

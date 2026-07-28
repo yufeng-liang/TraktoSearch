@@ -64,7 +64,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
-import com.tracktosearch.ui.component.hazeModalSurface
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -274,7 +273,6 @@ fun ActivationLoginScreen(
     if (showDoubanImportRequireLoginDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanImportRequireLoginDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
             title = { Text(stringResource(R.string.douban_import_require_trakt_title)) },
             text = { Text(stringResource(R.string.douban_import_require_trakt_desc)) },
             confirmButton = {
@@ -295,7 +293,6 @@ fun ActivationLoginScreen(
     if (showWhatIsTraktDialog) {
         AlertDialog(
             onDismissRequest = { showWhatIsTraktDialog = false },
-            modifier = Modifier.hazeModalSurface(ultraThick = true),
             title = { Text(stringResource(R.string.login_what_is_trakt_title)) },
             text = { Text(stringResource(R.string.login_what_is_trakt_desc)) },
             confirmButton = {
