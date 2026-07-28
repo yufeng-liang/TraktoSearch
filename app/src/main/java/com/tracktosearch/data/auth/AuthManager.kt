@@ -51,6 +51,10 @@ class AuthManager @Inject constructor(
     private val _recoveryFailure = MutableStateFlow<String?>(null)
     val recoveryFailure: StateFlow<String?> = _recoveryFailure.asStateFlow()
 
+    // 朋友昵称（激活/校验时由网关返回，未授权或离线时为 null）
+    private val _nickname = MutableStateFlow<String?>(null)
+    val nickname: StateFlow<String?> = _nickname.asStateFlow()
+
     // 设备 ID（激活后缓存）。@Volatile：WorkManager 线程写入对主线程可见
     @Volatile
     private var deviceId: String? = null
@@ -112,6 +116,7 @@ class AuthManager @Inject constructor(
                 nextCheckAt = body.nextCheckAt
                 if (deviceId != null) tokenStorage.saveSessionMetadata(deviceId!!, lastOnlineAt, nextCheckAt)
                 _authState.value = AuthState.AUTHORIZED
+                _nickname.value = body.nickname.takeIf { it.isNotBlank() }
                 Result.success(body)
             } else if (response.code() == 401) {
                 // 令牌失效，尝试刷新
@@ -276,6 +281,7 @@ class AuthManager @Inject constructor(
         deviceId = null
         nextCheckAt = 0L
         _authState.value = AuthState.UNAUTHORIZED
+        _nickname.value = null
     }
 
     private suspend fun recoverSilently(): Result<ActivateResponse> {

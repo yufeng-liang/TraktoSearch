@@ -4,6 +4,7 @@
  * 代理将其转换为 Worker 需要的 Authorization Bearer 头，避免前端读取 Cookie。
  */
 const WORKER_ORIGIN = 'https://auth-worker.douban-movie-api-peak.workers.dev';
+const FEEDBACK_WORKER_ORIGIN = 'https://feedback-worker.douban-movie-api-peak.workers.dev';
 
 export async function onRequest(context) {
     const { request } = context;
@@ -21,7 +22,16 @@ export async function onRequest(context) {
     }
 
     const upstreamPath = url.pathname.slice('/admin-api'.length) || '/';
-    const upstreamUrl = new URL(`${WORKER_ORIGIN}${upstreamPath}`);
+
+    // 按路径前缀选择 worker：/fb/* → feedback-worker（去掉 /fb 前缀），其余 → auth-worker
+    let workerOrigin = WORKER_ORIGIN;
+    let actualPath = upstreamPath;
+    if (upstreamPath.startsWith('/fb/')) {
+        workerOrigin = FEEDBACK_WORKER_ORIGIN;
+        actualPath = upstreamPath.slice(3); // 去掉 /fb 前缀
+    }
+
+    const upstreamUrl = new URL(`${workerOrigin}${actualPath}`);
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
@@ -38,7 +48,7 @@ export async function onRequest(context) {
     headers.delete('Cf-Access-Jwt-Assertion');
     headers.delete('Host');
     headers.delete('Content-Length');
-    headers.set('Origin', WORKER_ORIGIN);
+    headers.set('Origin', workerOrigin);
 
     let upstream;
     try {

@@ -40,6 +40,9 @@ import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.detail.DetailScreen
 import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
+import com.tracktosearch.ui.screen.feedback.FeedbackScreen
+import com.tracktosearch.ui.screen.feedback.NewFeedbackScreen
+import com.tracktosearch.ui.screen.feedback.FeedbackDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanFailuresScreen
 import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
@@ -100,6 +103,11 @@ object Routes {
     const val DOUBAN_ITEM_DETAIL = "doubanItemDetail/{doubanId}"
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
     const val MARK_RECORDS = "markRecords"
+    const val FEEDBACK = "feedback"
+    const val FEEDBACK_DETAIL = "feedbackDetail/{feedbackId}"
+    const val NEW_FEEDBACK = "newFeedback"
+
+    fun feedbackDetailRoute(feedbackId: String): String = "feedbackDetail/$feedbackId"
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
@@ -436,6 +444,9 @@ fun AppNavigation(
                             },
                             onSpiderTest = {
                                 navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                            },
+                            onFeedbackClick = {
+                                navController.navigate(Routes.FEEDBACK)
                             }
                         )
                     }
@@ -710,6 +721,31 @@ fun AppNavigation(
                             }
                         )
                     }
+                }
+
+                composable(Routes.FEEDBACK) {
+                    FeedbackScreen(
+                        onBack = { navController.popBackStack() },
+                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
+                        onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) }
+                    )
+                }
+                composable(Routes.NEW_FEEDBACK) {
+                    NewFeedbackScreen(
+                        onBack = { navController.popBackStack() },
+                        onSuccess = { navController.popBackStack() }
+                    )
+                }
+                composable(
+                    route = Routes.FEEDBACK_DETAIL,
+                    arguments = listOf(navArgument("feedbackId") { type = NavType.StringType })
+                ) { backStackEntry ->
+                    val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
+                    FeedbackDetailScreen(
+                        feedbackId = feedbackId,
+                        onBack = { navController.popBackStack() },
+                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) }
+                    )
                 }
             }
 
