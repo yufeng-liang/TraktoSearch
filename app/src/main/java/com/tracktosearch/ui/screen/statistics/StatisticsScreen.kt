@@ -4,7 +4,6 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.animateIntAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -88,7 +87,7 @@ import com.tracktosearch.R
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
@@ -104,6 +103,7 @@ import java.util.Calendar
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -199,7 +199,10 @@ fun StatisticsScreen(
                         if (uiState.overviewReady) {
                             OverviewCards(uiState, isVisible)
                         } else {
-                            SectionShimmer(height = 120.dp)
+                            StatisticsSkeletonContent(
+                                variant = StatisticsSkeletonVariant.OVERVIEW,
+                                modifier = Modifier.padding(16.dp)
+                            )
                         }
                     }
                 }
@@ -215,7 +218,7 @@ fun StatisticsScreen(
                         if (uiState.watchTimeReady) {
                             WatchTimeCard(uiState = uiState, isVisible = isVisible)
                         } else {
-                            SectionShimmer(height = 80.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.WATCH_TIME)
                         }
                     }
                 }
@@ -231,7 +234,7 @@ fun StatisticsScreen(
                         if (uiState.heatmapReady) {
                             HeatmapChart(heatmapData = uiState.heatmapData, isVisible = isVisible)
                         } else {
-                            SectionShimmer(height = 180.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.HEATMAP)
                         }
                     }
                 }
@@ -247,7 +250,7 @@ fun StatisticsScreen(
                         if (uiState.ratingsReady) {
                             RatingStatsCard(uiState = uiState, isVisible = isVisible)
                         } else {
-                            SectionShimmer(height = 260.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.RATINGS)
                         }
                     }
                 }
@@ -261,7 +264,7 @@ fun StatisticsScreen(
                     }
                     SectionCard(title = stringResource(R.string.statistics_wordcloud)) {
                         if (!uiState.wordCloudReady) {
-                            SectionShimmer(height = 220.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.WORD_CLOUD)
                         } else if (uiState.wordCloud.isNotEmpty()) {
                             WordCloud(
                                 words = uiState.wordCloud,
@@ -298,7 +301,7 @@ fun StatisticsScreen(
                         }
                     } else if (!uiState.genreReady) {
                         SectionCard(title = stringResource(R.string.statistics_genre_distribution)) {
-                            SectionShimmer(height = 280.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.PIE)
                         }
                     }
                 }
@@ -316,7 +319,7 @@ fun StatisticsScreen(
                         }
                     } else if (!uiState.genreReady) {
                         SectionCard(title = stringResource(R.string.statistics_genre_ranking)) {
-                            SectionShimmer(height = 280.dp)
+                            StatisticsSkeletonContent(StatisticsSkeletonVariant.RANKING)
                         }
                     }
                 }
@@ -336,8 +339,7 @@ fun StatisticsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .then(headerModifier)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                    .hazeProgressiveTopBar(
+                    .hazeTopBar(
                         state = statsHazeState,
                         style = statsHazeStyle,
                         blurRadius = 24.dp
@@ -497,6 +499,28 @@ private fun OverviewCards(uiState: StatisticsUiState, isVisible: Boolean) {
     }
 }
 
+/** 数字只在首次进入可视区域时播放一次，后续数据更新直接同步最终值。 */
+@Composable
+private fun rememberOneShotAnimatedInt(targetValue: Int, isVisible: Boolean): Int {
+    val animatedValue = remember { Animatable(0f) }
+    var hasAnimated by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isVisible, targetValue) {
+        if (!isVisible) return@LaunchedEffect
+        if (!hasAnimated) {
+            hasAnimated = true
+            animatedValue.animateTo(
+                targetValue = targetValue.toFloat(),
+                animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing)
+            )
+        } else {
+            animatedValue.snapTo(targetValue.toFloat())
+        }
+    }
+
+    return animatedValue.value.roundToInt()
+}
+
 /** 带数字跳动动画的统计卡片 */
 @Composable
 private fun AnimatedStatCard(
@@ -505,11 +529,7 @@ private fun AnimatedStatCard(
     modifier: Modifier = Modifier,
     isVisible: Boolean = true
 ) {
-    val animatedValue by animateIntAsState(
-        targetValue = if (isVisible) targetValue else 0,
-        animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
-        label = "statValue"
-    )
+    val animatedValue = rememberOneShotAnimatedInt(targetValue, isVisible)
 
     Card(
         modifier = modifier,
@@ -1229,20 +1249,195 @@ private fun heatmapColor(count: Int, primary: Color, emptyColor: Color): Color {
     }
 }
 
-/** 区块级骨架：某区块数据未就绪时，在对应卡片内显示闪烁占位 */
+private enum class StatisticsSkeletonVariant {
+    OVERVIEW,
+    WATCH_TIME,
+    HEATMAP,
+    RATINGS,
+    WORD_CLOUD,
+    PIE,
+    RANKING
+}
+
+/** 分块加载时复用初始整页骨架的结构，避免从 A 样式切换成简单矩形 B 样式。 */
 @Composable
-private fun SectionShimmer(
-    modifier: Modifier = Modifier,
-    height: androidx.compose.ui.unit.Dp = 120.dp
+private fun StatisticsSkeletonContent(
+    variant: StatisticsSkeletonVariant,
+    modifier: Modifier = Modifier
 ) {
     val brush = rememberShimmerBrush()
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(height)
-            .clip(RoundedCornerShape(8.dp))
-            .background(brush)
-    )
+    when (variant) {
+        StatisticsSkeletonVariant.OVERVIEW -> {
+            Row(
+                modifier = modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                repeat(3) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(80.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(brush)
+                    )
+                }
+            }
+        }
+
+        StatisticsSkeletonVariant.WATCH_TIME -> {
+            Column(modifier = modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.4f)
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+            }
+        }
+
+        StatisticsSkeletonVariant.HEATMAP -> {
+            Column(
+                modifier = modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                repeat(7) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        repeat(13) {
+                            Box(
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(brush)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        StatisticsSkeletonVariant.RATINGS -> {
+            Column(
+                modifier = modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.5f)
+                        .height(16.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.3f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                repeat(5) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(28.dp)
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+            }
+        }
+
+        StatisticsSkeletonVariant.WORD_CLOUD,
+        StatisticsSkeletonVariant.PIE -> {
+            Column(
+                modifier = modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(200.dp)
+                        .clip(RoundedCornerShape(100.dp))
+                        .background(brush)
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                repeat(5) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(brush)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+            }
+        }
+
+        StatisticsSkeletonVariant.RANKING -> {
+            val widths = listOf(1f, 0.92f, 0.84f, 0.76f, 0.68f, 0.6f, 0.52f, 0.44f, 0.36f, 0.28f)
+            Column(
+                modifier = modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                widths.forEach { fraction ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(fraction)
+                                .height(14.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(brush)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /** 骨架屏：加载中的占位界面，颜色风格与发现页一致 */
@@ -1407,12 +1602,7 @@ private fun StatisticsSkeleton() {
 private fun WatchTimeCard(uiState: StatisticsUiState, isVisible: Boolean) {
     val totalHours = uiState.totalWatchMinutes / 60
     val totalDays = totalHours / 24
-
-    val animatedHours by animateIntAsState(
-        targetValue = if (isVisible) totalHours.toInt() else 0,
-        animationSpec = tween(durationMillis = 1500, easing = LinearOutSlowInEasing),
-        label = "watchHours"
-    )
+    val animatedHours = rememberOneShotAnimatedInt(totalHours.toInt(), isVisible)
 
     Column {
         Text(
