@@ -85,7 +85,7 @@ import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
@@ -254,8 +254,7 @@ fun DiscoverFilterScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                .hazeProgressiveTopBar(
+                .hazeTopBar(
                     state = hazeState,
                     style = hazeStyle,
                     blurRadius = 24.dp

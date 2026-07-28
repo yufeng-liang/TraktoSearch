@@ -89,7 +89,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListReachedTopBar
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -798,7 +798,7 @@ fun SettingsScreen(
                     .onGloballyPositioned { coordinates ->
                         settingsTopBarHeightPx = coordinates.size.height
                     }
-                    .hazeProgressiveTopBar(
+                    .hazeTopBar(
                         state = settingsHazeState,
                         style = settingsHazeStyle,
                         blurRadius = 24.dp,

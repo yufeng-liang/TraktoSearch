@@ -56,7 +56,7 @@ internal fun hasListReachedTopBar(
 }
 
 @Composable
-fun Modifier.hazeProgressiveTopBar(
+fun Modifier.hazeTopBar(
     state: HazeState,
     style: HazeBlurStyle = HazeMaterials.thin(),
     blurRadius: Dp = 24.dp,

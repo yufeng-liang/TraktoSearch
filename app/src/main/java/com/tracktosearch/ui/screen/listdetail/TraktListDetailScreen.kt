@@ -60,7 +60,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.MovieCardSkeleton
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.ScrollToTopButton
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
@@ -148,8 +148,7 @@ fun TraktListDetailScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .then(loadingHeaderModifier)
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                                .hazeProgressiveTopBar(
+                                .hazeTopBar(
                                     state = hazeState,
                                     style = hazeStyle,
                                     blurRadius = 24.dp
@@ -266,8 +265,7 @@ fun TraktListDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(headerModifier)
-                            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.50f))
-                            .hazeProgressiveTopBar(
+                            .hazeTopBar(
                                 state = hazeState,
                                 style = hazeStyle,
                                 blurRadius = 24.dp
