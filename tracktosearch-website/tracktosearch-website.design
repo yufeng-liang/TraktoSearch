@@ -4,7 +4,7 @@
       "id": "page-index",
       "title": "首页",
       "type": "page",
-      "version": 2,
+      "version": 3,
       "createdAt": 1753440000000,
       "canvasData": {
         "x": 200,
@@ -12,7 +12,7 @@
         "group": 0
       },
       "devMetadata": {
-        "htmlSrc": "pages/index.html",
+        "htmlSrc": "pages/index-v3.html",
         "interactions": [
           {
             "id": "int-ck-click",
@@ -2667,6 +2667,160 @@
       },
       "devMetadata": {
         "imageSrc": "assets/chiikawa-ref/icon_usagi.webp"
+      }
+    },
+    {
+      "id": "image-173",
+      "title": "吉伊爱心 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 104780,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-chiikawa-love-v9.png"
+      }
+    },
+    {
+      "id": "image-174",
+      "title": "小八探头 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 105400,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-hachiware-peek-ground-v9.png"
+      }
+    },
+    {
+      "id": "image-175",
+      "title": "乌萨奇探头 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 106020,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-usagi-peek-ground-v9.png"
+      }
+    },
+    {
+      "id": "image-176",
+      "title": "小八侦探 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 106640,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-hachiware-detective-v9.png"
+      }
+    },
+    {
+      "id": "image-177",
+      "title": "乌萨奇分区 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 107260,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-usagi-section02-v9.png"
+      }
+    },
+    {
+      "id": "image-178",
+      "title": "吉伊星星眼 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 107880,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-chiikawa-star-v9.png"
+      }
+    },
+    {
+      "id": "image-179",
+      "title": "乌萨奇可爱 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 108500,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-usagi-yellow-cute-v9.png"
+      }
+    },
+    {
+      "id": "image-180",
+      "title": "吉伊欢呼 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 109120,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-chiikawa-cheer-v9.png"
+      }
+    },
+    {
+      "id": "image-181",
+      "title": "吉伊邀请挥手 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 109740,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-chiikawa-invite-wave-v9.png"
+      }
+    },
+    {
+      "id": "image-182",
+      "title": "乌萨奇兴奋 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 110360,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-usagi-excited-v9.png"
+      }
+    },
+    {
+      "id": "image-183",
+      "title": "三小只看电影 v9 透明",
+      "type": "image",
+      "version": 1,
+      "createdAt": 1785400000000,
+      "canvasData": {
+        "x": 110980,
+        "y": 2584
+      },
+      "devMetadata": {
+        "imageSrc": "assets/chiikawa/ai-three-watching-v9.png"
       }
     }
   ],
