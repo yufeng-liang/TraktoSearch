@@ -273,9 +273,6 @@ fun AppNavigation(
                                     popUpTo(0) { inclusive = true }
                                 }
                             },
-                            onDoubanImport = {
-                                navController.navigate(Routes.DOUBAN_LOGIN)
-                            }
                         )
                     }
                 }

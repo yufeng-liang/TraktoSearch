@@ -5,6 +5,7 @@ import com.tracktosearch.test.MainDispatcherRule
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,6 +56,22 @@ class AuthViewModelTest {
         assertThat(viewModel.uiState.value.activated).isTrue()
         assertThat(viewModel.uiState.value.isLoading).isFalse()
         assertThat(viewModel.uiState.value.error).isNull()
+    }
+
+    @Test
+    fun `activated state ignores repeated activation`() = runTest {
+        every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
+        coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.success(mockk())
+        val viewModel = AuthViewModel(authManager)
+
+        viewModel.updateInviteCode("TS-1234567890")
+        viewModel.activate()
+        advanceUntilIdle()
+        viewModel.activate()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { authManager.activate(any(), any(), any(), any()) }
+        assertThat(viewModel.uiState.value.activated).isTrue()
     }
 
     @Test

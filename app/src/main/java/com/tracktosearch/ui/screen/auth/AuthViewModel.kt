@@ -48,6 +48,7 @@ class AuthViewModel @Inject constructor(
     }
 
     fun activate() {
+        if (_uiState.value.isLoading || _uiState.value.activated) return
         val inviteCode = _uiState.value.inviteCode.trim()
         if (inviteCode.isEmpty()) {
             _uiState.value = _uiState.value.copy(error = "INVALID_INVITE")

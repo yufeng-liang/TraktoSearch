@@ -77,7 +77,6 @@ import kotlinx.coroutines.launch
 fun ActivationLoginScreen(
     onLoginSuccess: () -> Unit = {},
     onGuestMode: () -> Unit = {},
-    onDoubanImport: () -> Unit = {},
     redirectToBrowser: Boolean = false,
     expired: Boolean = false,
     modifier: Modifier = Modifier,
@@ -91,9 +90,8 @@ fun ActivationLoginScreen(
     val scope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
     val scrollState = rememberScrollState()
+    val loginBackground = Color(0xFFF7EFE2)
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
-    var showDoubanImportRequireLoginDialog by remember { mutableStateOf(false) }
-    var pendingDoubanImportAfterLogin by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
 
@@ -131,18 +129,13 @@ fun ActivationLoginScreen(
 
     LaunchedEffect(loginState) {
         if (loginState == LoginState.SUCCESS) {
-            if (pendingDoubanImportAfterLogin) {
-                pendingDoubanImportAfterLogin = false
-                onDoubanImport()
-            } else {
-                onLoginSuccess()
-            }
+            onLoginSuccess()
         }
     }
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = loginBackground
     ) {
         Box(
             modifier = Modifier
@@ -157,7 +150,7 @@ fun ActivationLoginScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                        .background(loginBackground)
                 ) {
                     MovieBackdrop(modifier = Modifier.fillMaxSize())
                 }
@@ -245,49 +238,14 @@ fun ActivationLoginScreen(
                     )
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                if (loginViewModel.isTraktLoggedIn()) onDoubanImport()
-                                else showDoubanImportRequireLoginDialog = true
-                            }
-                        },
-                        enabled = canUseActions,
-                        modifier = Modifier.weight(1f)
-                    ) { Text(stringResource(R.string.login_douban_import)) }
-                    TextButton(
-                        onClick = onGuestMode,
-                        enabled = canUseActions,
-                        modifier = Modifier.weight(1f)
-                    ) { Text(stringResource(R.string.login_guest)) }
-                }
+                TextButton(
+                    onClick = onGuestMode,
+                    enabled = canUseActions,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.login_guest)) }
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }
-    }
-
-    if (showDoubanImportRequireLoginDialog) {
-        AlertDialog(
-            onDismissRequest = { showDoubanImportRequireLoginDialog = false },
-            title = { Text(stringResource(R.string.douban_import_require_trakt_title)) },
-            text = { Text(stringResource(R.string.douban_import_require_trakt_desc)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDoubanImportRequireLoginDialog = false
-                    pendingDoubanImportAfterLogin = true
-                    launchAuthorization()
-                }) { Text(stringResource(R.string.douban_import_require_trakt_login)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDoubanImportRequireLoginDialog = false }) {
-                    Text(stringResource(R.string.douban_import_require_trakt_cancel))
-                }
-            }
-        )
     }
 
     if (showWhatIsTraktDialog) {
@@ -471,7 +429,7 @@ private fun ActivationCard(
             )
             Button(
                 onClick = authViewModel::activate,
-                enabled = !authState.isLoading,
+                enabled = !authState.isLoading && !authState.activated,
                 modifier = Modifier
                     .padding(start = 8.dp)
                     .height(48.dp),
@@ -493,7 +451,7 @@ private fun ActivationCard(
                 color = MaterialTheme.colorScheme.error
             )
         } ?: Text(
-            text = stringResource(if (authState.activated) R.string.login_activation_success else R.string.login_activation_locked),
+            text = stringResource(if (authState.activated) R.string.login_activation_choose_path else R.string.login_activation_locked),
             modifier = Modifier.padding(top = 8.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant

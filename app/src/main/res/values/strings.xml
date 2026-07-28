@@ -227,7 +227,7 @@
     <string name="login_douban_import">Or import from Douban</string>
     <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
     <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
-    <string name="login_activation_success">Activated · you can now continue</string>
+    <string name="login_activation_choose_path">Activated · choose to sign in with Trakt or continue as a guest</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
     <string name="douban_import_require_trakt_title">Login to Trakt required</string>
     <string name="douban_import_require_trakt_desc">Importing Douban marks requires logging into Trakt first, marks will sync to your Trakt watchlist/watched list. Login to Trakt now?</string>

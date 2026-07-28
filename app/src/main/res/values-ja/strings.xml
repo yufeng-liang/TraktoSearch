@@ -468,7 +468,7 @@
     <string name="login_sync_hint">ログイン後、Traktのウォッチリストが同期されます</string>
     <string name="login_activation_hint">アクセスを有効にするとTraktのウォッチリストを同期できます</string>
     <string name="login_activation_locked">○ 未認証 · コードを入力して視聴スペースを解放</string>
-    <string name="login_activation_success">有効化済み · 続行できます</string>
+    <string name="login_activation_choose_path">有効化済み · Traktにログインするか、ゲストとして続行してください</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
     <!-- Login Prompt Screen -->
