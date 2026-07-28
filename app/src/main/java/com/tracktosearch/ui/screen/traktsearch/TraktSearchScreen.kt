@@ -62,7 +62,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -71,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -87,17 +87,19 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -117,7 +119,9 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.hasListReachedTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.MovieCardSkeleton
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ResourceItemCard
@@ -165,6 +169,7 @@ fun TraktSearchScreen(
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val hazeSurface = MaterialTheme.colorScheme.surface
+    val isDark = isSystemInDarkTheme()
 
     var searchQuery by rememberSaveable { mutableStateOf(initialQuery) }
 
@@ -222,6 +227,7 @@ fun TraktSearchScreen(
     }
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
 
     // 点击 token,确保只有被点击的卡片参与转场
     var activeClickToken by remember { mutableStateOf(0) }
@@ -248,6 +254,24 @@ fun TraktSearchScreen(
             MediaType.SHOW -> showGridState
             MediaType.PERSON -> personGridState
             MediaType.DISK -> movieGridState // 网盘用 LazyColumn 的 listState
+        }
+        val hasContentUnderTopBar by remember(isDiskTab, currentGridState) {
+            derivedStateOf {
+                if (isDiskTab) {
+                    hasListReachedTopBar(
+                        firstVisibleItemIndex = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                        firstVisibleItemOffsetPx = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                        topBarHeightPx = topBarHeightPx
+                    )
+                } else {
+                    val firstVisibleItem = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()
+                    hasListReachedTopBar(
+                        firstVisibleItemIndex = firstVisibleItem?.index,
+                        firstVisibleItemOffsetPx = firstVisibleItem?.offset?.y,
+                        topBarHeightPx = topBarHeightPx
+                    )
+                }
+            }
         }
 
         // 主内容区域 - hazeSource 应用到可滚动组件
@@ -432,11 +456,15 @@ fun TraktSearchScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        topBarHeightPx = coordinates.size.height
+                    }
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
-                    .hazeProgressiveTopBar(
+                    .hazeTopBar(
                         state = hazeState,
                         style = hazeStyle,
-                        blurRadius = 24.dp
+                        blurRadius = 24.dp,
+                        isContentUnderTopBar = hasContentUnderTopBar
                     )
             ) {
                 // 状态栏 Spacer
@@ -452,79 +480,93 @@ fun TraktSearchScreen(
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.search_back), tint = MaterialTheme.colorScheme.primary)
                     }
                     val searchInteractionSource = remember { MutableInteractionSource() }
-                    BasicTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it },
+                    NeumorphicFrostedSurface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(45.dp)
-                            .focusRequester(focusRequester),
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                if (searchQuery.isNotBlank()) {
-                                    viewModel.search(searchQuery)
+                            .height(42.dp),
+                        isDark = isDark,
+                        shape = RoundedCornerShape(21.dp),
+                        backgroundColor = if (isDark) Color.White.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.55f),
+                        borderColor = if (isDark) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.75f),
+                        elevation = 4.dp,
+                        blurRadius = 16.dp,
+                        hazeState = hazeState,
+                        hazeStyle = HazeMaterials.thin()
+                    ) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .focusRequester(focusRequester)
+                                .padding(horizontal = 12.dp),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(
+                                onSearch = {
+                                    if (searchQuery.isNotBlank()) {
+                                        viewModel.search(searchQuery)
+                                    }
                                 }
-                            }
-                        ),
-                        interactionSource = searchInteractionSource,
-                        decorationBox = { innerTextField ->
-                            OutlinedTextFieldDefaults.DecorationBox(
-                                value = searchQuery,
-                                innerTextField = innerTextField,
-                                enabled = true,
-                                singleLine = true,
-                                visualTransformation = VisualTransformation.None,
-                                interactionSource = searchInteractionSource,
-                                placeholder = {
-                                    Text(
-                                        when (uiState.selectedTab) {
-                                            MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
-                                            MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
-                                            MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
-                                            MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
-                                        },
-                                        color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                            ),
+                            interactionSource = searchInteractionSource,
+                            decorationBox = { innerTextField ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Search,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                },
-                                trailingIcon = {
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .padding(horizontal = 8.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        if (searchQuery.isEmpty()) {
+                                            Text(
+                                                text = when (uiState.selectedTab) {
+                                                    MediaType.MOVIE -> stringResource(R.string.trakt_search_hint_movies)
+                                                    MediaType.SHOW -> stringResource(R.string.trakt_search_hint_shows)
+                                                    MediaType.PERSON -> stringResource(R.string.trakt_search_hint_persons)
+                                                    MediaType.DISK -> stringResource(R.string.trakt_search_hint_disk)
+                                                },
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f),
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        innerTextField()
+                                    }
                                     if (searchQuery.isNotEmpty()) {
-                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(32.dp)) {
+                                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(28.dp)) {
                                             Icon(
                                                 Icons.Rounded.Close,
                                                 contentDescription = stringResource(R.string.content_desc_clear),
-                                                modifier = Modifier.size(19.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     } else {
-                                        IconButton(onClick = {
-                                            if (searchQuery.isNotBlank()) {
-                                                viewModel.search(searchQuery)
-                                            }
-                                        }) {
+                                        IconButton(
+                                            onClick = { viewModel.search(searchQuery) },
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
                                             Icon(
                                                 Icons.Rounded.Search,
                                                 contentDescription = stringResource(R.string.watchlist_search),
-                                                modifier = Modifier.size(19.dp)
+                                                modifier = Modifier.size(18.dp)
                                             )
                                         }
                                     }
-                                },
-                                contentPadding = PaddingValues(start = 16.dp, end = 8.dp, top = 0.dp, bottom = 0.dp),
-                                container = {
-                                    OutlinedTextFieldDefaults.Container(
-                                        enabled = true,
-                                        isError = false,
-                                        interactionSource = searchInteractionSource,
-                                        colors = OutlinedTextFieldDefaults.colors(),
-                                        shape = RoundedCornerShape(22.dp)
-                                    )
                                 }
-                            )
-                        }
-                    )
+                            }
+                        )
+                    }
                 }
 
                 // Tab 栏
