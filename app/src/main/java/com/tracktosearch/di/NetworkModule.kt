@@ -504,6 +504,40 @@ object NetworkModule {
             .build()
             .create(OpenMeteoApi::class.java)
     }
+
+    @Provides
+    @Singleton
+    @Named("feedback")
+    fun provideFeedbackOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(Interceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("User-Agent", USER_AGENT)
+                    .build()
+                chain.proceed(request)
+            })
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideFeedbackApiService(
+        @Named("feedback") client: OkHttpClient,
+        json: Json
+    ): com.tracktosearch.data.remote.feedback.FeedbackApiService {
+        val retrofit = Retrofit.Builder()
+            .baseUrl(BuildConfig.FEEDBACK_BASE_URL.trimEnd('/') + "/")
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+        return retrofit.create(com.tracktosearch.data.remote.feedback.FeedbackApiService::class.java)
+    }
 }
 
 /**
