@@ -63,7 +63,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,7 +85,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.isContentUnderTopBar
+import com.tracktosearch.ui.component.hasListReachedTopBar
 import com.tracktosearch.ui.component.neumorphicInnerShadow
 import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
@@ -102,7 +101,6 @@ import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -176,16 +174,12 @@ fun DiscoverScreen(
     val discoverHazeState = remember { HazeState() }
     val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
-    val discoverContentTopPaddingPx = with(LocalDensity.current) {
-        (80.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
-    }
     var discoverTopBarHeightPx by remember { mutableIntStateOf(0) }
-    val discoverHasContentUnderTopBar by remember(discoverContentTopPaddingPx) {
+    val discoverHasContentUnderTopBar by remember {
         derivedStateOf {
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset,
-                contentTopPaddingPx = discoverContentTopPaddingPx,
+                firstVisibleItemOffsetPx = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
                 topBarHeightPx = discoverTopBarHeightPx
             )
         }

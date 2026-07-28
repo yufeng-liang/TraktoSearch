@@ -7,34 +7,53 @@ class NeumorphicGlassTest {
     @Test
     fun noVisibleItemDoesNotEnableTopBarHaze() {
         assertThat(
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = null,
-                firstVisibleItemScrollOffsetPx = null,
-                contentTopPaddingPx = 200,
+                firstVisibleItemOffsetPx = null,
                 topBarHeightPx = 100
             )
         ).isFalse()
     }
 
     @Test
-    fun itemAtTopBarBottomDoesNotEnableTopBarHaze() {
+    fun firstItemAtTopBarBottomEnablesTopBarHaze() {
         assertThat(
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffsetPx = 100,
-                contentTopPaddingPx = 200,
+                firstVisibleItemOffsetPx = 100,
                 topBarHeightPx = 100
             )
-        ).isFalse()
+        ).isTrue()
     }
 
     @Test
     fun itemInsideTopBarEnablesTopBarHaze() {
         assertThat(
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffsetPx = 101,
-                contentTopPaddingPx = 200,
+                firstVisibleItemOffsetPx = 99,
+                topBarHeightPx = 100
+            )
+        ).isTrue()
+    }
+
+    @Test
+    fun firstItemBelowTopBarDisablesTopBarHazeWhenScrollingBack() {
+        assertThat(
+            hasListReachedTopBar(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemOffsetPx = 101,
+                topBarHeightPx = 100
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun laterItemKeepsTopBarHazeEnabledEvenWhenItsContentStartsBelowTopBar() {
+        assertThat(
+            hasListReachedTopBar(
+                firstVisibleItemIndex = 1,
+                firstVisibleItemOffsetPx = 240,
                 topBarHeightPx = 100
             )
         ).isTrue()

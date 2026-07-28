@@ -161,7 +161,7 @@ import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.isContentUnderTopBar
+import com.tracktosearch.ui.component.hasListReachedTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
@@ -180,7 +180,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -353,16 +352,12 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
         else -> historyShowGridState
     }
-    val watchlistContentTopPaddingPx = with(LocalDensity.current) {
-        (170.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
-    }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
-    val hasContentUnderTopBar by remember(currentGridState, watchlistContentTopPaddingPx) {
+    val hasContentUnderTopBar by remember(currentGridState) {
         derivedStateOf {
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
-                contentTopPaddingPx = watchlistContentTopPaddingPx,
+                firstVisibleItemOffsetPx = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.y,
                 topBarHeightPx = topBarHeightPx
             )
         }

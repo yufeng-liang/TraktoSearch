@@ -43,18 +43,16 @@ private const val NEUMORPHIC_GLASS_TAG = "NeumorphicGlass"
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
-/** 标题栏使用普通 thin 模糊，不对模糊强度做渐进处理。 */
-internal fun isContentUnderTopBar(
+/** 列表首项到达标题栏底部时启用 Haze，回滚离开覆盖区后关闭。 */
+internal fun hasListReachedTopBar(
     firstVisibleItemIndex: Int?,
-    firstVisibleItemScrollOffsetPx: Int?,
-    contentTopPaddingPx: Int,
+    firstVisibleItemOffsetPx: Int?,
     topBarHeightPx: Int
 ): Boolean {
-    if (firstVisibleItemIndex == null || firstVisibleItemScrollOffsetPx == null || topBarHeightPx <= 0) {
+    if (firstVisibleItemIndex == null || firstVisibleItemOffsetPx == null || topBarHeightPx <= 0) {
         return false
     }
-    val contentTopPx = contentTopPaddingPx - firstVisibleItemScrollOffsetPx
-    return firstVisibleItemIndex > 0 || contentTopPx < topBarHeightPx
+    return firstVisibleItemIndex > 0 || firstVisibleItemOffsetPx <= topBarHeightPx
 }
 
 @Composable

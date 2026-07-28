@@ -83,16 +83,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
-import com.tracktosearch.ui.component.isContentUnderTopBar
+import com.tracktosearch.ui.component.hasListReachedTopBar
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
@@ -335,16 +333,12 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
-    val settingsContentTopPaddingPx = with(LocalDensity.current) {
-        (65.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
-    }
     var settingsTopBarHeightPx by remember { mutableIntStateOf(0) }
-    val settingsHasContentUnderTopBar by remember(settingsContentTopPaddingPx) {
+    val settingsHasContentUnderTopBar by remember {
         derivedStateOf {
-            isContentUnderTopBar(
+            hasListReachedTopBar(
                 firstVisibleItemIndex = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset,
-                contentTopPaddingPx = settingsContentTopPaddingPx,
+                firstVisibleItemOffsetPx = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
                 topBarHeightPx = settingsTopBarHeightPx
             )
         }
