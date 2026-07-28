@@ -139,7 +139,8 @@ fun MainScreen(
     onDoubanResync: () -> Unit = {},
     onDoubanFailures: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
-    onSpiderTest: () -> Unit = {}
+    onSpiderTest: () -> Unit = {},
+    onFeedbackClick: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
@@ -417,6 +418,7 @@ fun MainScreen(
                         onNavigateToLogin = onNavigateToLogin,
                         onStatisticsClick = onStatisticsClick,
                         onMarkRecordsClick = onMarkRecordsClick,
+                        onFeedbackClick = onFeedbackClick,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

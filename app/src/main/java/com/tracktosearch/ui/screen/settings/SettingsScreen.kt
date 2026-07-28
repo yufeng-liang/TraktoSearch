@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.Feedback
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.History
@@ -142,6 +143,7 @@ fun SettingsScreen(
     onNavigateToLogin: () -> Unit = {},
     onStatisticsClick: () -> Unit = {},
     onMarkRecordsClick: () -> Unit = {},
+    onFeedbackClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -788,10 +790,10 @@ fun SettingsScreen(
                     )
                     GroupDivider()
                     SettingsItemCard(
-                        icon = Icons.Rounded.Code,
-                        title = stringResource(R.string.settings_source_repo),
-                        subtitle = "yufeng-liang/TrackToSearch-release",
-                        onClick = { openUrl("https://gitee.com/yufeng-liang/TrackToSearch-release") },
+                        icon = Icons.Rounded.Feedback,
+                        title = stringResource(R.string.settings_feedback),
+                        subtitle = stringResource(R.string.settings_feedback_subtitle),
+                        onClick = onFeedbackClick,
                         containerColor = Color.Transparent
                     )
                 }
