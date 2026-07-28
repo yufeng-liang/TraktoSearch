@@ -74,6 +74,7 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CloudPermissionStorage
 import com.tracktosearch.data.local.OnboardingStorage
+import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.ui.component.LocalIsCurrentTab
@@ -86,6 +87,7 @@ import com.tracktosearch.ui.screen.discover.DiscoverScreen
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
+import com.tracktosearch.ui.screen.settings.AccentColorDialog
 import com.tracktosearch.ui.screen.settings.SettingsScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchScreen
 import com.tracktosearch.ui.screen.traktsearch.TraktSearchViewModel
@@ -109,6 +111,12 @@ import kotlinx.coroutines.launch
 @InstallIn(SingletonComponent::class)
 interface TraktRepositoryEntryPoint {
     fun traktRepository(): TraktRepository
+}
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface ThemeStorageEntryPoint {
+    fun themeStorage(): ThemeStorage
 }
 
 @Composable
@@ -145,6 +153,12 @@ fun MainScreen(
     // 新手引导
     val onboardingStorage = remember { OnboardingStorage(context.applicationContext) }
     val onboardingCompleted by onboardingStorage.isCompleted.collectAsState(initial = true)
+    val themeSelectionCompleted by onboardingStorage.isThemeSelectionCompleted.collectAsState(initial = true)
+    val themeStorage = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ThemeStorageEntryPoint::class.java).themeStorage()
+    }
+    val currentAccent by themeStorage.accentColor.collectAsState()
+    var showAccentOnboarding by remember { mutableStateOf(false) }
     var showOnboarding by remember { mutableStateOf(false) }
     val tabRects = remember { mutableStateOf<List<Rect>>(emptyList()) }
     val density = LocalDensity.current
@@ -175,9 +189,10 @@ fun MainScreen(
     // 悬浮导航显隐状态(提前声明,供 LaunchedEffect(onboardingCompleted) 使用)
     var isFabVisible by remember { mutableFloatStateOf(1f) }
 
-    LaunchedEffect(onboardingCompleted) {
+    LaunchedEffect(onboardingCompleted, themeSelectionCompleted) {
         if (onboardingCompleted == false) {
-            showOnboarding = true
+            showAccentOnboarding = !themeSelectionCompleted
+            showOnboarding = themeSelectionCompleted
             // 重置到搜索页，确保新手引导从搜索页开始
             // 同时强制显示底部导航(若设置页滚动时把它隐藏了)
             isFabVisible = 1f
@@ -186,6 +201,28 @@ fun MainScreen(
                 selectedTab = 0
             }
         }
+    }
+
+    if (showAccentOnboarding) {
+        AccentColorDialog(
+            currentAccent = currentAccent,
+            onAccentSelected = { accent ->
+                scope.launch {
+                    themeStorage.setAccentColor(accent)
+                    onboardingStorage.setThemeSelectionCompleted(true)
+                    showAccentOnboarding = false
+                    showOnboarding = true
+                }
+            },
+            onDismiss = {
+                scope.launch {
+                    onboardingStorage.setThemeSelectionCompleted(true)
+                    showAccentOnboarding = false
+                    showOnboarding = true
+                }
+            },
+            dialogTitle = stringResource(R.string.onboarding_choose_theme)
+        )
     }
 
     // Pager 滑动 → 同步 selectedTab
@@ -480,29 +517,20 @@ fun MainScreen(
                 }
             }
 
-            // 新手引导遮罩（4个Tab高亮 + 3个纯信息提示）
-            // 步骤→Tab页映射：搜索(0)→发现(1)→我的(2)→设置(3)→设置(3,观看统计入口在设置页第一行)→我的(2)→不切换(-1)
-            val onboardingTabMap = listOf(0, 1, 2, 3, 3, 2, -1)
+            // 新手引导遮罩：搜索、发现、我的三个 Tab 高亮
+            val onboardingTabMap = listOf(0, 1, 2)
             if (showOnboarding && tabRects.value.size == 4) {
                 OnboardingOverlay(
-                    targetRects = tabRects.value + listOf(Rect.Zero, Rect.Zero, Rect.Zero),
+                    targetRects = tabRects.value.take(3),
                     titles = listOf(
                         stringResource(R.string.onboarding_step1_title),
                         stringResource(R.string.onboarding_step2_title),
-                        stringResource(R.string.onboarding_step3_title),
-                        stringResource(R.string.onboarding_step4_title),
-                        stringResource(R.string.onboarding_step5_title),
-                        stringResource(R.string.onboarding_step6_title),
-                        stringResource(R.string.onboarding_step7_title)
+                        stringResource(R.string.onboarding_step3_title)
                     ),
                     descriptions = listOf(
                         stringResource(R.string.onboarding_step1_desc),
                         stringResource(R.string.onboarding_step2_desc),
-                        stringResource(R.string.onboarding_step3_desc),
-                        stringResource(R.string.onboarding_step4_desc),
-                        stringResource(R.string.onboarding_step5_desc),
-                        stringResource(R.string.onboarding_step6_desc),
-                        stringResource(R.string.onboarding_step7_desc)
+                        stringResource(R.string.onboarding_step3_desc)
                     ),
                     onComplete = {
                         showOnboarding = false

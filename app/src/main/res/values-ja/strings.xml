@@ -932,22 +932,13 @@
     <string name="onboarding_skip">スキップ</string>
     <string name="onboarding_next">次へ</string>
     <string name="onboarding_done">了解</string>
+    <string name="onboarding_choose_theme">好きなテーマカラーを選択</string>
     <string name="onboarding_step1_title">検索</string>
-    <string name="onboarding_step1_desc">映画やテレビ番組のリソースを検索、Quark、Baidu、Aliyunなどのクラウドドライブソースに対応</string>
+    <string name="onboarding_step1_desc">映画、テレビ番組、人物、リソースのカテゴリ別に検索</string>
     <string name="onboarding_step2_title">発見</string>
-    <string name="onboarding_step2_desc">豆瓣、TMDBの人気チャートを閲覧</string>
+    <string name="onboarding_step2_desc">パーソナライズされたおすすめ（豆瓣ログイン後に生成）と各種ランキングを閲覧</string>
     <string name="onboarding_step3_title">マイ</string>
-    <string name="onboarding_step3_desc">ログイン後に見たいリストと視聴済みリストを管理</string>
-    <string name="onboarding_step4_title">設定</string>
-    <string name="onboarding_step4_desc">テーマ、言語、検索ソースなどをカスタマイズ</string>
-    <string name="onboarding_step5_title">視聴統計</string>
-    <string name="onboarding_step5_desc">「設定」ページの先頭行で視聴データとヒートマップを表示、テレビ番組は1シーズン全話視聴でカウント</string>
-    <string name="onboarding_step6_title">詳細ページの操作</string>
-    <string name="onboarding_step6_desc">ポスターをタップして拡大表示・アルバムに保存、キャストアバターをタップして俳優の他の作品を表示、評価はハーフスター選択に対応</string>
-
-    <!-- Onboarding -->
-    <string name="onboarding_step7_title">その他のヒント</string>
-    <string name="onboarding_step7_desc">ステータスバーをタップしてトップにスクロール；設定で発見セクションをカスタマイズ；一部の機能（予告編、Trakt、TMDB）はVPNが必要です</string>
+    <string name="onboarding_step3_desc">豆瓣からインポートした作品を含む、Traktの見たいリストと視聴済みリストを表示</string>
 
     <!-- Common UI -->
     <string name="common_retry">再試行</string>

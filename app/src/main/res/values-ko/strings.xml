@@ -932,22 +932,13 @@
     <string name="onboarding_skip">건너뛰기</string>
     <string name="onboarding_next">다음</string>
     <string name="onboarding_done">확인</string>
+    <string name="onboarding_choose_theme">원하는 테마 색상 선택</string>
     <string name="onboarding_step1_title">검색</string>
-    <string name="onboarding_step1_desc">영화/TV 프로그램 리소스 검색, Quark, Baidu, Aliyun 등 클라우드 드라이브 소스 지원</string>
+    <string name="onboarding_step1_desc">영화, TV 프로그램, 인물, 리소스 카테고리별 검색 지원</string>
     <string name="onboarding_step2_title">발견</string>
-    <string name="onboarding_step2_desc">더우반, TMDB 인기 차트 탐색</string>
+    <string name="onboarding_step2_desc">개인 맞춤 추천(더우반 로그인 후 생성) 및 기타 차트 탐색</string>
     <string name="onboarding_step3_title">마이</string>
-    <string name="onboarding_step3_desc">로그인 후 관심목록과 시청 목록 관리</string>
-    <string name="onboarding_step4_title">설정</string>
-    <string name="onboarding_step4_desc">테마, 언어, 검색 소스 등 사용자 정의</string>
-    <string name="onboarding_step5_title">시청 통계</string>
-    <string name="onboarding_step5_desc">「설정」 페이지 첫 번째 행에서 시청 데이터와 히트맵 보기, TV 프로그램은 한 시즌 전체 시청 시 카운트</string>
-    <string name="onboarding_step6_title">상세 페이지 조작</string>
-    <string name="onboarding_step6_desc">포스터 탭하여 크게 보기 및 앨범에 저장, 출연진 아바타 탭하여 배우의 다른 작품 보기, 평가는 반점 선택 지원</string>
-
-    <!-- Onboarding -->
-    <string name="onboarding_step7_title">추가 팁</string>
-    <string name="onboarding_step7_desc">상태 표시줄을 탭하여 맨 위로 스크롤; 설정에서 발견 섹션을 사용자 정의; 일부 기능(예고편, Trakt, TMDB)은 VPN이 필요합니다</string>
+    <string name="onboarding_step3_desc">더우반에서 가져온 콘텐츠를 포함한 Trakt 관심목록 및 시청 목록 표시</string>
 
     <!-- Common UI -->
     <string name="common_retry">재시도</string>

@@ -21,15 +21,26 @@ class OnboardingStorage @Inject constructor(
 ) {
     private companion object {
         val KEY_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        val KEY_THEME_SELECTION_COMPLETED = booleanPreferencesKey("theme_selection_completed")
     }
 
     val isCompleted: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
         prefs[KEY_COMPLETED] ?: false
     }.distinctUntilChanged()
 
+    val isThemeSelectionCompleted: Flow<Boolean> = context.onboardingDataStore.data.map { prefs ->
+        prefs[KEY_THEME_SELECTION_COMPLETED] ?: false
+    }.distinctUntilChanged()
+
     suspend fun setCompleted(completed: Boolean) {
         context.onboardingDataStore.edit { prefs ->
             prefs[KEY_COMPLETED] = completed
+        }
+    }
+
+    suspend fun setThemeSelectionCompleted(completed: Boolean) {
+        context.onboardingDataStore.edit { prefs ->
+            prefs[KEY_THEME_SELECTION_COMPLETED] = completed
         }
     }
 }
