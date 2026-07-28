@@ -7,7 +7,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "feedback-db"
-database_id = "TODO_DEPLOY_TIME_FILL"
+database_id = "62047475-0eb8-4b24-8e18-a49acebf2dd5"
 
 # R2：截图存储
 [[r2_buckets]]
@@ -17,7 +17,7 @@ bucket_name = "feedback-screenshots"
 # KV：限流计数器
 [[kv_namespaces]]
 binding = "KV"
-id = "TODO_DEPLOY_TIME_FILL"
+id = "e4cd152919a24339a807cff410962043"
 
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY（与 auth-worker 共享）
