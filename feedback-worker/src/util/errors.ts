@@ -105,3 +105,17 @@ export function generateRequestId(): string {
 export function now(): number {
     return Math.floor(Date.now() / 1000);
 }
+
+// 安全解析 JSON 请求体：捕获解析异常 + 校验为对象
+export async function readJson<T>(request: Request): Promise<T> {
+    try {
+        const body = await request.json();
+        if (!body || typeof body !== 'object' || Array.isArray(body)) {
+            throw new Error('body must be an object');
+        }
+        return body as T;
+    } catch (err) {
+        if (err instanceof AppError) throw err;
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON body', 400);
+    }
+}

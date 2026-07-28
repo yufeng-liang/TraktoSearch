@@ -1,6 +1,6 @@
 // POST /admin/close — 关闭反馈
 
-import { AppError, successResponse } from '../util/errors';
+import { AppError, successResponse, readJson } from '../util/errors';
 
 interface Env {
     DB: D1Database;
@@ -15,7 +15,7 @@ export async function handleAdminClose(
     env: Env,
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as CloseRequest;
+    const body = await readJson<CloseRequest>(request);
     if (!body.feedbackId) {
         throw new AppError('INVALID_REQUEST', 'feedbackId is required', 400);
     }
@@ -24,8 +24,8 @@ export async function handleAdminClose(
         UPDATE feedbacks SET status = 'CLOSED' WHERE id = ?
     `).bind(body.feedbackId).run();
 
-    if (!result.success) {
-        throw new AppError('INTERNAL_ERROR', 'Failed to close feedback', 500);
+    if (!result.success || result.meta.changes !== 1) {
+        throw new AppError('NOT_FOUND', 'Feedback not found', 404);
     }
     return successResponse({ ok: true }, requestId);
 }

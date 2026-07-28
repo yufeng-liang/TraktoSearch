@@ -1,6 +1,6 @@
 // POST /admin/reply — 后台回复
 
-import { AppError, successResponse, now } from '../util/errors';
+import { AppError, successResponse, now, readJson } from '../util/errors';
 import { generateId } from '../util/crypto';
 
 interface Env {
@@ -17,7 +17,7 @@ export async function handleAdminReply(
     env: Env,
     requestId: string
 ): Promise<Response> {
-    const body = await request.json() as ReplyRequest;
+    const body = await readJson<ReplyRequest>(request);
     if (!body.feedbackId || !body.content) {
         throw new AppError('INVALID_REQUEST', 'feedbackId and content are required', 400);
     }
@@ -33,6 +33,9 @@ export async function handleAdminReply(
     if (!feedback) {
         throw new AppError('NOT_FOUND', 'Feedback not found', 404);
     }
+    if (feedback.status === 'CLOSED') {
+        throw new AppError('INVALID_REQUEST', 'Cannot reply to closed feedback', 400);
+    }
 
     const replyId = generateId();
     const currentTime = now();
@@ -42,7 +45,7 @@ export async function handleAdminReply(
             INSERT INTO feedback_replies (id, feedback_id, content, created_at)
             VALUES (?, ?, ?, ?)
         `).bind(replyId, body.feedbackId, content, currentTime),
-        // PENDING -> REPLIED；CLOSED 保持 CLOSED（不允许回复已关闭）
+        // PENDING -> REPLIED；REPLIED 保持 REPLIED
         env.DB.prepare(`
             UPDATE feedbacks SET status = 'REPLIED' WHERE id = ? AND status = 'PENDING'
         `).bind(body.feedbackId),

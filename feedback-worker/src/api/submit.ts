@@ -1,6 +1,6 @@
 // POST /feedback-api/submit — 提交反馈
 
-import { AppError, successResponse, now } from '../util/errors';
+import { AppError, successResponse, now, readJson } from '../util/errors';
 import { generateId } from '../util/crypto';
 import { checkRateLimit } from '../util/rate-limit';
 
@@ -47,7 +47,7 @@ export async function handleSubmit(
         throw new AppError('RATE_LIMITED', 'Daily limit reached', 429);
     }
 
-    const body = await request.json() as SubmitRequest;
+    const body = await readJson<SubmitRequest>(request);
 
     if (!VALID_TYPES.has(body.type)) {
         throw new AppError('INVALID_REQUEST', 'Invalid feedback type', 400);
@@ -60,10 +60,25 @@ export async function handleSubmit(
     if (screenshots.some(url => typeof url !== 'string' || url.length > 512)) {
         throw new AppError('INVALID_REQUEST', 'Invalid screenshot URL', 400);
     }
+    // 校验截图归属：key 必须以当前 friendId/ 开头
+    for (const k of screenshots) {
+        if (!k.startsWith(`${payload.sub}/`)) {
+            throw new AppError('INVALID_REQUEST', 'Screenshot does not belong to user', 400);
+        }
+    }
     const contact = body.contact ? body.contact.trim().slice(0, 128) : null;
     const friendNickname = (body.friendNickname || '').trim();
     if (!friendNickname || friendNickname.length > 64) {
         throw new AppError('INVALID_REQUEST', 'friendNickname is required', 400);
+    }
+    if (!body.appVersion || typeof body.appVersion !== 'string' || body.appVersion.length > 64) {
+        throw new AppError('INVALID_REQUEST', 'appVersion is required', 400);
+    }
+    if (!body.osVersion || typeof body.osVersion !== 'string' || body.osVersion.length > 64) {
+        throw new AppError('INVALID_REQUEST', 'osVersion is required', 400);
+    }
+    if (!body.deviceModel || typeof body.deviceModel !== 'string' || body.deviceModel.length > 128) {
+        throw new AppError('INVALID_REQUEST', 'deviceModel is required', 400);
     }
 
     const id = generateId();

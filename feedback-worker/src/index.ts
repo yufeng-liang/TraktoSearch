@@ -70,7 +70,11 @@ export default {
 
     // Cron：每天清理 30 天前截图
     async scheduled(event: ScheduledEvent, env: Env): Promise<void> {
-        await handleCleanupScreenshots(env);
+        try {
+            await handleCleanupScreenshots(env);
+        } catch (err) {
+            console.error('[scheduled] cleanup failed:', err);
+        }
     },
 };
 
