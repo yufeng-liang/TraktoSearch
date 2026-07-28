@@ -88,6 +88,8 @@
 
 ## 常见陷阱
 
+- Haze 2.0 的 `HazeMaterials.*` 默认从 `MaterialTheme.colorScheme.surface` 读取填充色；主题新增专属 `surface` 时会同步改变全站 haze，应先确认是否需要保持与其他主题一致。
+
 - Retrofit 的 `@GET("")` 会在进入 OkHttp 前因空 URL 失败，并被评分层的宽泛异常捕获静默降级；网关 base URL 已含 `/api/omdb/` 时应使用 `@GET(".")`，并用 MockWebServer 锁定最终路径。
 - Brainstorm Companion 预览依赖 URL 查询参数 `?key=`；部分应用内浏览器会把链接重写为不带 key 的裸地址，导致 Companion 显示等待页或返回 403。先用 `Invoke-WebRequest` 验证带 key 地址；若服务端正常而浏览器丢 key，应改用独立的本地静态预览服务器，不要反复重启同一个 Companion 会话。
 - Android/Gradle 测试和构建可能超过默认工具超时但仍在运行；使用较长的单次超时，超时后先检查 Gradle 进程、`app/build/test-results`、`app/build/reports` 和 APK 输出，再判断成功或失败。不要把工具层 timeout 直接等同于 Gradle 失败。
