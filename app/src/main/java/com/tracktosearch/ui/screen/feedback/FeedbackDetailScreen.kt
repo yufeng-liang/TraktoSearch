@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -111,6 +112,7 @@ fun FeedbackDetailScreen(
                         Text(stringResource(R.string.feedback_screenshots), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(screenshots) { key ->
+                                val context = LocalContext.current
                                 val url = com.tracktosearch.data.remote.feedback.screenshotUrl(key)
                                 var loadFailed by remember { mutableStateOf(false) }
                                 Box(
@@ -132,7 +134,7 @@ fun FeedbackDetailScreen(
                                     } else {
                                         AsyncImage(
                                             model = remember(url) {
-                                                ImageRequest.Builder(LocalContext.current)
+                                                ImageRequest.Builder(context)
                                                     .data(url)
                                                     .crossfade(true)
                                                     .build()
