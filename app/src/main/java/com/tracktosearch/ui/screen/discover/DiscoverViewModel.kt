@@ -263,6 +263,15 @@ class DiscoverViewModel @Inject constructor(
         loadDoubanRecommend()
     }
 
+    /** 豆瓣登录后返回发现页时，按最新凭据加载猜你喜欢。 */
+    fun refreshDoubanRecommendOnResume() {
+        if (doubanAuthStorage.getCredentials() != null &&
+            _uiState.value.doubanRecommendState is DoubanRecommendState.NotLoggedIn
+        ) {
+            loadDoubanRecommend()
+        }
+    }
+
     /**
      * 页面恢复可见时刷新想看/已看缓存快照。
      * TraktRepository 内部的 @Volatile var 在详情页标记后会就地替换，

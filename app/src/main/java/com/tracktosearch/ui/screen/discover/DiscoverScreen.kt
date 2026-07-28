@@ -139,6 +139,7 @@ fun DiscoverScreen(
     // 页面恢复可见时刷新想看/已看缓存快照（从详情页标记后返回时触发）
     LifecycleResumeEffect(Unit) {
         viewModel.refreshWatchlistWatchedIds()
+        viewModel.refreshDoubanRecommendOnResume()
         onPauseOrDispose { }
     }
     var showDoubanAllDialog by remember { mutableStateOf<String?>(null) }

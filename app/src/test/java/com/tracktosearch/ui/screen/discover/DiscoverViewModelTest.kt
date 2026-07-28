@@ -228,6 +228,21 @@ class DiscoverViewModelTest {
     }
 
     @Test
+    fun `refreshDoubanRecommendOnResume refreshes recommendations after login`() = runTest {
+        every { doubanAuthStorage.getCredentials() } returnsMany listOf(
+            null,
+            DoubanCredentials("user1", "cookie")
+        )
+        coEvery { doubanRecommendCache.getOrAwait(any(), any(), any()) } returns emptyList()
+
+        viewModel.refreshDoubanRecommendOnResume()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.doubanRecommendState)
+            .isInstanceOf(DoubanRecommendState.Success::class.java)
+    }
+
+    @Test
     fun `switchRecommendTab 切换猜你喜欢Tab`() = runTest {
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user1", "cookie")
         coEvery { doubanRecommendCache.getOrAwait(any(), any(), any()) } returns emptyList()
