@@ -139,8 +139,10 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.ui.component.ActionButtonRow
 import com.tracktosearch.ui.component.ActionItem
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.detail.PosterFullscreenOverlay
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.ToastEffect
@@ -150,8 +152,6 @@ import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.blur.blurEffect
-import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -863,7 +863,7 @@ fun DoubanItemDetailScreen(
     val view = LocalView.current
     val listState = rememberLazyListState()
     val hazeState = remember { HazeState() }
-    val hazeSurface = MaterialTheme.colorScheme.surface
+    val isDarkTheme = isAppDarkTheme()
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var showPosterFullscreen by remember { mutableStateOf(false) }
@@ -935,20 +935,25 @@ fun DoubanItemDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                // 海报主色调垂直渐变背景(顶部主色 45% 透明度 → 底部主题背景色)
-                .then(
-                    uiState.posterDominantColor?.let { c ->
-                        Modifier.background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    c.copy(alpha = 0.70f),
-                                    MaterialTheme.colorScheme.background
+        ) {
+            // source 与浮动按钮保持兄弟层级，同时采样沉浸背景和详情内容。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = hazeState, zIndex = 0f)
+                    .then(
+                        uiState.posterDominantColor?.let { c ->
+                            Modifier.background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        c.copy(alpha = 0.70f),
+                                        MaterialTheme.colorScheme.background
+                                    )
                                 )
                             )
-                        )
-                    } ?: Modifier
-                )
-        ) {
+                        } ?: Modifier
+                    )
+            ) {
             val failure = uiState.failure
 
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让状态栏区域也能用)
@@ -1001,8 +1006,7 @@ fun DoubanItemDetailScreen(
                     state = listState,
                     modifier = Modifier
                         .fillMaxSize()
-                        .statusBarsPadding()
-                        .hazeSource(state = hazeState),
+                        .statusBarsPadding(),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     // 头部区域:海报 + 标题 + 子标题 + 豆瓣评分 + 我的评分 + 标记信息 + 短评
@@ -1213,39 +1217,18 @@ fun DoubanItemDetailScreen(
                 }
             }
 
-            // 返回按钮(独立定位,半透明圆形背景 + Haze 模糊,参考正常详情页)
-            Box(
+            // 返回按钮：使用与正常详情页一致的拟态玻璃和 ultraThin Haze。
+            NeumorphicIconButton(
+                onClick = { view.performHaptic(HapticType.TICK); onBack() },
+                isDark = isDarkTheme,
                 modifier = Modifier
                     .statusBarsPadding()
                     .padding(start = 12.dp, top = 4.dp)
-                    .align(Alignment.TopStart)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(state = hazeState) {
-                        blurEffect {
-                            backgroundColor = hazeSurface.copy(alpha = 0.25f)
-                            blurRadius = 20.dp
-                            noiseFactor = 0f
-                        }
-                    }
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = {
-                            view.performHaptic(HapticType.TICK)
-                            onBack()
-                        }
-                    ),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.TopStart),
+                hazeState = hazeState,
+                hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
+                hazeDebugName = "douban.back",
+                size = 40.dp
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
@@ -1267,35 +1250,13 @@ fun DoubanItemDetailScreen(
                 // 手动标记媒体类型按钮(下拉菜单)
                 val failure = uiState.failure
                 Box {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .hazeEffect(state = hazeState) {
-                                blurEffect {
-                                    backgroundColor = hazeSurface.copy(alpha = 0.25f)
-                                    blurRadius = 20.dp
-                                    noiseFactor = 0f
-                                }
-                            }
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                shape = CircleShape
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    showMarkMenu = true
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
+                    NeumorphicIconButton(
+                        onClick = { view.performHaptic(HapticType.CLICK); showMarkMenu = true },
+                        isDark = isDarkTheme,
+                        hazeState = hazeState,
+                        hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
+                        hazeDebugName = "douban.mark",
+                        size = 40.dp
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Edit,
@@ -1386,52 +1347,31 @@ fun DoubanItemDetailScreen(
                 // 分享按钮(分享影视标题、评分、豆瓣链接)
                 val shareContext = LocalContext.current
                 val shareDoubanRatingLabel = stringResource(R.string.share_douban_rating)
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .hazeEffect(state = hazeState) {
-                            blurEffect {
-                                backgroundColor = hazeSurface.copy(alpha = 0.25f)
-                                blurRadius = 20.dp
-                                noiseFactor = 0f
-                            }
-                        }
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.30f),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                            shape = CircleShape
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-                                view.performHaptic(HapticType.TICK)
-                                val f = uiState.failure
-                                if (f != null) {
-                                    val shareText = buildString {
-                                        append(f.title)
-                                        f.rating?.let { append(" - ${shareDoubanRatingLabel}: $it") }
-                                        if (f.doubanUrl.isNotBlank()) {
-                                            append("\n")
-                                            append(f.doubanUrl)
-                                        }
-                                    }
-                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, shareText)
-                                    }
-                                    shareContext.startActivity(
-                                        Intent.createChooser(sendIntent, null)
-                                    )
+                NeumorphicIconButton(
+                    onClick = {
+                        view.performHaptic(HapticType.TICK)
+                        val f = uiState.failure
+                        if (f != null) {
+                            val shareText = buildString {
+                                append(f.title)
+                                f.rating?.let { append(" - ${shareDoubanRatingLabel}: $it") }
+                                if (f.doubanUrl.isNotBlank()) {
+                                    append("\n")
+                                    append(f.doubanUrl)
                                 }
                             }
-                        ),
-                    contentAlignment = Alignment.Center
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            shareContext.startActivity(Intent.createChooser(sendIntent, null))
+                        }
+                    },
+                    isDark = isDarkTheme,
+                    hazeState = hazeState,
+                    hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
+                    hazeDebugName = "douban.share",
+                    size = 40.dp
                 ) {
                     Icon(
                         Icons.Rounded.Share,
@@ -1441,13 +1381,15 @@ fun DoubanItemDetailScreen(
                     )
                 }
             }
+            }
 
             // 海报大图查看(放在最后绘制,关闭/保存按钮不被顶部按钮遮住)
-            val posterUrl = failure?.posterUrl
+            val posterFailure = uiState.failure
+            val posterUrl = posterFailure?.posterUrl
             if (showPosterFullscreen && posterUrl != null) {
                 PosterFullscreenOverlay(
                     posterUrl = posterUrl,
-                    title = failure.title,
+                    title = posterFailure?.title.orEmpty(),
                     onDismiss = { showPosterFullscreen = false }
                 )
             }

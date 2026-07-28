@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import android.util.Log
+import com.tracktosearch.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -14,12 +15,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -29,11 +32,15 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import dev.chrisbanes.haze.HazeLogger
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
+import java.util.concurrent.atomic.AtomicBoolean
+
+private const val NEUMORPHIC_GLASS_TAG = "NeumorphicGlass"
 
 /** 供跨窗口弹窗和底部抽屉共享当前页面背景的 Haze 状态。 */
 val LocalModalHazeState = compositionLocalOf<HazeState?> { null }
@@ -339,10 +346,16 @@ fun NeumorphicIconButton(
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
+    hazeStyle: HazeBlurStyle? = null,
+    hazeDebugName: String? = null,
     content: @Composable () -> Unit
 ) {
     val shape = CircleShape
-    val resolvedHazeStyle = HazeMaterials.thin()
+    SideEffect {
+        if (BuildConfig.DEBUG) HazeLogger.enabled = true
+    }
+    val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
+    val hazeDrawLogged = remember(hazeState, hazeDebugName) { AtomicBoolean(false) }
     val hazeModifier = if (hazeState != null) {
         Modifier.hazeEffect(state = hazeState) {
             blurEffect { style = resolvedHazeStyle }
@@ -363,10 +376,7 @@ fun NeumorphicIconButton(
             )
             .clip(shape)
             .then(hazeModifier)
-            .background(
-                if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
-                shape
-            )
+            .background(Color.Transparent, shape)
             .neumorphicInnerShadow(
                 shape = shape,
                 isDark = isDark,
@@ -380,6 +390,16 @@ fun NeumorphicIconButton(
                 color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE0E5EC).copy(alpha = 0.9f),
                 shape = shape
             )
+            .drawWithContent {
+                if (BuildConfig.DEBUG && hazeState != null && hazeDebugName != null && hazeDrawLogged.compareAndSet(false, true)) {
+                    Log.d(
+                        NEUMORPHIC_GLASS_TAG,
+                        "haze.draw name=$hazeDebugName enabled=true shape=circle sizeDp=$size " +
+                            "areas=${hazeState.areas.size} details=${hazeState.areas.joinToString()}"
+                    )
+                }
+                drawContent()
+            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

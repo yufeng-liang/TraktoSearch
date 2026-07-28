@@ -88,8 +88,10 @@ import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.MovieCard
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ResourceItemCard
 import com.tracktosearch.ui.component.ScrollToTopButton
+import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ToastEffect
@@ -238,6 +240,7 @@ fun DetailScreen(
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
     val detailHazeStyle = HazeMaterials.thin()
+    val detailIsDark = isAppDarkTheme()
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
@@ -255,22 +258,27 @@ fun DetailScreen(
         Box(modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .hazeSource(state = detailHazeState)
-            // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
-            // alpha 0.70:增强沉浸效果,让海报主色调更明显
-            .then(
-                uiState.posterDominantColor?.let { c ->
-                    Modifier.background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                c.copy(alpha = 0.70f),
-                                MaterialTheme.colorScheme.background
-                            )
-                        )
-                    )
-                } ?: Modifier
-            )
         ) {
+            // source 必须与浮动按钮保持兄弟层级：按钮不能成为 source 的子节点，
+            // 否则 Haze 会排除 source 自身，按钮就会退化为完全透明。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .hazeSource(state = detailHazeState, zIndex = 0f)
+                    // 海报主色调垂直渐变背景(主色 0.70f 透明 → 背景色),实现沉浸式视觉
+                    .then(
+                        uiState.posterDominantColor?.let { c ->
+                            Modifier.background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        c.copy(alpha = 0.70f),
+                                        MaterialTheme.colorScheme.background
+                                    )
+                                )
+                            )
+                        } ?: Modifier
+                    )
+            ) {
             // Tab 栏底色/文字颜色计算(在 LazyColumn 之外定义,让内容区也能用)
             // - 非吸顶(tab 还在海报下方):底色透明,文字按海报主色亮度自适应
             // - 吸顶(tab 滚动到顶部固定):底色为沉浸色与白色 0.5 混合,文字按底色亮度自适应
@@ -325,12 +333,12 @@ fun DetailScreen(
             androidx.compose.runtime.CompositionLocalProvider(
                 androidx.compose.material3.LocalContentColor provides tabContentColor
             ) {
+            // 将详情内容整体作为唯一内容 source，避免 LazyColumn 自身的绘制层影响 Haze 采样。
             LazyColumn(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
-                    .hazeSource(state = detailHazeState),
+                    .statusBarsPadding(),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 // 头部信息（随内容滚动）
@@ -727,36 +735,22 @@ fun DetailScreen(
                         }
                     }
                 }
-            }
+                }
             } // CompositionLocalProvider
+            }
 
-            // 返回按钮（半透明背景，原 Haze 模糊已移除以降低持续渲染开销，仅保留快速回顶按钮的 Haze）
-            Box(
+            // 返回按钮：与详情页其他操作统一使用拟态玻璃，并保留真实 Haze 背景采样。
+            NeumorphicIconButton(
+                onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) },
+                isDark = detailIsDark,
                 modifier = Modifier
                     .statusBarsPadding()
                     .padding(start = 12.dp, top = 4.dp)
-                    .align(Alignment.TopStart)
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .hazeEffect(state = detailHazeState) {
-                        blurEffect { style = detailHazeStyle }
-                    }
-                    // alpha 0.50:无 Haze 时提高对比度保证可见性
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                        shape = CircleShape
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { view.performHaptic(HapticType.TICK); onBack(uiState.watchlistChanged, uiState.watchedChanged) }
-                    ),
-                contentAlignment = Alignment.Center
+                    .align(Alignment.TopStart),
+                hazeState = detailHazeState,
+                hazeStyle = HazeMaterials.ultraThin(),
+                hazeDebugName = "detail.back",
+                size = 40.dp
             ) {
                 Icon(
                     Icons.AutoMirrored.Rounded.ArrowBack,
@@ -766,7 +760,7 @@ fun DetailScreen(
                 )
             }
 
-            // 分享按钮 + 豆瓣同步重试按钮（半透明背景，原 Haze 已移除以降低持续渲染开销）
+            // 分享按钮 + 豆瓣同步重试按钮
             val context = LocalContext.current
             val shareLinksLabel = stringResource(R.string.detail_share_links)
             Row(
@@ -825,53 +819,37 @@ fun DetailScreen(
                     }
                 }
 
-                // 分享按钮
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .hazeEffect(state = detailHazeState) {
-                            blurEffect { style = detailHazeStyle }
-                        }
-                        // alpha 0.50:无 Haze 时提高对比度保证可见性
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
-                            shape = CircleShape
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                            shape = CircleShape
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = {
-                                val shareText = buildString {
-                                    append(uiState.title)
-                                    if (uiState.year != null) append(" (${uiState.year})")
-                                    append("\n")
-                                    if (uiState.overview.isNotBlank()) {
-                                        append(uiState.overview)
-                                        append("\n")
-                                    }
-                                    // 附带前两个资源搜索结果的网盘链接
-                                    val topResources = uiState.resources.take(2)
-                                    if (topResources.isNotEmpty()) {
-                                        append("\n" + shareLinksLabel + "\n")
-                                        topResources.forEachIndexed { index, item ->
-                                            append("${index + 1}. ${item.name}\n${item.url}\n")
-                                        }
-                                    }
-                                }
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(Intent.EXTRA_TEXT, shareText)
-                                }
-                                context.startActivity(Intent.createChooser(intent, null))
+                // 分享按钮：与返回按钮使用同一拟态玻璃组件和 Haze 状态。
+                NeumorphicIconButton(
+                    onClick = {
+                        val shareText = buildString {
+                            append(uiState.title)
+                            if (uiState.year != null) append(" (${uiState.year})")
+                            append("\n")
+                            if (uiState.overview.isNotBlank()) {
+                                append(uiState.overview)
+                                append("\n")
                             }
-                        ),
-                    contentAlignment = Alignment.Center
+                            // 附带前两个资源搜索结果的网盘链接
+                            val topResources = uiState.resources.take(2)
+                            if (topResources.isNotEmpty()) {
+                                append("\n" + shareLinksLabel + "\n")
+                                topResources.forEachIndexed { index, item ->
+                                    append("${index + 1}. ${item.name}\n${item.url}\n")
+                                }
+                            }
+                        }
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        context.startActivity(Intent.createChooser(intent, null))
+                    },
+                    isDark = detailIsDark,
+                    hazeState = detailHazeState,
+                    hazeStyle = HazeMaterials.ultraThin(),
+                    hazeDebugName = "detail.share",
+                    size = 40.dp
                 ) {
                     Icon(
                         Icons.Rounded.Share,
@@ -887,7 +865,8 @@ fun DetailScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(bottom = 16.dp, end = 16.dp),
-                hazeState = detailHazeState
+                hazeState = detailHazeState,
+                hazeStyle = HazeMaterials.ultraThin()
             )
 
             // 海报大图查看
