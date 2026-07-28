@@ -55,9 +55,7 @@ fun NewFeedbackScreen(
         val newScreenshots = uris.take(3 - screenshots.size).mapNotNull { uri ->
             try {
                 val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bytes = inputStream?.readBytes()
-                inputStream?.close()
+                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 if (bytes != null) bytes to mimeType else null
             } catch (e: Exception) {
                 null

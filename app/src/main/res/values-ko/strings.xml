@@ -618,6 +618,11 @@
     <string name="feedback_app_info">앱 정보</string>
     <string name="feedback_screenshot_expired">스크린샷 만료</string>
     <string name="feedback_retry">재시도</string>
+    <string name="feedback_time_just_now">방금</string>
+    <string name="feedback_time_minutes_ago">%1$d분 전</string>
+    <string name="feedback_time_hours_ago">%1$d시간 전</string>
+    <string name="feedback_time_days_ago">%1$d일 전</string>
+    <string name="feedback_time_months_ago">%1$d개월 전</string>
     <string name="settings_help">도움말 &amp; 팁</string>
     <string name="help_title">도움말과 설명</string>
     <string name="help_search">검색 기능</string>

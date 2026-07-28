@@ -618,6 +618,11 @@
     <string name="feedback_app_info">アプリ情報</string>
     <string name="feedback_screenshot_expired">スクリーンショット期限切れ</string>
     <string name="feedback_retry">再試行</string>
+    <string name="feedback_time_just_now">たった今</string>
+    <string name="feedback_time_minutes_ago">%1$d 分前</string>
+    <string name="feedback_time_hours_ago">%1$d 時間前</string>
+    <string name="feedback_time_days_ago">%1$d 日前</string>
+    <string name="feedback_time_months_ago">%1$d か月前</string>
     <string name="settings_help">ヘルプ＆ヒント</string>
     <string name="help_title">ヘルプと説明</string>
     <string name="help_search">検索機能</string>

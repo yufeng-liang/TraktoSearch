@@ -187,8 +187,15 @@ private fun FeedbackCard(item: com.tracktosearch.data.remote.feedback.FeedbackLi
                 color = MaterialTheme.colorScheme.onSurface
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val justNow = stringResource(R.string.feedback_time_just_now)
+                val minutesAgo = stringResource(R.string.feedback_time_minutes_ago)
+                val hoursAgo = stringResource(R.string.feedback_time_hours_ago)
+                val daysAgo = stringResource(R.string.feedback_time_days_ago)
+                val monthsAgo = stringResource(R.string.feedback_time_months_ago)
                 Text(
-                    text = formatRelativeTime(item.created_at),
+                    text = formatRelativeTime(
+                        item.created_at, justNow, minutesAgo, hoursAgo, daysAgo, monthsAgo
+                    ),
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -202,14 +209,21 @@ private fun FeedbackCard(item: com.tracktosearch.data.remote.feedback.FeedbackLi
     }
 }
 
-private fun formatRelativeTime(timestamp: Long): String {
+private fun formatRelativeTime(
+    timestamp: Long,
+    justNow: String,
+    minutesAgo: String,
+    hoursAgo: String,
+    daysAgo: String,
+    monthsAgo: String
+): String {
     val diff = System.currentTimeMillis() - timestamp * 1000
     val minutes = TimeUnit.MILLISECONDS.toMinutes(diff)
     return when {
-        minutes < 1 -> "刚刚"
-        minutes < 60 -> "${minutes}分钟前"
-        minutes < 1440 -> "${minutes / 60}小时前"
-        minutes < 43200 -> "${minutes / 1440}天前"
-        else -> "${minutes / 43200}个月前"
+        minutes < 1 -> justNow
+        minutes < 60 -> minutesAgo.format(minutes)
+        minutes < 1440 -> hoursAgo.format(minutes / 60)
+        minutes < 43200 -> daysAgo.format(minutes / 1440)
+        else -> monthsAgo.format(minutes / 43200)
     }
 }

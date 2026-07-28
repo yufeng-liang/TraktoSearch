@@ -538,6 +538,11 @@
     <string name="feedback_app_info">App Info</string>
     <string name="feedback_screenshot_expired">Screenshot expired</string>
     <string name="feedback_retry">Retry</string>
+    <string name="feedback_time_just_now">Just now</string>
+    <string name="feedback_time_minutes_ago">%1$d min ago</string>
+    <string name="feedback_time_hours_ago">%1$d h ago</string>
+    <string name="feedback_time_days_ago">%1$d d ago</string>
+    <string name="feedback_time_months_ago">%1$d mo ago</string>
     <string name="settings_help">Help &amp; Tips</string>
     <string name="help_title">Help &amp; Tips</string>
     <string name="help_search">Search</string>

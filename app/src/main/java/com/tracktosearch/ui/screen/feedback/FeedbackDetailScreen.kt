@@ -94,9 +94,9 @@ fun FeedbackDetailScreen(
                 ) {
                     // 类型 + 状态 + 时间
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(feedback.type, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                        Text(feedbackTypeLabel(feedback.type), fontSize = 12.sp, color = feedbackTypeColor(feedback.type), fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.weight(1f))
-                        Text(feedback.status, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(feedbackStatusLabel(feedback.status), fontSize = 12.sp, color = feedbackStatusColor(feedback.status))
                     }
 
                     // 正文
@@ -159,13 +159,15 @@ fun FeedbackDetailScreen(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            val doubanLabel = stringResource(R.string.detail_info_douban_rating)
+                            val contactLabel = stringResource(R.string.feedback_contact)
                             Text(stringResource(R.string.feedback_app_info), fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                             InfoRow("App", feedback.app_version)
                             InfoRow("OS", feedback.os_version)
                             InfoRow("Device", feedback.device_model)
                             feedback.trakt_username?.let { InfoRow("Trakt", it) }
-                            feedback.douban_username?.let { InfoRow("豆瓣", it) }
-                            feedback.contact?.let { InfoRow(stringResource(R.string.feedback_contact), it) }
+                            feedback.douban_username?.let { InfoRow(doubanLabel, it) }
+                            feedback.contact?.let { InfoRow(contactLabel, it) }
                         }
                     }
 
@@ -230,4 +232,38 @@ private fun parseScreenshots(json: String?): List<String> {
 private fun formatTime(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault())
     return sdf.format(java.util.Date(timestamp * 1000))
+}
+
+@Composable
+private fun feedbackTypeLabel(type: String): String = stringResource(
+    when (type) {
+        "FEATURE" -> R.string.feedback_type_feature
+        "BUG" -> R.string.feedback_type_bug
+        "UX" -> R.string.feedback_type_ux
+        else -> R.string.feedback_type_other
+    }
+)
+
+@Composable
+private fun feedbackTypeColor(type: String): Color = when (type) {
+    "FEATURE" -> Color(0xFF34D399)
+    "BUG" -> Color(0xFFFB7185)
+    "UX" -> Color(0xFFFBBF24)
+    else -> Color(0xFF9CA3AF)
+}
+
+@Composable
+private fun feedbackStatusLabel(status: String): String = stringResource(
+    when (status) {
+        "PENDING" -> R.string.feedback_status_pending
+        "REPLIED" -> R.string.feedback_status_replied
+        else -> R.string.feedback_status_closed
+    }
+)
+
+@Composable
+private fun feedbackStatusColor(status: String): Color = when (status) {
+    "PENDING" -> MaterialTheme.colorScheme.primary
+    "REPLIED" -> Color(0xFF10B981)
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
