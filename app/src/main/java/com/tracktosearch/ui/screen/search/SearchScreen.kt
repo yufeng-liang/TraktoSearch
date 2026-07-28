@@ -328,11 +328,6 @@ fun SearchScreen(
                     letterSpacing = (-0.5).sp,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = stringResource(R.string.search_subtitle),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
-                )
             }
         }
 

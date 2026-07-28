@@ -35,7 +35,6 @@
 
     <!-- Search Screen -->
     <string name="search_title">검색</string>
-    <string name="search_subtitle">다음 시청작을 찾아보세요</string>
     <string name="hot_search">인기 검색</string>
     <string name="search_back">뒤로</string>
     <string name="search_placeholder">영화 제목을 입력하여 클라우드 리소스 검색</string>
@@ -1350,7 +1349,7 @@
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · 로그인됨</string>
-    <string name="settings_account_douban_login">Douban 로그인</string>
+    <string name="settings_account_douban_login">로그인</string>
     <string name="settings_account_douban_logout">로그아웃</string>
     <string name="settings_douban_logout_done">Douban에서 로그아웃되었습니다</string>
     <string name="settings_douban_login_hint">로그인하여豆瓣 마크를 Trakt에 동기화</string>

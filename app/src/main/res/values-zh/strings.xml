@@ -35,7 +35,6 @@
 
     <!-- Search Screen -->
     <string name="search_title">搜索</string>
-    <string name="search_subtitle">发现你的下一部观影</string>
     <string name="hot_search">热门搜索</string>
     <string name="search_back">返回</string>
     <string name="search_placeholder">输入片名搜索网盘资源</string>
@@ -1354,7 +1353,7 @@
     <string name="settings_account_trakt_label">Trakt</string>
     <string name="settings_account_douban">豆瓣</string>
     <string name="settings_account_douban_logged_in">豆瓣 · 已登录</string>
-    <string name="settings_account_douban_login">登录豆瓣</string>
+    <string name="settings_account_douban_login">登录</string>
     <string name="settings_account_douban_logout">退出</string>
     <string name="settings_douban_logout_done">已退出豆瓣</string>
     <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>

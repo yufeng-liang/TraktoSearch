@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
@@ -142,7 +143,8 @@ internal fun AccountRow(
             text = accountLabel,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.width(40.dp),
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.width(8.dp))
         // 头像：仅在 showAvatar=true 时展示（豆瓣未登录时无头像）
@@ -287,7 +289,8 @@ internal fun DoubanLoginPromptRow(
             text = stringResource(R.string.settings_account_douban),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(40.dp)
+            modifier = Modifier.width(40.dp),
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.width(8.dp))
         // 登录用途说明文字
