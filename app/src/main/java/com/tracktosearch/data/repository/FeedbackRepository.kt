@@ -5,6 +5,7 @@ import com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest
 import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
 import com.tracktosearch.data.remote.feedback.MineResponse
 import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
+import kotlinx.coroutines.CancellationException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -32,6 +33,8 @@ class FeedbackRepository @Inject constructor(
             } else {
                 Result.failure(IllegalStateException("HTTP ${response.code()}"))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -67,6 +70,8 @@ class FeedbackRepository @Inject constructor(
             val data = response.body()?.data
             if (response.isSuccessful && data != null) Result.success(data)
             else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -79,6 +84,8 @@ class FeedbackRepository @Inject constructor(
             val data = response.body()?.data
             if (response.isSuccessful && data != null) Result.success(data)
             else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -91,6 +98,8 @@ class FeedbackRepository @Inject constructor(
             val data = response.body()?.data
             if (response.isSuccessful && data != null) Result.success(data)
             else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }

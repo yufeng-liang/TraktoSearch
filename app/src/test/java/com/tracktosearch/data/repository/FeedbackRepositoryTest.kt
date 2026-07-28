@@ -8,6 +8,7 @@ import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
 import kotlinx.coroutines.test.runTest
 import okhttp3.MultipartBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import retrofit2.Response
@@ -63,5 +64,78 @@ class FeedbackRepositoryTest {
         val repo = FeedbackRepository(api)
         val result = repo.submit("BUG", "test", null, emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
         assertTrue(result.isFailure)
+    }
+
+    @Test
+    fun `uploadScreenshot success returns key`() = runTest {
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", com.tracktosearch.data.remote.feedback.UploadScreenshotResponse("r2key-abc"))
+            )
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
+            override suspend fun getMine(limit: Int, offset: Int) = error("not used")
+            override suspend fun getDetail(id: String) = error("not used")
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.uploadScreenshot(byteArrayOf(1, 2, 3), "image/jpeg")
+        assertTrue(result.isSuccess)
+        assertEquals("r2key-abc", result.getOrNull())
+    }
+
+    @Test
+    fun `uploadScreenshot http failure returns failure`() = runTest {
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.error<FeedbackResponse<com.tracktosearch.data.remote.feedback.UploadScreenshotResponse>>(
+                413,
+                okhttp3.ResponseBody.Companion.create(null, "")
+            )
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
+            override suspend fun getMine(limit: Int, offset: Int) = error("not used")
+            override suspend fun getDetail(id: String) = error("not used")
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.uploadScreenshot(byteArrayOf(1, 2, 3), "image/jpeg")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalStateException)
+        assertTrue(result.exceptionOrNull()?.message?.contains("413") == true)
+    }
+
+    @Test
+    fun `getMine success returns list`() = runTest {
+        val items = listOf(
+            com.tracktosearch.data.remote.feedback.FeedbackListItem("fb1", "BUG", "content1", null, "PENDING", 1700000000L),
+            com.tracktosearch.data.remote.feedback.FeedbackListItem("fb2", "SUGGESTION", "content2", """["key1"]""", "REPLIED", 1700000001L)
+        )
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
+            override suspend fun getMine(limit: Int, offset: Int) = Response.success(
+                FeedbackResponse("SUCCESS", "OK", "r1", MineResponse(items, 20, 0, 2, false))
+            )
+            override suspend fun getDetail(id: String) = error("not used")
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.getMine()
+        assertTrue(result.isSuccess)
+        assertEquals(2, result.getOrNull()?.feedbacks?.size)
+        assertEquals("fb1", result.getOrNull()?.feedbacks?.first()?.id)
+        assertFalse(result.getOrNull()?.hasMore == true)
+    }
+
+    @Test
+    fun `getDetail http failure returns failure`() = runTest {
+        val api = object : FeedbackApiService {
+            override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
+            override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
+            override suspend fun getMine(limit: Int, offset: Int) = error("not used")
+            override suspend fun getDetail(id: String) = Response.error<FeedbackResponse<FeedbackDetailResponse>>(
+                404,
+                okhttp3.ResponseBody.Companion.create(null, "")
+            )
+        }
+        val repo = FeedbackRepository(api)
+        val result = repo.getDetail("not-exist")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("404") == true)
     }
 }
