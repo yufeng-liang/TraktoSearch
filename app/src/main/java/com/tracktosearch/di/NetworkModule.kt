@@ -522,6 +522,7 @@ object NetworkModule {
                     .build()
                 chain.proceed(request)
             })
+            .addInterceptor(loggingInterceptor)
             .build()
     }
 

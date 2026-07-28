@@ -5,7 +5,6 @@ import com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest
 import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
 import com.tracktosearch.data.remote.feedback.MineResponse
 import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
-import com.tracktosearch.data.remote.feedback.UploadScreenshotResponse
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
