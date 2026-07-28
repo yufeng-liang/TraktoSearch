@@ -417,6 +417,40 @@ class WatchlistScreenTest {
      * 默认 uiState 为空列表状态,模拟已加载但无数据的场景。
      * needFirstSyncGuide 默认 false,避免弹出首次同步引导弹窗。
      */
+    @Test
+    fun tmdbUnavailable_doesNotRenderPosterErrorBanner() {
+        composeRule.setContent {
+            WatchlistScreen(
+                onMovieClick = { _, _, _, _, _, _, _ -> },
+                onShowClick = { _, _, _, _, _, _, _ -> },
+                onSearchClick = {},
+                onTraktSearch = { _, _ -> },
+                viewModel = createMockWatchlistViewModel(
+                    uiState = WatchlistUiState(
+                        movies = listOf(
+                            MediaUiItem(
+                                traktId = 1,
+                                tmdbId = 100,
+                                title = "测试电影",
+                                displayTitle = "测试电影",
+                                year = 2024,
+                                genres = "动作",
+                                posterUrl = null
+                            )
+                        ),
+                        moviesLoaded = true
+                    )
+                )
+            )
+        }
+        composeRule.waitForIdle()
+
+        assertThat(
+            composeRule.onAllNodesWithText(context.getString(R.string.watchlist_poster_error))
+                .fetchSemanticsNodes()
+        ).isEmpty()
+    }
+
     private fun createMockWatchlistViewModel(
         uiState: WatchlistUiState = WatchlistUiState()
     ): WatchlistViewModel {

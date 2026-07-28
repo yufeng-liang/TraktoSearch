@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.watchlist
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -72,7 +73,6 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.Visibility
-import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -159,7 +159,7 @@ import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
-import com.tracktosearch.ui.component.hazeProgressiveTopBar
+import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.hasListReachedTopBar
 import com.tracktosearch.ui.component.rememberShimmerBrush
@@ -236,13 +236,14 @@ fun WatchlistScreen(
     var showFirstSyncGuide by remember { mutableStateOf(false) }
     // 模式选择弹窗（引导弹窗确认后弹出）
     var showSyncModePicker by remember { mutableStateOf(false) }
-    // 海报加载失败横幅关闭状态(用户点关闭后隐藏,数据刷新后自动恢复)
-    var posterErrorDismissed by remember { mutableStateOf(false) }
+    val posterErrorMessage = context.getString(R.string.watchlist_poster_error)
     // 当前可见 tab 的 TMDB 不可用状态（实时计算，避免多 tab 加载互相覆盖）
     val tmdbUnavailable = uiState.isTmdbUnavailable(selectedMode, selectedTab)
     LaunchedEffect(tmdbUnavailable) {
-        // tmdbUnavailable 变 false 时重置关闭状态,下次再失败时重新显示横幅
-        if (!tmdbUnavailable) posterErrorDismissed = false
+        // 仅在当前 tab 出现 TMDB 数据缺失时提示一次 Toast。
+        if (tmdbUnavailable) {
+            Toast.makeText(context, posterErrorMessage, Toast.LENGTH_LONG).show()
+        }
     }
 
     // 监听首次同步引导状态
@@ -610,7 +611,7 @@ fun WatchlistScreen(
                     contentPadding = PaddingValues(
                         start = 8.dp,
                         end = 8.dp,
-                        top = 170.dp + statusBarHeight,
+                        top = 158.dp + statusBarHeight,
                         bottom = 80.dp
                     ),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -677,7 +678,7 @@ fun WatchlistScreen(
                         .onGloballyPositioned { coordinates ->
                             topBarHeightPx = coordinates.size.height
                         }
-                        .hazeProgressiveTopBar(
+                        .hazeTopBar(
                             state = hazeState,
                             style = hazeStyle,
                             blurRadius = 24.dp,
@@ -1142,50 +1143,6 @@ fun WatchlistScreen(
                             }
 
                             // TMDB 不可用提示(可关闭,数据刷新后自动恢复)
-                            if (tmdbUnavailable && !posterErrorDismissed) {
-                                NeumorphicFrostedSurface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    isDark = isDark,
-                                    shape = RoundedCornerShape(12.dp),
-                                    backgroundColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
-                                    borderColor = MaterialTheme.colorScheme.error.copy(alpha = 0.20f),
-                                    elevation = 2.dp,
-                                    blurRadius = 12.dp,
-                                    hazeState = hazeState,
-                                    hazeStyle = HazeMaterials.thin()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            Icons.Rounded.Warning,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onErrorContainer,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = stringResource(R.string.watchlist_poster_error),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        IconButton(
-                                            onClick = { posterErrorDismissed = true }
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.Close,
-                                                contentDescription = stringResource(R.string.detail_close),
-                                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
     
@@ -1284,7 +1241,7 @@ fun WatchlistScreen(
                     WatchlistSkeletonGrid(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 172.dp + statusBarHeight)
+                            .padding(top = 160.dp + statusBarHeight)
                     )
                 }
             }
