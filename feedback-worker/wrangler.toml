@@ -1,0 +1,33 @@
+name = "feedback-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+# D1：反馈数据
+[[d1_databases]]
+binding = "DB"
+database_name = "feedback-db"
+database_id = "TODO_DEPLOY_TIME_FILL"
+
+# R2：截图存储
+[[r2_buckets]]
+binding = "SCREENSHOTS"
+bucket_name = "feedback-screenshots"
+
+# KV：限流计数器
+[[kv_namespaces]]
+binding = "KV"
+id = "TODO_DEPLOY_TIME_FILL"
+
+# Secrets（通过 wrangler secret put 注入）
+# JWT_SIGNING_KEY（与 auth-worker 共享）
+# ACCESS_TEAM_DOMAIN
+# ACCESS_AUDIENCE
+# ADMIN_EMAIL
+
+[vars]
+ENVIRONMENT = "production"
+
+[triggers]
+# 每天凌晨 3 点（UTC）清理 30 天前截图
+crons = ["0 3 * * *"]

@@ -54,6 +54,10 @@ auth-worker/node_modules/
 # Cloudflare Wrangler local state
 auth-worker/.wrangler/
 gateway-pages/.wrangler/
+feedback-worker/.wrangler/
+
+# Cloudflare Worker node_modules
+feedback-worker/node_modules/
 
 # Perfetto / ART trace files (large, local performance analysis only)
 *.trace
