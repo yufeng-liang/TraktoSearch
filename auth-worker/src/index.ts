@@ -18,6 +18,7 @@ import {
     healthCheck,
     listAuditLogs,
     listDevices,
+    listFriendIpLogs,
     listFriends,
     listInvites,
     revokeDevice,
@@ -249,6 +250,12 @@ async function handleAdminApi(
     const inviteRevokeMatch = path.match(/^\/admin\/invites\/([^/]+)\/revoke$/);
     if (inviteRevokeMatch && request.method === 'POST') {
         return revokeInvite(env, requestId, inviteRevokeMatch[1]);
+    }
+
+    // 朋友 IP 历史
+    const ipLogsMatch = path.match(/^\/admin\/friends\/([^/]+)\/ip-logs$/);
+    if (ipLogsMatch && request.method === 'GET') {
+        return listFriendIpLogs(request, env, requestId, ipLogsMatch[1]);
     }
 
     // 审计日志

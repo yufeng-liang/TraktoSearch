@@ -26,6 +26,7 @@ export async function listFriends(request: Request, env: { DB: D1Database }, req
 
     const { results } = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+               f.last_ip, f.last_ip_geo, f.ip_updated_at,
                f.created_at, f.updated_at,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) as active_devices,
                (SELECT MAX(d.last_seen_at) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) as last_seen
@@ -57,6 +58,7 @@ export async function getFriendDetail(
 ): Promise<Response> {
     const friend = await env.DB.prepare(`
         SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+               f.last_ip, f.last_ip_geo, f.ip_updated_at,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) AS total_devices,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) AS active_devices,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'REVOKED' AND d.deleted_at IS NULL) AS revoked_devices,
@@ -717,4 +719,39 @@ async function readJson<T>(request: Request): Promise<T> {
     } catch {
         throw new AppError('INVALID_REQUEST', 'Invalid JSON body', 400);
     }
+}
+
+// GET /admin/friends/:id/ip-logs — 朋友 IP 历史
+export async function listFriendIpLogs(
+    request: Request,
+    env: { DB: D1Database },
+    requestId: string,
+    friendId: string
+): Promise<Response> {
+    const url = new URL(request.url);
+    const requestedLimit = Number.parseInt(url.searchParams.get('limit') || '50', 10);
+    const requestedOffset = Number.parseInt(url.searchParams.get('offset') || '0', 10);
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 200) : 50;
+    const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
+
+    const { results } = await env.DB.prepare(`
+        SELECT id, ip, country, region, city, latitude, longitude, isp, created_at
+        FROM friend_ip_logs
+        WHERE friend_id = ?
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+    `).bind(friendId, limit, offset).all();
+
+    const countResult = await env.DB.prepare(`
+        SELECT COUNT(*) AS count FROM friend_ip_logs WHERE friend_id = ?
+    `).bind(friendId).first<{ count: number }>();
+    const total = Number(countResult?.count || 0);
+
+    return successResponse({
+        logs: results,
+        limit,
+        offset,
+        total,
+        hasMore: offset + results.length < total,
+    }, requestId);
 }
