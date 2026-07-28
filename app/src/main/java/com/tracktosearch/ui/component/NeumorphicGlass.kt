@@ -42,9 +42,17 @@ const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
 /** 标题栏使用普通 thin 模糊，不对模糊强度做渐进处理。 */
 internal fun isContentUnderTopBar(
-    firstVisibleItemOffsetPx: Int?,
+    firstVisibleItemIndex: Int?,
+    firstVisibleItemScrollOffsetPx: Int?,
+    contentTopPaddingPx: Int,
     topBarHeightPx: Int
-): Boolean = topBarHeightPx > 0 && firstVisibleItemOffsetPx != null && firstVisibleItemOffsetPx < topBarHeightPx
+): Boolean {
+    if (firstVisibleItemIndex == null || firstVisibleItemScrollOffsetPx == null || topBarHeightPx <= 0) {
+        return false
+    }
+    val contentTopPx = contentTopPaddingPx - firstVisibleItemScrollOffsetPx
+    return firstVisibleItemIndex > 0 || contentTopPx < topBarHeightPx
+}
 
 @Composable
 fun Modifier.hazeProgressiveTopBar(
@@ -330,9 +338,18 @@ fun NeumorphicIconButton(
     isDark: Boolean,
     modifier: Modifier = Modifier,
     size: Dp = 42.dp,
+    hazeState: HazeState? = null,
     content: @Composable () -> Unit
 ) {
     val shape = CircleShape
+    val resolvedHazeStyle = HazeMaterials.thin()
+    val hazeModifier = if (hazeState != null) {
+        Modifier.hazeEffect(state = hazeState) {
+            blurEffect { style = resolvedHazeStyle }
+        }
+    } else {
+        Modifier
+    }
     Box(
         modifier = modifier
             .size(size)
@@ -345,6 +362,7 @@ fun NeumorphicIconButton(
                 shadowOffset = 5.dp
             )
             .clip(shape)
+            .then(hazeModifier)
             .background(
                 if (isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.65f),
                 shape

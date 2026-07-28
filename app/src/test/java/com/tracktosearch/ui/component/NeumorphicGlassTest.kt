@@ -8,7 +8,9 @@ class NeumorphicGlassTest {
     fun noVisibleItemDoesNotEnableTopBarHaze() {
         assertThat(
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = null,
+                firstVisibleItemIndex = null,
+                firstVisibleItemScrollOffsetPx = null,
+                contentTopPaddingPx = 200,
                 topBarHeightPx = 100
             )
         ).isFalse()
@@ -18,7 +20,9 @@ class NeumorphicGlassTest {
     fun itemAtTopBarBottomDoesNotEnableTopBarHaze() {
         assertThat(
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = 100,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffsetPx = 100,
+                contentTopPaddingPx = 200,
                 topBarHeightPx = 100
             )
         ).isFalse()
@@ -28,7 +32,9 @@ class NeumorphicGlassTest {
     fun itemInsideTopBarEnablesTopBarHaze() {
         assertThat(
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = 99,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffsetPx = 101,
+                contentTopPaddingPx = 200,
                 topBarHeightPx = 100
             )
         ).isTrue()

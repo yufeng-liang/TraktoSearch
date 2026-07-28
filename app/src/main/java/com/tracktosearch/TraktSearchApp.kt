@@ -21,6 +21,7 @@ import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
+import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -62,6 +63,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
         CrashHandler.init(this)
         // 只在主进程初始化，避免 :pushcore 子进程重复初始化 Hilt 注入依赖、JPush
         if (isMainProcess()) {
+            StartupTrace.markProcessStart()
+            StartupTrace.mark("application.onCreate.enter")
             Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
@@ -72,22 +75,26 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                 CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
             }
 
-            // 远程配置初始化，用于非敏感运行参数；上游 key 不进入 APK
-            remoteConfigManager.initialize()
+            // 暂时停用远程配置拉取：当前暂无业务读取这些配置，避免启动阶段产生额外网络请求。
+            // 后续启用时恢复下一行调用。
+            // remoteConfigManager.initialize()
+            StartupTrace.mark("application.remote_config.disabled")
             // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
             // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                coroutineScope {
-                    val jobs = buildList {
-                        tmdbRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
-                        traktRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
-                        add(async { doubanHotCache.loadFromDisk() })
-                        add(async { doubanDetailCache.loadFromDisk() })
-                        add(async { doubanIdMappingCache.loadFromDisk() })
+                StartupTrace.measure("application.cache_warmup") {
+                    coroutineScope {
+                        val jobs = buildList {
+                            tmdbRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
+                            traktRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
+                            add(async { doubanHotCache.loadFromDisk() })
+                            add(async { doubanDetailCache.loadFromDisk() })
+                            add(async { doubanIdMappingCache.loadFromDisk() })
+                        }
+                        jobs.awaitAll()
                     }
-                    jobs.awaitAll()
+                    posterColorCache.warmUp()
                 }
-                posterColorCache.warmUp()
             }
             // 独立协程预热开屏图标到 Coil 内存缓存：按显示尺寸(211dp)降采样解码，
             // 使 splash 的 AsyncImage 命中缓存秒显，避免异步加载时序冲突导致图标不显示

@@ -84,11 +84,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hazeProgressiveTopBar
 import com.tracktosearch.ui.component.isContentUnderTopBar
@@ -334,11 +336,16 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
+    val settingsContentTopPaddingPx = with(LocalDensity.current) {
+        (65.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
+    }
     var settingsTopBarHeightPx by remember { mutableIntStateOf(0) }
-    val settingsHasContentUnderTopBar by remember {
+    val settingsHasContentUnderTopBar by remember(settingsContentTopPaddingPx) {
         derivedStateOf {
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                firstVisibleItemIndex = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset,
+                contentTopPaddingPx = settingsContentTopPaddingPx,
                 topBarHeightPx = settingsTopBarHeightPx
             )
         }
@@ -731,21 +738,15 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_account),
                     hazeState = settingsHazeState
                 ) {
-                    if (isLoggedIn) {
-                        AccountItem(
-                            viewModel = viewModel,
-                            onTraktLogout = { showLogoutDialog = true },
-                            onDoubanLogin = { onNavigateToDoubanLogin() },
-                            onDoubanLogout = { showDoubanLogoutDialog = true },
-                            containerColor = Color.Transparent
-                        )
-                    } else {
-                        // 访客模式：显示登录 Trakt 入口（豆瓣导入需先登录 Trakt）
-                        GuestLoginItem(
-                            onNavigateToLogin = onNavigateToLogin,
-                            containerColor = Color.Transparent
-                        )
-                    }
+                    AccountItem(
+                        viewModel = viewModel,
+                        isTraktLoggedIn = isLoggedIn,
+                        onTraktLogin = onNavigateToLogin,
+                        onTraktLogout = { showLogoutDialog = true },
+                        onDoubanLogin = { onNavigateToDoubanLogin() },
+                        onDoubanLogout = { showDoubanLogoutDialog = true },
+                        containerColor = Color.Transparent
+                    )
                 }
             }
 
@@ -1861,6 +1862,8 @@ private fun CacheManagementSectionItem(
 @Composable
 private fun AccountItem(
     viewModel: SettingsViewModel,
+    isTraktLoggedIn: Boolean,
+    onTraktLogin: () -> Unit,
     onTraktLogout: () -> Unit,
     onDoubanLogin: () -> Unit,
     onDoubanLogout: () -> Unit,
@@ -1877,15 +1880,19 @@ private fun AccountItem(
         color = containerColor,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            AccountRow(
-                accountLabel = stringResource(R.string.settings_account_trakt_label),
-                avatarUrl = userProfile?.images?.avatar?.full ?: "",
-                primaryName = userProfile?.username,
-                secondaryName = null,
-                showAvatar = true,
-                isVip = userProfile?.vip == true,
-                onLogout = onTraktLogout
-            )
+            if (isTraktLoggedIn) {
+                AccountRow(
+                    accountLabel = stringResource(R.string.settings_account_trakt_label),
+                    avatarUrl = userProfile?.images?.avatar?.full ?: "",
+                    primaryName = userProfile?.username,
+                    secondaryName = null,
+                    showAvatar = true,
+                    isVip = userProfile?.vip == true,
+                    onLogout = onTraktLogout
+                )
+            } else {
+                TraktLoginPromptRow(onLogin = onTraktLogin)
+            }
             GroupDivider()
             val doubanCreds = doubanProfile
             if (doubanLoggedIn) {

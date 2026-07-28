@@ -311,6 +311,44 @@ internal fun DoubanLoginPromptRow(
     }
 }
 
+/** Trakt 未连接时保留账户行，并提供登录入口。 */
+@Composable
+internal fun TraktLoginPromptRow(
+    onLogin: () -> Unit
+) {
+    val view = LocalView.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 6.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.settings_account_trakt_label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(40.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = stringResource(R.string.settings_guest_login_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f)
+        )
+        Button(
+            onClick = {
+                view.performHaptic(HapticType.HEAVY_CLICK)
+                onLogin()
+            },
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+            modifier = Modifier.height(36.dp)
+        ) {
+            Text(stringResource(R.string.login_button))
+        }
+    }
+}
+
 /**
  * 访客模式下的账户区块：显示"登录 Trakt"按钮。
  * 豆瓣导入需先登录 Trakt，所以访客模式下只显示 Trakt 登录入口。

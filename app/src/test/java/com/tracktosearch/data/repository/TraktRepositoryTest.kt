@@ -133,6 +133,19 @@ class TraktRepositoryTest {
         coVerify(exactly = 1) { userProfileStorage.saveProfile(refreshed) }
     }
 
+    @Test
+    fun `checkTraktConnection_成功时复用已获取的用户资料`() = runTest {
+        val profile = TraktUserProfileResponse(username = "yuhu", name = "yufeng liang")
+        coEvery { traktApiService.getUserProfile() } returns Response.success(profile)
+
+        assertThat(repository.checkTraktConnection()).isTrue()
+
+        val cachedResult = repository.getUserProfile()
+        assertThat(cachedResult.getOrNull()).isEqualTo(profile)
+        coVerify(exactly = 1) { traktApiService.getUserProfile() }
+        coVerify(exactly = 1) { userProfileStorage.saveProfile(profile) }
+    }
+
     private fun parseTraktDate(dateStr: String?): Long {
         val method = TraktRepository::class.java.getDeclaredMethod("parseTraktDate", String::class.java)
         method.isAccessible = true

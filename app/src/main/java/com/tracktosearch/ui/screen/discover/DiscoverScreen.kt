@@ -63,6 +63,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -101,6 +102,7 @@ import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
@@ -174,11 +176,16 @@ fun DiscoverScreen(
     val discoverHazeState = remember { HazeState() }
     val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
+    val discoverContentTopPaddingPx = with(LocalDensity.current) {
+        (80.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
+    }
     var discoverTopBarHeightPx by remember { mutableIntStateOf(0) }
-    val discoverHasContentUnderTopBar by remember {
+    val discoverHasContentUnderTopBar by remember(discoverContentTopPaddingPx) {
         derivedStateOf {
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                firstVisibleItemIndex = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset,
+                contentTopPaddingPx = discoverContentTopPaddingPx,
                 topBarHeightPx = discoverTopBarHeightPx
             )
         }

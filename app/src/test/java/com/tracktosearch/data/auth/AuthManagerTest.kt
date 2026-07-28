@@ -64,4 +64,24 @@ class AuthManagerTest {
         coVerify(exactly = 1) { api.challenge(ChallengeRequest("device-id")) }
         coVerify(exactly = 1) { api.refresh(any()) }
     }
+
+    @Test
+    fun initialize_usesCachedAuthorizationBeforeNextCheckAt() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns System.currentTimeMillis() / 1000 + 3_600
+        every { storage.getCachedLastOnlineAt() } returns System.currentTimeMillis() / 1000
+        coEvery { storage.isTokenValid() } returns true
+
+        manager.initialize()
+
+        assertThat(manager.authState.value).isEqualTo(AuthState.AUTHORIZED)
+        coVerify(exactly = 0) { api.check(any()) }
+    }
 }

@@ -182,6 +182,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -354,11 +355,16 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
         else -> historyShowGridState
     }
+    val watchlistContentTopPaddingPx = with(LocalDensity.current) {
+        (170.dp + WindowInsets.statusBars.asPaddingValues().calculateTopPadding()).toPx().roundToInt()
+    }
     var topBarHeightPx by remember { mutableIntStateOf(0) }
-    val hasContentUnderTopBar by remember(currentGridState) {
+    val hasContentUnderTopBar by remember(currentGridState, watchlistContentTopPaddingPx) {
         derivedStateOf {
             isContentUnderTopBar(
-                firstVisibleItemOffsetPx = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.y,
+                firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
+                firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
+                contentTopPaddingPx = watchlistContentTopPaddingPx,
                 topBarHeightPx = topBarHeightPx
             )
         }

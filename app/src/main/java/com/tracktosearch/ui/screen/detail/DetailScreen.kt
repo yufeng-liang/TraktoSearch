@@ -98,6 +98,9 @@ import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.blur.blurEffect
+import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -234,6 +237,7 @@ fun DetailScreen(
 
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
+    val detailHazeStyle = HazeMaterials.thin()
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
     var activeClickToken by remember { mutableStateOf(0) }
@@ -734,6 +738,9 @@ fun DetailScreen(
                     .align(Alignment.TopStart)
                     .size(40.dp)
                     .clip(CircleShape)
+                    .hazeEffect(state = detailHazeState) {
+                        blurEffect { style = detailHazeStyle }
+                    }
                     // alpha 0.50:无 Haze 时提高对比度保证可见性
                     .background(
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
@@ -777,6 +784,9 @@ fun DetailScreen(
                         modifier = Modifier
                             .size(40.dp)
                             .clip(CircleShape)
+                            .hazeEffect(state = detailHazeState) {
+                                blurEffect { style = detailHazeStyle }
+                            }
                             // alpha 0.50:无 Haze 时提高对比度保证可见性
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
@@ -820,6 +830,9 @@ fun DetailScreen(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
+                        .hazeEffect(state = detailHazeState) {
+                            blurEffect { style = detailHazeStyle }
+                        }
                         // alpha 0.50:无 Haze 时提高对比度保证可见性
                         .background(
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),

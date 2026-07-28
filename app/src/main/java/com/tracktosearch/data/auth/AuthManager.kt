@@ -1,6 +1,7 @@
 package com.tracktosearch.data.auth
 
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.BuildConfig
 import android.os.Build
 import android.util.Base64
@@ -256,6 +257,12 @@ class AuthManager @Inject constructor(
             if (_authState.value == AuthState.UNAUTHORIZED) {
                 recoverSilently()
             }
+            return
+        }
+        // 每日网关校验尚未到期时，沿用本地授权状态，避免冷启动被网络请求阻塞。
+        if (nextCheckAt > System.currentTimeMillis() / 1000) {
+            _authState.value = AuthState.AUTHORIZED
+            StartupTrace.mark("auth.initialize.cached_authorization", "nextCheckAt=$nextCheckAt")
             return
         }
         check()

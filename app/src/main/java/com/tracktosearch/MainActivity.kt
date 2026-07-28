@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.ViewTreeObserver
 import android.widget.Toast
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -32,8 +33,10 @@ import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
+import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
+import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
@@ -132,14 +135,21 @@ class MainActivity : AppCompatActivity() {
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
     private var authInitializationJob: Job? = null
+    @Volatile
+    private var startupContentReadyForDraw = false
+    private var startupFirstContentDrawLogged = false
+    private var initialResumeHandled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        StartupTrace.mark("activity.onCreate.enter")
         var isReady by mutableStateOf(false)
         // 通过 Compose 状态控制 Splash 的结束条件
         val splashScreen = installSplashScreen()
+        StartupTrace.mark("activity.splash_installed")
         // 使用 mutableStateOf 让 Compose 感知 Splash 加载状态
         splashScreen.setKeepOnScreenCondition { !isReady }
         super.onCreate(savedInstanceState)
+        StartupTrace.mark("activity.super_onCreate.complete")
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(
                 lightScrim = android.graphics.Color.TRANSPARENT,
@@ -158,51 +168,79 @@ class MainActivity : AppCompatActivity() {
                 layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
+        installStartupFirstDrawTrace()
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
         var isTraktConnected by mutableStateOf(false)
+        var traktConnectionState by mutableStateOf(TraktConnectionState.DISCONNECTED)
 
         authInitializationJob = lifecycleScope.launch {
+            StartupTrace.mark("startup.enter")
             val splashStartTime = System.currentTimeMillis()
-            authManager.initialize()
+            StartupTrace.measure("auth.initialize") {
+                authManager.initialize()
+            }
             val authState = authManager.authState.value
             val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
             // 判断 Trakt 授权状态
             // 已授权后检查 Trakt 连接状态
-            isTraktConnected = isAuthorized && traktRepository.checkTraktConnection()
+            val cachedTraktProfile = if (isAuthorized) {
+                StartupTrace.measure("trakt.profile.cache") {
+                    traktRepository.getCachedUserProfile()
+                }
+            } else {
+                StartupTrace.mark("trakt.profile.cache.skipped", "reason=not_authorized")
+                null
+            }
+            isTraktConnected = cachedTraktProfile != null
+            traktConnectionState = if (isAuthorized) {
+                TraktConnectionState.CHECKING
+            } else {
+                TraktConnectionState.DISCONNECTED
+            }
             startDest = when {
                 !isAuthorized -> Routes.LOGIN
-                isTraktConnected -> Routes.MAIN
-                else -> Routes.LOGIN
+                else -> Routes.MAIN
             }
             // 根据 Trakt 连接状态选择默认标签页
-            initialTab = if (isTraktConnected) {
-                defaultTabStorage.defaultTab.first()
+            initialTab = if (isAuthorized) {
+                StartupTrace.measure("local.default_tab") {
+                    defaultTabStorage.defaultTab.first()
+                }
             } else {
                 0
             }
 
-            val language = languageStorage.language.first()
+            val language = StartupTrace.measure("local.language") {
+                languageStorage.language.first()
+            }
             applyLanguage(language)
 
             // 预加载首页所需数据
-            sharedTransitionStorage.preloadAndGetValue()
+            StartupTrace.measure("local.shared_transition") {
+                sharedTransitionStorage.preloadAndGetValue()
+            }
 
             // 已登录且激活时，在后台启动发现页新片榜和口碑榜预取；它们不阻塞 Splash 退出。
-            if (isTraktConnected) {
+            if (isAuthorized) {
                 this@MainActivity.lifecycleScope.launch {
-                    runCatching { prefetchDoubanHotCategory("douban-movie") }
+                    StartupTrace.measure("prefetch.douban_movie") {
+                        runCatching { prefetchDoubanHotCategory("douban-movie") }
+                    }
                 }
                 this@MainActivity.lifecycleScope.launch {
-                    runCatching { prefetchDoubanHotCategory("douban-weekly") }
+                    StartupTrace.measure("prefetch.douban_weekly") {
+                        runCatching { prefetchDoubanHotCategory("douban-weekly") }
+                    }
                 }
             }
 
-            if (isTraktConnected) {
-                // Trakt 想看列表是进入主界面的必要数据，只有它完成后才结束 Splash。
-                runCatching { traktRepository.getMovieWatchlist(page = 1, limit = 200) }
+            if (isAuthorized) {
+                // 想看列表由 WatchlistScreen 进入后自行加载，避免网络请求阻塞 Splash。
+                StartupTrace.mark("trakt.watchlist.startup_skipped", "reason=load_on_page")
             } else {
+                StartupTrace.mark("trakt.watchlist.startup_skipped", "reason=not_authorized")
                 // 未登录或未激活时，保证 Splash 至少展示指定时长
                 val elapsed = System.currentTimeMillis() - splashStartTime
                 val remaining = MIN_SYSTEM_SPLASH_DURATION_MS - elapsed
@@ -210,6 +248,27 @@ class MainActivity : AppCompatActivity() {
             }
 
             isReady = true
+            startupContentReadyForDraw = true
+            StartupTrace.mark("startup.ready")
+            if (isAuthorized) {
+                this@MainActivity.lifecycleScope.launch {
+                    val connected = StartupTrace.measure("trakt.profile") {
+                        traktRepository.checkTraktConnection()
+                    }
+                    isTraktConnected = connected
+                    traktConnectionState = if (connected) {
+                        TraktConnectionState.CONNECTED
+                    } else {
+                        TraktConnectionState.DISCONNECTED
+                    }
+                    StartupTrace.mark(
+                        "trakt.connection.state",
+                        if (connected) "connected" else "disconnected"
+                    )
+                }
+            } else {
+                StartupTrace.mark("trakt.profile.skipped", "reason=not_authorized")
+            }
         }
 
         handleIntent(intent)
@@ -221,6 +280,7 @@ class MainActivity : AppCompatActivity() {
         // 配置状态栏点击滚动到顶部
         setupStatusBarTapListener()
 
+        StartupTrace.mark("activity.set_content.begin")
         setContent {
             val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle()
             val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle()
@@ -236,6 +296,7 @@ class MainActivity : AppCompatActivity() {
                         startDestination = currentDestination,
                         initialTab = initialTab,
                         initialTraktLoggedIn = isTraktConnected,
+                        traktConnectionState = traktConnectionState,
                         authStateHolder = authStateHolder,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN
@@ -246,6 +307,7 @@ class MainActivity : AppCompatActivity() {
                 } // CompositionLocalProvider
             }
         }
+        StartupTrace.mark("activity.set_content.complete")
     }
 
     /** 预热发现页新片榜/口碑榜的共享缓存，进入页面后由 DiscoverViewModel 直接复用。 */
@@ -282,13 +344,35 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        StartupTrace.mark("activity.onResume.enter")
         JPushHelper.onResume(this)
+        val isInitialResume = !initialResumeHandled
+        initialResumeHandled = true
         lifecycleScope.launch {
             authInitializationJob?.join()
-            if (authManager.authState.value != AuthState.UNAUTHORIZED) {
-                authManager.check()
+            if (isInitialResume) {
+                StartupTrace.mark("auth.resume_check.skipped", "reason=initial_resume")
+            } else if (authManager.authState.value != AuthState.UNAUTHORIZED) {
+                StartupTrace.measure("auth.resume_check") {
+                    authManager.check()
+                }
+            } else {
+                StartupTrace.mark("auth.resume_check.skipped", "reason=unauthorized")
             }
         }
+    }
+
+    private fun installStartupFirstDrawTrace() {
+        val observer = window.decorView.viewTreeObserver
+        val listener = object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                if (!startupContentReadyForDraw || startupFirstContentDrawLogged) return
+                startupFirstContentDrawLogged = true
+                StartupTrace.mark("activity.first_content_draw")
+                if (observer.isAlive) observer.removeOnDrawListener(this)
+            }
+        }
+        observer.addOnDrawListener(listener)
     }
 
     private var statusBarHeight: Int = 0

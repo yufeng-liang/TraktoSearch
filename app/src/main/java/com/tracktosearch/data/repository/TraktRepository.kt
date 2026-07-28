@@ -1953,6 +1953,12 @@ class TraktRepository @Inject constructor(
         } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
+    /** 只读取本地 profile 缓存，不发起网络请求，供启动阶段先展示上次数据。 */
+    suspend fun getCachedUserProfile(): TraktUserProfileResponse? {
+        userProfileCache?.let { return it }
+        return userProfileStorage.getProfile()?.also { userProfileCache = it }
+    }
+
     /**
      * 启动时检查当前网关朋友是否已经连接 Trakt。
      *
@@ -1961,7 +1967,14 @@ class TraktRepository @Inject constructor(
      */
     suspend fun checkTraktConnection(): Boolean {
         return try {
-            traktApiService.getUserProfile().isSuccessful
+            val response = traktApiService.getUserProfile()
+            if (!response.isSuccessful) return false
+
+            // 启动检查本身已经拿到了当前账号资料，直接写入后续页面共用的缓存，避免再次请求。
+            val profile = enrichUserProfileAvatar(response.body() ?: TraktUserProfileResponse())
+            userProfileCache = profile
+            userProfileStorage.saveProfile(profile)
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {

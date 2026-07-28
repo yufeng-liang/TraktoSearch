@@ -34,6 +34,7 @@ import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
+import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -157,6 +158,11 @@ fun AppNavigation(
     startDestination: String,
     initialTab: Int = 0,
     initialTraktLoggedIn: Boolean = false,
+    traktConnectionState: TraktConnectionState = if (initialTraktLoggedIn) {
+        TraktConnectionState.CONNECTED
+    } else {
+        TraktConnectionState.DISCONNECTED
+    },
     authStateHolder: AuthStateHolder,
     onLoginSuccess: () -> Unit = {}
 ) {
@@ -187,6 +193,15 @@ fun AppNavigation(
     val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
     // Trakt OAuth 与网关激活分开维护；网关 AUTHORIZED 不代表 Trakt 已登录。
     var isTraktLoggedIn by remember { mutableStateOf(initialTraktLoggedIn) }
+
+    // CHECKING 期间保留上次缓存；只有明确失败后才显示 Trakt 登录提示。
+    LaunchedEffect(traktConnectionState) {
+        when (traktConnectionState) {
+            TraktConnectionState.CONNECTED -> isTraktLoggedIn = true
+            TraktConnectionState.DISCONNECTED -> isTraktLoggedIn = false
+            TraktConnectionState.CHECKING -> Unit
+        }
+    }
 
     LaunchedEffect(currentAuthState) {
         if (currentAuthState == AuthState.OFFLINE) {
