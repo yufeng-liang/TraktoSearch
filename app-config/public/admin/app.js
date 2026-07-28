@@ -887,6 +887,7 @@ function render() {
             case 'friends': renderFriends(main, renderToken); break;
             case 'friend-detail': renderFriendDetail(main, renderToken); break;
             case 'audit': renderAudit(main, renderToken); break;
+            case 'feedback': renderFeedback(main, renderToken); break;
             default: renderDashboard(main, renderToken);
         }
         main.style.opacity = '1';
@@ -1196,6 +1197,53 @@ function renderFriendDetail(container, renderToken) {
         content.querySelectorAll('.js-delete-device').forEach(button => {
             button.addEventListener('click', () => showDeleteDeviceModal(button.dataset.deviceId, button.dataset.deviceName));
         });
+
+        // IP 历史卡片
+        const ipCard = document.createElement('div');
+        ipCard.className = 'card';
+        ipCard.innerHTML = `
+            <div class="card-header"><span class="card-title">最近活动 IP</span></div>
+            ${f.last_ip ? `
+                <div style="display:grid;gap:10px;font-size:13px">
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">IP 地址</span><span style="font-family:var(--font-mono)">${escapeHtml(f.last_ip)}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">地理位置</span><span>${escapeHtml(f.last_ip_geo || '未知')}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">更新时间</span><span>${formatTime(f.ip_updated_at)}</span></div>
+                </div>
+                <button class="btn btn-ghost btn-sm" id="show-ip-logs" style="margin-top:12px">查看 IP 历史</button>
+                <div id="ip-logs-list" hidden style="margin-top:12px"></div>
+            ` : '<div class="empty-state" style="text-align:center;padding:16px;color:var(--text-dim)">暂无 IP 记录</div>'}
+        `;
+        content.appendChild(ipCard);
+        const showIpLogsBtn = ipCard.querySelector('#show-ip-logs');
+        if (showIpLogsBtn) {
+            showIpLogsBtn.addEventListener('click', () => {
+                const logsDiv = ipCard.querySelector('#ip-logs-list');
+                if (!logsDiv.hasAttribute('hidden')) {
+                    logsDiv.setAttribute('hidden', '');
+                    showIpLogsBtn.textContent = '查看 IP 历史';
+                    return;
+                }
+                showIpLogsBtn.textContent = '加载中...';
+                showIpLogsBtn.disabled = true;
+                API.get(`/admin/friends/${id}/ip-logs`).then(logs => {
+                    showIpLogsBtn.disabled = false;
+                    showIpLogsBtn.textContent = '收起 IP 历史';
+                    logsDiv.removeAttribute('hidden');
+                    const ipLogs = Array.isArray(logs) ? logs : (logs.logs || []);
+                    if (ipLogs.length === 0) {
+                        logsDiv.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim)">暂无历史记录</div>';
+                    } else {
+                        logsDiv.innerHTML = `<div class="table-scroll"><table><thead><tr><th>IP</th><th>地理位置</th><th>时间</th></tr></thead><tbody>${ipLogs.map(l => `<tr><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.ip || '—')}</td><td>${escapeHtml(l.ip_geo || '未知')}</td><td style="color:var(--text-dim);font-size:12px">${formatTime(l.logged_at)}</td></tr>`).join('')}</tbody></table></div>`;
+                    }
+                }).catch(err => {
+                    showIpLogsBtn.disabled = false;
+                    showIpLogsBtn.textContent = '查看 IP 历史';
+                    logsDiv.removeAttribute('hidden');
+                    logsDiv.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(err.message || '')}</span></div>`;
+                });
+            });
+        }
+
         const inviteSection = document.createElement('div');
         inviteSection.id = 'inviteSection';
         inviteSection.className = 'card invite-management-card';
@@ -1861,6 +1909,215 @@ function showEnableFriendModal(friendId, friendName) {
 function debounce(fn, ms) {
     let timer;
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), ms); };
+}
+
+// ===== Feedback Management =====
+function renderFeedback(container, renderToken) {
+    const header = document.createElement('div');
+    header.className = 'page-header';
+    header.innerHTML = `
+        <h1 class="section-title">反馈管理</h1>
+        <p class="section-subtitle">查看和回复用户反馈</p>
+        <div class="feedback-filters" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+            <select class="form-select" id="fb-type-filter" style="width:auto">
+                <option value="">全部类型</option>
+                <option value="FEATURE">功能建议</option>
+                <option value="BUG">Bug 报告</option>
+                <option value="UX">体验问题</option>
+                <option value="OTHER">其他</option>
+            </select>
+            <select class="form-select" id="fb-status-filter" style="width:auto">
+                <option value="">全部状态</option>
+                <option value="PENDING">待处理</option>
+                <option value="REPLIED">已回复</option>
+                <option value="CLOSED">已关闭</option>
+            </select>
+            <input type="text" class="form-input" id="fb-nickname" placeholder="朋友名搜索" style="width:160px">
+            <button class="btn btn-primary btn-sm" id="fb-search">搜索</button>
+        </div>
+    `;
+    container.appendChild(header);
+
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'table-wrap';
+    tableWrap.innerHTML = '<div class="loading-skeleton" style="height:200px;margin:16px"></div>';
+    container.appendChild(tableWrap);
+
+    const pagination = document.createElement('div');
+    pagination.className = 'invite-pagination fb-pagination';
+    container.appendChild(pagination);
+
+    let offset = 0;
+    const limit = 20;
+    let loadSequence = 0;
+
+    function loadAndRender() {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        const type = document.getElementById('fb-type-filter').value;
+        const status = document.getElementById('fb-status-filter').value;
+        const nickname = document.getElementById('fb-nickname').value.trim();
+        const sequence = ++loadSequence;
+        tableWrap.innerHTML = '<div class="loading-skeleton" style="height:200px;margin:16px"></div>';
+        pagination.innerHTML = '';
+
+        API.post('/fb/admin/list', { type, status, friendNickname: nickname, limit, offset }).then(page => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            if (sequence !== loadSequence) return;
+            const feedbacks = page.feedbacks || [];
+            const typeLabels = { FEATURE: '功能', BUG: 'Bug', UX: '体验', OTHER: '其他' };
+            const typeColors = { FEATURE: '#34d399', BUG: '#fb7185', UX: '#fbbf24', OTHER: '#9ca3af' };
+            const statusLabels = { PENDING: '待处理', REPLIED: '已回复', CLOSED: '已关闭' };
+            const statusColors = { PENDING: '#fb923c', REPLIED: '#10b981', CLOSED: '#9ca3af' };
+
+            if (feedbacks.length === 0) {
+                tableWrap.innerHTML = '<div class="empty-state" style="text-align:center;padding:32px;color:var(--text-dim)">暂无反馈</div>';
+            } else {
+                const rows = feedbacks.map(f => {
+                    const typeLabel = typeLabels[f.type] || f.type;
+                    const typeColor = typeColors[f.type] || '#9ca3af';
+                    const statusLabel = statusLabels[f.status] || f.status;
+                    const statusColor = statusColors[f.status] || '#9ca3af';
+                    const screenshotBadge = f.screenshots ? '📷' : '';
+                    const contentPreview = escapeHtml((f.content || '').slice(0, 50)) + (f.content && f.content.length > 50 ? '...' : '');
+                    return `<tr data-id="${escapeHtml(f.id)}" class="fb-row" style="cursor:pointer">
+                        <td><span class="badge" style="background:${typeColor};color:white">${typeLabel}</span></td>
+                        <td>${escapeHtml(f.friend_nickname || '—')}</td>
+                        <td>${contentPreview}</td>
+                        <td style="text-align:center">${screenshotBadge}</td>
+                        <td><span style="color:${statusColor};font-weight:500">${statusLabel}</span></td>
+                        <td style="color:var(--text-dim);font-size:12px">${formatTime(f.created_at)}</td>
+                    </tr>`;
+                }).join('');
+                tableWrap.innerHTML = `
+                    <div class="table-scroll"><table>
+                        <thead><tr><th>类型</th><th>朋友</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
+                        <tbody>${rows}</tbody>
+                    </table></div>
+                `;
+                tableWrap.querySelectorAll('.fb-row').forEach(row => {
+                    row.addEventListener('click', () => showFeedbackDetail(row.dataset.id, container, renderToken));
+                });
+            }
+
+            const total = page.total || 0;
+            const end = Math.min(offset + feedbacks.length, total);
+            pagination.innerHTML = `<span>共 ${total} 条${total ? `，第 ${offset + 1} - ${end} 条` : ''}</span><div>
+                <button class="btn btn-ghost btn-sm fb-prev" ${offset === 0 ? 'disabled' : ''}>上一页</button>
+                <button class="btn btn-ghost btn-sm fb-next" ${page.hasMore ? '' : 'disabled'}>下一页</button>
+            </div>`;
+            pagination.querySelector('.fb-prev')?.addEventListener('click', () => { offset = Math.max(0, offset - limit); loadAndRender(); });
+            pagination.querySelector('.fb-next')?.addEventListener('click', () => { offset += limit; loadAndRender(); });
+        }).catch(err => {
+            if (renderToken !== state.renderToken || !container.isConnected) return;
+            tableWrap.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(err.message || '')}</span><button class="btn btn-sm btn-ghost" id="fbRetry">重试</button></div>`;
+            document.getElementById('fbRetry')?.addEventListener('click', loadAndRender);
+        });
+    }
+
+    document.getElementById('fb-search').addEventListener('click', () => { offset = 0; loadAndRender(); });
+    document.getElementById('fb-nickname').addEventListener('keypress', (e) => { if (e.key === 'Enter') { offset = 0; loadAndRender(); } });
+    loadAndRender();
+}
+
+function showFeedbackDetail(id, container, renderToken) {
+    container.innerHTML = '<div class="loading-skeleton" style="height:400px;margin:16px"></div>';
+
+    API.get(`/fb/admin/detail/${id}`).then(data => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        const f = data.feedback || {};
+        const replies = data.replies || [];
+        const typeLabels = { FEATURE: '功能建议', BUG: 'Bug 报告', UX: '体验问题', OTHER: '其他' };
+        const statusLabels = { PENDING: '待处理', REPLIED: '已回复', CLOSED: '已关闭' };
+        const statusColors = { PENDING: '#fb923c', REPLIED: '#10b981', CLOSED: '#9ca3af' };
+
+        let screenshotsHtml = '';
+        if (f.screenshots) {
+            try {
+                const keys = JSON.parse(f.screenshots);
+                if (Array.isArray(keys) && keys.length > 0) {
+                    screenshotsHtml = `<div class="fb-screenshots" style="margin-top:12px"><strong>截图（${keys.length} 张）：</strong><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${keys.map(k => `<img src="${escapeHtml(k)}" alt="截图" style="width:120px;height:120px;object-fit:cover;border-radius:8px;cursor:pointer" class="fb-screenshot-img" data-key="${escapeHtml(k)}">`).join('')}</div></div>`;
+                }
+            } catch { /* screenshots 不是合法 JSON，忽略 */ }
+        }
+
+        const repliesHtml = replies.map(r => `
+            <div class="reply-item" style="padding:12px;border-radius:8px;background:var(--surface-2);margin-bottom:8px">
+                <div>${escapeHtml(r.content || '')}</div>
+                <div style="color:var(--text-dim);font-size:12px;margin-top:4px">${formatTime(r.created_at)}</div>
+            </div>
+        `).join('');
+
+        container.innerHTML = `
+            <div class="detail-heading">
+                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle">${escapeHtml(typeLabels[f.type] || f.type || '')} · ${escapeHtml(f.friend_nickname || '')}</p></div>
+                <div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="fb-back">返回列表</button></div>
+            </div>
+            <div class="detail-grid">
+                <div class="card detail-card">
+                    <div class="card-header"><span class="card-title">反馈内容</span><span style="color:${statusColors[f.status] || '#9ca3af'};font-weight:500">${statusLabels[f.status] || f.status || ''}</span></div>
+                    <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">朋友</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">类型</span><span>${escapeHtml(typeLabels[f.type] || f.type || '—')}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatTime(f.created_at)}</span></div>
+                        ${f.trakt_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Trakt</span><span>${escapeHtml(f.trakt_username)}</span></div>` : ''}
+                        ${f.douban_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">豆瓣</span><span>${escapeHtml(f.douban_username)}</span></div>` : ''}
+                        ${f.contact ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">联系方式</span><span>${escapeHtml(f.contact)}</span></div>` : ''}
+                    </div>
+                    <div style="padding:12px;border-radius:8px;background:var(--surface-2);white-space:pre-wrap;word-break:break-word">${escapeHtml(f.content || '')}</div>
+                    ${screenshotsHtml}
+                </div>
+                <div class="card">
+                    <div class="card-header"><span class="card-title">回复（${replies.length}）</span></div>
+                    <div id="replies-list" style="margin-bottom:16px">${repliesHtml || '<div class="empty-state" style="text-align:center;padding:16px;color:var(--text-dim)">暂无回复</div>'}</div>
+                    ${f.status !== 'CLOSED' ? `
+                        <textarea class="form-input" id="reply-content" placeholder="输入回复..." rows="4" style="width:100%;margin-bottom:8px;resize:vertical"></textarea>
+                        <div style="display:flex;gap:8px">
+                            <button class="btn btn-primary btn-sm" id="fb-reply">回复</button>
+                            <button class="btn btn-ghost btn-sm" id="fb-close">关闭反馈</button>
+                        </div>
+                    ` : '<div class="empty-state" style="text-align:center;padding:8px;color:var(--text-dim)">此反馈已关闭</div>'}
+                </div>
+                <div class="card">
+                    <div class="card-header"><span class="card-title">应用信息</span></div>
+                    <div style="display:grid;gap:10px;font-size:13px">
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">App 版本</span><span>${escapeHtml(f.app_version || '—')}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">系统版本</span><span>${escapeHtml(f.os_version || '—')}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">设备型号</span><span>${escapeHtml(f.device_model || '—')}</span></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('fb-back').addEventListener('click', () => { location.hash = '#/feedback'; });
+        document.getElementById('fb-reply')?.addEventListener('click', () => {
+            const content = document.getElementById('reply-content').value.trim();
+            if (!content) return;
+            const btn = document.getElementById('fb-reply');
+            btn.disabled = true;
+            btn.textContent = '回复中...';
+            API.post('/fb/admin/reply', { feedbackId: id, content }).then(() => {
+                showToast('回复成功');
+                showFeedbackDetail(id, container, renderToken);
+            }).catch(err => {
+                btn.disabled = false;
+                btn.textContent = '回复';
+                showToast('回复失败：' + (err.message || ''), 'error');
+            });
+        });
+        document.getElementById('fb-close')?.addEventListener('click', () => {
+            if (!confirm('确认关闭此反馈？关闭后用户仍可查看但不能再回复。')) return;
+            API.post('/fb/admin/close', { feedbackId: id }).then(() => {
+                showToast('已关闭');
+                showFeedbackDetail(id, container, renderToken);
+            }).catch(err => showToast('关闭失败：' + (err.message || ''), 'error'));
+        });
+        container.querySelectorAll('.fb-screenshot-img').forEach(img => {
+            img.addEventListener('click', () => window.open(img.dataset.key, '_blank'));
+        });
+    }).catch(err => {
+        if (renderToken !== state.renderToken || !container.isConnected) return;
+        container.innerHTML = `<div class="error-banner"><span class="error-text">加载失败：${escapeHtml(err.message || '')}</span><button class="btn btn-sm btn-ghost" id="fbDetailRetry">重试</button></div>`;
+        document.getElementById('fbDetailRetry')?.addEventListener('click', () => showFeedbackDetail(id, container, renderToken));
+    });
 }
 
 // ===== Init =====
