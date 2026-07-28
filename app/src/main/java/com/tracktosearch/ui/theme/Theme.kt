@@ -73,7 +73,7 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
         surface = CinemaSurface,
         onSurface = Color(0xFFF7EDE3),
         surfaceVariant = Color(0xFF4A382E),
-        onSurfaceVariant = Color(0xFFD9C8BA),
+        onSurfaceVariant = LightGray,
         outline = Color(0xFFA98A74),
         outlineVariant = Color(0xFF685244),
     )
@@ -91,7 +91,7 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
         surface = Color.White,
         onSurface = Color(0xFF5D4638),
         surfaceVariant = Color(0xFFEFE9DF),
-        onSurfaceVariant = Color(0xFF806F63),
+        onSurfaceVariant = Color(0xFF49454F),
         outline = Color(0xFFC9C0B2),
         outlineVariant = Color(0xFFD9D2C6),
     )
