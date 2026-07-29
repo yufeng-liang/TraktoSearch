@@ -167,6 +167,20 @@ test('formatTime uses normalized milliseconds for dates beyond 30 days', () => {
     assert.match(appSource, /return new Date\(dateMs\)\.toLocaleDateString\('zh-CN'\)/);
 });
 
+test('feedback screenshots load directly from feedback-worker', () => {
+    assert.match(appSource, /const FEEDBACK_WORKER_BASE_URL = 'https:\/\/feedback-worker\.douban-movie-api-peak\.workers\.dev'/);
+    assert.match(appSource, /const FEEDBACK_SCREENSHOT_BASE_URL = `\$\{FEEDBACK_WORKER_BASE_URL\}\/feedback-api\/screenshot`/);
+    assert.match(appSource, /FEEDBACK_SCREENSHOT_BASE_URL\}\/\$\{encodeURIComponent\(k\)\}/);
+    assert.doesNotMatch(appSource, /\/admin-api\/fb\/feedback-api\/screenshot/);
+});
+
+test('feedback admin APIs load directly from feedback-worker', () => {
+    assert.match(appSource, /const isFeedbackRequest = path\.startsWith\('\/fb\/'\)/);
+    assert.match(appSource, /const requestBase = isFeedbackRequest \? FEEDBACK_WORKER_BASE_URL : API_BASE/);
+    assert.match(appSource, /const requestPath = isFeedbackRequest \? path\.slice\(3\) : path/);
+    assert.match(appSource, /fetch\(`\$\{requestBase\}\$\{requestPath\}`/);
+});
+
 test('navigation renders once through hashchange for a changed route', () => {
     const navigateBlock = appSource.match(/function navigate\([\s\S]*?\r?\n}\r?\n/);
     assert.ok(navigateBlock, 'navigate function should exist');
