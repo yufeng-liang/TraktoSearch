@@ -439,6 +439,13 @@
     <string name="crash_email_body">Here are the crash logs:</string>
     <string name="crash_email_no_log">The app crashed but no detailed logs were found.</string>
     <string name="crash_toast_copied">Logs copied. Please send to 1577865546@qq.com</string>
+    <!-- Crash log authorization -->
+    <string name="crash_auth_dialog_title">Crash Log Authorization</string>
+    <string name="crash_auth_dialog_message">The app crashed recently. May we upload the crash log (including stack trace, app version, device model, and recent actions) to the developer via the gateway to help fix the issue? You can change this anytime in Settings.</string>
+    <string name="crash_auth_dialog_agree">Agree and upload</string>
+    <string name="crash_auth_dialog_decline">Decline</string>
+    <string name="settings_crash_log_title">Crash log upload</string>
+    <string name="settings_crash_log_subtitle">Upload crash logs to developer via gateway to help fix issues. Off by default.</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">Movie Credits</string>
@@ -1129,6 +1136,13 @@ Config:
     <string name="snackbar_test_empty">Connected, but no results parsed</string>
     <string name="snackbar_export_success">Export successful</string>
     <string name="snackbar_export_failed">Export failed: unknown error</string>
+    <string name="export_verify_valid">Signature valid ✓ Watchlist %1$d items, Watched %2$d items</string>
+    <string name="export_verify_invalid">Signature invalid ✗ File may have been tampered</string>
+    <string name="export_verify_no_signature">No signature found (legacy format)</string>
+    <string name="export_verify_parse_error">Parse failed: %1$s</string>
+    <string name="export_verify_failed">Verify failed: %1$s</string>
+    <string name="settings_export_verify">Verify export file</string>
+    <string name="settings_export_verify_subtitle">Check HMAC signature integrity</string>
     <string name="snackbar_import_no_data">No valid records found</string>
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>

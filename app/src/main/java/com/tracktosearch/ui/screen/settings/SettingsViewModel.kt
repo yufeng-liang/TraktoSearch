@@ -50,6 +50,7 @@ import com.tracktosearch.data.util.ExportItem
 import com.tracktosearch.data.util.ParseResult
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.ImportItem
+import com.tracktosearch.data.util.VerifyResult
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -80,6 +81,7 @@ class SettingsViewModel @Inject constructor(
     private val searchSourceStorage: SearchSourceStorage,
     private val notificationStorage: NotificationStorage,
     private val notificationScheduler: NotificationScheduler,
+    private val crashLogStorage: com.tracktosearch.data.local.CrashLogStorage,
     private val languageStorage: LanguageStorage,
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
@@ -125,6 +127,9 @@ class SettingsViewModel @Inject constructor(
     val releaseReminderEnabled: StateFlow<Boolean> = notificationStorage.releaseReminderEnabled
 
     val newSeasonReminderEnabled: StateFlow<Boolean> = notificationStorage.newSeasonReminderEnabled
+
+    /** 崩溃日志上报开关（默认关闭，需用户授权） */
+    val crashLogEnabled: StateFlow<Boolean> = crashLogStorage.enabled
 
     private val _exportImportState = MutableStateFlow(ExportImportState())
     val exportImportState: StateFlow<ExportImportState> = _exportImportState.asStateFlow()
@@ -264,6 +269,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { notificationStorage.setNewSeasonReminderEnabled(enabled) }
     }
 
+    fun setCrashLogEnabled(enabled: Boolean) {
+        viewModelScope.launch { crashLogStorage.setEnabled(enabled) }
+    }
+
     fun exportData(uri: Uri) {
         viewModelScope.launch {
             _exportImportState.value = _exportImportState.value.copy(
@@ -275,7 +284,7 @@ class SettingsViewModel @Inject constructor(
                 val historyMovies = fetchAllMovieHistory()
                 val historyShows = fetchAllShowHistory()
 
-                val content = DataExportImport.exportToJson(
+                val content = DataExportImport.exportToJsonWithSignature(
                     watchlistMovies = watchlistMovies.map { it.toExportItem() },
                     watchlistShows = watchlistShows.map { it.toExportItem() },
                     historyMovies = historyMovies.map { it.toExportItem() },
@@ -294,6 +303,37 @@ class SettingsViewModel @Inject constructor(
                 _exportImportState.value = _exportImportState.value.copy(
                     isExporting = false,
                     message = context.getString(R.string.snackbar_export_failed)
+                )
+            }
+        }
+    }
+
+    /** 验证导出文件的 HMAC 签名,显示验证结果 */
+    fun verifyExportFile(uri: Uri) {
+        viewModelScope.launch {
+            _exportImportState.value = _exportImportState.value.copy(
+                isExporting = true, message = null
+            )
+            try {
+                val content = readUriContent(uri)
+                val message = when (val result = DataExportImport.verifyExportFile(content)) {
+                    is VerifyResult.Valid -> context.getString(
+                        R.string.export_verify_valid,
+                        result.data.watchlistMovies.size + result.data.watchlistShows.size,
+                        result.data.historyMovies.size + result.data.historyShows.size
+                    )
+                    VerifyResult.InvalidSignature -> context.getString(R.string.export_verify_invalid)
+                    VerifyResult.NoSignature -> context.getString(R.string.export_verify_no_signature)
+                    is VerifyResult.ParseError -> context.getString(R.string.export_verify_parse_error, result.message)
+                }
+                _exportImportState.value = _exportImportState.value.copy(
+                    isExporting = false,
+                    message = message
+                )
+            } catch (e: Exception) {
+                _exportImportState.value = _exportImportState.value.copy(
+                    isExporting = false,
+                    message = context.getString(R.string.export_verify_failed, e.message ?: "")
                 )
             }
         }

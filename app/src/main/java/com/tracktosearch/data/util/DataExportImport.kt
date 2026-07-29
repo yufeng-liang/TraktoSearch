@@ -6,6 +6,9 @@ import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.crypto.Mac
+import javax.crypto.spec.SecretKeySpec
+import java.security.MessageDigest
 
 @Serializable
 data class ExportData(
@@ -45,12 +48,98 @@ sealed class ParseResult {
     data class Error(val message: String) : ParseResult()
 }
 
+/**
+ * 导出文件验签结果。
+ * - [Valid] 签名有效,返回解析后的 [ExportData]
+ * - [InvalidSignature] 签名不匹配,文件可能被篡改
+ * - [NoSignature] 文件不包含签名(旧版格式或未签名)
+ * - [ParseError] JSON 解析失败
+ */
+sealed class VerifyResult {
+    data class Valid(val data: ExportData) : VerifyResult()
+    object InvalidSignature : VerifyResult()
+    object NoSignature : VerifyResult()
+    data class ParseError(val message: String) : VerifyResult()
+}
+
 object DataExportImport {
 
     private val json = Json {
         prettyPrint = true
         encodeDefaults = false
         ignoreUnknownKeys = true
+    }
+
+    // HMAC-SHA256 密钥:SHA-256 摘要取前 32 字节
+    // 注:key 打包进 App,反编译能看到,但导出签名主要防用户误编辑导致数据损坏,
+    // 非真正防恶意篡改(开源客户端无法做到)。后续可迁移到服务端签名。
+    private const val HMAC_KEY = "TraktToSearch_ExportIntegrity_2026"
+    private const val SIGNATURE_SEPARATOR = "\n---HMAC-SHA256---\n"
+
+    private val hmacKey: SecretKeySpec by lazy {
+        val digest = MessageDigest.getInstance("SHA-256").digest(HMAC_KEY.toByteArray(Charsets.UTF_8))
+        SecretKeySpec(digest, "HmacSHA256")
+    }
+
+    /** 计算 content 的 HMAC-SHA256 签名(hex) */
+    fun signExport(content: String): String {
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(hmacKey)
+        val raw = mac.doFinal(content.toByteArray(Charsets.UTF_8))
+        return raw.joinToString("") { "%02x".format(it) }
+    }
+
+    /** 验证 content 与 signature 是否匹配(常量时间比较) */
+    fun verifySignature(content: String, signature: String): Boolean {
+        val expected = signExport(content)
+        if (expected.length != signature.length) return false
+        // 常量时间比较防时序攻击
+        var result = 0
+        for (i in expected.indices) {
+            result = result or (expected[i].code xor signature[i].code)
+        }
+        return result == 0
+    }
+
+    /** 导出 JSON 并附加 HMAC 签名(双段格式:JSON + 分隔符 + 签名) */
+    fun exportToJsonWithSignature(
+        watchlistMovies: List<ExportItem>,
+        watchlistShows: List<ExportItem>,
+        historyMovies: List<ExportItem>,
+        historyShows: List<ExportItem>
+    ): String {
+        val content = exportToJson(watchlistMovies, watchlistShows, historyMovies, historyShows)
+        val signature = signExport(content)
+        return content + SIGNATURE_SEPARATOR + signature
+    }
+
+    /**
+     * 验证导出文件内容并解析数据。
+     * 支持带签名(双段格式)和不带签名(纯 JSON)的文件。
+     */
+    fun verifyExportFile(fileContent: String): VerifyResult {
+        val separatorIndex = fileContent.indexOf(SIGNATURE_SEPARATOR)
+        return if (separatorIndex >= 0) {
+            // 带签名的文件
+            val content = fileContent.substring(0, separatorIndex)
+            val signature = fileContent.substring(separatorIndex + SIGNATURE_SEPARATOR.length).trim()
+            if (verifySignature(content, signature)) {
+                try {
+                    VerifyResult.Valid(json.decodeFromString<ExportData>(content))
+                } catch (e: Exception) {
+                    VerifyResult.ParseError(e.message ?: "Unknown error")
+                }
+            } else {
+                VerifyResult.InvalidSignature
+            }
+        } else {
+            // 不带签名的文件(旧版或未签名)
+            try {
+                VerifyResult.Valid(json.decodeFromString<ExportData>(fileContent.trim()))
+            } catch (e: Exception) {
+                VerifyResult.ParseError(e.message ?: "Unknown error")
+            }
+        }
     }
 
     fun exportToJson(

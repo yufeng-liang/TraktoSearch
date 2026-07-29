@@ -439,6 +439,13 @@
     <string name="crash_email_body">以下是应用崩溃的错误日志：</string>
     <string name="crash_email_no_log">应用发生了异常退出，但未找到详细的错误日志。</string>
     <string name="crash_toast_copied">日志已复制到剪贴板，请手动发送至 1577865546@qq.com</string>
+    <!-- 崩溃日志授权 -->
+    <string name="crash_auth_dialog_title">崩溃日志授权</string>
+    <string name="crash_auth_dialog_message">应用近期发生了崩溃。是否允许通过网关将崩溃日志（含堆栈、应用版本、设备型号、最近操作）上报给开发者以帮助修复问题？你随时可在设置中更改。</string>
+    <string name="crash_auth_dialog_agree">同意并上报</string>
+    <string name="crash_auth_dialog_decline">拒绝</string>
+    <string name="settings_crash_log_title">崩溃日志上报</string>
+    <string name="settings_crash_log_subtitle">通过网关将崩溃日志上报给开发者以修复问题，默认关闭</string>
 
     <!-- Person Screen -->
     <string name="person_movie_credits">参演电影</string>
@@ -1115,6 +1122,13 @@
     <string name="snackbar_test_empty">连接成功，但未解析到结果</string>
     <string name="snackbar_export_success">导出成功</string>
     <string name="snackbar_export_failed">导出失败：未知错误</string>
+    <string name="export_verify_valid">签名验证通过 ✓ 想看 %1$d 条，看过 %2$d 条</string>
+    <string name="export_verify_invalid">签名验证失败 ✗ 文件可能被篡改</string>
+    <string name="export_verify_no_signature">文件未包含签名（旧版格式）</string>
+    <string name="export_verify_parse_error">文件解析失败：%1$s</string>
+    <string name="export_verify_failed">验证失败：%1$s</string>
+    <string name="settings_export_verify">验证导出文件</string>
+    <string name="settings_export_verify_subtitle">校验 HMAC 签名完整性</string>
     <string name="snackbar_import_no_data">未找到有效记录</string>
     <string name="snackbar_sync_progress">正在同步 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 导入完成：成功 %1$d 条，未匹配 %2$d 条</string>

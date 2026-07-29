@@ -2,11 +2,13 @@ package com.tracktosearch.data.util
 
 import android.content.Context
 import android.os.Build
+import com.tracktosearch.data.local.CrashLogStorage
 import com.tracktosearch.data.remote.crash.CrashLogApiService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -20,12 +22,14 @@ import javax.inject.Singleton
  * 走 auth-worker 代理（${GATEWAY_BASE_URL}/api/crash-logs），
  * 客户端不持有 CRASH_LOG_TOKEN，避免密钥编译进 APK 被反编译泄露。
  *
- * 上报失败时本地日志保留，下次启动 token 恢复后重试。
+ * 隐私规范：仅在用户授权后上报（[CrashLogStorage.enabled]）。
+ * 未授权时本地日志保留，等待用户开启后下次启动重试。
  */
 @Singleton
 class CrashLogUploader @Inject constructor(
     @ApplicationContext private val context: Context,
     private val crashLogApi: CrashLogApiService,
+    private val crashLogStorage: CrashLogStorage,
 ) {
 
     companion object {
@@ -37,6 +41,12 @@ class CrashLogUploader @Inject constructor(
 
     /** Called at app start — waits for current upload, returns true if all files uploaded OK. */
     suspend fun uploadPendingLogs(): Boolean {
+        // 隐私授权：用户未同意上报时直接返回（视为成功，不触发邮件兜底弹窗）
+        if (!crashLogStorage.enabled.first()) {
+            _uploadResult.complete(true)
+            return true
+        }
+
         val dir = File(context.filesDir, CRASH_DIR)
         if (!dir.exists()) {
             _uploadResult.complete(true)

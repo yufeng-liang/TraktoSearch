@@ -448,6 +448,13 @@
     <string name="crash_email_body">앱 크래시 로그:\n\n</string>
     <string name="crash_email_no_log">크래시되었으나 상세 로그를 찾을 수 없습니다.</string>
     <string name="crash_toast_copied">로그가 복사되었습니다. 1577865546@qq.com 로 전송해주세요</string>
+    <!-- 크래시 로그 인가 -->
+    <string name="crash_auth_dialog_title">크래시 로그 인가</string>
+    <string name="crash_auth_dialog_message">앱이 최근 크래시되었습니다. 문제 수정을 위해 게이트웨이를 통해 크래시 로그(스택 트레이스, 앱 버전, 기기 모델, 최근 작업 포함)를 개발자에게 전송해도 됩니까? 설정에서 언제든 변경할 수 있습니다.</string>
+    <string name="crash_auth_dialog_agree">동의하고 전송</string>
+    <string name="crash_auth_dialog_decline">거부</string>
+    <string name="settings_crash_log_title">크래시 로그 전송</string>
+    <string name="settings_crash_log_subtitle">게이트웨이를 통해 크래시 로그를 개발자에게 전송하여 문제 수정 지원. 기본값 꺼짐</string>
 
     <!-- Disk Type Labels -->
     <string name="disk_quark">Quark</string>
@@ -1003,6 +1010,13 @@
     <string name="snackbar_test_empty">연결 성공, 결과 없음</string>
     <string name="snackbar_export_success">내보내기 성공</string>
     <string name="snackbar_export_failed">내보내기 실패</string>
+    <string name="export_verify_valid">서명 검증 성공 ✓ 관심 %1$d건, 시청 %2$d건</string>
+    <string name="export_verify_invalid">서명 검증 실패 ✗ 파일이 변조되었을 수 있음</string>
+    <string name="export_verify_no_signature">서명 없음 (이전 형식)</string>
+    <string name="export_verify_parse_error">파싱 실패: %1$s</string>
+    <string name="export_verify_failed">검증 실패: %1$s</string>
+    <string name="settings_export_verify">내보내기 파일 검증</string>
+    <string name="settings_export_verify_subtitle">HMAC 서명 무결성 확인</string>
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>

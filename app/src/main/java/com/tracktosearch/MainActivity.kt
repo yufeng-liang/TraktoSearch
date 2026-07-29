@@ -132,6 +132,8 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
+    @Inject
+    lateinit var crashLogStorage: com.tracktosearch.data.local.CrashLogStorage
 
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
@@ -461,7 +463,46 @@ class MainActivity : AppCompatActivity() {
         val crashCount = CrashHandler.getAndResetCrashCount(this)
         if (crashCount < 1) return
 
-        // 等待崩溃日志上传结果，最多 8 秒
+        // 等待 CrashLogStorage 异步加载完成
+        val enabled = crashLogStorage.enabled.first()
+        val prompted = crashLogStorage.prompted.first()
+
+        // 首次崩溃且未弹过授权弹窗：显示授权询问
+        if (!prompted) {
+            runOnUiThread {
+                AlertDialog.Builder(this)
+                    .setTitle(getString(R.string.crash_auth_dialog_title))
+                    .setMessage(getString(R.string.crash_auth_dialog_message))
+                    .setPositiveButton(getString(R.string.crash_auth_dialog_agree)) { _: DialogInterface, _: Int ->
+                        lifecycleScope.launch {
+                            crashLogStorage.setEnabled(true)
+                            crashLogStorage.setPrompted(true)
+                            // 用户刚同意，立即触发上传
+                            crashLogUploader.uploadPendingLogs()
+                            CrashHandler.clearCrashLogs(this@MainActivity)
+                        }
+                    }
+                    .setNegativeButton(getString(R.string.crash_auth_dialog_decline)) { dialog: DialogInterface, _: Int ->
+                        dialog.dismiss()
+                        lifecycleScope.launch {
+                            crashLogStorage.setPrompted(true)
+                            // 用户拒绝，清理本地日志不上报
+                            CrashHandler.clearCrashLogs(this@MainActivity)
+                        }
+                    }
+                    .setCancelable(false)
+                    .show()
+            }
+            return
+        }
+
+        // 已弹过授权弹窗但未授权：清理日志，不打扰用户
+        if (!enabled) {
+            CrashHandler.clearCrashLogs(this)
+            return
+        }
+
+        // 已授权：等待 TraktSearchApp 启动的上传结果，失败则弹邮件兜底
         val uploadOk = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
             crashLogUploader.uploadResult.await()
         } ?: false
