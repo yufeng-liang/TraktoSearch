@@ -113,6 +113,15 @@ export async function handleActivate(
         `).bind(recoveryIdHmac));
     }
 
+    if (invite.kind !== 'MIGRATION' && !existingDevice && body.androidId) {
+        const recoveryIdHmac = await hmacDeviceContinuityId(body.androidId, env.DEVICE_RECOVERY_HMAC_KEY);
+        existingDevice = await firstRow<{ id: string; friend_id: string; status: string; deleted_at: number | null }>(env.DB.prepare(`
+            SELECT id, friend_id, status, deleted_at
+            FROM devices
+            WHERE recovery_id_hmac = ?
+        `).bind(recoveryIdHmac));
+    }
+
     if (invite.kind === 'MIGRATION' && !existingDevice) {
         return logAndThrowActivationFailure(env, requestId, 'MIGRATION_DEVICE_NOT_FOUND', 'Migration invite requires an existing device', invite);
     }
