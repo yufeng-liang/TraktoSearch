@@ -184,6 +184,9 @@ dependencies {
     // Security
     implementation(libs.security.crypto)
 
+    // SQLCipher（Room 数据库加密）
+    implementation(libs.sqlcipher)
+
     // 中文分词
     implementation(libs.jieba.analysis)
 

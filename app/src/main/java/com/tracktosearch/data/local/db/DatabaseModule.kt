@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
+import net.sqlcipher.database.SQLiteDatabase
+import net.sqlcipher.database.SupportFactory
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -213,11 +216,24 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        // 首次从明文库迁移到 SQLCipher：删除旧明文库（数据可从云端/Trakt 重新同步）
+        if (DatabaseKeyProvider.legacyPlaintextDbExists(context) && !DatabaseKeyProvider.hasCipherKey(context)) {
+            DatabaseKeyProvider.deleteLegacyPlaintextDb(context)
+        }
+
+        // 加载 SQLCipher native 库（需在创建 SupportFactory 前调用）
+        SQLiteDatabase.loadLibs(context)
+
+        val passphrase = DatabaseKeyProvider.getPassphrase(context)
+        // SupportFactory 用 SQLCipher 密钥打开加密数据库
+        val factory: SupportSQLiteOpenHelper.Factory = SupportFactory(passphrase)
+
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             "tracktosearch.db"
         )
+            .openHelperFactory(factory)
             .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
     }

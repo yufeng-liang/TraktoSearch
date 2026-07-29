@@ -26,3 +26,8 @@
     public static *** v(...);
     public static *** i(...);
 }
+
+# SQLCipher：保留 native 方法和 JNI 桥接类
+-keep class net.sqlcipher.** { *; }
+-keep class net.sqlcipher.database.** { *; }
+-dontwarn net.sqlcipher.**

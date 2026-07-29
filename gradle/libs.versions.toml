@@ -32,6 +32,7 @@ lottie = "6.7.1"
 errorproneAnnotations = "2.50.0"
 profileinstaller = "1.4.1"
 securityCrypto = "1.1.0"
+sqlcipher = "4.5.4"
 jieba-analysis = "1.0.2"
 junit = "4.13.2"
 mockk = "1.14.11"
@@ -133,6 +134,9 @@ profileinstaller = { group = "androidx.profileinstaller", name = "profileinstall
 
 # Security
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
+# SQLCipher（Room 数据库加密）
+sqlcipher = { group = "net.zetetic", name = "android-database-sqlcipher", version.ref = "sqlcipher" }
 
 # 中文分词（词云/评论统计）
 jieba-analysis = { module = "com.huaban:jieba-analysis", version.ref = "jieba-analysis" }
