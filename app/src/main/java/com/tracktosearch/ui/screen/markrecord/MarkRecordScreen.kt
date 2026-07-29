@@ -2,7 +2,6 @@ package com.tracktosearch.ui.screen.markrecord
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -65,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeTopBar
+import com.tracktosearch.ui.component.isAppDarkTheme
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -82,6 +82,7 @@ fun MarkRecordScreen(
     viewModel: MarkRecordViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val isDark = isAppDarkTheme()
     val hazeState = remember { HazeState() }
     val hazeStyle = HazeMaterials.thin()
     val listState = rememberLazyGridState()
@@ -245,7 +246,7 @@ fun MarkRecordScreen(
                             value = uiState.searchQuery,
                             onValueChange = { viewModel.updateSearchQuery(it) },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text(stringResource(R.string.mark_records_search_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            placeholder = { Text(stringResource(R.string.mark_records_search_hint), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             singleLine = true,
                             shape = RoundedCornerShape(999.dp),
                             colors = OutlinedTextFieldDefaults.colors(

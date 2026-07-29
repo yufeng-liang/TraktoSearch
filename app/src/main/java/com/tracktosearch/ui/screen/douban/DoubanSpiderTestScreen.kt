@@ -12,7 +12,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +99,7 @@ import com.tracktosearch.data.repository.DoubanRetryManager
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 import com.tracktosearch.ui.util.showToast
+import com.tracktosearch.ui.component.isAppDarkTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -448,6 +448,7 @@ fun DoubanSpiderTestScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val cachedItems by viewModel.cachedItems.collectAsStateWithLifecycle()
+    val isDark = isAppDarkTheme()
     val context = LocalContext.current
     val view = androidx.compose.ui.platform.LocalView.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -659,7 +660,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateMarkDoubanId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_mark_douban_id), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_mark_douban_id), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
@@ -843,7 +844,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateRatingDoubanId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_douban_id), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_douban_id), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp
@@ -878,7 +879,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateRatingComment,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_comment_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_rating_comment_hint), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
                         )
                         Spacer(modifier = Modifier.height(10.dp))
@@ -1110,7 +1111,7 @@ fun DoubanSpiderTestScreen(
                             onValueChange = viewModel::updateSearchImdbId,
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text(stringResource(R.string.douban_spider_test_search_imdb_hint), color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
+                            placeholder = { Text(stringResource(R.string.douban_spider_test_search_imdb_hint), color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)) },
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 13.sp

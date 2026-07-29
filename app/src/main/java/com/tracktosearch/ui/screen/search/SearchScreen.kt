@@ -20,7 +20,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -558,6 +557,7 @@ private fun SearchBarTop(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
+    val isDark = isAppDarkTheme()
     var showTypeDropdown by remember { mutableStateOf(false) }
     val typeColorMap = mapOf(
         SearchSourceType.DISK to Color(0xFF26A69A),    // Teal
@@ -598,7 +598,7 @@ private fun SearchBarTop(
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Visible,
-                    color = if (isSystemInDarkTheme()) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
+                    color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
                 )
             },
             leadingIcon = {
