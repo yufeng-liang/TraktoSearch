@@ -924,6 +924,7 @@
     <string name="update_browser_download">브라우저에서 다운로드</string>
     <string name="update_downloading">다운로드 중…</string>
     <string name="update_download_failed">다운로드 실패. 브라우저에서 다운로드해주세요</string>
+    <string name="update_signature_invalid">APK 서명 검증 실패, 설치가 차단되었습니다</string>
     <string name="update_install">설치 중…</string>
     <string name="update_version_suffix">업데이트</string>
 

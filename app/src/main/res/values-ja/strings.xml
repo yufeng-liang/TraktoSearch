@@ -924,6 +924,7 @@
     <string name="update_browser_download">ブラウザでダウンロード</string>
     <string name="update_downloading">ダウンロード中…</string>
     <string name="update_download_failed">ダウンロードに失敗しました。ブラウザでダウンロードしてください</string>
+    <string name="update_signature_invalid">APK 署名検証失敗、インストールをブロックしました</string>
     <string name="update_install">インストール中…</string>
     <string name="update_version_suffix">アップデート</string>
 

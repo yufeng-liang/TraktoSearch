@@ -1065,6 +1065,7 @@
     <string name="update_browser_download">浏览器下载</string>
     <string name="update_downloading">正在下载…</string>
     <string name="update_download_failed">下载失败，请尝试浏览器下载</string>
+    <string name="update_signature_invalid">APK 签名校验失败，已阻止安装</string>
     <string name="update_install">正在安装…</string>
     <string name="update_version_suffix">版本更新</string>
 

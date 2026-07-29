@@ -364,6 +364,7 @@ fun UpdateDialog(
 ) {
     val context = LocalContext.current
     val downloadFailedMsg = stringResource(R.string.update_download_failed)
+    val signatureInvalidMsg = stringResource(R.string.update_signature_invalid)
     val scope = rememberCoroutineScope()
     // 下载状态用 rememberSaveable 保留旋屏后的状态（Completed/Error 不丢失）；
     // Downloading 状态旋屏后 job 丢失，下方 LaunchedEffect 会重置为 Idle
@@ -387,7 +388,11 @@ fun UpdateDialog(
     // 下载完成自动唤起安装
     LaunchedEffect(downloadState) {
         if (downloadState is DownloadState.Completed) {
-            ApkInstaller.installApk(context, (downloadState as DownloadState.Completed).file)
+            try {
+                ApkInstaller.installApk(context, (downloadState as DownloadState.Completed).file)
+            } catch (e: SecurityException) {
+                downloadState = DownloadState.Error(signatureInvalidMsg)
+            }
         }
     }
 
@@ -515,8 +520,12 @@ fun UpdateDialog(
                 is DownloadState.Completed -> {
                     Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
                         Button(onClick = {
-                            ApkInstaller.installApk(context, state.file)
-                            onDismiss()
+                            try {
+                                ApkInstaller.installApk(context, state.file)
+                                onDismiss()
+                            } catch (e: SecurityException) {
+                                downloadState = DownloadState.Error(signatureInvalidMsg)
+                            }
                         }, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.update_download))
                         }

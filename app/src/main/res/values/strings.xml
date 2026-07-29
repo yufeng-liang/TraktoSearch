@@ -1079,6 +1079,7 @@ Config:
     <string name="update_browser_download">Download in browser</string>
     <string name="update_downloading">Downloading…</string>
     <string name="update_download_failed">Download failed, try browser download</string>
+    <string name="update_signature_invalid">APK signature verification failed, installation blocked</string>
     <string name="update_install">Installing…</string>
     <string name="update_version_suffix">update</string>
 
