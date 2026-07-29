@@ -29,6 +29,10 @@ import { handleTmdbProxy } from './proxy/tmdb';
 import { handleTraktProxy, handleTraktOAuth } from './proxy/trakt';
 import { handleDoubanProxy } from './proxy/douban';
 import { handleOmdbProxy } from './proxy/omdb';
+import { handleGiteeProxy } from './proxy/gitee';
+import { handleGithubProxy } from './proxy/github';
+import { handleTranslateProxy } from './proxy/translate';
+import { handleCrashLogProxy } from './proxy/crash-logs';
 
 export interface Env {
     DB: D1Database;
@@ -45,6 +49,13 @@ export interface Env {
     ACCESS_TEAM_DOMAIN: string;
     ACCESS_AUDIENCE: string;
     ENVIRONMENT: string;
+    // 密钥代理（原客户端 BuildConfig 内嵌，现迁移到 worker secrets）
+    GITEE_ACCESS_TOKEN: string;
+    GITHUB_UPDATE_TOKEN: string;
+    BAIDU_APP_ID: string;
+    BAIDU_SECRET_KEY: string;
+    BAIDU_API_KEY: string;
+    CRASH_LOG_TOKEN: string;
 }
 
 export default {
@@ -173,6 +184,21 @@ async function handleAuthApi(
     }
     if (path.startsWith('/api/omdb/')) {
         return handleOmdbProxy(request, env, path);
+    }
+
+    // 密钥代理端点（需 JWT）：Gitee / GitHub / 百度翻译 / 崩溃日志
+    // 客户端原直连第三方服务并自带密钥，现统一走网关由 worker 注入密钥。
+    if (path.startsWith('/api/gitee/')) {
+        return handleGiteeProxy(request, env, path);
+    }
+    if (path.startsWith('/api/github/')) {
+        return handleGithubProxy(request, env, path);
+    }
+    if (path.startsWith('/api/translate/')) {
+        return handleTranslateProxy(request, env, path);
+    }
+    if (path === '/api/crash-logs' && request.method === 'POST') {
+        return handleCrashLogProxy(request, env);
     }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);

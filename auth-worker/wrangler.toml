@@ -1,6 +1,8 @@
 name = "auth-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
+# nodejs_compat：百度翻译通用 API 的 MD5 签名需要 node:crypto
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 # D1 数据库（授权关系数据）
@@ -26,6 +28,14 @@ id = "5e2b3731a5284fedb9d17093a86218ea"
 # ADMIN_EMAIL
 # ACCESS_TEAM_DOMAIN
 # ACCESS_AUDIENCE
+#
+# 密钥代理 Secrets（原客户端 BuildConfig 内嵌，现迁移到 worker，避免反编译泄露）
+# GITEE_ACCESS_TOKEN —— 豆瓣失败项/个人数据/详情池云端同步
+# GITHUB_UPDATE_TOKEN —— GitHub Releases 更新检查
+# BAIDU_APP_ID —— 百度翻译 appid
+# BAIDU_SECRET_KEY —— 百度翻译通用 API MD5 签名密钥
+# BAIDU_API_KEY —— 百度翻译 AI API Bearer token
+# CRASH_LOG_TOKEN —— app-config 崩溃日志上报 Bearer token
 
 [vars]
 ENVIRONMENT = "production"
