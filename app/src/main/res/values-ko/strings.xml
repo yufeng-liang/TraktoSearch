@@ -602,7 +602,8 @@
     <string name="feedback_content_too_short">본문은 최소 5자</string>
     <string name="feedback_content_too_long">본문은 최대 2000자</string>
     <string name="feedback_select_type">유형을 선택하세요</string>
-    <string name="feedback_screenshots">스크린샷 (선택, 최대 3장)</string>
+    <string name="feedback_screenshots">스크린샷 (선택, 최대 5장)</string>
+    <string name="feedback_uploading">스크린샷 업로드 중 (%1$d/%2$d)</string>
     <string name="feedback_contact">연락처 (선택)</string>
     <string name="feedback_contact_placeholder">이메일 또는 QQ</string>
     <string name="feedback_submit">제출</string>

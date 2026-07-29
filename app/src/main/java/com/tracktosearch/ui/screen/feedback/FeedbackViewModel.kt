@@ -46,7 +46,7 @@ class FeedbackViewModel @Inject constructor(
 
     sealed interface SubmitState {
         data object Idle : SubmitState
-        data object Uploading : SubmitState
+        data class Uploading(val current: Int, val total: Int) : SubmitState
         data object Submitting : SubmitState
         data class Success(val id: String) : SubmitState
         data class Error(val message: String) : SubmitState
@@ -112,12 +112,13 @@ class FeedbackViewModel @Inject constructor(
         screenshotBytes: List<ByteArray>,
         screenshotMimeTypes: List<String>
     ) {
-        _submitState.value = SubmitState.Uploading
+        _submitState.value = SubmitState.Uploading(0, screenshotBytes.size)
         viewModelScope.launch {
             try {
                 // 上传截图
                 val screenshotKeys = mutableListOf<String>()
                 for ((index, bytes) in screenshotBytes.withIndex()) {
+                    _submitState.value = SubmitState.Uploading(index, screenshotBytes.size)
                     val mimeType = screenshotMimeTypes.getOrNull(index) ?: "image/jpeg"
                     val keyResult = feedbackRepository.uploadScreenshot(bytes, mimeType)
                     keyResult.onSuccess { screenshotKeys.add(it) }
@@ -125,6 +126,9 @@ class FeedbackViewModel @Inject constructor(
                             _submitState.value = SubmitState.Error("SCREENSHOT_UPLOAD_FAILED: ${it.message}")
                             return@launch
                         }
+                }
+                if (screenshotBytes.isNotEmpty()) {
+                    _submitState.value = SubmitState.Uploading(screenshotBytes.size, screenshotBytes.size)
                 }
 
                 // 提交

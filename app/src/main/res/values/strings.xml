@@ -522,7 +522,8 @@
     <string name="feedback_content_too_short">Content must be at least 5 characters</string>
     <string name="feedback_content_too_long">Content must be at most 2000 characters</string>
     <string name="feedback_select_type">Please select a type</string>
-    <string name="feedback_screenshots">Screenshots (optional, max 3)</string>
+    <string name="feedback_screenshots">Screenshots (optional, max 5)</string>
+    <string name="feedback_uploading">Uploading screenshots (%1$d/%2$d)</string>
     <string name="feedback_contact">Contact (optional)</string>
     <string name="feedback_contact_placeholder">Email or QQ</string>
     <string name="feedback_submit">Submit</string>

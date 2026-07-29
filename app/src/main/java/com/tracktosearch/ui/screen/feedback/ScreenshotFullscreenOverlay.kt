@@ -42,19 +42,19 @@ import net.engawapg.lib.zoomable.zoomable
 
 /**
  * 截图全屏查看 overlay
- * @param urls 截图完整 URL 列表
+ * @param images 截图数据列表（URL 字符串或 ByteArray）
  * @param initialIndex 初始查看的索引
  * @param onDismiss 关闭回调
  */
 @Composable
 internal fun ScreenshotFullscreenOverlay(
-    urls: List<String>,
+    images: List<Any>,
     initialIndex: Int,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { urls.size })
+    val pagerState = rememberPagerState(initialPage = initialIndex, pageCount = { images.size })
     val zoomState = rememberZoomState()
 
     // 切页时重置缩放
@@ -92,9 +92,9 @@ internal fun ScreenshotFullscreenOverlay(
             modifier = Modifier.fillMaxSize()
         ) { page ->
             AsyncImage(
-                model = remember(urls[page]) {
+                model = remember(images[page]) {
                     ImageRequest.Builder(context)
-                        .data(urls[page])
+                        .data(images[page])
                         .crossfade(false)
                         .size(1080)
                         .build()
@@ -163,7 +163,7 @@ internal fun ScreenshotFullscreenOverlay(
             }
 
             // 页码指示器（多图时显示）
-            if (urls.size > 1) {
+            if (images.size > 1) {
                 Box(
                     modifier = Modifier
                         .background(
@@ -173,7 +173,7 @@ internal fun ScreenshotFullscreenOverlay(
                         .padding(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "${pagerState.currentPage + 1} / ${urls.size}",
+                        text = "${pagerState.currentPage + 1} / ${images.size}",
                         color = Color.White,
                         fontSize = 13.sp
                     )
