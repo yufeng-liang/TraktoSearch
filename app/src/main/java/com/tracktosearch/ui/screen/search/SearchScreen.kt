@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.search
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
+import com.tracktosearch.BuildConfig
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -368,7 +369,7 @@ fun SearchScreen(
                         searchQuery = searchQuery,
                         onQueryChange = { searchQuery = it },
                         onSearch = {
-                            if (searchQuery.trim() == "13638719007") {
+                            if (BuildConfig.DEBUG && searchQuery.trim() == "13638719007") {
                                 onSpiderTest?.invoke()
                             } else {
                                 viewModel.addTraktHistory(searchQuery, searchSourceType.name.lowercase())
