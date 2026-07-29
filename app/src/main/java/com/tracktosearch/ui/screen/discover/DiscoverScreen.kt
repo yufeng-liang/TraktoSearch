@@ -182,6 +182,7 @@ fun DiscoverScreen(
             hasListReachedTopBar(
                 firstVisibleItemIndex = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
                 firstVisibleItemOffsetPx = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset,
                 topBarHeightPx = discoverTopBarHeightPx
             )
         }
