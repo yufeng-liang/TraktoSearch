@@ -41,3 +41,28 @@ test('does not expose non-app Worker routes', async () => {
     const response = await onRequest(contextFor('/gateway-api/admin/friends'));
     assert.equal(response.status, 404);
 });
+
+test('forwards feedback API requests to feedback-worker', async () => {
+    const calls = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (request) => {
+        calls.push(request);
+        return new Response(JSON.stringify({ code: 'SUCCESS' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
+    };
+
+    try {
+        const response = await onRequest(contextFor('/gateway-api/feedback-api/mine?limit=20', {
+            method: 'GET',
+            headers: { Authorization: 'Bearer test-token' },
+        }));
+
+        assert.equal(response.status, 200);
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].url, 'https://feedback-worker.douban-movie-api-peak.workers.dev/feedback-api/mine?limit=20');
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});

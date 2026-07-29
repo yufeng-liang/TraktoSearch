@@ -202,7 +202,7 @@ fun FeedbackDetailScreen(
     fullscreenIndex?.let { index ->
         if (fullscreenUrls.isNotEmpty()) {
             ScreenshotFullscreenOverlay(
-                urls = fullscreenUrls,
+                images = fullscreenUrls,
                 initialIndex = index,
                 onDismiss = { fullscreenIndex = null }
             )

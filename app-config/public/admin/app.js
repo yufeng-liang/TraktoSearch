@@ -2035,7 +2035,7 @@ function showFeedbackDetail(id, container, renderToken) {
             try {
                 const keys = JSON.parse(f.screenshots);
                 if (Array.isArray(keys) && keys.length > 0) {
-                    screenshotsHtml = `<div class="fb-screenshots" style="margin-top:12px"><strong>截图（${keys.length} 张）：</strong><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${keys.map(k => `<img src="${escapeHtml(k)}" alt="截图" style="width:120px;height:120px;object-fit:cover;border-radius:8px;cursor:pointer" class="fb-screenshot-img" data-key="${escapeHtml(k)}">`).join('')}</div></div>`;
+                    screenshotsHtml = `<div class="fb-screenshots" style="margin-top:12px"><strong>截图（${keys.length} 张）：</strong><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">${keys.map(k => { const src = `/admin-api/fb/feedback-api/screenshot/${escapeHtml(k)}`; return `<img src="${src}" alt="截图" style="width:120px;height:120px;object-fit:cover;border-radius:8px;cursor:pointer" class="fb-screenshot-img" data-key="${src}">`; }).join('')}</div></div>`;
                 }
             } catch { /* screenshots 不是合法 JSON，忽略 */ }
         }

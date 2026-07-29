@@ -28,7 +28,7 @@ interface SubmitRequest {
 }
 
 const VALID_TYPES = new Set(['FEATURE', 'BUG', 'UX', 'OTHER']);
-const MAX_SCREENSHOTS = 3;
+const MAX_SCREENSHOTS = 5;
 
 export async function handleSubmit(
     request: Request,

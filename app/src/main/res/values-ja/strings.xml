@@ -602,7 +602,8 @@
     <string name="feedback_content_too_short">本文は5文字以上必要です</string>
     <string name="feedback_content_too_long">本文は2000文字以内です</string>
     <string name="feedback_select_type">タイプを選択してください</string>
-    <string name="feedback_screenshots">スクリーンショット（任意、最大3枚）</string>
+    <string name="feedback_screenshots">スクリーンショット（任意、最大5枚）</string>
+    <string name="feedback_uploading">スクリーンショットをアップロード中（%1$d/%2$d）</string>
     <string name="feedback_contact">連絡先（任意）</string>
     <string name="feedback_contact_placeholder">メールまたはQQ</string>
     <string name="feedback_submit">送信</string>

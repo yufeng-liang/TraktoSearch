@@ -32,7 +32,7 @@ android {
 
         buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
         buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
-        buildConfigField("String", "FEEDBACK_BASE_URL", "\"${properties.getProperty("feedback.base.url", "https://feedback-worker.douban-movie-api-peak.workers.dev")}\"")
+        buildConfigField("String", "FEEDBACK_BASE_URL", "\"${properties.getProperty("feedback.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
         buildConfigField("String", "JPUSH_APPKEY", "\"${properties.getProperty("jpush.appkey", "")}\"")
         buildConfigField("String", "BAIDU_APP_ID", "\"${properties.getProperty("baidu.app.id", "")}\"")
         buildConfigField("String", "BAIDU_SECRET_KEY", "\"${properties.getProperty("baidu.secret.key", "")}\"")

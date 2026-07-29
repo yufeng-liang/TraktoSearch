@@ -24,10 +24,10 @@ describe('feedback-worker validation', () => {
         assert.ok(tooLong.length > 2000);
     });
 
-    test('screenshot count limited to 3', () => {
-        const MAX = 3;
-        const shots = ['a', 'b', 'c', 'd', 'e'].slice(0, MAX);
-        assert.equal(shots.length, 3);
+    test('screenshot count limited to 5', () => {
+        const MAX = 5;
+        const shots = ['a', 'b', 'c', 'd', 'e', 'f'].slice(0, MAX);
+        assert.equal(shots.length, 5);
     });
 
     test('valid status set', () => {

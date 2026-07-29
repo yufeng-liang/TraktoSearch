@@ -522,7 +522,8 @@
     <string name="feedback_content_too_short">正文至少 5 个字</string>
     <string name="feedback_content_too_long">正文最多 2000 个字</string>
     <string name="feedback_select_type">请选择反馈类型</string>
-    <string name="feedback_screenshots">截图（选填，最多 3 张）</string>
+    <string name="feedback_screenshots">截图（选填，最多 5 张）</string>
+    <string name="feedback_uploading">正在上传截图（%1$d/%2$d）</string>
     <string name="feedback_contact">联系方式（选填）</string>
     <string name="feedback_contact_placeholder">邮箱或 QQ</string>
     <string name="feedback_submit">提交</string>

@@ -1,16 +1,22 @@
-const WORKER_ORIGIN = 'https://auth-worker.douban-movie-api-peak.workers.dev';
+const AUTH_WORKER_ORIGIN = 'https://auth-worker.douban-movie-api-peak.workers.dev';
+const FEEDBACK_WORKER_ORIGIN = 'https://feedback-worker.douban-movie-api-peak.workers.dev';
 const PUBLIC_PREFIX = '/gateway-api';
 
 /**
  * App 网关同源代理。
- * 只转发 Worker 的健康检查和 /api/*，避免把 Admin 接口变成公开代理。
+ * /api/* 和 /health → auth-worker，/feedback-api/* → feedback-worker。
+ * 不转发 Admin 接口，避免变成公开代理。
  */
 export async function onRequest(context) {
     const { request } = context;
     const url = new URL(request.url);
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
-    if (upstreamPath !== '/health' && !upstreamPath.startsWith('/api/')) {
+    // 路由：/feedback-api/* → feedback-worker，其余 → auth-worker
+    let workerOrigin = AUTH_WORKER_ORIGIN;
+    if (upstreamPath.startsWith('/feedback-api/')) {
+        workerOrigin = FEEDBACK_WORKER_ORIGIN;
+    } else if (upstreamPath !== '/health' && !upstreamPath.startsWith('/api/')) {
         return jsonResponse({ code: 'NOT_FOUND', message: 'Not found' }, 404);
     }
 
@@ -21,7 +27,7 @@ export async function onRequest(context) {
         });
     }
 
-    const upstreamUrl = new URL(`${WORKER_ORIGIN}${upstreamPath}`);
+    const upstreamUrl = new URL(`${workerOrigin}${upstreamPath}`);
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
@@ -29,7 +35,7 @@ export async function onRequest(context) {
     headers.delete('Content-Length');
     headers.delete('Cookie');
     headers.delete('Cf-Access-Jwt-Assertion');
-    headers.set('Origin', WORKER_ORIGIN);
+    headers.set('Origin', workerOrigin);
 
     try {
         const upstream = await fetch(new Request(upstreamUrl, {
