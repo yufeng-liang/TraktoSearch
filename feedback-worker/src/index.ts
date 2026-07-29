@@ -59,6 +59,17 @@ export default {
             return applySecurityHeaders(addCorsHeaders(response));
         } catch (err) {
             if (isAppError(err)) {
+                // 安全告警：鉴权失败（401/403）记录到 console + KV 计数
+                if (err.statusCode === 401 || err.statusCode === 403) {
+                    const clientIp = request.headers.get('CF-Connecting-IP') || 'unknown';
+                    const url = new URL(request.url);
+                    console.warn(`[AUTH_FAIL] ${err.code} status=${err.statusCode} ip=${clientIp} path=${url.pathname} method=${request.method} requestId=${requestId}`);
+                    try {
+                        const counterKey = `auth_fail:${clientIp}:${url.pathname}`;
+                        const current = parseInt(await env.KV.get(counterKey) || '0', 10);
+                        await env.KV.put(counterKey, String(current + 1), { expirationTtl: 3600 });
+                    } catch { /* KV 写入失败不影响响应 */ }
+                }
                 return applySecurityHeaders(addCorsHeaders(errorResponse(err, requestId)));
             }
             console.error('Unhandled error:', err);
