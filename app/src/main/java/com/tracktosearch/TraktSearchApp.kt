@@ -19,10 +19,8 @@ import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
-import com.tracktosearch.push.JPushHelper
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +47,9 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject @DoubanIdMapping lateinit var doubanIdMappingCache: PersistentTtlCache<String>
     @Inject lateinit var remoteConfigManager: RemoteConfigManager
     @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
+    @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
+
+    // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
     // 缓存 Configuration，避免每次 get() 都新建实例
     override val workManagerConfiguration: Configuration by lazy {
@@ -59,20 +60,19 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
 
     override fun onCreate() {
         super.onCreate()
-        // CrashHandler 在所有进程初始化(包括 :pushcore 子进程),确保子进程崩溃也能记录日志
+        // CrashHandler 在所有进程初始化，确保子进程崩溃也能记录日志
         CrashHandler.init(this)
-        // 只在主进程初始化，避免 :pushcore 子进程重复初始化 Hilt 注入依赖、JPush
+        // 只在主进程初始化，避免子进程重复初始化 Hilt 注入依赖
         if (isMainProcess()) {
             StartupTrace.markProcessStart()
             StartupTrace.mark("application.onCreate.enter")
-            Thread { JPushHelper.init(this) }.start()
             // WorkManager 调度移到后台线程，避免 getInstance + enqueueUniquePeriodicWork 阻塞主线程
             Thread { notificationScheduler.schedulePeriodicCheck() }.start()
             // 授权撤销最多 15 分钟内生效；网络不可用时由 AuthManager 保留离线宽限策略。
             Thread { authCheckScheduler.schedulePeriodicCheck() }.start()
-            // 上传未发送的崩溃日志到云端
+            // 上传未发送的崩溃日志到云端（走网关代理，worker 注入上报密钥）
             CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                CrashLogUploader.uploadPendingLogs(this@TraktSearchApp)
+                crashLogUploader.uploadPendingLogs()
             }
 
             // 暂时停用远程配置拉取：当前暂无业务读取这些配置，避免启动阶段产生额外网络请求。

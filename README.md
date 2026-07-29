@@ -53,7 +53,6 @@
 - **后台**: WorkManager（定时同步/通知）
 - **桌面组件**: Glance（App Widget）
 - **特效**: Haze 毛玻璃效果、Lottie 动画
-- **推送**: JPush（极光推送，含厂商通道占位）
 - **其他**: jsoup（HTML 解析）、Security Crypto（密钥加密）、Baseline Profile
 
 ## 下载
@@ -114,9 +113,6 @@ omdb.api.key=your_omdb_api_key
 gitee.access.token=your_gitee_access_token
 github.update.token=your_github_token
 
-# 极光推送 JPush（可选，关闭通知可留空）
-jpush.appkey=your_jpush_appkey
-
 # 百度翻译（评论翻译可选）
 baidu.app.id=your_baidu_app_id
 baidu.secret.key=your_baidu_secret_key
@@ -172,7 +168,6 @@ Release 构建会开启 R8 混淆与资源压缩（`isMinifyEnabled = true`、`i
 
 ### 常见问题
 
-- **`Manifest merger failed` / 渠道占位符缺失**：部分厂商推送占位符（如小米/OPPO/VIVO）来自 `local.properties`，未配置时会为空字符串。可暂时在 `local.properties` 中补填空值，或在 `app/build.gradle.kts` 中注释对应 `manifestPlaceholders` 赋值。
 - **`BUILD FAILED: Could not resolve`**：多为网络/代理问题，检查 `gradle.properties` 代理设置或切换网络。
 - **KSP / Hilt 编译报错**：确认 Kotlin 2.4.0 与 Hilt 2.60、KSP 2.3.9 版本匹配，并执行 `./gradlew clean` 后重新构建。
 
@@ -252,7 +247,6 @@ app/src/main/java/com/tracktosearch/
 │   └── theme/          # 主题配置
 ├── di/                 # Hilt 依赖注入模块（NetworkModule / ConfigModule / DoubanModule ...）
 ├── widget/             # Glance 桌面组件
-├── push/               # JPush 推送
 ├── service/            # 前台服务（豆瓣同步等）
 ├── util/               # 全局工具
 ├── MainActivity.kt     # 入口 Activity

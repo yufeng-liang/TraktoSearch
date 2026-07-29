@@ -37,11 +37,6 @@
             android:theme="@style/Theme.TraktToSearch"
             android:usesCleartextTraffic="false">
 
-        <!-- 极光推送默认通知图标，避免 JPushInterface.init 用 0 资源 ID 报 Invalid resource ID -->
-        <meta-data
-            android:name="JPUSH_DEFAULT_ICON"
-            android:resource="@mipmap/ic_launcher" />
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -96,17 +91,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- 极光推送 Required -->
-        <service
-            android:name=".push.PushService"
-            android:enabled="true"
-            android:exported="false"
-            android:process=":pushcore">
-            <intent-filter>
-                <action android:name="cn.jiguang.user.service.action" />
-            </intent-filter>
-        </service>
-
         <!-- 豆瓣标记同步前台服务 -->
         <service
             android:name=".service.DoubanSyncService"
@@ -124,16 +108,6 @@
             android:name=".service.DoubanBatchRemovalService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
-
-        <receiver
-            android:name=".push.PushReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="cn.jpush.android.intent.RECEIVER_MESSAGE" />
-                <category android:name="${applicationId}" />
-            </intent-filter>
-        </receiver>
 
         <!-- 快速搜索 Widget -->
         <receiver

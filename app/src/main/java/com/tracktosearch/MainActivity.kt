@@ -34,10 +34,8 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
-import com.tracktosearch.data.util.CrashLogUploader
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
-import com.tracktosearch.push.JPushHelper
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
 import com.tracktosearch.ui.theme.TraktToSearchTheme
@@ -131,6 +129,9 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
+
+    @Inject
+    lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
 
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
@@ -349,7 +350,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         StartupTrace.mark("activity.onResume.enter")
-        JPushHelper.onResume(this)
         val isInitialResume = !initialResumeHandled
         initialResumeHandled = true
         lifecycleScope.launch {
@@ -393,11 +393,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.dispatchTouchEvent(event)
-    }
-
-    override fun onPause() {
-        super.onPause()
-        JPushHelper.onPause(this)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -468,7 +463,7 @@ class MainActivity : AppCompatActivity() {
 
         // 等待崩溃日志上传结果，最多 8 秒
         val uploadOk = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
-            CrashLogUploader.uploadResult.await()
+            crashLogUploader.uploadResult.await()
         } ?: false
 
         if (uploadOk) {

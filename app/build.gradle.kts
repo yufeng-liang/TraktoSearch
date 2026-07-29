@@ -30,32 +30,14 @@ android {
 
         testInstrumentationRunner = "com.tracktosearch.CustomTestRunner"
 
-        buildConfigField("String", "GITEE_ACCESS_TOKEN", "\"${properties.getProperty("gitee.access.token", "")}\"")
-        buildConfigField("String", "GITHUB_UPDATE_TOKEN", "\"${properties.getProperty("github.update.token", "")}\"")
         buildConfigField("String", "FEEDBACK_BASE_URL", "\"${properties.getProperty("feedback.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
-        buildConfigField("String", "JPUSH_APPKEY", "\"${properties.getProperty("jpush.appkey", "")}\"")
-        buildConfigField("String", "BAIDU_APP_ID", "\"${properties.getProperty("baidu.app.id", "")}\"")
-        buildConfigField("String", "BAIDU_SECRET_KEY", "\"${properties.getProperty("baidu.secret.key", "")}\"")
-        buildConfigField("String", "BAIDU_API_KEY", "\"${properties.getProperty("baidu.api.key", "")}\"")
-        buildConfigField("String", "CRASH_LOG_API_URL", "\"${properties.getProperty("crash.log.api.url", "https://app-config-1qe.pages.dev/api/crash-logs")}\"")
-        buildConfigField("String", "CRASH_LOG_API_TOKEN", "\"${properties.getProperty("crash.log.api.token", "")}\"")
         // 云端配置热更新:加密 key(与 app-config/.env 中 CONFIG_AES_KEY 一致)+ 配置服务 baseUrl
         buildConfigField("String", "CONFIG_AES_KEY", "\"${properties.getProperty("config.aes.key", "")}\"")
         buildConfigField("String", "CONFIG_BASE_URL", "\"${properties.getProperty("config.base.url", "https://app-config-1qe.pages.dev/")}\"")
         // 授权网关根域名（固定，不可被远程配置替换）
         buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
-
-        val appId = applicationId ?: "com.tracktosearch"
-        manifestPlaceholders["JPUSH_PKGNAME"] = appId
-        manifestPlaceholders["JPUSH_APPKEY"] = properties.getProperty("jpush.appkey", "")
-        manifestPlaceholders["JPUSH_CHANNEL"] = "developer-default"
-        manifestPlaceholders["XIAOMI_APPID"] = properties.getProperty("xiaomi.app.id", "")
-        manifestPlaceholders["XIAOMI_APPKEY"] = properties.getProperty("xiaomi.app.key", "")
-        manifestPlaceholders["OPPO_APPKEY"] = properties.getProperty("oppo.app.key", "")
-        manifestPlaceholders["OPPO_APPID"] = properties.getProperty("oppo.app.id", "")
-        manifestPlaceholders["OPPO_APPSECRET"] = properties.getProperty("oppo.app.secret", "")
-        manifestPlaceholders["VIVO_APPKEY"] = properties.getProperty("vivo.app.key", "")
-        manifestPlaceholders["VIVO_APPID"] = properties.getProperty("vivo.app.id", "")
+        // 已迁移到 auth-worker Secrets 的密钥（不再编译进 APK）：
+        // GITEE_ACCESS_TOKEN / GITHUB_UPDATE_TOKEN / BAIDU_APP_ID / BAIDU_SECRET_KEY / BAIDU_API_KEY / CRASH_LOG_TOKEN
     }
 
     signingConfigs {
@@ -202,9 +184,6 @@ dependencies {
     // Security
     implementation(libs.security.crypto)
 
-    // 极光推送
-    implementation(libs.jpush)
-
     // 中文分词
     implementation(libs.jieba.analysis)
 
@@ -235,18 +214,9 @@ dependencies {
     androidTestImplementation(libs.coroutines.test)
     androidTestImplementation(libs.truth)
     kspAndroidTest(libs.hilt.compiler)
-    // 厂商通道
-    //implementation("cn.jiguang.sdk.plugin:xiaomi:5.8.0")
-    //implementation("cn.jiguang.sdk.plugin:huawei:5.8.0")
-    //implementation("cn.jiguang.sdk.plugin:oppo:5.8.0")
-    //implementation("cn.jiguang.sdk.plugin:vivo:5.8.0")
 }
 
-// JPush SDK 的 SchedulerReceiver 字节码缺少 stackmap frame,
-// Robolectric 加载 merged manifest 时会触发 VerifyError。
-// -Xverify:none 在 JDK 17 中 deprecated 但仍可用,跳过字节码校验让 Robolectric 测试能初始化。
 // -Xmx4g: 1195+ 测试用例（含 Robolectric）默认 512MB 堆内存不足，WatchlistViewModelTest 会 OOM。
 tasks.withType<Test>().configureEach {
-    jvmArgs("-Xverify:none")
     maxHeapSize = "4g"
 }
