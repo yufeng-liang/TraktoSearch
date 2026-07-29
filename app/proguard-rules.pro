@@ -18,3 +18,11 @@
 -keep class com.tracktosearch.data.auth.GatewayResponse { *; }
 -keep class com.tracktosearch.data.auth.GatewaySuccessResponse { *; }
 -keepattributes SourceFile,LineNumberTable
+
+# 安全：release 构建剥离 Log.d/v/i 调用，防止 logcat 泄露敏感信息
+# 保留 Log.w/e 用于线上问题排查
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
