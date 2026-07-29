@@ -132,10 +132,9 @@ fun StatisticsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .hazeSource(state = statsHazeState)
         ) {
             if (uiState.initialLoading) {
-                StatisticsSkeleton()
+                StatisticsSkeleton(hazeState = statsHazeState)
             } else if (uiState.error != null) {
                 Column(
                     modifier = Modifier
@@ -172,7 +171,9 @@ fun StatisticsScreen(
                 val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeSource(state = statsHazeState),
                     contentPadding = PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -1442,12 +1443,14 @@ private fun StatisticsSkeletonContent(
 
 /** 骨架屏：加载中的占位界面，颜色风格与发现页一致 */
 @Composable
-private fun StatisticsSkeleton() {
+private fun StatisticsSkeleton(hazeState: HazeState) {
     val brush = rememberShimmerBrush()
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .hazeSource(state = hazeState),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 65.dp + statusBarHeight, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {

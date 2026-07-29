@@ -157,7 +157,6 @@ fun DiscoverFilterScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .hazeSource(state = hazeState)
             .then(
                 if (sharedTransitionScope != null && animatedVisibilityScope != null && LocalSharedTransitionEnabled.current) {
                     with(sharedTransitionScope) {
@@ -174,7 +173,9 @@ fun DiscoverFilterScreen(
         // ========== 列表内容 ==========
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
             contentPadding = PaddingValues(
                 start = 12.dp,
                 end = 12.dp,

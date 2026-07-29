@@ -117,7 +117,6 @@ fun TraktListDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .hazeSource(state = hazeState)
         ) {
             when {
                 // 首次加载：骨架屏
@@ -125,7 +124,9 @@ fun TraktListDetailScreen(
                     Box(modifier = Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(3),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .hazeSource(state = hazeState),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)
@@ -209,7 +210,9 @@ fun TraktListDetailScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
                         state = gridState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(state = hazeState),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 65.dp + statusBarHeight, bottom = 16.dp)

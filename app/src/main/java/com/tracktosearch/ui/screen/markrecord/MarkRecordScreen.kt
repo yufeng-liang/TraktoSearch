@@ -105,13 +105,14 @@ fun MarkRecordScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .hazeSource(state = hazeState)
     ) {
         // ========== 网格内容 ==========
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = hazeState),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
             contentPadding = PaddingValues(
