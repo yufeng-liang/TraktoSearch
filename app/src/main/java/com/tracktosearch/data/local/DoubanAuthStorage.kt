@@ -98,7 +98,13 @@ class DoubanAuthStorage @Inject constructor(
 
     /** 清除豆瓣凭据（退出登录或 Cookie 过期时调用） */
     fun clearCredentials() {
-        prefs.edit().clear().apply()
+        // 按 key 删除，不清空整个 prefs 文件，避免误删其他可能的共享字段
+        prefs.edit()
+            .remove(KEY_USER_ID)
+            .remove(KEY_COOKIE)
+            .remove(KEY_NICKNAME)
+            .remove(KEY_AVATAR)
+            .apply()
         _isLoggedIn.value = false
         _doubanProfile.value = null
     }
