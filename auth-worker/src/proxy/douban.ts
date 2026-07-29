@@ -4,7 +4,9 @@ import { Env } from '../index';
 import { buildDoubanHeaders } from './douban-token';
 import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
 
-const DOUBAN_BASE_URL = 'https://douban-movie-api.pages.dev';
+// 上游豆瓣热榜服务：已从 Pages Functions（硬编码 Key）切换到 Worker（env.API_KEY 注入）。
+// Worker 代码 douban-movie-api/worker.js 通过 env.API_KEY 验证，Key 仅存于 Cloudflare Secrets。
+const DOUBAN_BASE_URL = 'https://douban-movie-api.douban-movie-api-peak.workers.dev';
 
 const DOUBAN_PREFIX = '/api/douban/';
 
