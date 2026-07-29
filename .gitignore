@@ -78,3 +78,6 @@ feedback-worker/node_modules/
 
 # Local verification screenshots and reports
 verification-artifacts/
+
+# Git worktrees
+.worktrees/
