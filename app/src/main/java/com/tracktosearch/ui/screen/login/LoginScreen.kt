@@ -101,6 +101,8 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             val result = authManager.exchangeCodeForToken(code)
             if (result.isSuccess) {
+                // OAuth 可能切换到另一个 Trakt 账号，避免 Watchlist 和资料沿用旧账号缓存。
+                traktRepository.clearTraktAccountCaches()
                 _loginState.value = LoginState.SUCCESS
             } else {
                 _loginState.value = LoginState.ERROR

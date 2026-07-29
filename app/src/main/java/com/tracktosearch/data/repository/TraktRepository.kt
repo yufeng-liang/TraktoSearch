@@ -229,6 +229,12 @@ class TraktRepository @Inject constructor(
         try { watchlistWatchedIdsCache.clearAll() } catch (e: CancellationException) { throw e } catch (_: Exception) {}
     }
 
+    /** 清理当前 Trakt 账号的全部本地数据，切换账号或重新授权后必须调用。 */
+    suspend fun clearTraktAccountCaches() {
+        clearWatchlistWatchedCache()
+        clearUserProfileCache()
+    }
+
     /** 将当前内存中的 watchlistWatchedIds 异步写回持久化缓存（增删后调用以保持一致） */
     private fun persistWatchlistWatchedIds() {
         val current = watchlistWatchedIds ?: return

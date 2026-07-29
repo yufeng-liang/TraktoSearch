@@ -290,7 +290,11 @@ class MainActivity : AppCompatActivity() {
                 if (isReady) {
                     var currentDestination by remember { mutableStateOf(startDest) }
                     val authStateHolder = remember {
-                        com.tracktosearch.ui.navigation.AuthStateHolder(authManager, traktAuthManager)
+                        com.tracktosearch.ui.navigation.AuthStateHolder(
+                            authManager,
+                            traktAuthManager,
+                            traktRepository
+                        )
                     }
                     AppNavigation(
                         startDestination = currentDestination,

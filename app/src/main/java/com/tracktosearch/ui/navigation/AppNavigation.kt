@@ -148,13 +148,20 @@ object Routes {
 
 class AuthStateHolder @Inject constructor(
     private val authManager: AuthManager,
-    private val traktAuthManager: TraktAuthManager
+    private val traktAuthManager: TraktAuthManager,
+    private val traktRepository: com.tracktosearch.data.repository.TraktRepository
 ) {
     val authState: kotlinx.coroutines.flow.StateFlow<AuthState> = authManager.authState
     val isLoggedIn: kotlinx.coroutines.flow.Flow<Boolean> = authManager.authState
         .map { it == AuthState.AUTHORIZED || it == AuthState.OFFLINE }
 
-    suspend fun disconnectTrakt() = traktAuthManager.disconnect()
+    suspend fun disconnectTrakt() {
+        try {
+            traktAuthManager.disconnect()
+        } finally {
+            traktRepository.clearTraktAccountCaches()
+        }
+    }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
