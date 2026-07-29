@@ -459,18 +459,6 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
-        // 顶部高光
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .clip(shape)
-                .background(
-                    Brush.verticalGradient(
-                        0f to Color.White.copy(alpha = 0.20f),
-                        0.5f to Color.Transparent
-                    )
-                )
-        )
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
