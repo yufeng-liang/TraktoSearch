@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置：
+  1. 全局禁用明文流量（cleartextTrafficPermitted=false），所有连接必须 HTTPS
+  2. 仅信任系统 CA，不信任用户安装的 CA，防止中间人攻击（用户安装的根证书可能是恶意软件注入）
+  3. 豆瓣域名特殊处理：保留对系统 CA 的信任，因为 doubanio.com 图片 CDN 必须可访问
+  4. 不实施 CertificatePinner：Cloudflare Workers/Pages 边缘证书由 CF 管理，~90 天轮换，
+     SPKI 可能变化，pinning 会导致证书轮换后 App 无法访问网关，风险大于收益
+-->
+<network-security-config>
+    <!-- 基础配置：仅信任系统 CA -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
