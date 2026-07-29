@@ -31,6 +31,10 @@
 -keepattributes Exceptions
 -keepattributes InnerClasses
 -keepattributes Signature
+
+# Retrofit 挂起函数的响应泛型需要在 R8 full mode 下保留，否则会退化为 Object。
+-keep class com.tracktosearch.data.auth.GatewayResponse { *; }
+-keep class com.tracktosearch.data.auth.GatewaySuccessResponse { *; }
 -keepattributes SourceFile,LineNumberTable
 -keep class com.hianalytics.android.**{*;}
 -keep class com.huawei.updatesdk.**{*;}

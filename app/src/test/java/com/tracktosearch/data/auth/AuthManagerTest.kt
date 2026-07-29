@@ -10,6 +10,8 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Before
@@ -83,5 +85,51 @@ class AuthManagerTest {
 
         assertThat(manager.authState.value).isEqualTo(AuthState.AUTHORIZED)
         coVerify(exactly = 0) { api.check(any()) }
+    }
+
+    @Test
+    fun concurrentInitialize_checksOnlyAfterTheFirstInitializationUpdatesSession() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
+        var cachedNextCheckAt = 0L
+        val futureNextCheckAt = System.currentTimeMillis() + 60_000L
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } answers { cachedNextCheckAt }
+        every { storage.getCachedLastOnlineAt() } returns 1_000L
+        coEvery { storage.isTokenValid() } returns true
+        coEvery { storage.saveSessionMetadata(any(), any(), any()) } answers {
+            cachedNextCheckAt = arg(2)
+        }
+        every { continuityManager.getAndroidId() } returns "android-id"
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            delay(10)
+            Response.success(
+                GatewayResponse(
+                    "SUCCESS",
+                    "OK",
+                    data = CheckResponse(
+                        authorized = true,
+                        friendId = "friend-id",
+                        deviceId = "device-id",
+                        nickname = "friend",
+                        deviceStatus = "ACTIVE",
+                        nextCheckAt = futureNextCheckAt,
+                        configVersion = 1,
+                    ),
+                ),
+            )
+        }
+
+        val first = async { manager.initialize() }
+        val second = async { manager.initialize() }
+        first.await()
+        second.await()
+
+        coVerify(exactly = 1) { api.check(CheckRequest("android-id")) }
     }
 }

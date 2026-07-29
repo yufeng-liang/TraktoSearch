@@ -64,6 +64,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.isAppDarkTheme
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -90,7 +91,10 @@ fun ActivationLoginScreen(
     val scope = rememberCoroutineScope()
     val hazeState = remember { HazeState() }
     val scrollState = rememberScrollState()
-    val loginBackground = Color(0xFFF7EFE2)
+    val isDarkTheme = isAppDarkTheme()
+    val loginBackground = if (isDarkTheme) Color(0xFFD9CFC2) else Color(0xFFF7EFE2)
+    val loginTextColor = if (isDarkTheme) Color(0xFF4A3529) else MaterialTheme.colorScheme.onSurface
+    val loginSecondaryTextColor = if (isDarkTheme) Color(0xFF624B3C) else MaterialTheme.colorScheme.onSurfaceVariant
     var showWhatIsTraktDialog by remember { mutableStateOf(false) }
 
     val isActivated = authState.activated
@@ -159,6 +163,9 @@ fun ActivationLoginScreen(
             TextButton(
                 onClick = { showWhatIsTraktDialog = true },
                 enabled = true,
+                colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                    contentColor = if (isDarkTheme) Color(0xFF6B4632) else MaterialTheme.colorScheme.primary
+                ),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
@@ -200,7 +207,7 @@ fun ActivationLoginScreen(
                                 fontSize = 14.sp,
                                 lineHeight = 20.sp
                             ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = loginSecondaryTextColor,
                             textAlign = TextAlign.Center
                         )
                     }
@@ -212,7 +219,7 @@ fun ActivationLoginScreen(
                         text = stringResource(R.string.auth_expired_message),
                         fontSize = 16.sp,
                         lineHeight = 24.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = loginSecondaryTextColor,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -241,6 +248,10 @@ fun ActivationLoginScreen(
                 TextButton(
                     onClick = onGuestMode,
                     enabled = canUseActions,
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = loginTextColor,
+                        disabledContentColor = loginTextColor.copy(alpha = 0.38f)
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.login_guest)) }
                 Spacer(modifier = Modifier.height(20.dp))

@@ -8,6 +8,8 @@ import android.util.Base64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.decodeFromString
@@ -44,6 +46,7 @@ class AuthManager @Inject constructor(
     private val json: Json
 ) {
     private val refreshCoordinator = AuthRefreshCoordinator()
+    private val initializationMutex = Mutex()
 
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -238,6 +241,10 @@ class AuthManager @Inject constructor(
 
     /** 启动时恢复本地会话并按需向网关校验。 */
     suspend fun initialize() {
+        initializationMutex.withLock { initializeLocked() }
+    }
+
+    private suspend fun initializeLocked() {
         tokenStorage.ensureCacheLoaded()
         deviceId = tokenStorage.getCachedDeviceId()
         nextCheckAt = tokenStorage.getCachedNextCheckAt()
