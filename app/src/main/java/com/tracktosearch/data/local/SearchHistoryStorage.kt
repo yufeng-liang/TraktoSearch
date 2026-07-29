@@ -1,21 +1,31 @@
 package com.tracktosearch.data.local
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
 data class SearchHistoryItem(val keyword: String, val type: String)
 
-private val Context.searchHistoryDataStore: DataStore<Preferences> by preferencesDataStore(name = "search_history")
+// 旧明文 DataStore，仅用于一次性迁移到加密存储后清理
+private val Context.legacySearchHistoryDataStore: DataStore<Preferences> by preferencesDataStore(name = "search_history")
 
 @Singleton
 class SearchHistoryStorage @Inject constructor(
@@ -23,32 +33,95 @@ class SearchHistoryStorage @Inject constructor(
 ) {
     private companion object {
         // 用 String 存储有序历史（换行符分隔），避免 Set 无序导致历史顺序丢失
-        val KEY_HISTORY = stringPreferencesKey("search_keywords_joined")
+        const val KEY_HISTORY = "search_keywords_joined"
+        const val KEY_MIGRATED = "migrated_from_datastore"
         const val MAX_HISTORY = 30
         const val SEPARATOR = "\n"
+        const val PREFS_NAME = "search_history_encrypted"
     }
 
-    val history: Flow<List<SearchHistoryItem>> = context.searchHistoryDataStore.data.map { prefs ->
-        val joined = prefs[KEY_HISTORY] ?: ""
-        if (joined.isBlank()) {
-            emptyList()
-        } else {
-            joined.split(SEPARATOR).filter { it.isNotBlank() }.map { raw ->
-                if (raw.contains("::")) {
-                    val parts = raw.split("::", limit = 2)
-                    SearchHistoryItem(keyword = parts[1], type = parts[0])
-                } else {
-                    SearchHistoryItem(keyword = raw, type = "disk")
-                }
+    // EncryptedSharedPreferences 创建涉及 Keystore 解密，耗时 100-500ms
+    // 用 volatile + 双重检查锁，在 IO 线程首次初始化，避免阻塞主线程
+    @Volatile
+    private var prefsCache: SharedPreferences? = null
+
+    private suspend fun prefs(): SharedPreferences {
+        prefsCache?.let { return it }
+        return withContext(Dispatchers.IO) {
+            prefsCache?.let { return@withContext it }
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            val created = EncryptedSharedPreferences.create(
+                context,
+                PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            prefsCache = created
+            created
+        }
+    }
+
+    private val _history = MutableStateFlow<List<SearchHistoryItem>>(emptyList())
+    val history: StateFlow<List<SearchHistoryItem>> = _history.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        // 启动时异步加载历史数据 + 迁移旧 DataStore 数据
+        scope.launch {
+            migrateFromLegacyIfNeeded()
+            refreshFlow()
+        }
+    }
+
+    /** 一次性迁移：从明文 DataStore 读取旧搜索历史写入加密 prefs，避免用户历史丢失 */
+    private suspend fun migrateFromLegacyIfNeeded() {
+        val p = prefs()
+        if (p.getBoolean(KEY_MIGRATED, false)) return
+        // 从旧 DataStore 读取
+        val legacyJoined = try {
+            context.legacySearchHistoryDataStore.data.first()[stringPreferencesKey("search_keywords_joined")]
+        } catch (_: Exception) {
+            null
+        }
+        if (!legacyJoined.isNullOrBlank()) {
+            p.edit().putString(KEY_HISTORY, legacyJoined).apply()
+        }
+        // 标记迁移完成，并清理旧 DataStore
+        p.edit().putBoolean(KEY_MIGRATED, true).apply()
+        try {
+            context.legacySearchHistoryDataStore.edit { it.clear() }
+        } catch (_: Exception) {
+            // 清理失败不影响功能，旧明文数据会被忽略
+        }
+    }
+
+    private fun refreshFlow() {
+        val joined = prefsCache?.getString(KEY_HISTORY, "") ?: ""
+        _history.value = parseJoined(joined)
+    }
+
+    private fun parseJoined(joined: String): List<SearchHistoryItem> {
+        if (joined.isBlank()) return emptyList()
+        return joined.split(SEPARATOR).filter { it.isNotBlank() }.map { raw ->
+            if (raw.contains("::")) {
+                val parts = raw.split("::", limit = 2)
+                SearchHistoryItem(keyword = parts[1], type = parts[0])
+            } else {
+                SearchHistoryItem(keyword = raw, type = "disk")
             }
         }
-    }.distinctUntilChanged()
+    }
 
     suspend fun add(keyword: String, type: String = "disk") {
         if (keyword.isBlank()) return
         val encoded = "$type::$keyword"
-        context.searchHistoryDataStore.edit { prefs ->
-            val current = (prefs[KEY_HISTORY] ?: "")
+        val p = prefs()
+        withContext(Dispatchers.IO) {
+            val current = (p.getString(KEY_HISTORY, "") ?: "")
                 .split(SEPARATOR)
                 .filter { it.isNotBlank() }
                 .toMutableList()
@@ -57,16 +130,18 @@ class SearchHistoryStorage @Inject constructor(
             current.remove(keyword)
             // 新记录置顶
             current.add(0, encoded)
-            prefs[KEY_HISTORY] = current.take(MAX_HISTORY).joinToString(SEPARATOR)
+            p.edit().putString(KEY_HISTORY, current.take(MAX_HISTORY).joinToString(SEPARATOR)).apply()
         }
+        refreshFlow()
     }
 
     suspend fun remove(keyword: String, type: String? = null) {
-        context.searchHistoryDataStore.edit { prefs ->
-            val current = (prefs[KEY_HISTORY] ?: "")
+        val p = prefs()
+        withContext(Dispatchers.IO) {
+            val current = (p.getString(KEY_HISTORY, "") ?: "")
                 .split(SEPARATOR)
                 .filter { it.isNotBlank() }
-            prefs[KEY_HISTORY] = current
+            val updated = current
                 .filter { entry ->
                     if (type != null) {
                         // 按 (type, keyword) 复合 key 精确匹配删除，保留同 keyword 不同 type 的记录
@@ -77,12 +152,16 @@ class SearchHistoryStorage @Inject constructor(
                     }
                 }
                 .joinToString(SEPARATOR)
+            p.edit().putString(KEY_HISTORY, updated).apply()
         }
+        refreshFlow()
     }
 
     suspend fun clear() {
-        context.searchHistoryDataStore.edit { prefs ->
-            prefs.remove(KEY_HISTORY)
+        val p = prefs()
+        withContext(Dispatchers.IO) {
+            p.edit().remove(KEY_HISTORY).apply()
         }
+        refreshFlow()
     }
 }

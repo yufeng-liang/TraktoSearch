@@ -89,12 +89,8 @@ class SearchViewModel @Inject constructor(
     // 搜索结果缓存
     private val searchResultCache = TtlCache<List<ResourceItem>>(TTL_SEARCH)
 
-    // 搜索历史 - 使用 stateIn 预加载，避免异步延迟
-    private val searchHistoryFlow = searchHistoryStorage.history.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    // 搜索历史 - SearchHistoryStorage 已用 StateFlow 暴露，直接收集
+    private val searchHistoryFlow = searchHistoryStorage.history
 
     init {
         // 收集搜索历史并更新 UI 状态
