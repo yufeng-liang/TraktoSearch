@@ -303,7 +303,7 @@ fun DiscoverScreen(
                     if (heroCategories.isNotEmpty()) {
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(9.dp),
-                            contentPadding = PaddingValues(horizontal = 0.dp)
+                            contentPadding = PaddingValues(horizontal = 5.dp)
                         ) {
                             itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->
                                 Box(modifier = Modifier.fadeSlideIn(index)) {
