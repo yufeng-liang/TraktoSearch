@@ -1,22 +1,20 @@
 package com.tracktosearch.data.remote.config
 
-import okhttp3.ResponseBody
 import retrofit2.http.GET
 
 /**
  * 云端配置服务 Retrofit 接口。
  *
- * baseUrl 由 [com.tracktosearch.BuildConfig.CONFIG_BASE_URL] 提供
- * (默认 https://app-config.pages.dev/)。
- *
- * 返回的是 base64 编码的密文,客户端用 AES-256-GCM 解密后得到 JSON 明文。
+ * baseUrl 由 [com.tracktosearch.BuildConfig.GATEWAY_BASE_URL] 提供，
+ * 走网关 /api/config（需 JWT 鉴权），worker 服务端用 CONFIG_AES_KEY Secret
+ * 解密后返回明文 JSON，密钥不再编译进 APK。
  */
 interface ConfigApiService {
     /**
-     * 拉取加密的配置文件。
+     * 拉取配置文件（明文 JSON，由网关服务端解密）。
      *
-     * @return base64 字符串形式的密文(iv + ciphertext + auth tag)
+     * @return 解密后的 JSON 字符串
      */
-    @GET("config.json.enc")
-    suspend fun fetchEncryptedConfig(): ResponseBody
+    @GET("api/config")
+    suspend fun fetchConfig(): String
 }

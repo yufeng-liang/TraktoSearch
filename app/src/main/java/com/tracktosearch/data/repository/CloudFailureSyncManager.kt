@@ -141,18 +141,15 @@ class CloudFailureSyncManager @Inject constructor(
                     val body = parseContentResponse(resp.body())
                     if (body != null) {
                         existingSha = body.sha
-                        // 尝试解密并解析 payload 获取 uploadedAt
+                        // 网关服务端已解密，content 为 base64(明文 JSON)
                         val base64Content = body.content
                         if (base64Content != null) {
-                            val encrypted = String(
+                            val jsonStr = String(
                                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                                 Charsets.UTF_8
                             )
-                            val jsonStr = AesCrypto.decrypt(encrypted)
-                            if (jsonStr != null) {
-                                val cloudPayload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
-                                cloudUploadedAt = cloudPayload.uploadedAt
-                            }
+                            val cloudPayload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
+                            cloudUploadedAt = cloudPayload.uploadedAt
                         }
                     }
                 }
@@ -193,9 +190,9 @@ class CloudFailureSyncManager @Inject constructor(
                 }
             )
             val jsonStr = json.encodeToString(CloudPayload.serializer(), payload)
-            val encrypted = AesCrypto.encrypt(jsonStr)
+            // 网关服务端透明加密，客户端只需 base64 编码明文
             val base64Content = android.util.Base64.encodeToString(
-                encrypted.toByteArray(Charsets.UTF_8),
+                jsonStr.toByteArray(Charsets.UTF_8),
                 android.util.Base64.NO_WRAP
             )
 
@@ -257,14 +254,11 @@ class CloudFailureSyncManager @Inject constructor(
             val body = parseContentResponse(resp.body()) ?: return@withContext null
             val base64Content = body.content ?: return@withContext null
 
-            val encrypted = String(
+            // 网关服务端已解密，content 为 base64(明文 JSON)
+            val jsonStr = String(
                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                 Charsets.UTF_8
             )
-            val jsonStr = AesCrypto.decrypt(encrypted) ?: run {
-                Log.w(TAG, "云端数据解密失败")
-                return@withContext null
-            }
             val payload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
             payload.totalFailures
         } catch (e: Exception) {
@@ -297,11 +291,11 @@ class CloudFailureSyncManager @Inject constructor(
             val body = parseContentResponse(resp.body()) ?: return@withContext DownloadResult.Failed
             val base64Content = body.content ?: return@withContext DownloadResult.Failed
 
-            val encrypted = String(
+            // 网关服务端已解密，content 为 base64(明文 JSON)
+            val jsonStr = String(
                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                 Charsets.UTF_8
             )
-            val jsonStr = AesCrypto.decrypt(encrypted) ?: return@withContext DownloadResult.Failed
             val payload = json.decodeFromString(CloudPayload.serializer(), jsonStr)
 
             if (payload.failures.isEmpty()) return@withContext DownloadResult.CloudEmpty

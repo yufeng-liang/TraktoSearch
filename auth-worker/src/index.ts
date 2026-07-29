@@ -34,6 +34,7 @@ import { handleGiteeProxy } from './proxy/gitee';
 import { handleGithubProxy } from './proxy/github';
 import { handleTranslateProxy } from './proxy/translate';
 import { handleCrashLogProxy } from './proxy/crash-logs';
+import { handleConfigProxy } from './proxy/config';
 
 export interface Env {
     DB: D1Database;
@@ -57,6 +58,11 @@ export interface Env {
     BAIDU_SECRET_KEY: string;
     BAIDU_API_KEY: string;
     CRASH_LOG_TOKEN: string;
+    // 云端配置服务端解密（原客户端 BuildConfig.CONFIG_AES_KEY）
+    CONFIG_AES_KEY: string;
+    CONFIG_BASE_URL: string;
+    // 云端同步数据服务端加密（原客户端 AesCrypto 硬编码密钥）
+    CLOUD_SYNC_AES_KEY: string;
 }
 
 export default {
@@ -212,6 +218,11 @@ async function handleAuthApi(
     }
     if (path === '/api/crash-logs' && request.method === 'POST') {
         return handleCrashLogProxy(request, env);
+    }
+
+    // 云端配置代理（需 JWT）：worker 服务端解密后返回明文
+    if (path === '/api/config' && request.method === 'GET') {
+        return handleConfigProxy(request, env, requestId);
     }
 
     throw new AppError('NOT_FOUND', 'Not found', 404);

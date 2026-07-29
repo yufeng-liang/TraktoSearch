@@ -2,6 +2,7 @@ package com.tracktosearch.di
 
 import android.content.Context
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.auth.AuthInterceptor
 import com.tracktosearch.data.remote.config.ConfigApiService
 import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.config.RemoteConfigProvider
@@ -21,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
 
-/** 云端配置只负责非敏感运行参数；上游 API key 由 Worker Secrets 管理。 */
+/** 云端配置走网关 /api/config（服务端解密），密钥不再编译进 APK。 */
 @Module
 @InstallIn(SingletonComponent::class)
 object ConfigModule {
@@ -31,8 +32,10 @@ object ConfigModule {
     @Named("config")
     fun provideConfigOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
     ): OkHttpClient = baseClient.newBuilder()
+        .addInterceptor(authInterceptor)
         .addInterceptor(loggingInterceptor)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -44,7 +47,7 @@ object ConfigModule {
         @Named("config") okHttpClient: OkHttpClient,
         json: Json
     ): ConfigApiService = Retrofit.Builder()
-        .baseUrl(BuildConfig.CONFIG_BASE_URL.trimEnd('/') + "/")
+        .baseUrl(BuildConfig.GATEWAY_BASE_URL.trimEnd('/') + "/")
         .client(okHttpClient)
         .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
         .build()

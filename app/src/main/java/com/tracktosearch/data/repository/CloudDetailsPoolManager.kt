@@ -135,14 +135,12 @@ class CloudDetailsPoolManager @Inject constructor(
                             existingSha = body.sha
                             val content = body.content
                             if (!content.isNullOrEmpty()) {
-                                val encrypted = String(
+                                // 网关服务端已解密，content 为 base64(明文 JSON)
+                                val plaintext = String(
                                     android.util.Base64.decode(content, android.util.Base64.NO_WRAP),
                                     Charsets.UTF_8
                                 )
-                                val decrypted = AesCrypto.decrypt(encrypted)
-                                if (decrypted != null) {
-                                    existingEntries = parseShardPayload(decrypted)
-                                }
+                                existingEntries = parseShardPayload(plaintext)
                             }
                         }
                     }
@@ -158,7 +156,7 @@ class CloudDetailsPoolManager @Inject constructor(
                     return true
                 }
 
-                // 3. 序列化 + 加密 + 上传
+                // 3. 序列化 + base64 编码（网关服务端透明加密）
                 val payload = ShardPayload(
                     total = merged.size,
                     entries = merged.mapValues { (_, v) ->
@@ -166,9 +164,8 @@ class CloudDetailsPoolManager @Inject constructor(
                     }
                 )
                 val jsonStr = json.encodeToString(ShardPayload.serializer(), payload)
-                val encrypted = AesCrypto.encrypt(jsonStr)
                 val base64Content = android.util.Base64.encodeToString(
-                    encrypted.toByteArray(Charsets.UTF_8),
+                    jsonStr.toByteArray(Charsets.UTF_8),
                     android.util.Base64.NO_WRAP
                 )
 
@@ -264,12 +261,12 @@ class CloudDetailsPoolManager @Inject constructor(
             }
             val body = parseContentResponse(resp.body()) ?: return null
             val base64Content = body.content ?: return null
-            val encrypted = String(
+            // 网关服务端已解密，content 为 base64(明文 JSON)
+            val plaintext = String(
                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                 Charsets.UTF_8
             )
-            val decrypted = AesCrypto.decrypt(encrypted) ?: return null
-            parseShardPayload(decrypted)
+            parseShardPayload(plaintext)
         } catch (e: Exception) {
             Log.w(TAG, "下载分片 $shard 异常: ${e.message}")
             null

@@ -160,16 +160,16 @@ class CloudPersonalSyncManager @Inject constructor(
     }
 
     /**
-     * 加密并上传内容到指定路径（带乐观锁）。
+     * 上传内容到指定路径（带乐观锁，网关服务端透明加密）。
      * - 文件不存在 → POST 创建
      * - 文件已存在 → GET sha → PUT 更新
      * @return true 成功，false 失败
      */
     private suspend fun uploadEncrypted(path: String, jsonStr: String, commitMsg: String): Boolean {
         return try {
-            val encrypted = AesCrypto.encrypt(jsonStr)
+            // 网关服务端透明加密，客户端只需 base64 编码明文
             val base64Content = android.util.Base64.encodeToString(
-                encrypted.toByteArray(Charsets.UTF_8),
+                jsonStr.toByteArray(Charsets.UTF_8),
                 android.util.Base64.NO_WRAP
             )
             // 先 GET sha
@@ -203,8 +203,8 @@ class CloudPersonalSyncManager @Inject constructor(
     }
 
     /**
-     * 下载并解密云端文件。
-     * @return 解密后的 JSON 字符串，文件不存在或失败返回 null
+     * 下载云端文件（网关服务端已解密）。
+     * @return 明文 JSON 字符串，文件不存在或失败返回 null
      */
     private suspend fun downloadDecrypted(path: String): String? {
         return try {
@@ -215,11 +215,11 @@ class CloudPersonalSyncManager @Inject constructor(
             }
             val body = parseContentResponse(resp.body()) ?: return null
             val base64Content = body.content ?: return null
-            val encrypted = String(
+            // 网关服务端已解密，content 为 base64(明文 JSON)
+            String(
                 android.util.Base64.decode(base64Content, android.util.Base64.NO_WRAP),
                 Charsets.UTF_8
             )
-            AesCrypto.decrypt(encrypted)
         } catch (e: Exception) {
             Log.w(TAG, "下载异常: path=$path | ${e.message}")
             null
