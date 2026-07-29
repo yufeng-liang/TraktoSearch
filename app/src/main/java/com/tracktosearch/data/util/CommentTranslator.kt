@@ -1,6 +1,8 @@
 package com.tracktosearch.data.util
 
 import android.util.Log
+import com.tracktosearch.data.remote.translate.TranslateApiService
+import com.tracktosearch.data.remote.translate.TranslateRequest
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,25 +15,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
-import java.net.URLEncoder
-import java.security.MessageDigest
 import java.util.Locale
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class CommentTranslator @Inject constructor() {
+class CommentTranslator @Inject constructor(
+    private val translateApi: TranslateApiService,
+) {
 
     private val jsonDecoder = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     // 翻译结果缓存（相同评论的翻译不会变，LRU 限制 200 条防内存增长）
     private val translationCache = android.util.LruCache<Int, String>(200)
-
-    // 百度翻译 API 配置（来自 local.properties）
-    private val BAIDU_APP_ID = com.tracktosearch.BuildConfig.BAIDU_APP_ID
-    private val BAIDU_SECRET_KEY = com.tracktosearch.BuildConfig.BAIDU_SECRET_KEY
-    private val BAIDU_API_KEY = com.tracktosearch.BuildConfig.BAIDU_API_KEY
 
     /** 翻译提示词：让大模型知道这是影视评论，保留人名/专有名词 */
     private val TRANSLATION_CONTEXT = "这是一条外文影视评论，请翻译为中文。保留电影/电视剧名称、演员名、导演名等专有名词不翻译。"
@@ -151,87 +147,46 @@ class CommentTranslator @Inject constructor() {
 
     }
 
-    /** 百度大模型文本翻译 API（AI） */
-    private fun translateWithBaiduAI(text: String, targetLang: String): String? {
-        val url = "https://fanyi-api.baidu.com/ait/api/aiTextTranslate"
-
-        // 手动构建 JSON，正确转义文本中的特殊字符
-        val escapedText = text.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-        val escapedReference = TRANSLATION_CONTEXT.replace("\\", "\\\\").replace("\"", "\\\"")
-        val body = "{" +
-                "\"appid\":\"$BAIDU_APP_ID\"," +
-                "\"q\":\"$escapedText\"," +
-                "\"from\":\"en\"," +
-                "\"to\":\"$targetLang\"," +
-                "\"model_type\":\"llm\"," +
-                "\"reference\":\"$escapedReference\"" +
-                "}"
-
-        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-        connection.connectTimeout = 5000
-        connection.readTimeout = 10000
-        connection.requestMethod = "POST"
-        connection.doOutput = true
-        connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
-        connection.setRequestProperty("Authorization", "Bearer $BAIDU_API_KEY")
-
+    /**
+     * 百度大模型文本翻译 API（AI）—— 走网关代理。
+     * 密钥由 auth-worker 注入，客户端不持有 BAIDU_API_KEY。
+     */
+    private suspend fun translateWithBaiduAI(text: String, targetLang: String): String? {
         return try {
-            connection.outputStream.write(body.toByteArray(Charsets.UTF_8))
-            connection.outputStream.flush()
-            connection.outputStream.close()
-
-            val responseCode = connection.responseCode
-            if (responseCode == 200) {
-                val json = connection.inputStream.bufferedReader().readText()
-                val response = jsonDecoder.decodeFromString<BaiduAIResponse>(json)
-                if (response.error_code == null) {
-                    // trans_result 是直接数组 [{src, dst}, ...]
-                    response.trans_result?.joinToString("") { it.dst ?: "" }
-                        ?.takeIf { it.isNotEmpty() }
-                } else {
-                    null
-                }
+            val response = translateApi.translateAi(
+                TranslateRequest(q = text, from = "en", to = targetLang, reference = TRANSLATION_CONTEXT)
+            )
+            val json = response.string()
+            val parsed = jsonDecoder.decodeFromString<BaiduAIResponse>(json)
+            if (parsed.error_code == null) {
+                parsed.trans_result?.joinToString("") { it.dst ?: "" }
+                    ?.takeIf { it.isNotEmpty() }
             } else {
                 null
             }
-        } finally {
-            connection.disconnect()
+        } catch (e: Exception) {
+            Log.w("CommentTranslator", "AI translate failed: ${e.message}")
+            null
         }
     }
 
-    /** 百度通用文本翻译 API（降级方案） */
-    private fun translateWithBaidu(text: String, targetLang: String): String? {
-        val salt = UUID.randomUUID().toString()
-        val signStr = BAIDU_APP_ID + text + salt + BAIDU_SECRET_KEY
-        val sign = md5(signStr)
-        val encodedText = URLEncoder.encode(text, "UTF-8")
-
-        val url = ("https://fanyi-api.baidu.com/api/trans/vip/translate?" +
-                "q=$encodedText&from=en&to=$targetLang" +
-                "&appid=$BAIDU_APP_ID&salt=$salt&sign=$sign")
-
-        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-        connection.connectTimeout = 5000
-        connection.readTimeout = 8000
-        connection.requestMethod = "GET"
-        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14)")
-
+    /**
+     * 百度通用文本翻译 API（降级方案）—— 走网关代理。
+     * MD5 签名由 auth-worker 生成，客户端不持有 BAIDU_SECRET_KEY。
+     */
+    private suspend fun translateWithBaidu(text: String, targetLang: String): String? {
         return try {
-            val json = connection.inputStream.bufferedReader().readText()
-            val response = jsonDecoder.decodeFromString<BaiduResponse>(json)
-            response.trans_result?.joinToString("") { it.dst ?: "" }
+            val response = translateApi.translateGeneral(
+                TranslateRequest(q = text, from = "en", to = targetLang)
+            )
+            val json = response.string()
+            val parsed = jsonDecoder.decodeFromString<BaiduResponse>(json)
+            parsed.trans_result?.joinToString("") { it.dst ?: "" }
                 ?.takeIf { it.isNotEmpty() }
-        } finally {
-            connection.disconnect()
+        } catch (e: Exception) {
+            Log.w("CommentTranslator", "General translate failed: ${e.message}")
+            null
         }
-    }
-
-    private fun md5(str: String): String {
-        val md = MessageDigest.getInstance("MD5")
-        val digest = md.digest(str.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }
     }
 
     private fun getTargetLangCode(): String {

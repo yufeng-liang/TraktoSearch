@@ -1,6 +1,7 @@
 // feedback-worker 主入口
 
 import { successResponse, errorResponse, AppError, generateRequestId, isAppError } from './util/errors';
+import { applySecurityHeaders } from './util/security-headers';
 import { verifyAccessToken } from './util/jwt';
 import { handleSubmit } from './api/submit';
 import { handleUploadScreenshot } from './api/upload-screenshot';
@@ -29,7 +30,7 @@ export default {
     async fetch(request: Request, env: Env): Promise<Response> {
         const requestId = generateRequestId();
         try {
-            if (request.method === 'OPTIONS') return handleCors();
+            if (request.method === 'OPTIONS') return applySecurityHeaders(handleCors());
 
             const url = new URL(request.url);
             const path = url.pathname;
@@ -55,16 +56,16 @@ export default {
             else {
                 throw new AppError('NOT_FOUND', 'Not found', 404);
             }
-            return addCorsHeaders(response);
+            return applySecurityHeaders(addCorsHeaders(response));
         } catch (err) {
             if (isAppError(err)) {
-                return addCorsHeaders(errorResponse(err, requestId));
+                return applySecurityHeaders(addCorsHeaders(errorResponse(err, requestId)));
             }
             console.error('Unhandled error:', err);
-            return addCorsHeaders(errorResponse(
+            return applySecurityHeaders(addCorsHeaders(errorResponse(
                 new AppError('INTERNAL_ERROR', 'Internal server error', 500),
                 requestId
-            ));
+            )));
         }
     },
 

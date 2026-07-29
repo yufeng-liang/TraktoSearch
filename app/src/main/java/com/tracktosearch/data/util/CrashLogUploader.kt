@@ -2,28 +2,41 @@ package com.tracktosearch.data.util
 
 import android.content.Context
 import android.os.Build
-import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.remote.crash.CrashLogApiService
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object CrashLogUploader {
+/**
+ * 崩溃日志上报器（Hilt 单例）。
+ *
+ * 走 auth-worker 代理（${GATEWAY_BASE_URL}/api/crash-logs），
+ * 客户端不持有 CRASH_LOG_TOKEN，避免密钥编译进 APK 被反编译泄露。
+ *
+ * 上报失败时本地日志保留，下次启动 token 恢复后重试。
+ */
+@Singleton
+class CrashLogUploader @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val crashLogApi: CrashLogApiService,
+) {
 
-    private const val CRASH_DIR = "crash_logs"
+    companion object {
+        private const val CRASH_DIR = "crash_logs"
+    }
+
     private val _uploadResult = CompletableDeferred<Boolean>()
     val uploadResult: Deferred<Boolean> = _uploadResult
 
     /** Called at app start — waits for current upload, returns true if all files uploaded OK. */
-    suspend fun uploadPendingLogs(context: Context): Boolean {
-        val apiUrl = BuildConfig.CRASH_LOG_API_URL
-        val apiToken = BuildConfig.CRASH_LOG_API_TOKEN
-        if (apiUrl.isBlank() || apiToken.isBlank()) {
-            _uploadResult.complete(false)
-            return false
-        }
-
+    suspend fun uploadPendingLogs(): Boolean {
         val dir = File(context.filesDir, CRASH_DIR)
         if (!dir.exists()) {
             _uploadResult.complete(true)
@@ -43,7 +56,7 @@ object CrashLogUploader {
             for (file in files) {
                 try {
                     val content = file.readText()
-                    val result = uploadLog(apiUrl, apiToken, content, context)
+                    val result = uploadLog(content)
                     if (result) {
                         file.delete()
                     } else {
@@ -58,12 +71,7 @@ object CrashLogUploader {
         return allOk
     }
 
-    private suspend fun uploadLog(
-        apiUrl: String,
-        apiToken: String,
-        logContent: String,
-        context: Context
-    ): Boolean {
+    private suspend fun uploadLog(logContent: String): Boolean {
         val appVersion = runCatching {
             val pi = context.packageManager.getPackageInfo(context.packageName, 0)
             "${pi.versionName} (${if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode})"
@@ -73,7 +81,7 @@ object CrashLogUploader {
         val lines = logContent.lines()
         val timeLine = lines.find { it.startsWith("Time:") }?.removePrefix("Time:")?.trim() ?: ""
         val pageLine = lines.find { it.startsWith("Current Page:") }?.removePrefix("Current Page:")?.trim() ?: ""
-        val actionsLine = lines.joinToString("\n").let { full ->
+        val actionsLine = logContent.let { full ->
             val idx = full.indexOf("=== Recent User Actions ===")
             if (idx >= 0) {
                 val endIdx = full.indexOf("\n\n", idx)
@@ -102,23 +110,14 @@ object CrashLogUploader {
             "stackTrace" to stackTrace
         )
 
-        val url = java.net.URL(apiUrl)
-        val conn = url.openConnection() as java.net.HttpURLConnection
-        try {
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.setRequestProperty("Authorization", "Bearer $apiToken")
-            conn.doOutput = true
-            conn.connectTimeout = 15000
-            conn.readTimeout = 15000
-
-            conn.outputStream.use { os ->
-                os.write(jsonBody.toByteArray(Charsets.UTF_8))
-            }
-
-            return conn.responseCode in 200..299
-        } finally {
-            conn.disconnect()
+        val requestBody = jsonBody.toRequestBody("application/json".toMediaType())
+        return try {
+            val response = crashLogApi.upload(requestBody)
+            // ResponseBody 读取后即视为成功（worker 返回 2xx）
+            try { response.close() } catch (_: Exception) {}
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 

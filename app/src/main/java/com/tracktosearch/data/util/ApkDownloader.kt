@@ -6,13 +6,13 @@ import android.content.Context
 import android.os.Environment
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import com.tracktosearch.BuildConfig
 import com.tracktosearch.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 
 object ApkDownloader {
@@ -24,31 +24,16 @@ object ApkDownloader {
         url: String,
         fileName: String,
         onProgress: (Float) -> Unit,
-        fallbackUrl: String = ""
+        fallbackUrl: String = "",
+        /** APK 期望 SHA-256（小写 hex），非空时下载完成后校验，不匹配抛异常并删除文件 */
+        expectedSha256: String = ""
     ): File = withContext(Dispatchers.IO) {
-        val githubToken = BuildConfig.GITHUB_UPDATE_TOKEN
-
+        // APK 下载走匿名请求（GitHub releases 查询已走网关代理）。
+        // 移除直连 GitHub token 注入，避免密钥编译进 APK 被反编译泄露。
         val client = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(120, TimeUnit.SECONDS)
             .followRedirects(true)
-            .apply {
-                if (githubToken.isNotEmpty()) {
-                    addNetworkInterceptor { chain ->
-                        val request = chain.request()
-                        val host = request.url.host
-                        if (host == "github.com" || host.endsWith("github.com") ||
-                            host == "objects.githubusercontent.com" || host.endsWith("githubusercontent.com")) {
-                            val newRequest = request.newBuilder()
-                                .header("Authorization", "token $githubToken")
-                                .build()
-                            chain.proceed(newRequest)
-                        } else {
-                            chain.proceed(request)
-                        }
-                    }
-                }
-            }
             .build()
 
         createDownloadChannel(context)
@@ -73,12 +58,35 @@ object ApkDownloader {
                 result
             }
 
+            // SHA-256 完整性校验：防止下载过程中被篡改或损坏
+            if (expectedSha256.isNotEmpty()) {
+                val actualHash = computeSha256(finalResult)
+                if (!actualHash.equals(expectedSha256, ignoreCase = true)) {
+                    finalResult.delete()
+                    throw Exception(context.getString(R.string.download_sha256_mismatch))
+                }
+            }
+
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
             finalResult
         } catch (e: Exception) {
             NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
             throw e
         }
+    }
+
+    /** 计算文件 SHA-256（小写 hex） */
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = input.read(buffer)
+                if (read == -1) break
+                digest.update(buffer, 0, read)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun tryDownload(

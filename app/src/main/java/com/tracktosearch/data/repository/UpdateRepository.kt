@@ -16,7 +16,9 @@ data class UpdateInfo(
     val downloadUrl: String,       // 公开 Gitee 仓库的 APK 下载链接
     val changelog: String,
     val fileSize: Long,
-    val hasUpdate: Boolean
+    val hasUpdate: Boolean,
+    /** APK 期望 SHA-256（来自发布时上传的 .sha256 sidecar 文件，空表示无校验） */
+    val sha256: String = ""
 )
 
 @Singleton
@@ -202,9 +204,9 @@ class UpdateRepository @Inject constructor(
             if (isNewerVersion(gitHubResult.latestVersion, currentVersion)) {
                 // 有新版本：将该版本 changelog 追加到完整日志缓存，设置页打开时直接用缓存
                 appendToFullChangelog(gitHubResult.latestVersion, gitHubResult.changelog)
-                val downloadUrl = fetchDownloadUrl(gitHubResult.latestVersion)
+                val (downloadUrl, sha256) = fetchDownloadAsset(gitHubResult.latestVersion)
                 // 下载链接为空时仍返回 hasUpdate=true,避免旧版本因下载链接获取失败而看不到更新提示
-                val info = gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                val info = gitHubResult.copy(downloadUrl = downloadUrl, hasUpdate = true, sha256 = sha256)
                 changelogStorage.saveCachedUpdateInfo(
                     info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
                 )
@@ -225,9 +227,9 @@ class UpdateRepository @Inject constructor(
             cachedLatestVersion = giteeResult.latestVersion
             if (isNewerVersion(giteeResult.latestVersion, currentVersion)) {
                 appendToFullChangelog(giteeResult.latestVersion, giteeResult.changelog)
-                val downloadUrl = fetchDownloadUrl(giteeResult.latestVersion)
+                val (downloadUrl, sha256) = fetchDownloadAsset(giteeResult.latestVersion)
                 // 下载链接为空时仍返回 hasUpdate=true(同 GitHub 路径)
-                val info = giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true)
+                val info = giteeResult.copy(downloadUrl = downloadUrl, hasUpdate = true, sha256 = sha256)
                 changelogStorage.saveCachedUpdateInfo(
                     info.latestVersion, info.changelog, info.hasUpdate, info.downloadUrl
                 )
@@ -262,17 +264,21 @@ class UpdateRepository @Inject constructor(
     }
 
     /**
-     * 从公开仓库获取 APK 下载链接
+     * 从公开仓库获取 APK 下载链接 + SHA-256 校验值。
+     *
      * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktToSearch-*.apk），
-     * 若有多个匹配则在匹配集中取最小体积的，避免选到因 UTF-8 重新编码而膨胀的损坏文件
+     * 若有多个匹配则在匹配集中取最后一个（后上传的排在后面）。
+     *
+     * SHA-256 来源：release body 中的 `SHA-256: <hex>` 行（由 release skill 发布时写入）。
+     * 缺失时返回空字符串，客户端跳过校验（向后兼容旧 release）。
      */
-    private suspend fun fetchDownloadUrl(version: String): String {
+    private suspend fun fetchDownloadAsset(version: String): Pair<String, String> {
         return try {
             val releases = giteeApi.getLatestRelease(RELEASE_REPO_OWNER, RELEASE_REPO)
-            val release = releases.firstOrNull() ?: return ""
+            val release = releases.firstOrNull() ?: return "" to ""
 
             val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
-            if (apkAssets.isEmpty()) return ""
+            if (apkAssets.isEmpty()) return "" to ""
 
             // 优先 TraktToSearch-*.apk 命名的附件；候选中取最后一个（后上传的排在后面）
             val namedCandidates = apkAssets.filter {
@@ -281,11 +287,20 @@ class UpdateRepository @Inject constructor(
             val apkAsset = (namedCandidates.ifEmpty { apkAssets })
                 .lastOrNull()
 
-            apkAsset?.browser_download_url ?: ""
+            val apkUrl = apkAsset?.browser_download_url ?: ""
+            val sha256 = parseSha256FromBody(release.body)
+            apkUrl to sha256
         } catch (e: CancellationException) { throw e } catch (e: Exception) {
             Log.w(TAG, "Failed to fetch download URL from release repo", e)
-            ""
+            "" to ""
         }
+    }
+
+    /** 从 release body 解析 SHA-256（格式：`SHA-256: <64-hex>`，大小写不敏感） */
+    private fun parseSha256FromBody(body: String): String {
+        if (body.isBlank()) return ""
+        val regex = Regex("""(?i)sha-256:\s*([a-f0-9]{64})""")
+        return regex.find(body)?.groupValues?.getOrNull(1)?.lowercase()?.trim().orEmpty()
     }
 
     private suspend fun tryFetchFromGitHub(): UpdateInfo? {

@@ -478,7 +478,8 @@ fun UpdateDialog(
                                             fileName = "TraktToSearch-v${updateInfo.latestVersion}.apk",
                                             onProgress = { progress ->
                                                 downloadState = DownloadState.Downloading(progress)
-                                            }
+                                            },
+                                            expectedSha256 = updateInfo.sha256
                                         )
                                         downloadState = DownloadState.Completed(file)
                                     } catch (e: Exception) {

@@ -3,6 +3,20 @@ const FEEDBACK_WORKER_ORIGIN = 'https://feedback-worker.douban-movie-api-peak.wo
 const PUBLIC_PREFIX = '/gateway-api';
 
 /**
+ * 安全响应头：网关纯 API 代理，CSP 收紧到完全无资源加载。
+ * 上游 Worker 已设置同样的头，这里做兜底防止未来某些路径漏设。
+ */
+const SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'X-XSS-Protection': '0',
+    'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+};
+
+/**
  * App 网关同源代理。
  * /api/* 和 /health → auth-worker，/feedback-api/* → feedback-worker。
  * 不转发 Admin 接口，避免变成公开代理。
@@ -23,7 +37,7 @@ export async function onRequest(context) {
     if (request.method === 'OPTIONS') {
         return new Response(null, {
             status: 204,
-            headers: corsHeaders(),
+            headers: { ...corsHeaders(), ...SECURITY_HEADERS },
         });
     }
 
@@ -50,6 +64,10 @@ export async function onRequest(context) {
         for (const [name, value] of Object.entries(corsHeaders())) {
             if (!responseHeaders.has(name)) responseHeaders.set(name, value);
         }
+        // 兜底安全响应头：上游 Worker 通常已设置，这里覆盖性补齐防止漏设
+        for (const [name, value] of Object.entries(SECURITY_HEADERS)) {
+            responseHeaders.set(name, value);
+        }
 
         return new Response(upstream.body, {
             status: upstream.status,
@@ -75,6 +93,7 @@ function jsonResponse(body, status) {
         status,
         headers: {
             ...corsHeaders(),
+            ...SECURITY_HEADERS,
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
         },

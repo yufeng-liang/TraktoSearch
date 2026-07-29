@@ -1,6 +1,7 @@
 // auth-worker 主入口
 
 import { successResponse, errorResponse, AppError, generateRequestId, isAppError } from './util/errors';
+import { applySecurityHeaders } from './util/security-headers';
 import { verifyAccessToken } from './util/jwt';
 import { handleActivate } from './auth/activate';
 import { handleChallenge } from './auth/challenge';
@@ -65,7 +66,7 @@ export default {
         try {
             // CORS 预检
             if (request.method === 'OPTIONS') {
-                return handleCors();
+                return applySecurityHeaders(handleCors());
             }
 
             // 路由分发
@@ -90,17 +91,17 @@ export default {
                 throw new AppError('NOT_FOUND', 'Not found', 404);
             }
 
-            // 添加 CORS 头
-            return addCorsHeaders(response);
+            // 添加 CORS 头 + 安全响应头
+            return applySecurityHeaders(addCorsHeaders(response));
         } catch (err) {
             if (isAppError(err)) {
-                return addCorsHeaders(errorResponse(err, requestId));
+                return applySecurityHeaders(addCorsHeaders(errorResponse(err, requestId)));
             }
             console.error('Unhandled error:', err);
-            return addCorsHeaders(errorResponse(
+            return applySecurityHeaders(addCorsHeaders(errorResponse(
                 new AppError('INTERNAL_ERROR', 'Internal server error', 500),
                 requestId
-            ));
+            )));
         }
     },
 };

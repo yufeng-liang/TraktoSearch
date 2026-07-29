@@ -1,16 +1,44 @@
 /**
- * Pages Functions 全局中间件：把 Cloudflare Access JWT 注入后台页面。
+ * Pages Functions 全局中间件：
+ * 1. 为所有响应注入安全响应头（X-Content-Type-Options / CSP / HSTS 等）
+ * 2. 把 Cloudflare Access JWT 注入后台页面
  *
  * Access 登录后会在当前域名的 CF_Authorization Cookie 中保存 JWT，
  * 后台前端再把它作为 Bearer 令牌转发给授权 Worker。
  */
+
+/** 安全响应头：纯 API/静态站点收紧 CSP，禁止第三方嵌入和资源加载 */
+const SECURITY_HEADERS = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'geolocation=(), microphone=(), camera=(), payment=()',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'X-XSS-Protection': '0',
+    // app-config 含静态 HTML 后台，允许同源脚本与样式，禁止第三方资源加载
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+};
+
+function applySecurityHeaders(response) {
+    const headers = new Headers(response.headers);
+    for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+        if (!headers.has(key)) headers.set(key, value);
+    }
+    return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+    });
+}
+
 export async function onRequest(context) {
     const { request, next } = context;
     const url = new URL(request.url);
 
-    // 仅处理后台页面，避免改写配置和其他 API 响应。
+    // 非后台页面：仅叠加安全响应头
     if (!url.pathname.startsWith('/admin/')) {
-        return next();
+        const response = await next();
+        return applySecurityHeaders(response);
     }
 
     const cookie = request.headers.get('Cookie') || '';
@@ -19,7 +47,7 @@ export async function onRequest(context) {
     const response = await next();
 
     if (!accessToken || !response.headers.get('content-type')?.includes('text/html')) {
-        return response;
+        return applySecurityHeaders(response);
     }
 
     const html = await response.text();
@@ -32,11 +60,13 @@ export async function onRequest(context) {
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'text/html; charset=UTF-8');
     headers.delete('Content-Length');
-    return new Response(injectedHtml, {
+    // 注入业务头后再叠加安全头
+    const rebuilt = new Response(injectedHtml, {
         status: response.status,
         statusText: response.statusText,
         headers,
     });
+    return applySecurityHeaders(rebuilt);
 }
 
 function readJwtEmail(token) {

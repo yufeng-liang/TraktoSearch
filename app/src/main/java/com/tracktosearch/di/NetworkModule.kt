@@ -378,26 +378,28 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGitHubUpdateApiService(
+    @Named("github")
+    fun provideGithubOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
-    ): GitHubUpdateApiService {
-        val token = BuildConfig.GITHUB_UPDATE_TOKEN
-        val client = baseClient.newBuilder().apply {
-            if (token.isNotEmpty()) {
-                addInterceptor(Interceptor { chain ->
-                    val request = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                    chain.proceed(request)
-                })
-            }
-        }
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        // GitHub API 走网关代理（auth-worker 注入 GITHUB_UPDATE_TOKEN），
+        // 客户端只需带网关 JWT，不再直连 api.github.com。
+        return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGitHubUpdateApiService(
+        @Named("github") okHttpClient: OkHttpClient
+    ): GitHubUpdateApiService {
         return Retrofit.Builder()
-            .baseUrl("https://api.github.com/")
-            .client(client)
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/github/")
+            .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(GitHubUpdateApiService::class.java)
@@ -405,53 +407,41 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideGiteeUpdateApiService(
+    @Named("gitee")
+    fun provideGiteeOkHttpClient(
         baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
-    ): GiteeUpdateApiService {
-        val token = BuildConfig.GITEE_ACCESS_TOKEN
-        val client = baseClient.newBuilder().apply {
-            if (token.isNotEmpty()) {
-                addInterceptor(Interceptor { chain ->
-                    val request = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                    chain.proceed(request)
-                })
-            }
-        }
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        // Gitee API 走网关代理（auth-worker 注入 GITEE_ACCESS_TOKEN），
+        // 客户端只需带网关 JWT，不再直连 gitee.com。
+        return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
             .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideGiteeUpdateApiService(
+        @Named("gitee") okHttpClient: OkHttpClient
+    ): GiteeUpdateApiService {
         return Retrofit.Builder()
-            .baseUrl("https://gitee.com/api/v5/")
-            .client(client)
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/gitee/")
+            .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(GiteeUpdateApiService::class.java)
     }
 
-    /** 豆瓣失败项云端同步专用 Gitee Contents API(复用 GITEE_ACCESS_TOKEN) */
+    /** 豆瓣失败项云端同步专用 Gitee Contents API（走网关代理，worker 注入 token） */
     @Provides
     @Singleton
     fun provideGiteeContentsApi(
-        baseClient: OkHttpClient,
-        loggingInterceptor: HttpLoggingInterceptor
+        @Named("gitee") okHttpClient: OkHttpClient
     ): com.tracktosearch.data.remote.cloud.GiteeContentsApi {
-        val token = BuildConfig.GITEE_ACCESS_TOKEN
-        val client = baseClient.newBuilder().apply {
-            if (token.isNotEmpty()) {
-                addInterceptor(Interceptor { chain ->
-                    val request = chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                    chain.proceed(request)
-                })
-            }
-        }
-            .addInterceptor(loggingInterceptor)
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(15, TimeUnit.SECONDS)
-            .build()
         // 专用 Json:encodeDefaults = false,使 GiteeContentRequest.sha = null 时不出现在 JSON 体中
         // (Gitee API 收到 "sha": null 会报 "sha is empty")
         val giteeJson = Json {
@@ -460,11 +450,42 @@ object NetworkModule {
             encodeDefaults = false
         }
         return Retrofit.Builder()
-            .baseUrl("https://gitee.com/api/v5/")
-            .client(client)
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/gitee/")
+            .client(okHttpClient)
             .addConverterFactory(giteeJson.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(com.tracktosearch.data.remote.cloud.GiteeContentsApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("translate")
+    fun provideTranslateOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        // 百度翻译走网关代理（auth-worker 注入 BAIDU_* 密钥并代签名），
+        // 客户端只需带网关 JWT，不再直连 fanyi-api.baidu.com。
+        return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideTranslateApiService(
+        @Named("translate") okHttpClient: OkHttpClient
+    ): com.tracktosearch.data.remote.translate.TranslateApiService {
+        return Retrofit.Builder()
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/translate/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(com.tracktosearch.data.remote.translate.TranslateApiService::class.java)
     }
 
     @Provides
@@ -503,6 +524,37 @@ object NetworkModule {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
             .create(OpenMeteoApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("crashLogs")
+    fun provideCrashLogsOkHttpClient(
+        baseClient: OkHttpClient,
+        loggingInterceptor: HttpLoggingInterceptor,
+        authInterceptor: AuthInterceptor
+    ): OkHttpClient {
+        // 崩溃日志走网关代理（auth-worker 注入 CRASH_LOG_TOKEN 转发到 app-config），
+        // 客户端只需带网关 JWT，不再持有上报密钥。
+        return baseClient.newBuilder()
+            .addInterceptor(authInterceptor)
+            .addInterceptor(loggingInterceptor)
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideCrashLogApiService(
+        @Named("crashLogs") okHttpClient: OkHttpClient
+    ): com.tracktosearch.data.remote.crash.CrashLogApiService {
+        return Retrofit.Builder()
+            .baseUrl("${BuildConfig.GATEWAY_BASE_URL.trimEnd('/')}/api/crash-logs/")
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(com.tracktosearch.data.remote.crash.CrashLogApiService::class.java)
     }
 
     @Provides

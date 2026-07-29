@@ -1353,6 +1353,7 @@ Config:
     <string name="download_preparing">Preparing download…</string>
     <string name="download_failed_both">Both primary and fallback URLs failed to download</string>
     <string name="download_failed">Download failed</string>
+    <string name="download_sha256_mismatch">APK integrity check failed (SHA-256 mismatch), please retry or download via browser</string>
 
     <!-- Search Service -->
     <string name="search_test_keyword">The Wandering Earth</string>
