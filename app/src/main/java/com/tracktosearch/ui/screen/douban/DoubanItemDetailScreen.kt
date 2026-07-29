@@ -6,8 +6,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.webkit.CookieManager
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -1501,14 +1501,34 @@ fun DoubanItemDetailScreen(
                             settings.domStorageEnabled = true
                             settings.userAgentString = "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
                             CookieManager.getInstance().setAcceptCookie(true)
-                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                            // 安全：禁用第三方 Cookie，演职员页只需 first-party cookie
+                            CookieManager.getInstance().setAcceptThirdPartyCookies(this, false)
                             // 注入豆瓣 cookie
                             val cookie = viewModel.getDoubanCookie()
                             if (cookie != null) {
                                 CookieManager.getInstance().setCookie("https://movie.douban.com", cookie)
                                 CookieManager.getInstance().flush()
                             }
-                            webViewClient = WebViewClient()
+                            // 安全：域名白名单，只允许豆瓣域内跳转，其他域用外置浏览器打开
+                            webViewClient = object : WebViewClient() {
+                                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                                    val host = request?.url?.host ?: return true
+                                    return if (host.endsWith("douban.com")) {
+                                        false // 豆瓣域内允许加载
+                                    } else {
+                                        // 非豆瓣域用外置浏览器打开，阻止 WebView 加载
+                                        request.url?.let { uri ->
+                                            runCatching {
+                                                val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                view?.context?.startActivity(intent)
+                                            }
+                                        }
+                                        true
+                                    }
+                                }
+                            }
                             loadUrl(url)
                         }
                     },
