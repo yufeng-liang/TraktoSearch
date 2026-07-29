@@ -82,7 +82,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -91,7 +90,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.hazeTopBar
-import com.tracktosearch.ui.component.hasListReachedTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.BuildConfig
@@ -335,14 +334,11 @@ fun SettingsScreen(
 
     // LazyListState 由 NavGraph backstack 自然 remember,返回设置页时位置自动恢复,无需手动持久化
     val settingsListState = rememberLazyListState()
-    var settingsTopBarHeightPx by remember { mutableIntStateOf(0) }
     val settingsHasContentUnderTopBar by remember {
         derivedStateOf {
-            hasListReachedTopBar(
+            hasListScrolled(
                 firstVisibleItemIndex = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemOffsetPx = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
-                firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset,
-                topBarHeightPx = settingsTopBarHeightPx
+                firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset
             )
         }
     }
@@ -798,9 +794,6 @@ fun SettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        settingsTopBarHeightPx = coordinates.size.height
-                    }
                     .hazeTopBar(
                         state = settingsHazeState,
                         style = settingsHazeStyle,

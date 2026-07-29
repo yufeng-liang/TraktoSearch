@@ -121,7 +121,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -161,7 +160,7 @@ import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.hasListReachedTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.rememberShimmerBrush
 import com.tracktosearch.ui.screen.discover.CapsuleTabSelector
 import com.tracktosearch.ui.screen.douban.DoubanFirstSyncGuideDialog
@@ -353,14 +352,11 @@ fun WatchlistScreen(
         selectedMode == 1 && selectedTab == 0 -> historyMovieGridState
         else -> historyShowGridState
     }
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
     val hasContentUnderTopBar by remember(currentGridState) {
         derivedStateOf {
-            hasListReachedTopBar(
+            hasListScrolled(
                 firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemOffsetPx = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.y,
-                firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
-                topBarHeightPx = topBarHeightPx
+                firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
             )
         }
     }
@@ -676,9 +672,6 @@ fun WatchlistScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .onGloballyPositioned { coordinates ->
-                            topBarHeightPx = coordinates.size.height
-                        }
                         .hazeTopBar(
                             state = hazeState,
                             style = hazeStyle,

@@ -7,71 +7,49 @@ class NeumorphicGlassTest {
     @Test
     fun noVisibleItemDoesNotEnableTopBarHaze() {
         assertThat(
-            hasListReachedTopBar(
+            hasListScrolled(
                 firstVisibleItemIndex = null,
-                firstVisibleItemOffsetPx = null,
-                firstVisibleItemScrollOffsetPx = null,
-                topBarHeightPx = 100
+                firstVisibleItemScrollOffsetPx = null
             )
         ).isFalse()
-    }
-
-    @Test
-    fun firstItemAtTopBarBottomEnablesTopBarHaze() {
-        assertThat(
-            hasListReachedTopBar(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemOffsetPx = 100,
-                firstVisibleItemScrollOffsetPx = 1,
-                topBarHeightPx = 100
-            )
-        ).isTrue()
-    }
-
-    @Test
-    fun itemInsideTopBarEnablesTopBarHaze() {
-        assertThat(
-            hasListReachedTopBar(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemOffsetPx = 99,
-                firstVisibleItemScrollOffsetPx = 1,
-                topBarHeightPx = 100
-            )
-        ).isTrue()
-    }
-
-    @Test
-    fun firstItemBelowTopBarDisablesTopBarHazeWhenScrollingBack() {
-        assertThat(
-            hasListReachedTopBar(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemOffsetPx = 101,
-                firstVisibleItemScrollOffsetPx = 0,
-                topBarHeightPx = 100
-            )
-        ).isFalse()
-    }
-
-    @Test
-    fun laterItemKeepsTopBarHazeEnabledEvenWhenItsContentStartsBelowTopBar() {
-        assertThat(
-            hasListReachedTopBar(
-                firstVisibleItemIndex = 1,
-                firstVisibleItemOffsetPx = 240,
-                firstVisibleItemScrollOffsetPx = 0,
-                topBarHeightPx = 100
-            )
-        ).isTrue()
     }
 
     @Test
     fun initialListPositionDoesNotEnableTopBarHaze() {
         assertThat(
-            hasListReachedTopBar(
+            hasListScrolled(
                 firstVisibleItemIndex = 0,
-                firstVisibleItemOffsetPx = 100,
-                firstVisibleItemScrollOffsetPx = 0,
-                topBarHeightPx = 100
+                firstVisibleItemScrollOffsetPx = 0
+            )
+        ).isFalse()
+    }
+
+    @Test
+    fun anyScrollOffsetEnablesTopBarHaze() {
+        assertThat(
+            hasListScrolled(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffsetPx = 1
+            )
+        ).isTrue()
+    }
+
+    @Test
+    fun laterItemEnablesTopBarHazeEvenWhenItemScrollOffsetIsZero() {
+        assertThat(
+            hasListScrolled(
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffsetPx = 0
+            )
+        ).isTrue()
+    }
+
+    @Test
+    fun negativeScrollOffsetDoesNotEnableTopBarHaze() {
+        assertThat(
+            hasListScrolled(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffsetPx = -1
             )
         ).isFalse()
     }

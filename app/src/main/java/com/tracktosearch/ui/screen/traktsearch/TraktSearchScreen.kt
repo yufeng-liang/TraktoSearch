@@ -88,7 +88,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -119,7 +118,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.MovieCard
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
-import com.tracktosearch.ui.component.hasListReachedTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.MovieCardSkeleton
@@ -227,8 +226,6 @@ fun TraktSearchScreen(
     }
 
     val statusBarHeight = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-    var topBarHeightPx by remember { mutableIntStateOf(0) }
-
     // 点击 token,确保只有被点击的卡片参与转场
     var activeClickToken by remember { mutableStateOf(0) }
 
@@ -258,19 +255,15 @@ fun TraktSearchScreen(
         val hasContentUnderTopBar by remember(isDiskTab, currentGridState) {
             derivedStateOf {
                 if (isDiskTab) {
-                    hasListReachedTopBar(
+                    hasListScrolled(
                         firstVisibleItemIndex = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                        firstVisibleItemOffsetPx = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
-                        firstVisibleItemScrollOffsetPx = diskListState.firstVisibleItemScrollOffset,
-                        topBarHeightPx = topBarHeightPx
+                        firstVisibleItemScrollOffsetPx = diskListState.firstVisibleItemScrollOffset
                     )
                 } else {
                     val firstVisibleItem = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()
-                    hasListReachedTopBar(
+                    hasListScrolled(
                         firstVisibleItemIndex = firstVisibleItem?.index,
-                        firstVisibleItemOffsetPx = firstVisibleItem?.offset?.y,
-                        firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
-                        topBarHeightPx = topBarHeightPx
+                        firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset
                     )
                 }
             }
@@ -458,9 +451,6 @@ fun TraktSearchScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        topBarHeightPx = coordinates.size.height
-                    }
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.50f))
                     .hazeTopBar(
                         state = hazeState,

@@ -60,7 +60,6 @@ import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -86,7 +85,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.isAppDarkTheme
-import com.tracktosearch.ui.component.hasListReachedTopBar
+import com.tracktosearch.ui.component.hasListScrolled
 import com.tracktosearch.ui.component.neumorphicInnerShadow
 import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.screen.search.DoubanHotAllSheet
@@ -176,14 +175,11 @@ fun DiscoverScreen(
     val discoverHazeState = remember { HazeState() }
     val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
-    var discoverTopBarHeightPx by remember { mutableIntStateOf(0) }
     val discoverHasContentUnderTopBar by remember {
         derivedStateOf {
-            hasListReachedTopBar(
+            hasListScrolled(
                 firstVisibleItemIndex = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
-                firstVisibleItemOffsetPx = discoverListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
-                firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset,
-                topBarHeightPx = discoverTopBarHeightPx
+                firstVisibleItemScrollOffsetPx = discoverListState.firstVisibleItemScrollOffset
             )
         }
     }
@@ -746,9 +742,6 @@ fun DiscoverScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onGloballyPositioned { coordinates ->
-                        discoverTopBarHeightPx = coordinates.size.height
-                    }
                     .hazeTopBar(
                         state = discoverHazeState,
                         style = discoverHazeStyle,
