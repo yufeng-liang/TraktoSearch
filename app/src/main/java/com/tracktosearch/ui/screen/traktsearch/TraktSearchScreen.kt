@@ -261,6 +261,7 @@ fun TraktSearchScreen(
                     hasListReachedTopBar(
                         firstVisibleItemIndex = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
                         firstVisibleItemOffsetPx = diskListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                        firstVisibleItemScrollOffsetPx = diskListState.firstVisibleItemScrollOffset,
                         topBarHeightPx = topBarHeightPx
                     )
                 } else {
@@ -268,6 +269,7 @@ fun TraktSearchScreen(
                     hasListReachedTopBar(
                         firstVisibleItemIndex = firstVisibleItem?.index,
                         firstVisibleItemOffsetPx = firstVisibleItem?.offset?.y,
+                        firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
                         topBarHeightPx = topBarHeightPx
                     )
                 }

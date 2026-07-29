@@ -359,6 +359,7 @@ fun WatchlistScreen(
             hasListReachedTopBar(
                 firstVisibleItemIndex = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
                 firstVisibleItemOffsetPx = currentGridState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset?.y,
+                firstVisibleItemScrollOffsetPx = currentGridState.firstVisibleItemScrollOffset,
                 topBarHeightPx = topBarHeightPx
             )
         }

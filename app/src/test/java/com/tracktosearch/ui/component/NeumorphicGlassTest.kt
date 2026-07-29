@@ -10,6 +10,7 @@ class NeumorphicGlassTest {
             hasListReachedTopBar(
                 firstVisibleItemIndex = null,
                 firstVisibleItemOffsetPx = null,
+                firstVisibleItemScrollOffsetPx = null,
                 topBarHeightPx = 100
             )
         ).isFalse()
@@ -21,6 +22,7 @@ class NeumorphicGlassTest {
             hasListReachedTopBar(
                 firstVisibleItemIndex = 0,
                 firstVisibleItemOffsetPx = 100,
+                firstVisibleItemScrollOffsetPx = 1,
                 topBarHeightPx = 100
             )
         ).isTrue()
@@ -32,6 +34,7 @@ class NeumorphicGlassTest {
             hasListReachedTopBar(
                 firstVisibleItemIndex = 0,
                 firstVisibleItemOffsetPx = 99,
+                firstVisibleItemScrollOffsetPx = 1,
                 topBarHeightPx = 100
             )
         ).isTrue()
@@ -43,6 +46,7 @@ class NeumorphicGlassTest {
             hasListReachedTopBar(
                 firstVisibleItemIndex = 0,
                 firstVisibleItemOffsetPx = 101,
+                firstVisibleItemScrollOffsetPx = 0,
                 topBarHeightPx = 100
             )
         ).isFalse()
@@ -54,8 +58,21 @@ class NeumorphicGlassTest {
             hasListReachedTopBar(
                 firstVisibleItemIndex = 1,
                 firstVisibleItemOffsetPx = 240,
+                firstVisibleItemScrollOffsetPx = 0,
                 topBarHeightPx = 100
             )
         ).isTrue()
+    }
+
+    @Test
+    fun initialListPositionDoesNotEnableTopBarHaze() {
+        assertThat(
+            hasListReachedTopBar(
+                firstVisibleItemIndex = 0,
+                firstVisibleItemOffsetPx = 100,
+                firstVisibleItemScrollOffsetPx = 0,
+                topBarHeightPx = 100
+            )
+        ).isFalse()
     }
 }

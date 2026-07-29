@@ -47,11 +47,15 @@ const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 internal fun hasListReachedTopBar(
     firstVisibleItemIndex: Int?,
     firstVisibleItemOffsetPx: Int?,
+    firstVisibleItemScrollOffsetPx: Int?,
     topBarHeightPx: Int
 ): Boolean {
-    if (firstVisibleItemIndex == null || firstVisibleItemOffsetPx == null || topBarHeightPx <= 0) {
+    if (firstVisibleItemIndex == null || firstVisibleItemOffsetPx == null ||
+        firstVisibleItemScrollOffsetPx == null || topBarHeightPx <= 0
+    ) {
         return false
     }
+    if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffsetPx == 0) return false
     return firstVisibleItemIndex > 0 || firstVisibleItemOffsetPx <= topBarHeightPx
 }
 

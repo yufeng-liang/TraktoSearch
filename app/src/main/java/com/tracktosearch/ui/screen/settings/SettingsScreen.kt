@@ -341,6 +341,7 @@ fun SettingsScreen(
             hasListReachedTopBar(
                 firstVisibleItemIndex = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.index,
                 firstVisibleItemOffsetPx = settingsListState.layoutInfo.visibleItemsInfo.firstOrNull()?.offset,
+                firstVisibleItemScrollOffsetPx = settingsListState.firstVisibleItemScrollOffset,
                 topBarHeightPx = settingsTopBarHeightPx
             )
         }
