@@ -119,6 +119,7 @@
     <string name="watchlist_selected_count">Selected %d</string>
     <string name="watchlist_remove_watchlist">Remove from watchlist</string>
     <string name="watchlist_remove_history">Remove from history</string>
+    <string name="watchlist_batch_remove_partial_failed">Some items failed to remove</string>
     <string name="watchlist_pull_to_refresh">Pull down to refresh</string>
     <string name="watchlist_release_to_refresh">Release to refresh</string>
     <string name="watchlist_refreshing">Refreshing…</string>
@@ -248,6 +249,7 @@
     <string name="douban_login_privacy_expand">View details</string>
     <string name="douban_login_privacy_collapse">Collapse</string>
     <string name="douban_login_success_snackbar">Douban login successful, syncing marks…</string>
+    <string name="douban_login_load_failed">Load failed</string>
     <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
     <string name="douban_sync_title">Douban Marks Sync</string>
     <string name="douban_sync_complete">Sync Complete</string>
@@ -306,6 +308,7 @@
     <string name="douban_sync_failed_export_nothing">No failures to export</string>
     <string name="douban_sync_failed_export_success">Exported %1$d failure items</string>
     <string name="douban_sync_failed_export_failed">Export failed</string>
+    <string name="douban_sync_failed_export_chooser_title">Share failures JSON</string>
     <string name="douban_sync_failed_show_all">Show all %1$d items</string>
     <string name="douban_sync_failed_collapse">Collapse</string>
     <string name="douban_sync_current_processing">Processing: %1$s</string>
@@ -773,10 +776,7 @@ Config:
 
     <!-- Data Management -->
     <string name="settings_data_management">Data Management</string>
-    <string name="settings_export_json">Export Data (JSON)</string>
-    <string name="settings_export_json_desc">Export watchlist and history as JSON</string>
     <string name="settings_import_imdb">Import from IMDb</string>
-    <string name="settings_import_imdb_desc">Import watchlist from IMDb CSV</string>
     <string name="settings_export_marks_data">Export marks</string>
     <string name="settings_view_statistics">View statistics</string>
     <string name="mark_records_settings_entry">Mark Records</string>
@@ -845,6 +845,17 @@ Config:
     <string name="consistency_check_sub_wish">Wish list</string>
     <string name="consistency_check_sub_collect">Watched list</string>
     <string name="consistency_check_sub_detail_ck">Fetching ck</string>
+    <string name="consistency_check_phase_cancelling">Cancelling...</string>
+    <string name="consistency_check_phase_cancelled">Cancelled</string>
+    <string name="consistency_check_network_failed">Network connection failed, please check your network and try again</string>
+    <string name="consistency_check_network_timeout">Network request timed out, please try again</string>
+    <string name="consistency_check_exception">Check error: %1$s</string>
+    <string name="consistency_check_not_logged_in">Douban not logged in</string>
+    <string name="consistency_check_cookie_expired">Douban login expired</string>
+    <string name="consistency_check_cookie_expired_prompt">Douban login expired, please log in again</string>
+    <string name="delay_type_douban_detail_crawl">Douban detail page delay</string>
+    <string name="delay_type_douban_list_crawl">Douban list page delay</string>
+    <string name="delay_type_douban_retry">Douban retry delay</string>
     <!-- Status consistency check confirmation dialog -->
     <string name="consistency_check_confirm_title">Check status consistency</string>
     <string name="consistency_check_confirm_last">Last check: %1$s</string>
@@ -868,9 +879,9 @@ Config:
     <string name="cloud_failures_downloaded">Cloud failures downloaded and merged</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">Upload failures to cloud</string>
+    <string name="settings_douban_upload_cloud">Upload failures</string>
     <string name="settings_douban_upload_cloud_desc">Upload local failures to Gitee cloud for cross-device viewing (requires Douban login)</string>
-    <string name="settings_douban_download_cloud">Pull failures from cloud</string>
+    <string name="settings_douban_download_cloud">Pull failures</string>
     <string name="settings_douban_download_cloud_desc">Download cloud failures for this Douban account and merge locally</string>
     <string name="cloud_sync_no_login">Please login to Douban first</string>
     <string name="cloud_sync_no_local_failures">No local failures, skipped upload</string>
@@ -1147,7 +1158,6 @@ Config:
     <string name="snackbar_import_no_data">No valid records found</string>
     <string name="snackbar_sync_progress">Syncing %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb import done: %1$d matched, %2$d unmatched</string>
-    <string name="snackbar_import_failed">Import failed: unknown error</string>
     <string name="snackbar_import_done_json">Imported %1$d failure items</string>
     <string name="error_not_imdb_csv">Not a valid IMDb CSV (missing required columns: Title, Created, Title Type)</string>
     <string name="error_empty_csv">File is empty or has no data rows</string>
@@ -1418,6 +1428,7 @@ Config:
     <string name="easter_msg_lantern_3">Warm company, night no longer dark</string>
     <!-- 账户区：Trakt 标签 / 豆瓣一栏 -->
     <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_trakt_login">Login</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · Logged in</string>
     <string name="settings_account_douban_login">Login</string>

@@ -152,6 +152,7 @@
     <string name="douban_login_privacy_expand">詳細を表示</string>
     <string name="douban_login_privacy_collapse">折りたたむ</string>
     <string name="douban_login_success_snackbar">豆瓣ログイン成功、マークを同期中…</string>
+    <string name="douban_login_load_failed">読み込み失敗</string>
     <string name="douban_login_notification_rationale">バックグラウンド同期に通知権限が必要です。付与してください</string>
     <string name="douban_sync_title">豆瓣マーク同期</string>
     <string name="douban_sync_complete">同期完了</string>
@@ -210,6 +211,7 @@
     <string name="douban_sync_failed_export_nothing">エクスポートする失敗項目がありません</string>
     <string name="douban_sync_failed_export_success">%1$d 項目の失敗データをエクスポート</string>
     <string name="douban_sync_failed_export_failed">エクスポートに失敗</string>
+    <string name="douban_sync_failed_export_chooser_title">失敗項目 JSON を共有</string>
     <string name="douban_sync_failed_show_all">すべて %1$d 項目を表示</string>
     <string name="douban_sync_failed_collapse">折りたたむ</string>
     <string name="douban_sync_current_processing">処理中：%1$s</string>
@@ -368,6 +370,7 @@
     <string name="watchlist_selected_count">%d件選択中</string>
     <string name="watchlist_remove_watchlist">ウォッチリストから削除</string>
     <string name="watchlist_remove_history">履歴から削除</string>
+    <string name="watchlist_batch_remove_partial_failed">一部の項目の削除に失敗しました</string>
     <string name="watchlist_pull_to_refresh">下に引っ張って更新</string>
     <string name="watchlist_release_to_refresh">離して更新</string>
     <string name="watchlist_refreshing">更新中…</string>
@@ -653,10 +656,7 @@
     <string name="settings_licenses">オープンソースライセンス</string>
 
     <!-- Data Management (追加) -->
-    <string name="settings_export_json">データをエクスポート (JSON)</string>
-    <string name="settings_export_json_desc">ウォッチリストと履歴をJSONとしてエクスポート</string>
     <string name="settings_import_imdb">IMDbからインポート</string>
-    <string name="settings_import_imdb_desc">IMDb CSVからウォッチリストをインポート</string>
     <string name="settings_export_marks_data">マークをエクスポート</string>
     <string name="settings_view_statistics">視聴統計</string>
     <string name="settings_douban_resync">豆瓣を再同期</string>
@@ -723,6 +723,17 @@
     <string name="consistency_check_sub_wish">見たいリスト</string>
     <string name="consistency_check_sub_collect">見たリスト</string>
     <string name="consistency_check_sub_detail_ck">詳細ページck取得</string>
+    <string name="consistency_check_phase_cancelling">キャンセル中...</string>
+    <string name="consistency_check_phase_cancelled">キャンセル済み</string>
+    <string name="consistency_check_network_failed">ネットワーク接続に失敗しました。ネットワークを確認して再試行してください</string>
+    <string name="consistency_check_network_timeout">ネットワークリクエストがタイムアウトしました。再試行してください</string>
+    <string name="consistency_check_exception">チェックエラー: %1$s</string>
+    <string name="consistency_check_not_logged_in">豆瓣未ログイン</string>
+    <string name="consistency_check_cookie_expired">豆瓣ログイン期限切れ</string>
+    <string name="consistency_check_cookie_expired_prompt">豆瓣ログインの有効期限が切れました。再度ログインしてください</string>
+    <string name="delay_type_douban_detail_crawl">豆瓣詳細ページ遅延</string>
+    <string name="delay_type_douban_list_crawl">豆瓣リストページ遅延</string>
+    <string name="delay_type_douban_retry">豆瓣リトライ遅延</string>
     <!-- 状態一致性チェック確認ダイアログ -->
     <string name="consistency_check_confirm_title">状態一致性チェック</string>
     <string name="consistency_check_confirm_last">前回チェック：%1$s</string>
@@ -746,9 +757,9 @@
     <string name="cloud_failures_downloaded">クラウド失敗データをダウンロードしてマージしました</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">失敗データをクラウドにアップロード</string>
+    <string name="settings_douban_upload_cloud">失敗データをアップロード</string>
     <string name="settings_douban_upload_cloud_desc">ローカルの失敗項目を Gitee クラウドにアップロードして他のデバイスで表示(豆瓣ログイン必須)</string>
-    <string name="settings_douban_download_cloud">クラウドから失敗データを取得</string>
+    <string name="settings_douban_download_cloud">失敗データを取得</string>
     <string name="settings_douban_download_cloud_desc">この豆瓣アカウントのクラウド失敗データをダウンロードしてローカルにマージ</string>
     <string name="cloud_sync_no_login">先に豆瓣アカウントにログインしてください</string>
     <string name="cloud_sync_no_local_failures">ローカルに失敗項目がないため、アップロードをスキップ</string>
@@ -1021,7 +1032,6 @@
     <string name="snackbar_import_no_data">有効なレコードが見つかりません</string>
     <string name="snackbar_sync_progress">同期中 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb インポート完了: %1$d 件一致、%2$d 件不一致</string>
-    <string name="snackbar_import_failed">インポート失敗</string>
     <string name="snackbar_import_done_json">%1$d 件の失敗データをインポートしました</string>
     <string name="error_not_imdb_csv">有効な IMDb CSV ではありません（必須列 Title、Created、Title Type が不足）</string>
     <string name="error_empty_csv">ファイルが空かデータ行がありません</string>
@@ -1400,6 +1410,7 @@
     <string name="easter_msg_lantern_3">温かく寄り添い、夜はもう暗くない</string>
     <!-- アカウント：Trakt ラベル / 豆瓣欄 -->
     <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_trakt_login">ログイン</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · ログイン済み</string>
     <string name="settings_account_douban_login">ログイン</string>

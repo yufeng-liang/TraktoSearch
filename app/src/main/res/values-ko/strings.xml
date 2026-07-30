@@ -152,6 +152,7 @@
     <string name="douban_login_privacy_expand">상세 정보 보기</string>
     <string name="douban_login_privacy_collapse">접기</string>
     <string name="douban_login_success_snackbar">더우반 로그인 성공, 마크 동기화 중…</string>
+    <string name="douban_login_load_failed">로딩 실패</string>
     <string name="douban_login_notification_rationale">백그라운드 동기화에 알림 권한이 필요합니다. 부여해 주세요</string>
     <string name="douban_sync_title">더우반 마크 동기화</string>
     <string name="douban_sync_complete">동기화 완료</string>
@@ -210,6 +211,7 @@
     <string name="douban_sync_failed_export_nothing">내보낼 실패 항목 없음</string>
     <string name="douban_sync_failed_export_success">%1$d 실패 항목 내보냄</string>
     <string name="douban_sync_failed_export_failed">내보내기 실패</string>
+    <string name="douban_sync_failed_export_chooser_title">실패 항목 JSON 공유</string>
     <string name="douban_sync_failed_show_all">모든 %1$d 항목 표시</string>
     <string name="douban_sync_failed_collapse">접기</string>
     <string name="douban_sync_current_processing">처리 중: %1$s</string>
@@ -368,6 +370,7 @@
     <string name="watchlist_selected_count">%d개 선택됨</string>
     <string name="watchlist_remove_watchlist">관심목록에서 삭제</string>
     <string name="watchlist_remove_history">기록에서 삭제</string>
+    <string name="watchlist_batch_remove_partial_failed">일부 항목 제거 실패</string>
     <string name="watchlist_pull_to_refresh">당겨서 새로고침</string>
     <string name="watchlist_release_to_refresh">놓아서 새로고침</string>
     <string name="watchlist_refreshing">새로고침 중…</string>
@@ -653,10 +656,7 @@
     <string name="settings_licenses">오픈소스 라이선스</string>
 
     <!-- Data Management (추가) -->
-    <string name="settings_export_json">데이터 내보내기 (JSON)</string>
-    <string name="settings_export_json_desc">관심목록과 기록을 JSON으로 내보내기</string>
     <string name="settings_import_imdb">IMDb에서 가져오기</string>
-    <string name="settings_import_imdb_desc">IMDb CSV에서 관심목록 가져오기</string>
     <string name="settings_export_marks_data">마크 내보내기</string>
     <string name="settings_view_statistics">시청 통계</string>
     <string name="settings_douban_resync">더우반 재동기화</string>
@@ -723,6 +723,17 @@
     <string name="consistency_check_sub_wish">보고싶어요 목록</string>
     <string name="consistency_check_sub_collect">봤어요 목록</string>
     <string name="consistency_check_sub_detail_ck">상세 페이지 ck 가져오는 중</string>
+    <string name="consistency_check_phase_cancelling">취소 중...</string>
+    <string name="consistency_check_phase_cancelled">취소됨</string>
+    <string name="consistency_check_network_failed">네트워크 연결 실패, 네트워크를 확인하고 다시 시도하세요</string>
+    <string name="consistency_check_network_timeout">네트워크 요청 시간 초과, 다시 시도하세요</string>
+    <string name="consistency_check_exception">확인 오류: %1$s</string>
+    <string name="consistency_check_not_logged_in">더우반 미로그인</string>
+    <string name="consistency_check_cookie_expired">더우반 로그인 만료</string>
+    <string name="consistency_check_cookie_expired_prompt">더우반 로그인이 만료되었습니다. 다시 로그인하세요</string>
+    <string name="delay_type_douban_detail_crawl">더우반 상세 페이지 지연</string>
+    <string name="delay_type_douban_list_crawl">더우반 목록 페이지 지연</string>
+    <string name="delay_type_douban_retry">더우반 재시도 지연</string>
     <!-- 상태 일관성 검사 확인 다이얼로그 -->
     <string name="consistency_check_confirm_title">상태 일관성 검사</string>
     <string name="consistency_check_confirm_last">이전 검사: %1$s</string>
@@ -746,9 +757,9 @@
     <string name="cloud_failures_downloaded">클라우드 실패 데이터를 다운로드하고 병합했습니다</string>
 
     <!-- Manual cloud sync (settings page) -->
-    <string name="settings_douban_upload_cloud">실패 데이터를 클라우드에 업로드</string>
+    <string name="settings_douban_upload_cloud">실패 데이터 업로드</string>
     <string name="settings_douban_upload_cloud_desc">로컬 실패 항목을 Gitee 클라우드에 업로드하여 다른 기기에서 보기(더우반 로그인 필요)</string>
-    <string name="settings_douban_download_cloud">클라우드에서 실패 데이터 가져오기</string>
+    <string name="settings_douban_download_cloud">실패 데이터 가져오기</string>
     <string name="settings_douban_download_cloud_desc">이 더우반 계정의 클라우드 실패 데이터를 다운로드하여 로컬에 병합</string>
     <string name="cloud_sync_no_login">먼저 더우반 계정에 로그인하세요</string>
     <string name="cloud_sync_no_local_failures">로컬 실패 항목이 없어 업로드를 건너뛰었습니다</string>
@@ -1021,7 +1032,6 @@
     <string name="snackbar_import_no_data">유효한 레코드를 찾을 수 없음</string>
     <string name="snackbar_sync_progress">동기화 중 %1$d/%2$d: %3$s</string>
     <string name="snackbar_import_done_imdb">IMDb 가져오기 완료: %1$d 개 일치, %2$d 개 불일치</string>
-    <string name="snackbar_import_failed">가져오기 실패</string>
     <string name="snackbar_import_done_json">실패 데이터 %1$d건을 가져왔습니다</string>
     <string name="error_not_imdb_csv">유효한 IMDb CSV가 아닙니다 (필수 열 Title, Created, Title Type 누락)</string>
     <string name="error_empty_csv">파일이 비어 있거나 데이터 행이 없습니다</string>
@@ -1400,6 +1410,7 @@
     <string name="easter_msg_lantern_3">따뜻하게 곁에, 밤은 더 이상 어둡지 않아</string>
     <!-- 계정: Trakt 라벨 / Douban 항목 -->
     <string name="settings_account_trakt_label">Trakt</string>
+    <string name="settings_account_trakt_login">로그인</string>
     <string name="settings_account_douban">Douban</string>
     <string name="settings_account_douban_logged_in">Douban · 로그인됨</string>
     <string name="settings_account_douban_login">로그인</string>

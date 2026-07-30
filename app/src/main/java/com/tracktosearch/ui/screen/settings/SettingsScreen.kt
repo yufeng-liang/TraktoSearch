@@ -166,6 +166,9 @@ fun SettingsScreen(
     val doubanRetryState by doubanRetryViewModel.retryState.collectAsStateWithLifecycle()
     val cloudSyncLoading by doubanRetryViewModel.cloudSyncLoading.collectAsStateWithLifecycle()
     val cloudSyncEvent by doubanRetryViewModel.cloudSyncEvent.collectAsStateWithLifecycle()
+    // 云端失败项数量:用于「上传/拉取失败数据」入口可见性判断
+    // null=未登录豆瓣或检测失败,0=云端无数据,>0=云端有数据
+    val cloudFailureCount by doubanRetryViewModel.cloudFailureCount.collectAsStateWithLifecycle()
     // 豆瓣登录态:「重新同步豆瓣」点击前预检,未登录弹确认框引导登录
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     // 增量同步冷却期状态(跨设备同步显示)
@@ -254,6 +257,8 @@ fun SettingsScreen(
     // 冷却期仅从本地读取(豆瓣登录后已刷新云端 meta 到本地)
     LaunchedEffect(doubanLoggedIn) {
         doubanRetryViewModel.refreshRetryState()
+        // 豆瓣登录后检测云端失败项,用于「上传/拉取失败数据」入口可见性
+        doubanRetryViewModel.refreshCloudFailureCount()
         viewModel.loadCooldownStatusFromLocal()
     }
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
@@ -389,22 +394,24 @@ fun SettingsScreen(
                     bottom = 80.dp
                 )
         ) {
-            // 观看统计（第一位，独占整行卡片，无类目 Header）
+            // 观看统计（第一位，独占整行卡片，无类目 Header）—— 仅登录可见
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
-            item(key = "statistics_entry") {
-                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else { Modifier }
-                StatisticsCard(
-                    modifier = statisticsEntryModifier,
-                    hazeState = settingsHazeState,
-                    onClick = onStatisticsClick
-                )
+            if (isLoggedIn) {
+                item(key = "statistics_entry") {
+                    val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else { Modifier }
+                    StatisticsCard(
+                        modifier = statisticsEntryModifier,
+                        hazeState = settingsHazeState,
+                        onClick = onStatisticsClick
+                    )
+                }
             }
 
             // 标记记录（仅登录可见，独占整行卡片）
@@ -561,7 +568,8 @@ fun SettingsScreen(
                                 )
                             }
 
-                            // 数据流通 2x2 卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
+                            // 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
+                            // 「上传/拉取失败数据」入口仅在豆瓣已登录且(本地或云端存在失败数据)时显示
                             DataFlowGridItem(
                                 onExport = {
                                     if (!exportImportState.isExporting) {
@@ -576,8 +584,33 @@ fun SettingsScreen(
                                 },
                                 onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
                                 onDownloadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.downloadFromCloud() },
+                                showCloudActions = doubanLoggedIn &&
+                                    (doubanRetryState.hasFailures || (cloudFailureCount ?: 0) > 0),
+                                exportEnabled = !exportImportState.isExporting,
+                                importEnabled = !exportImportState.isImporting,
+                                cloudEnabled = !cloudSyncLoading,
                                 containerColor = Color.Transparent
                             )
+
+                            // 云端同步进行中:显示进度条(紧贴数据流通卡片,便于用户关联按钮状态)
+                            if (cloudSyncLoading) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    LinearProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.cloud_sync_in_progress),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
                             SettingsItemCard(
                                 icon = Icons.Rounded.Verified,
                                 title = stringResource(R.string.settings_export_verify),
@@ -701,24 +734,6 @@ fun SettingsScreen(
                             )
                         }
 
-                            // 云端同步进行中:显示进度条
-                            if (cloudSyncLoading) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                                ) {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = stringResource(R.string.cloud_sync_in_progress),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
                             exportImportState.syncProgress?.let { progress ->
                                 if (exportImportState.isImporting) {
                                     Column(
@@ -1759,8 +1774,14 @@ private fun NotificationItem(
 }
 
 /**
- * 数据流通 2x2 卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）。
+ * 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）。
  * 抽取为独立函数，避免 item lambda 捕获过多外部状态。
+ *
+ * @param showCloudActions 是否显示第二行「上传/拉取失败数据」入口。
+ *   仅当豆瓣已登录且(本地有失败项 或 云端有失败项)时为 true,避免无数据时暴露无效入口。
+ * @param exportEnabled 导出按钮是否启用(导出进行中应禁用)
+ * @param importEnabled 导入按钮是否启用(导入进行中应禁用)
+ * @param cloudEnabled 云端按钮是否启用(云端同步进行中应禁用)
  */
 @Composable
 private fun DataFlowGridItem(
@@ -1768,6 +1789,10 @@ private fun DataFlowGridItem(
     onImportImdb: () -> Unit,
     onUploadCloud: () -> Unit,
     onDownloadCloud: () -> Unit,
+    showCloudActions: Boolean = true,
+    exportEnabled: Boolean = true,
+    importEnabled: Boolean = true,
+    cloudEnabled: Boolean = true,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
 ) {
     Row(
@@ -1779,34 +1804,40 @@ private fun DataFlowGridItem(
             icon = Icons.Rounded.FileUpload,
             title = stringResource(R.string.settings_export_marks_data),
             onClick = onExport,
-            containerColor = containerColor
+            containerColor = containerColor,
+            enabled = exportEnabled
         )
         DataFlowCard(
             modifier = Modifier.weight(1f),
             icon = Icons.Rounded.FileDownload,
             title = stringResource(R.string.settings_import_imdb),
             onClick = onImportImdb,
-            containerColor = containerColor
+            containerColor = containerColor,
+            enabled = importEnabled
         )
     }
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        DataFlowCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Rounded.CloudUpload,
-            title = stringResource(R.string.settings_douban_upload_cloud),
-            onClick = onUploadCloud,
-            containerColor = containerColor
-        )
-        DataFlowCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Rounded.CloudDownload,
-            title = stringResource(R.string.settings_douban_download_cloud),
-            onClick = onDownloadCloud,
-            containerColor = containerColor
-        )
+    if (showCloudActions) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            DataFlowCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Rounded.CloudUpload,
+                title = stringResource(R.string.settings_douban_upload_cloud),
+                onClick = onUploadCloud,
+                containerColor = containerColor,
+                enabled = cloudEnabled
+            )
+            DataFlowCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Rounded.CloudDownload,
+                title = stringResource(R.string.settings_douban_download_cloud),
+                onClick = onDownloadCloud,
+                containerColor = containerColor,
+                enabled = cloudEnabled
+            )
+        }
     }
 }
 
@@ -2020,7 +2051,7 @@ private fun CloudSyncCompareDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
         title = { Text(stringResource(titleRes)) },
         text = {
             Column(

@@ -347,7 +347,7 @@ internal fun TraktLoginPromptRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
             modifier = Modifier.height(36.dp)
         ) {
-            Text(stringResource(R.string.login_button))
+            Text(stringResource(R.string.settings_account_trakt_login))
         }
     }
 }
