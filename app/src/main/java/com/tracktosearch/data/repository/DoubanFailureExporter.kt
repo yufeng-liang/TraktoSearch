@@ -68,7 +68,7 @@ class DoubanFailureExporter @Inject constructor(
     private data class ExportPayload(
         val version: Int = 1,
         val exportedAt: String,
-        val source: String = "TraktToSearch",
+        val source: String = "TraktoSearch",
         val totalFailures: Int,
         val failures: List<FailureDto>
     )
@@ -109,7 +109,7 @@ class DoubanFailureExporter @Inject constructor(
         // 写到 cacheDir/share 子目录,通过 FileProvider 暴露
         val shareDir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
         val dateStr = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        val file = File(shareDir, "TraktToSearch-失败项-$dateStr.json")
+        val file = File(shareDir, "TraktoSearch-失败项-$dateStr.json")
         file.writeText(jsonStr, Charsets.UTF_8)
 
         // 通过 FileProvider 生成 content URI
@@ -188,7 +188,7 @@ class DoubanFailureExporter @Inject constructor(
 
         val shareDir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
         val dateStr = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        val file = File(shareDir, "TraktToSearch-失败项-$dateStr.json")
+        val file = File(shareDir, "TraktoSearch-失败项-$dateStr.json")
         file.writeText(jsonStr, Charsets.UTF_8)
 
         val authority = "${context.packageName}.fileprovider"
@@ -229,7 +229,7 @@ class DoubanFailureExporter @Inject constructor(
 
         val shareDir = File(context.cacheDir, "share").apply { if (!exists()) mkdirs() }
         val dateStr = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-        val file = File(shareDir, "TraktToSearch-失败项-$dateStr.json")
+        val file = File(shareDir, "TraktoSearch-失败项-$dateStr.json")
         file.writeText(jsonStr, Charsets.UTF_8)
 
         val authority = "${context.packageName}.fileprovider"

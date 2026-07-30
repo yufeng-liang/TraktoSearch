@@ -266,7 +266,7 @@ class UpdateRepository @Inject constructor(
     /**
      * 从公开仓库获取 APK 下载链接 + SHA-256 校验值。
      *
-     * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktToSearch-*.apk），
+     * 选择策略：在所有 .apk 附件中优先按命名规则匹配（TraktoSearch-*.apk），
      * 若有多个匹配则在匹配集中取最后一个（后上传的排在后面）。
      *
      * SHA-256 来源：release body 中的 `SHA-256: <hex>` 行（由 release skill 发布时写入）。
@@ -280,9 +280,9 @@ class UpdateRepository @Inject constructor(
             val apkAssets = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
             if (apkAssets.isEmpty()) return "" to ""
 
-            // 优先 TraktToSearch-*.apk 命名的附件；候选中取最后一个（后上传的排在后面）
+            // 优先 TraktoSearch-*.apk 命名的附件；候选中取最后一个（后上传的排在后面）
             val namedCandidates = apkAssets.filter {
-                it.name.startsWith("TraktToSearch-", ignoreCase = true)
+                it.name.startsWith("TraktoSearch-", ignoreCase = true)
             }
             val apkAsset = (namedCandidates.ifEmpty { apkAssets })
                 .lastOrNull()

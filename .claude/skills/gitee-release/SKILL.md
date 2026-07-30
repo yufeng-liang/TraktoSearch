@@ -17,7 +17,7 @@ license: MIT
 ## 前置（由 release skill 保证）
 
 - Gitee MCP 已加载（`create_release`、`list_releases`）
-- APK 已构建并重命名为 `TraktToSearch-v{versionName}.apk`
+- APK 已构建并重命名为 `TraktoSearch-v{versionName}.apk`
 - 更新日志 markdown 已生成（文件 `changelog.md`）
 - 代码与 tag 已 `git -c http.proxy="" push gitee master` + `git -c http.proxy="" push gitee v{versionName}`
 
@@ -35,11 +35,11 @@ license: MIT
 
 - 主仓库：
   ```
-  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktToSearch-v{versionName}.apk"
+  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
   ```
 - 公开仓库：
   ```
-  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch-release/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktToSearch-v{versionName}.apk"
+  curl.exe -X POST "https://gitee.com/api/v5/repos/yufeng-liang/TrackToSearch-release/releases/{release_id}/attach_files?access_token={token}" -F "file=@{apk_path};filename=TraktoSearch-v{versionName}.apk"
   ```
 - **绝不用 PowerShell multipart 拼接**，否则 APK 被 UTF-8 重编码损坏
 

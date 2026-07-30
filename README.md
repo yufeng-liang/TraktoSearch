@@ -1,4 +1,4 @@
-# TraktToSearch
+# TraktoSearch
 
 从观影清单到网盘资源，一步之遥。
 

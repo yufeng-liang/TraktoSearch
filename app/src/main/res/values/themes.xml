@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.TraktToSearch" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="Theme.TraktoSearch" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
@@ -8,5 +8,5 @@
     </style>
 
     <!-- Android 12 以下的启动页主题：直接使用 App 主题，不显示系统 splash -->
-    <style name="Theme.App.Starting" parent="Theme.TraktToSearch" />
+    <style name="Theme.App.Starting" parent="Theme.TraktoSearch" />
 </resources>

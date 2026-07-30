@@ -39,7 +39,7 @@ import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
-import com.tracktosearch.ui.theme.TraktToSearchTheme
+import com.tracktosearch.ui.theme.TraktoSearchTheme
 import com.tracktosearch.ui.util.LocalScrollToTopProvider
 import com.tracktosearch.ui.util.ScrollToTopProvider
 import com.tracktosearch.ui.util.showToast
@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val themeMode by themeStorage.themeMode.collectAsStateWithLifecycle()
             val accentColor by themeStorage.accentColor.collectAsStateWithLifecycle()
-            TraktToSearchTheme(themeMode = themeMode, accentColor = accentColor) {
+            TraktoSearchTheme(themeMode = themeMode, accentColor = accentColor) {
                 CompositionLocalProvider(LocalScrollToTopProvider provides scrollToTopProvider) {
                 // Splash 完成后展示主导航
                 if (isReady) {

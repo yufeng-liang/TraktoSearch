@@ -480,7 +480,7 @@ fun UpdateDialog(
                                         val file = ApkDownloader.downloadApk(
                                             context = context,
                                             url = updateInfo.downloadUrl,
-                                            fileName = "TraktToSearch-v${updateInfo.latestVersion}.apk",
+                                            fileName = "TraktoSearch-v${updateInfo.latestVersion}.apk",
                                             onProgress = { progress ->
                                                 downloadState = DownloadState.Downloading(progress)
                                             },
