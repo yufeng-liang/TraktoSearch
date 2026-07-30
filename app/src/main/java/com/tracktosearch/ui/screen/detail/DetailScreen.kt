@@ -372,6 +372,11 @@ fun DetailScreen(
                     )
                 }
 
+                // 转场期间(contentReady=false)跳过 Tab 行和所有 Tab 内容组合,
+                // 首帧只组合 header(海报+标题+按钮),大幅降低转场期间首帧工作量。
+                // contentReady 由 posterDominantColor 就绪或 400ms 兜底触发,转场结束后即 true。
+                if (contentReady) {
+
                 // Tab 行（吸顶，共用同一个）
                 val showCommentsTab = uiState.sectionVisible.comments
                 val showRecommendationsTab = uiState.sectionVisible.recommendations
@@ -735,6 +740,7 @@ fun DetailScreen(
                         }
                     }
                 }
+                } // end if (contentReady)
                 }
             } // CompositionLocalProvider
             }
