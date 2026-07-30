@@ -423,6 +423,7 @@ fun MainScreen(
                         } else {
                             LoginPromptScreen(
                                 onNavigateToLogin = onNavigateToLogin,
+                                onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                                 onContinueAsGuest = { scope.launch { pagerState.scrollToPage(0) } },
                                 modifier = Modifier.fillMaxSize()
                             )
