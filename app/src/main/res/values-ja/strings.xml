@@ -152,7 +152,7 @@
     <string name="douban_login_privacy_detail">• ログインの理由：豆瓣マーク（見たい、見た、評価）を読み取るため\n• 保存内容：CookieとuserId（今回のクロール用）のみ、豆瓣パスワードは保存しません\n• Cookieの用途：movie.douban.com/people/{userId}/wish|collectページのリクエストのみ\n• 同期完了後：設定で豆瓣認証情報をいつでも削除可能\n• データフロー：豆瓣 → アプリ → Trakt、中間サーバーなし</string>
     <string name="douban_login_privacy_expand">詳細を表示</string>
     <string name="douban_login_privacy_collapse">折りたたむ</string>
-    <string name="douban_login_success_snackbar">豆瓣ログイン成功、マークを同期中…</string>
+    <string name="douban_login_success_snackbar">豆瓣ログイン成功</string>
     <string name="douban_login_notification_rationale">バックグラウンド同期に通知権限が必要です。付与してください</string>
     <string name="douban_sync_title">豆瓣マーク同期</string>
     <string name="douban_sync_complete">同期完了</string>

@@ -134,6 +134,11 @@ import java.util.Locale
 fun SettingsScreen(
     onLogout: () -> Unit = {},
     isLoggedIn: Boolean = true,
+    /**
+     * Trakt 是否已连接(独立于综合 isLoggedIn)。
+     * AccountItem 用此值判断 Trakt 行显示登录还是登出,避免豆瓣单独登录时被综合 isLoggedIn 误判为 Trakt 已登录。
+     */
+    isTraktConnected: Boolean = false,
     onHelpClick: () -> Unit = {},
     onRestartOnboarding: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
@@ -245,18 +250,29 @@ fun SettingsScreen(
         }
     }
     // 账户资料加载：从账户 item 内上提，避免 item 滑出/滑入时重复触发网络请求
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) {
+    // Trakt profile 仅在 Trakt 已连接时加载,避免豆瓣单独登录时触发 401 失败
+    // 豆瓣 profile 在综合登录态下加载(豆瓣登录或 Trakt 登录都可能需要)
+    LaunchedEffect(isLoggedIn, isTraktConnected) {
+        if (isTraktConnected) {
             viewModel.loadUserProfile()
+        }
+        if (isLoggedIn) {
             viewModel.loadDoubanProfile()
         }
     }
     // 豆瓣登录态变化时刷新失败项状态:登录后若云端失败数据已下载合并到本地,
     // 返回设置页时 doubanLoggedIn 从 false→true 触发刷新,「查看同步失败项」入口卡片及时显示
-    // 冷却期仅从本地读取(豆瓣登录后已刷新云端 meta 到本地)
+    // 同时首次豆瓣登录成功后自动弹出导入标记弹窗(showSyncModePicker)
+    var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(doubanLoggedIn) {
         doubanRetryViewModel.refreshRetryState()
         viewModel.loadCooldownStatusFromLocal()
+        // 首次豆瓣登录成功(false→true): 自动弹出导入标记弹窗,提示用户选择增量/全量同步
+        // 用 hasShownDoubanImportDialog 避免重复弹出(旋屏/返回设置页不再弹)
+        if (doubanLoggedIn && !hasShownDoubanImportDialog) {
+            hasShownDoubanImportDialog = true
+            showSyncModePicker = true
+        }
     }
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -765,7 +781,9 @@ fun SettingsScreen(
                 ) {
                     AccountItem(
                         viewModel = viewModel,
-                        isTraktLoggedIn = isLoggedIn,
+                        // 用 Trakt 连接态(而非综合 isLoggedIn)判断 Trakt 行,
+                        // 避免豆瓣单独登录时 isLoggedIn=true 导致 Trakt 行误显示为已登录
+                        isTraktLoggedIn = isTraktConnected,
                         onTraktLogin = onNavigateToLogin,
                         onTraktLogout = { showLogoutDialog = true },
                         onDoubanLogin = { onNavigateToDoubanLogin() },

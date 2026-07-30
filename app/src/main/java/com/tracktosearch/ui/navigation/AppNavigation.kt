@@ -401,6 +401,7 @@ fun AppNavigation(
                         MainScreen(
                             initialTab = mainInitialTab,
                             isLoggedIn = isLoggedIn,
+                            isTraktConnected = isTraktConnected,
                             isDoubanMode = isDoubanMode,
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))

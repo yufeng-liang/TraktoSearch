@@ -152,7 +152,7 @@
     <string name="douban_login_privacy_detail">• 로그인 이유: 더우반 마크(보고싶음, 봄, 평점) 읽기\n• 저장 내용: Cookie와 userId(이번 크롤링용)만 저장, 더우반 비밀번호는 저장하지 않음\n• Cookie 용도: movie.douban.com/people/{userId}/wish|collect 페이지 요청에만 사용\n• 동기화 완료 후: 설정에서 더우반 인증 정보를 언제든 삭제 가능\n• 데이터 흐름: 더우반 → 앱 → Trakt, 중간 서버 없음</string>
     <string name="douban_login_privacy_expand">상세 정보 보기</string>
     <string name="douban_login_privacy_collapse">접기</string>
-    <string name="douban_login_success_snackbar">더우반 로그인 성공, 마크 동기화 중…</string>
+    <string name="douban_login_success_snackbar">더우반 로그인 성공</string>
     <string name="douban_login_notification_rationale">백그라운드 동기화에 알림 권한이 필요합니다. 부여해 주세요</string>
     <string name="douban_sync_title">더우반 마크 동기화</string>
     <string name="douban_sync_complete">동기화 완료</string>

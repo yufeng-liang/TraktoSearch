@@ -248,7 +248,7 @@
     <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App → Trakt，不经过任何中间服务器</string>
     <string name="douban_login_privacy_expand">查看详细说明</string>
     <string name="douban_login_privacy_collapse">收起</string>
-    <string name="douban_login_success_snackbar">豆瓣登录成功，正在同步标记…</string>
+    <string name="douban_login_success_snackbar">豆瓣登录成功</string>
     <string name="douban_login_notification_rationale">后台同步需要通知权限以显示进度，请授予</string>
     <string name="douban_sync_title">豆瓣标记同步</string>
     <string name="douban_sync_complete">同步完成</string>

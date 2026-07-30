@@ -84,6 +84,7 @@ import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
+import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
@@ -126,10 +127,22 @@ interface DoubanAuthStorageEntryPoint {
     fun doubanAuthStorage(): com.tracktosearch.data.local.DoubanAuthStorage
 }
 
+/** EntryPoint 用于在 MainScreen 启动豆瓣同步(激活页登录后弹窗选择模式) */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface DoubanSyncManagerEntryPoint {
+    fun doubanSyncManager(): com.tracktosearch.data.repository.DoubanSyncManager
+}
+
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
     isLoggedIn: Boolean,
+    /**
+     * Trakt 是否已连接(独立于豆瓣登录态)。
+     * 用于 AccountItem 精确判断 Trakt 行显示登录还是登出,避免被综合 isLoggedIn(= isTraktConnected || isDoubanLoggedIn) 误判。
+     */
+    isTraktConnected: Boolean = false,
     /**
      * 是否处于豆瓣独立模式（激活网关 + 已登录豆瓣 + 未连 trakt）。
      * 影响「我的」tab 头像来源：豆瓣模式下取 DoubanAuthStorage.doubanProfile.avatarUrl，
@@ -196,6 +209,12 @@ fun MainScreen(
         EntryPointAccessors.fromApplication(context.applicationContext, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
     }
     val doubanProfile by doubanAuthStorage.doubanProfile.collectAsState()
+    // 豆瓣登录态: 用于激活页登录成功后(新手引导结束时)自动弹出导入标记弹窗
+    val doubanLoggedIn by doubanAuthStorage.isLoggedIn.collectAsState(initial = false)
+    // 豆瓣导入标记弹窗(激活页登录成功 + 新手引导完成后触发)
+    var showDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
+    // 标记是否已弹过导入弹窗,避免重复弹出
+    var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(isLoggedIn, isDoubanMode) {
         if (isLoggedIn) {
             if (isDoubanMode) {
@@ -230,6 +249,17 @@ fun MainScreen(
                 pagerState.scrollToPage(0)
                 selectedTab = 0
             }
+        }
+    }
+
+    // 激活页豆瓣登录成功后,等新手引导完成再弹出导入标记弹窗
+    // 触发条件: doubanLoggedIn=true && onboardingCompleted=true && 未弹过
+    // 场景1: 首次使用,登录后新手引导显示 → 用户完成 → 弹出导入弹窗
+    // 场景2: 非首次使用(已完成新手引导),登录后直接弹出导入弹窗
+    LaunchedEffect(doubanLoggedIn, onboardingCompleted) {
+        if (doubanLoggedIn && onboardingCompleted == true && !hasShownDoubanImportDialog) {
+            hasShownDoubanImportDialog = true
+            showDoubanImportDialog = true
         }
     }
 
@@ -388,17 +418,15 @@ fun MainScreen(
                             SearchScreen(
                                 initialKeyword = "",
                                 onSearchClick = onSearchClick,
-                                // 豆瓣模式: 无 trakt token,Trakt 搜索会 401 失败,隐藏入口(传 null)
-                                // 同时隐藏 SearchSourceType 切换器(仅保留 DISK 资源搜索)
-                                onTraktSearch = if (isDoubanMode) null else { type, query ->
+                                onTraktSearch = { type, query ->
                                     traktSearchType = type
                                     traktSearchQuery = query
                                     showTraktSearch = true
                                 },
                                 onSpiderTest = onSpiderTest,
                                 onMovieClick = onMovieClick,
-                                searchSourceType = if (isDoubanMode) SearchSourceType.DISK else searchSourceType,
-                                onSearchSourceTypeChange = if (isDoubanMode) null else ({ searchSourceType = it }),
+                                searchSourceType = searchSourceType,
+                                onSearchSourceTypeChange = { searchSourceType = it },
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -419,8 +447,7 @@ fun MainScreen(
                                 onShowClick = onShowClick,
                                 onDoubanFailureClick = onDoubanFailureClick,
                                 onSearchClick = onSearchClick,
-                                // 豆瓣模式: watchlist 搜索框无结果时不跳转 Trakt 搜索(会 401 失败)
-                                onTraktSearch = if (isDoubanMode) { _, _ -> } else onTraktSearch,
+                                onTraktSearch = onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                                 onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                                 onNavigateToLogin = onNavigateToLogin,
@@ -438,6 +465,8 @@ fun MainScreen(
                     3 -> SettingsScreen(
                         onLogout = onLogout,
                         isLoggedIn = isLoggedIn,
+                        // 传入 Trakt 连接态(独立于综合 isLoggedIn),供 AccountItem 精确判断 Trakt 行
+                        isTraktConnected = isTraktConnected,
                         onHelpClick = onHelpClick,
                         onRestartOnboarding = onRestartOnboarding,
                         onDoubanResync = {
@@ -600,6 +629,29 @@ fun MainScreen(
                         if (targetTab != null && targetTab >= 0) {
                             scope.launch { pagerState.scrollToPage(targetTab) }
                             selectedTab = targetTab
+                        }
+                    }
+                )
+            }
+
+            // 激活页豆瓣登录成功 + 新手引导完成后: 弹出导入标记弹窗
+            // 用户可选择增量/全量同步,或跳过
+            if (showDoubanImportDialog) {
+                DoubanSyncModePickerDialog(
+                    syncedCount = 0,
+                    cooldownStatus = null,
+                    onDismiss = { showDoubanImportDialog = false },
+                    onModeSelected = { mode ->
+                        showDoubanImportDialog = false
+                        val doubanSyncManager = EntryPointAccessors.fromApplication(
+                            context.applicationContext, DoubanSyncManagerEntryPoint::class.java
+                        ).doubanSyncManager()
+                        scope.launch {
+                            doubanSyncManager.startSync(mode)
+                            // 切换到 Watchlist tab 显示同步横幅
+                            com.tracktosearch.service.DoubanSyncService.start(context)
+                            pagerState.scrollToPage(2)
+                            selectedTab = 2
                         }
                     }
                 )

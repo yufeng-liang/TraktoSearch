@@ -248,7 +248,7 @@
     <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App → Trakt, no intermediate servers</string>
     <string name="douban_login_privacy_expand">View details</string>
     <string name="douban_login_privacy_collapse">Collapse</string>
-    <string name="douban_login_success_snackbar">Douban login successful, syncing marks…</string>
+    <string name="douban_login_success_snackbar">Douban login successful</string>
     <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
     <string name="douban_sync_title">Douban Marks Sync</string>
     <string name="douban_sync_complete">Sync Complete</string>
