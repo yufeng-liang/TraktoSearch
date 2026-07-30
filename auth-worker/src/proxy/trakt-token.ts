@@ -29,6 +29,35 @@ export function buildTraktApiHeaders(
     };
 }
 
+/** 构造 Trakt 公开端点请求头（仅需 client_id，不需要用户 access_token）。
+ *  用于 trending / anticipated / search / movies/{id} / shows/{id} 等公开数据。
+ */
+export function buildTraktPublicApiHeaders(
+    clientId: string,
+): HeadersInit {
+    return {
+        'Content-Type': 'application/json',
+        'User-Agent': TRAKT_USER_AGENT,
+        'trakt-api-version': '2',
+        'trakt-api-key': clientId,
+    };
+}
+
+/** 判断 Trakt 子路径是否为公开端点（无需用户 access_token）。
+ *  - sync/* 、recommendations/* 、users/* 、shows/{id}/progress/* 需要用户凭据
+ *  - 其余端点（movies/* 、shows/* 、lists/* 、search/* 、people/* 等）仅需 client_id
+ */
+export function isTraktPublicPath(traktPath: string): boolean {
+    if (traktPath.startsWith('sync/')) return false;
+    if (traktPath.startsWith('recommendations/')) return false;
+    if (traktPath.startsWith('users/')) return false;
+    // shows/{id}/progress/* 需要用户 token
+    if (/^shows\/\d+\/progress\//.test(traktPath)) return false;
+    // comments POST 需要用户 token（GET comments 走 movies/{id}/comments 和 shows/{id}/comments）
+    if (traktPath === 'comments') return false;
+    return true;
+}
+
 export interface TraktAuthorizationCodePayload {
     code: string;
     client_id: string;

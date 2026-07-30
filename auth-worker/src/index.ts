@@ -27,7 +27,8 @@ import {
     updateFriend,
 } from './admin/admin';
 import { handleTmdbProxy } from './proxy/tmdb';
-import { handleTraktProxy, handleTraktOAuth } from './proxy/trakt';
+import { handleTraktProxy, handleTraktOAuth, handleTraktPublicProxy } from './proxy/trakt';
+import { isTraktPublicPath } from './proxy/trakt-token';
 import { handleDoubanProxy } from './proxy/douban';
 import { handleOmdbProxy } from './proxy/omdb';
 import { handleGiteeProxy } from './proxy/gitee';
@@ -171,6 +172,30 @@ async function handleAuthApi(
     // 将该入口保持公开，避免 access token 过期时连登录页都无法重新打开。
     if (path === '/api/trakt/oauth/authorize' && request.method === 'GET') {
         return handleTraktOAuth(request, env, path, '', requestId);
+    }
+
+    // 公开数据端点（无需 JWT）：访客模式下发现页/搜索页也能正常浏览
+    // worker 仍注入上游 API Key，安全层从「用户鉴权」下沉到「网关密钥代理」
+    // 豆瓣热榜（chart/weekly/nowplaying/top250）——纯公开榜单数据
+    if (path.startsWith('/api/douban/api/') && request.method === 'GET') {
+        return handleDoubanProxy(request, env, path);
+    }
+    // TMDB —— 电影/剧集元数据、搜索、海报等全为公开数据
+    if (path.startsWith('/api/tmdb/') && request.method === 'GET') {
+        return handleTmdbProxy(request, env, path);
+    }
+    // OMDb —— 评分等公开数据
+    if (path.startsWith('/api/omdb/') && request.method === 'GET') {
+        return handleOmdbProxy(request, env, path);
+    }
+    // Trakt 公开端点（trending/anticipated/search/movies/{id}/shows/{id}/people/* 等）
+    // 仅需 client_id，不需要用户 access_token；sync/recommendations/users 仍需 JWT
+    if (path.startsWith('/api/trakt/') && !path.startsWith('/api/trakt/oauth/') && request.method === 'GET') {
+        const traktPath = path.replace('/api/trakt/', '');
+        // 动态判断是否为公开路径（isTraktPublicPath 内部排除 sync/recommendations/users 等）
+        if (isTraktPublicPath(traktPath)) {
+            return handleTraktPublicProxy(request, env, path);
+        }
     }
 
     // 需要 JWT 的端点

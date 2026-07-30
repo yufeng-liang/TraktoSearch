@@ -7,6 +7,8 @@ import { now } from '../util/errors';
 import {
     TRAKT_OAUTH_REDIRECT_URI,
     buildTraktApiHeaders,
+    buildTraktPublicApiHeaders,
+    isTraktPublicPath,
     buildTraktProxyUrl,
     buildAuthorizationCodePayload,
     buildRefreshTokenPayload,
@@ -211,6 +213,38 @@ export async function handleTraktProxy(
             return proxyResponse(retryResponse);
         }
     }
+
+    return proxyResponse(upstreamResponse);
+}
+
+/** Trakt 公开端点代理（仅需 client_id，不需要用户 access_token）。
+ *  用于 trending / anticipated / search / movies/{id} / shows/{id} / people/* 等公开数据。
+ *  访客模式下也可使用，让发现页趋势榜等栏目正常展示。
+ */
+export async function handleTraktPublicProxy(
+    request: Request,
+    env: Env,
+    path: string
+): Promise<Response> {
+    const traktPath = path.replace(TRAKT_PREFIX, '');
+
+    // 安全兜底：仅放行公开端点，避免误把 sync/recommendations/users 路由到这里
+    if (!isTraktPublicPath(traktPath)) {
+        throw new AppError('UNAUTHORIZED', 'This endpoint requires authentication', 401);
+    }
+
+    const url = buildTraktProxyUrl(request.url, traktPath);
+    const body = await readTraktProxyBody(request);
+    const pool = new KeyPool('trakt', env.TRAKT_CLIENT_ID, env.KV);
+    const upstreamResponse = await fetchWithKeyRotation(
+        pool,
+        (clientId) => fetch(url, {
+            method: request.method,
+            headers: buildTraktPublicApiHeaders(clientId),
+            body,
+        }),
+        [401, 403, 429],
+    );
 
     return proxyResponse(upstreamResponse);
 }
