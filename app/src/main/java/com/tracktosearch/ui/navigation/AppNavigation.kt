@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.tracktosearch.BuildConfig
 import com.tracktosearch.DeepLinkNavigator
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
@@ -391,8 +392,8 @@ fun AppNavigation(
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
                             onSearchClick = { keyword ->
-                                // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页
-                                if (keyword.trim() == "13638719007") {
+                                // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页(仅 DEBUG 构建可用)
+                                if (BuildConfig.DEBUG && keyword.trim() == "13638719007") {
                                     navController.navigate(Routes.DOUBAN_SPIDER_TEST)
                                 } else {
                                     navController.navigate(Routes.searchRoute(keyword))
@@ -448,7 +449,10 @@ fun AppNavigation(
                                 navController.navigate(Routes.DOUBAN_LOGIN)
                             },
                             onSpiderTest = {
-                                navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                                // 仅 DEBUG 构建允许进入豆瓣爬取测试页
+                                if (BuildConfig.DEBUG) {
+                                    navController.navigate(Routes.DOUBAN_SPIDER_TEST)
+                                }
                             },
                             onFeedbackClick = {
                                 navController.navigate(Routes.FEEDBACK)
@@ -708,10 +712,13 @@ fun AppNavigation(
                     )
                 }
 
-                composable(Routes.DOUBAN_SPIDER_TEST) {
-                    DoubanSpiderTestScreen(
-                        onBack = { navController.popBackStack() }
-                    )
+                // 豆瓣爬取测试页仅在 DEBUG 构建注册,避免 release 暴露调试入口
+                if (BuildConfig.DEBUG) {
+                    composable(Routes.DOUBAN_SPIDER_TEST) {
+                        DoubanSpiderTestScreen(
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
 
                 composable(Routes.MARK_RECORDS) {
