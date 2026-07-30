@@ -225,6 +225,7 @@
     <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
+    <string name="login_douban">豆瓣登录</string>
     <string name="login_activation_hint">激活后同步你的 Trakt 想看列表</string>
     <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
     <string name="login_activation_choose_path">已激活 · 请选择登录 Trakt，或暂时以访客身份进入</string>

@@ -34,6 +34,7 @@ import com.tracktosearch.data.remote.douban.dto.DoubanHotData
 import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.navigation.AppNavigation
@@ -135,6 +136,11 @@ class MainActivity : AppCompatActivity() {
     @Inject
     lateinit var crashLogStorage: com.tracktosearch.data.local.CrashLogStorage
 
+    // 统一会话模式管理器：trakt 连接态/豆瓣登录态合一，
+    // AppNavigation 通过其 StateFlow 派生 isLoggedIn / isDoubanMode 等 UI 状态
+    @Inject
+    lateinit var sessionModeManager: SessionModeManager
+
     // 提供滚动到顶部能力
     private val scrollToTopProvider = ScrollToTopProvider()
     private var authInitializationJob: Job? = null
@@ -175,8 +181,9 @@ class MainActivity : AppCompatActivity() {
 
         var startDest by mutableStateOf(Routes.LOGIN)
         var initialTab by mutableStateOf(0)
+        // 本地 Compose state 仅用于 setContent 触发首次重组；
+        // 真实 trakt 连接态以 SessionModeManager 为单一数据源（由 AppNavigation collectAsStateWithLifecycle 读取）
         var isTraktConnected by mutableStateOf(false)
-        var traktConnectionState by mutableStateOf(TraktConnectionState.DISCONNECTED)
 
         authInitializationJob = lifecycleScope.launch {
             StartupTrace.mark("startup.enter")
@@ -201,11 +208,10 @@ class MainActivity : AppCompatActivity() {
                 null
             }
             isTraktConnected = cachedTraktProfile != null
-            traktConnectionState = if (isAuthorized) {
-                TraktConnectionState.CHECKING
-            } else {
-                TraktConnectionState.DISCONNECTED
-            }
+            // 同步初始 Trakt 连接态到 SessionModeManager（AppNavigation 据此派生 isLoggedIn/isDoubanMode）
+            sessionModeManager.setTraktConnectionState(
+                if (isAuthorized) TraktConnectionState.CHECKING else TraktConnectionState.DISCONNECTED
+            )
             startDest = when {
                 isAuthorized -> Routes.MAIN
                 isGuestMode -> Routes.MAIN  // 访客模式：直接进主页，跨重启保留
@@ -264,11 +270,10 @@ class MainActivity : AppCompatActivity() {
                         traktRepository.checkTraktConnection()
                     }
                     isTraktConnected = connected
-                    traktConnectionState = if (connected) {
-                        TraktConnectionState.CONNECTED
-                    } else {
-                        TraktConnectionState.DISCONNECTED
-                    }
+                    // 网络校验完成后写入 SessionModeManager，驱动 UI 切换到 TRAKT 模式或留在 GUEST/DOUBAN
+                    sessionModeManager.setTraktConnectionState(
+                        if (connected) TraktConnectionState.CONNECTED else TraktConnectionState.DISCONNECTED
+                    )
                     StartupTrace.mark(
                         "trakt.connection.state",
                         if (connected) "connected" else "disconnected"
@@ -307,9 +312,8 @@ class MainActivity : AppCompatActivity() {
                     AppNavigation(
                         startDestination = currentDestination,
                         initialTab = initialTab,
-                        initialTraktLoggedIn = isTraktConnected,
-                        traktConnectionState = traktConnectionState,
                         authStateHolder = authStateHolder,
+                        sessionModeManager = sessionModeManager,
                         onLoginSuccess = {
                             currentDestination = Routes.MAIN
                         }

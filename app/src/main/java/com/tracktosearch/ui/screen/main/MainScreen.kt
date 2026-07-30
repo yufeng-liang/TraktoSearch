@@ -119,10 +119,23 @@ interface ThemeStorageEntryPoint {
     fun themeStorage(): ThemeStorage
 }
 
+/** EntryPoint 用于在 MainScreen 读取豆瓣登录态/资料（豆瓣独立模式下显示头像） */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface DoubanAuthStorageEntryPoint {
+    fun doubanAuthStorage(): com.tracktosearch.data.local.DoubanAuthStorage
+}
+
 @Composable
 fun MainScreen(
     initialTab: Int = 0,
     isLoggedIn: Boolean,
+    /**
+     * 是否处于豆瓣独立模式（激活网关 + 已登录豆瓣 + 未连 trakt）。
+     * 影响「我的」tab 头像来源：豆瓣模式下取 DoubanAuthStorage.doubanProfile.avatarUrl，
+     * trakt 模式下沿用 TraktRepository.getUserProfile。
+     */
+    isDoubanMode: Boolean = false,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onSearchClick: (keyword: String) -> Unit,
@@ -172,15 +185,29 @@ fun MainScreen(
         CloudPermissionStorage(context.applicationContext)
     }
 
-    // 用户头像：登录后从 TraktRepository 获取（带永久缓存，仅登出才清除）
+    // 用户头像：登录后从对应来源获取
+    // - 豆瓣模式：从 DoubanAuthStorage.doubanProfile.avatarUrl 读取（StateFlow 直读，登录后即可拿到）
+    // - trakt 模式：从 TraktRepository.getUserProfile() 获取（带永久缓存）
+    // - GUEST 模式：不显示头像（isLoggedIn=false 时占位）
     var userAvatarUrl by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(isLoggedIn) {
+    val doubanAuthStorage = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
+    }
+    val doubanProfile by doubanAuthStorage.doubanProfile.collectAsState()
+    LaunchedEffect(isLoggedIn, isDoubanMode) {
         if (isLoggedIn) {
-            val traktRepository = EntryPointAccessors.fromApplication(
-                context.applicationContext, TraktRepositoryEntryPoint::class.java
-            ).traktRepository()
-            traktRepository.getUserProfile().onSuccess { profile ->
-                userAvatarUrl = profile.images.avatar.full.takeIf { it.isNotBlank() }
+            if (isDoubanMode) {
+                // 豆瓣模式：avatarUrl 由 doubanProfile StateFlow 实时驱动（在 NavTabItem 中读取），
+                // 此处置空避免 trakt 头像残留
+                userAvatarUrl = null
+            } else {
+                // trakt 模式：从 TraktRepository 获取头像
+                val traktRepository = EntryPointAccessors.fromApplication(
+                    context.applicationContext, TraktRepositoryEntryPoint::class.java
+                ).traktRepository()
+                traktRepository.getUserProfile().onSuccess { profile ->
+                    userAvatarUrl = profile.images.avatar.full.takeIf { it.isNotBlank() }
+                }
             }
         } else {
             userAvatarUrl = null
@@ -494,8 +521,12 @@ fun MainScreen(
                 ) {
                     tabs.forEachIndexed { index, tab ->
                         val isSelected = selectedTab == index
-                        // "我的"tab(index=2)登录后显示用户头像
-                        val avatarUrl = if (index == 2 && isLoggedIn) userAvatarUrl else null
+                        // "我的"tab(index=2)登录后显示用户头像：
+                        // - 豆瓣模式：doubanProfile.avatarUrl（StateFlow 实时）
+                        // - trakt 模式：userAvatarUrl（TraktRepository 缓存）
+                        val avatarUrl = if (index == 2 && isLoggedIn) {
+                            if (isDoubanMode) doubanProfile?.avatarUrl else userAvatarUrl
+                        } else null
                         NavTabItem(
                             icon = tab.icon,
                             labelRes = tab.labelRes,

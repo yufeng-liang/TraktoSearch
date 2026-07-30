@@ -133,6 +133,7 @@
     <string name="login_retry">再試行</string>
     <string name="login_guest">ゲストとして続行</string>
     <string name="login_douban_import">または豆瓣からインポート</string>
+    <string name="login_douban">豆瓣でログイン</string>
     <string name="douban_import_require_trakt_title">Trakt ログインが必要です</string>
     <string name="douban_import_require_trakt_desc">豆瓣マークのインポートには Trakt ログインが必要です。マークは Trakt のウォッチリスト/視聴済みリストに同期されます。Trakt にログインしますか?</string>
     <string name="douban_import_require_trakt_login">Trakt にログイン</string>

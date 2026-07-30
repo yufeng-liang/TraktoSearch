@@ -78,6 +78,11 @@ import kotlinx.coroutines.launch
 fun ActivationLoginScreen(
     onLoginSuccess: () -> Unit = {},
     onGuestMode: () -> Unit = {},
+    /**
+     * 豆瓣登录入口回调：跳转到 DoubanLoginScreen。
+     * 登录成功后由 AppNavigation 直接进入 MainScreen（豆瓣独立模式）。
+     */
+    onDoubanLogin: () -> Unit = {},
     redirectToBrowser: Boolean = false,
     expired: Boolean = false,
     modifier: Modifier = Modifier,
@@ -254,6 +259,18 @@ fun ActivationLoginScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(stringResource(R.string.login_guest)) }
+
+                // 豆瓣登录入口：与 Trakt 登录按钮协调的次级 TextButton，
+                // 用于进入豆瓣独立模式（不连 trakt 也能用 watchlist 等核心功能）
+                TextButton(
+                    onClick = onDoubanLogin,
+                    enabled = canUseActions && loginState != LoginState.AUTHORIZING && loginState != LoginState.CONNECTING,
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = if (isDarkTheme) Color(0xFF6B4632) else MaterialTheme.colorScheme.primary,
+                        disabledContentColor = loginTextColor.copy(alpha = 0.38f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.login_douban)) }
                 Spacer(modifier = Modifier.height(20.dp))
             }
         }

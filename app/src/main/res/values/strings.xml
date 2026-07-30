@@ -225,6 +225,7 @@
     <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
+    <string name="login_douban">Login with Douban</string>
     <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
     <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
     <string name="login_activation_choose_path">Activated · choose to sign in with Trakt or continue as a guest</string>

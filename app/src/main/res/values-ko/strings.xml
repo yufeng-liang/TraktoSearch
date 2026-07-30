@@ -133,6 +133,7 @@
     <string name="login_retry">재시도</string>
     <string name="login_guest">게스트로 계속</string>
     <string name="login_douban_import">또는 더우반에서 가져오기</string>
+    <string name="login_douban">더우반 로그인</string>
     <string name="douban_import_require_trakt_title">Trakt 로그인 필요</string>
     <string name="douban_import_require_trakt_desc">더우반 마크 가져오기에는 Trakt 로그인이 필요합니다. 마크는 Trakt 관심목록/시청 목록에 동기화됩니다. Trakt에 로그인하시겠습니까?</string>
     <string name="douban_import_require_trakt_login">Trakt 로그인</string>
