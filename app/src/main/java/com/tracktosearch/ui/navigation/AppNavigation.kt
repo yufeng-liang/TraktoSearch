@@ -419,13 +419,11 @@ fun AppNavigation(
                                 navController.navigate(Routes.listDetailRoute(listId, listName))
                             },
                             onLogout = {
-                                // 这里是 Trakt 退出，不应清除网关激活令牌。
+                                // Trakt 退出登录：只清除 Trakt 连接状态，不清除网关激活令牌，
+                                // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
                                 isTraktLoggedIn = false
                                 scope.launch { authStateHolder.disconnectTrakt() }
-                                currentStartDest = Routes.LOGIN
-                                navController.navigate(Routes.LOGIN) {
-                                    popUpTo(0) { inclusive = true }
-                                }
+                                // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
                             },
                             onHelpClick = {
                                 navController.navigate(Routes.HELP)
