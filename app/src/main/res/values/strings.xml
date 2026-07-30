@@ -258,6 +258,7 @@
     <string name="douban_sync_background">Background</string>
     <string name="douban_sync_relogin">Re-login</string>
     <string name="douban_sync_login_trakt">Login Trakt</string>
+    <string name="douban_sync_login_douban">Login Douban</string>
     <string name="douban_sync_cookie_expired_banner">Douban login expired, tap to re-login</string>
     <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -827,6 +828,8 @@ Config:
     <string name="consistency_check_background">Background</string>
     <string name="consistency_check_cancelling">Cancelling...</string>
     <string name="consistency_check_cancel">Cancel</string>
+    <string name="consistency_check_phase_preparing">Preparing check...</string>
+    <string name="consistency_check_channel_desc">Status consistency check progress</string>
     <string name="consistency_check_complete_banner">Check complete</string>
     <string name="douban_batch_removal_title">Remove Douban marks</string>
     <string name="douban_batch_removal_cancel">Cancel</string>
@@ -853,6 +856,7 @@ Config:
     <string name="consistency_check_not_logged_in">Douban not logged in</string>
     <string name="consistency_check_cookie_expired">Douban login expired</string>
     <string name="consistency_check_cookie_expired_prompt">Douban login expired, please log in again</string>
+    <string name="consistency_check_not_logged_in_prompt">Not logged in to Douban, please log in first</string>
     <string name="delay_type_douban_detail_crawl">Douban detail page delay</string>
     <string name="delay_type_douban_list_crawl">Douban list page delay</string>
     <string name="delay_type_douban_retry">Douban retry delay</string>
@@ -877,6 +881,7 @@ Config:
     <string name="cloud_failures_download">Download</string>
     <string name="cloud_failures_dismiss">Not now</string>
     <string name="cloud_failures_downloaded">Cloud failures downloaded and merged</string>
+    <string name="cloud_failures_downloaded_with_count">Downloaded and merged %1$d cloud failure items, replacing local data</string>
 
     <!-- Manual cloud sync (settings page) -->
     <string name="settings_douban_upload_cloud">Upload failures</string>

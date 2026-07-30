@@ -237,6 +237,8 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(forceOverwrite: Boolean = false): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 清除上一次取消遗留的 isCancelling 标志,避免新同步被误判为正在取消
+        _progress.value = _progress.value.copy(isCancelling = false)
         dirtyDetailIds.clear()
         // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
         acquireWakeLock()
@@ -265,6 +267,8 @@ class DoubanSyncManager @Inject constructor(
     fun startSync(mode: SyncMode, forceCrawl: Boolean = false): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 清除上一次取消遗留的 isCancelling 标志,避免新同步被误判为正在取消
+        _progress.value = _progress.value.copy(isCancelling = false)
         dirtyDetailIds.clear()
         // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
         acquireWakeLock()
@@ -298,6 +302,8 @@ class DoubanSyncManager @Inject constructor(
     fun startResume(): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 清除上一次取消遗留的 isCancelling 标志,避免新同步被误判为正在取消
+        _progress.value = _progress.value.copy(isCancelling = false)
         dirtyDetailIds.clear()
         // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
         acquireWakeLock()
@@ -328,6 +334,13 @@ class DoubanSyncManager @Inject constructor(
      */
     suspend fun getPendingItemsCount(): Int {
         return doubanSyncPendingItemDao.count()
+    }
+
+    /**
+     * 查询已同步条目数量(用于「重新同步豆瓣」模式选择对话框展示"已同步 N 项")。
+     */
+    suspend fun getSyncedCount(): Int {
+        return doubanSyncedItemDao.count()
     }
 
     /**
@@ -435,6 +448,8 @@ class DoubanSyncManager @Inject constructor(
     ): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 清除上一次取消遗留的 isCancelling 标志,避免新同步被误判为正在取消
+        _progress.value = _progress.value.copy(isCancelling = false)
         dirtyDetailIds.clear()
         // 同步入口立即 acquire WakeLock,覆盖整个同步生命周期(爬取→写入→一致性检查→云端上传)
         acquireWakeLock()
@@ -474,7 +489,12 @@ class DoubanSyncManager @Inject constructor(
         // forceOverwrite=true（完整重写）时跳过拉取，因为要重新处理全部条目
         if (!forceOverwrite) {
             _progress.value = _progress.value.copy(phase = "拉取云端同步数据")
-            pullFromCloudBeforeSync()
+            val pullResult = pullFromCloudBeforeSync()
+            if (pullResult.hasAnyData) {
+                _progress.value = _progress.value.copy(
+                    subPhase = "已拉取云端 ${pullResult.syncedItems} 条同步数据"
+                )
+            }
         }
 
         // 加载 Trakt 已有标记缓存（用于冲突检测）
@@ -625,6 +645,8 @@ class DoubanSyncManager @Inject constructor(
             isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
+        // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
+        if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
         uploadToCloudAfterSync(mode = "LEGACY", isFullComplete = !cancelled)
     }
@@ -645,7 +667,12 @@ class DoubanSyncManager @Inject constructor(
 
         // 跨设备云端同步：拉取 A 手机已同步的数据和进度（B 手机增量同步场景）
         _progress.value = _progress.value.copy(phase = "拉取云端同步数据")
-        pullFromCloudBeforeSync()
+        val pullResult = pullFromCloudBeforeSync()
+        if (pullResult.hasAnyData) {
+            _progress.value = _progress.value.copy(
+                subPhase = "已拉取云端 ${pullResult.syncedItems} 条同步数据"
+            )
+        }
 
         traktRepository.loadWatchlistWatchedIds()
         val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
@@ -820,6 +847,8 @@ class DoubanSyncManager @Inject constructor(
             isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
+        // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
+        if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
         val mode = "INCREMENTAL_WITH_CHANGES"
         uploadToCloudAfterSync(mode = mode, isFullComplete = !cancelled)
@@ -1101,6 +1130,8 @@ class DoubanSyncManager @Inject constructor(
             isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
+        // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
+        if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
         uploadToCloudAfterSync(mode = "RESUME", isFullComplete = !cancelled)
     }
@@ -1232,6 +1263,8 @@ class DoubanSyncManager @Inject constructor(
             isCancelling = _progress.value.isCancelling
         )
         _progress.value = finalProgress
+        // 取消场景下由 cancel() 方法统一执行 uploadAll(lastSyncMode="CANCELLED"),此处跳过避免双重上传
+        if (cancelled) return
         // 同步完成后:上传个人数据到云端（跨设备同步，失败不阻塞）
         // 重试不算完整同步（仅处理失败项），不更新 lastFullSyncAt，不上传 id_mappings
         uploadToCloudAfterSync(mode = "RETRY", isFullComplete = false)

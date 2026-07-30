@@ -1,7 +1,7 @@
 package com.tracktosearch.data.repository
 
 import android.util.Log
-import com.tracktosearch.data.local.CloudFailurePullMetaStorage
+import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.remote.cloud.AesCrypto
@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * 豆瓣失败项云端同步管理器。
  *
  * - 上传:同步完成后调用,把本地失败项加密后上传到 Gitee 仓库
- *   `failures/{SHA256(doubanUserId)前16位}.json`
+ *   `failures/{SHA256(doubanUserId)前16字节(32个十六进制字符)}.json`
  * - 下载:豆瓣登录后调用,检测云端是否有该用户的失败数据,
  *   有则返回数量供 UI 弹窗提示,用户同意后下载并合并到本地 Room
  *
@@ -35,7 +35,7 @@ class CloudFailureSyncManager @Inject constructor(
     private val giteeContentsApi: GiteeContentsApi,
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
     private val doubanAuthStorage: DoubanAuthStorage,
-    private val cloudFailurePullMetaStorage: CloudFailurePullMetaStorage,
+    private val cloudFailureSyncMetaStorage: CloudFailureSyncMetaStorage,
     private val json: Json
 ) {
 
@@ -122,9 +122,11 @@ class CloudFailureSyncManager @Inject constructor(
             return@withContext UploadResult.Failed
         }
         val path = buildPath(creds.userId)
-        val entities = doubanSyncFailureDao.getAll()
 
         try {
+            // dao.getAll() 必须在 try 块内,异常时由下方 catch 捕获并返回 Failed,
+            // 避免 ViewModel 的 _cloudSyncLoading 因未捕获异常而永远停留在 true
+            val entities = doubanSyncFailureDao.getAll()
             if (entities.isEmpty()) {
                 // 本地无失败项,不主动删除云端(保留云端历史,避免误删)
                 Log.d(TAG, "本地无失败项,跳过上传")
@@ -219,7 +221,7 @@ class CloudFailureSyncManager @Inject constructor(
             }
             if (putResp.isSuccessful) {
                 // 记录本次上传的云端版本,避免后续下载时因云端时间戳更新而提示覆盖
-                cloudFailurePullMetaStorage.recordPulledUploadedAt(payload.uploadedAt)
+                cloudFailureSyncMetaStorage.recordSyncedUploadedAt(payload.uploadedAt)
                 Log.d(TAG, "上传成功: ${entities.size} 条失败项 → $path (${if (existingSha != null) "PUT 更新" else "POST 新建"}, uploadedAt=${payload.uploadedAt})")
                 UploadResult.Uploaded
             } else {
@@ -301,12 +303,12 @@ class CloudFailureSyncManager @Inject constructor(
             if (payload.failures.isEmpty()) return@withContext DownloadResult.CloudEmpty
 
             // 时间戳比较:云端 uploadedAt vs 本地最新 max(entity failedAt/updatedAt, 上次拉取的云端 uploadedAt)
-            // 加入 lastPulledUploadedAt 是为了识别"已拉取过该云端版本",避免覆盖后再次拉取仍判定云端较新
+            // 加入 lastSyncedUploadedAt 是为了识别"已同步过该云端版本",避免覆盖后再次拉取仍判定云端较新
             // （云端 uploadedAt 是上传时刻,总是晚于失败条目本身的 failedAt/updatedAt）
             val localEntities = doubanSyncFailureDao.getAll()
             val entityNewest = localEntities.maxOfOrNull { maxOf(it.failedAt, it.updatedAt) } ?: 0L
-            val lastPulled = cloudFailurePullMetaStorage.getLastPulledUploadedAt()
-            val localNewest = maxOf(entityNewest, lastPulled)
+            val lastSynced = cloudFailureSyncMetaStorage.getLastSyncedUploadedAt()
+            val localNewest = maxOf(entityNewest, lastSynced)
 
             if (localNewest > 0L && payload.uploadedAt <= localNewest) {
                 // 本地有数据且本地更新或相等 → 忽略云端,以本地显示为准
@@ -348,7 +350,7 @@ class CloudFailureSyncManager @Inject constructor(
 
             doubanSyncFailureDao.replaceAll(entities)
             // 记录本次拉取覆盖的云端版本,避免下次拉取仍判定云端较新
-            cloudFailurePullMetaStorage.recordPulledUploadedAt(payload.uploadedAt)
+            cloudFailureSyncMetaStorage.recordSyncedUploadedAt(payload.uploadedAt)
             Log.d(TAG, "云端数据替换本地成功: ${entities.size} 条 (cloudUploadedAt=${payload.uploadedAt}, localNewest=$localNewest)")
             DownloadResult.Success(count = entities.size, cloudTime = payload.uploadedAt, localTime = localNewest)
         } catch (e: Exception) {
@@ -369,7 +371,7 @@ class CloudFailureSyncManager @Inject constructor(
     ): Int =
         withContext(Dispatchers.IO) {
             doubanSyncFailureDao.replaceAll(entities)
-            cloudFailurePullMetaStorage.recordPulledUploadedAt(cloudUploadedAt)
+            cloudFailureSyncMetaStorage.recordSyncedUploadedAt(cloudUploadedAt)
             entities.size
         }
 }

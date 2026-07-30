@@ -1180,7 +1180,7 @@ fun WatchlistScreen(
                                                 val ids = selectedItems.keys.toList()
                                                 val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
                                                 tabScope.launch {
-                                                    if (selectedMode == 0) {
+                                                    val hasFailure = if (selectedMode == 0) {
                                                         viewModel.batchRemoveFromWatchlist(ids, type)
                                                     } else {
                                                         viewModel.batchRemoveFromHistory(ids, type)
@@ -1192,6 +1192,14 @@ fun WatchlistScreen(
                                                     // 等待批量操作完成后才关闭多选栏，避免提前关闭导致用户以为已处理但实际仍在进行
                                                     isMultiSelectMode = false
                                                     isRemoving = false
+                                                    // 部分条目移除失败时提示用户（成功的项已更新 UI 并启动豆瓣移除）
+                                                    if (hasFailure) {
+                                                        Toast.makeText(
+                                                            context,
+                                                            context.getString(R.string.watchlist_batch_remove_partial_failed),
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+                                                    }
                                                 }
                                             },
                                             enabled = !isRemoving,

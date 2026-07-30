@@ -268,24 +268,26 @@ class WatchlistViewModel @Inject constructor(
             }
         }
         // 监听状态一致性检查进度：isRunning 时显示横幅，完成时自动弹出结果弹窗（常驻，用户手动关）
-        var checkCompleteHandled = false
+        // CC-L05: checkCompleteHandled 移到 Checker 内部，避免 ViewModel 重建后丢失导致重复弹窗
+        // CC-F01: progress 被重置为默认值时清除横幅，修复设置页关闭弹窗后 Watchlist 页横幅不消失
         viewModelScope.launch {
             statusConsistencyChecker.checkProgress.collect { progress: ConsistencyCheckResult ->
                 if (progress.isRunning || progress.isComplete) {
                     _uiState.update { it.copy(consistencyCheckProgress = progress) }
-                    if (progress.isRunning) {
-                        // 新检查开始，允许本次完成再次自动弹窗
-                        checkCompleteHandled = false
-                    }
                     if (progress.isComplete) {
                         // 取消时不自动弹窗（用户已在设置页的 ConsistencyCheckDialog 看到取消结果）
-                        if (!progress.isCancelled && !checkCompleteHandled) {
+                        // 通过 Checker 内的 checkCompleteHandled 标志确保 ViewModel 重建后不重复弹窗：
+                        // 首次消费返回 true 触发弹窗,之后返回 false 直到下次检查完成
+                        if (!progress.isCancelled && statusConsistencyChecker.consumeCheckCompleteEvent()) {
                             _consistencyCheckCompleteEvent.emit(Unit)
-                            checkCompleteHandled = true
                         }
                         // 不重置 checkProgress、不自动关闭：结果弹窗常驻，用户手动关闭；
                         // 横幅保留完成态，可随时点开回看结果
                     }
+                } else {
+                    // progress 被重置为默认值（isRunning=false, isComplete=false），
+                    // 主动清除横幅避免常驻显示
+                    _uiState.update { it.copy(consistencyCheckProgress = null) }
                 }
             }
         }
@@ -674,27 +676,31 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    /** 从想看列表批量移除（suspend，调用方等待完成后关闭多选栏） */
-    suspend fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
+    /** 从想看列表批量移除（suspend，调用方等待完成后关闭多选栏）。
+     *  部分成功时仍会更新 UI（移除已成功项）并启动豆瓣批量移除。
+     *  @return true=有部分条目移除失败；false=全部成功 */
+    suspend fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType): Boolean {
         val isMovie = type == MediaType.MOVIE
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeFromWatchlist(id, type) }
             }.awaitAll()
         }
-        val allSuccess = results.all { it.isSuccess }
-        if (allSuccess) {
+        val successCount = results.count { it.isSuccess }
+        val failedCount = results.size - successCount
+        if (successCount > 0) {
+            // 仅对成功的 id 执行 UI 更新和豆瓣批量移除，避免部分失败时 UI 与服务端不一致
+            val successIds = traktIds.filterIndexed { i, _ -> results[i].isSuccess }.toSet()
             // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
-                _uiState.value.movies.filter { it.traktId in traktIds }
+                _uiState.value.movies.filter { it.traktId in successIds }
             } else {
-                _uiState.value.shows.filter { it.traktId in traktIds }
+                _uiState.value.shows.filter { it.traktId in successIds }
             }
-            // 全部成功才更新 UI，避免部分失败时 UI 与服务端不一致
             _uiState.value = if (isMovie) {
-                _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in traktIds })
+                _uiState.value.copy(movies = _uiState.value.movies.filter { it.traktId !in successIds })
             } else {
-                _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in traktIds })
+                _uiState.value.copy(shows = _uiState.value.shows.filter { it.traktId !in successIds })
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
@@ -702,28 +708,34 @@ class WatchlistViewModel @Inject constructor(
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
+        return failedCount > 0
     }
 
-    /** 从已看历史批量移除（suspend，调用方等待完成后关闭多选栏） */
-    suspend fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType) {
+    /** 从已看历史批量移除（suspend，调用方等待完成后关闭多选栏）。
+     *  部分成功时仍会更新 UI（移除已成功项）并启动豆瓣批量移除。
+     *  @return true=有部分条目移除失败；false=全部成功 */
+    suspend fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType): Boolean {
         val isMovie = type == MediaType.MOVIE
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeWatched(id, type) }
             }.awaitAll()
         }
-        val allSuccess = results.all { it.isSuccess }
-        if (allSuccess) {
+        val successCount = results.count { it.isSuccess }
+        val failedCount = results.size - successCount
+        if (successCount > 0) {
+            // 仅对成功的 id 执行 UI 更新和豆瓣批量移除，避免部分失败时 UI 与服务端不一致
+            val successIds = traktIds.filterIndexed { i, _ -> results[i].isSuccess }.toSet()
             // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
-                _uiState.value.historyMovies.filter { it.traktId in traktIds }
+                _uiState.value.historyMovies.filter { it.traktId in successIds }
             } else {
-                _uiState.value.historyShows.filter { it.traktId in traktIds }
+                _uiState.value.historyShows.filter { it.traktId in successIds }
             }
             _uiState.value = if (isMovie) {
-                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in traktIds })
+                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.traktId !in successIds })
             } else {
-                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in traktIds })
+                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.traktId !in successIds })
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
@@ -731,6 +743,7 @@ class WatchlistViewModel @Inject constructor(
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
+        return failedCount > 0
     }
 }
 

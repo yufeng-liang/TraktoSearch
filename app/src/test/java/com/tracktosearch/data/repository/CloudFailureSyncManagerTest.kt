@@ -56,14 +56,14 @@ class CloudFailureSyncManagerTest {
     private val giteeApi = mockk<GiteeContentsApi>(relaxed = true)
     private val doubanSyncFailureDao = mockk<DoubanSyncFailureDao>(relaxed = true)
     private val doubanAuthStorage = mockk<DoubanAuthStorage>(relaxed = true)
-    private val cloudFailurePullMetaStorage = mockk<com.tracktosearch.data.local.CloudFailurePullMetaStorage>(relaxed = true)
+    private val cloudFailureSyncMetaStorage = mockk<com.tracktosearch.data.local.CloudFailureSyncMetaStorage>(relaxed = true)
     private val json = Json { ignoreUnknownKeys = true }
-    private val manager = CloudFailureSyncManager(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailurePullMetaStorage, json)
+    private val manager = CloudFailureSyncManager(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailureSyncMetaStorage, json)
 
     @Before
     fun setUp() {
         // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
-        clearMocks(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailurePullMetaStorage)
+        clearMocks(giteeApi, doubanSyncFailureDao, doubanAuthStorage, cloudFailureSyncMetaStorage)
     }
 
     // ============================================================
@@ -381,7 +381,7 @@ class CloudFailureSyncManagerTest {
         manager.uploadIfHasFailures()
 
         // 验证上传成功后记录了云端版本时间戳
-        coVerify { cloudFailurePullMetaStorage.recordPulledUploadedAt(any()) }
+        coVerify { cloudFailureSyncMetaStorage.recordSyncedUploadedAt(any()) }
     }
 
     // ============================================================

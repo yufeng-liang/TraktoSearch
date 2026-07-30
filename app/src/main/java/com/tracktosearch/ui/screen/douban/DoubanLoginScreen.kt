@@ -108,6 +108,10 @@ class DoubanLoginViewModel @Inject constructor(
         }
     }
 
+    /** 下载结果一次性事件(成功时携带数量,供 UI 显示带数量的 Snackbar) */
+    private val _cloudDownloadResult = MutableStateFlow<Int?>(null)
+    val cloudDownloadResult: StateFlow<Int?> = _cloudDownloadResult
+
     /** 用户确认后下载云端失败数据并合并到本地 */
     fun downloadCloudFailures() {
         viewModelScope.launch {
@@ -115,9 +119,16 @@ class DoubanLoginViewModel @Inject constructor(
             // 云端更新且替换成功 → 刷新失败项统计,让设置页/Watchlist 页显示最新数量
             if (result is com.tracktosearch.data.repository.DownloadResult.Success) {
                 doubanRetryManager.refreshRetryState()
+                // 暴露下载数量给 UI,触发带数量的 Snackbar 提示
+                _cloudDownloadResult.value = result.count
             }
             _cloudFailureCount.value = null
         }
+    }
+
+    /** UI 显示完 Snackbar 后清除事件 */
+    fun consumeCloudDownloadResult() {
+        _cloudDownloadResult.value = null
     }
 
     /** 用户忽略云端数据 */
@@ -142,7 +153,7 @@ fun DoubanLoginScreen(
     viewModel: DoubanLoginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val cloudDownloadedMsg = stringResource(R.string.cloud_failures_downloaded)
+    val cloudDownloadedWithCountMsg = stringResource(R.string.cloud_failures_downloaded_with_count)
     val isLoggedIn by viewModel.doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
     val loginSuccess by viewModel.loginSuccess.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
@@ -150,6 +161,8 @@ fun DoubanLoginScreen(
     // Snackbar 状态：登录成功时显示提示
     val snackbarHostState = remember { SnackbarHostState() }
     val successMessage = stringResource(R.string.douban_login_success_snackbar)
+    // WebView 主框架加载失败时的兜底文案(预解析,避免在 WebViewClient 回调内硬编码中文)
+    val loadFailedText = stringResource(R.string.douban_login_load_failed)
 
     // 通知权限请求 launcher
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -194,12 +207,6 @@ fun DoubanLoginScreen(
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.downloadCloudFailures()
-                        scope.launch {
-                            snackbarHostState.showSnackbar(
-                                message = cloudDownloadedMsg,
-                                duration = androidx.compose.material3.SnackbarDuration.Short
-                            )
-                        }
                     }) {
                         Text(stringResource(R.string.cloud_failures_download))
                     }
@@ -211,6 +218,17 @@ fun DoubanLoginScreen(
                 }
         )
         }
+    }
+
+    // 监听云端下载结果:成功时显示带数量的 Snackbar,提示本地数据已被替换
+    val cloudDownloadResult by viewModel.cloudDownloadResult.collectAsStateWithLifecycle()
+    LaunchedEffect(cloudDownloadResult) {
+        val count = cloudDownloadResult ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            message = cloudDownloadedWithCountMsg.format(count),
+            duration = androidx.compose.material3.SnackbarDuration.Short
+        )
+        viewModel.consumeCloudDownloadResult()
     }
 
     // WebView 加载状态：null=空闲，"loading"=加载中，其他字符串=错误信息
@@ -348,7 +366,7 @@ fun DoubanLoginScreen(
                                     super.onReceivedError(view, request, error)
                                     // 主框架加载失败时显示错误信息
                                     if (request?.isForMainFrame == true) {
-                                        loadState = error?.description?.toString() ?: "加载失败"
+                                        loadState = error?.description?.toString() ?: loadFailedText
                                     }
                                 }
                             }

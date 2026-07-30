@@ -117,6 +117,8 @@ fun DoubanSyncDialog(
     val scope = rememberCoroutineScope()
     val progress by viewModel.progress.collectAsStateWithLifecycle()
     val p = progress
+    // 分享失败项 JSON 时 createChooser 的标题(预解析,避免在 lambda 内调用 stringResource)
+    val failedExportChooserTitle = stringResource(R.string.douban_sync_failed_export_chooser_title)
 
     // 延时倒计时(豆瓣反爬/列表页/重试等待):基于 delayInfo.startMs + totalSeconds 每秒刷新剩余秒数
     var delayRemainingSeconds by remember { mutableIntStateOf(0) }
@@ -262,7 +264,7 @@ fun DoubanSyncDialog(
                                                 putExtra(Intent.EXTRA_STREAM, uri)
                                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                             }
-                                            context.startActivity(Intent.createChooser(shareIntent, "分享失败项 JSON"))
+                                            context.startActivity(Intent.createChooser(shareIntent, failedExportChooserTitle))
                                             exportResult = true
                                             exportedCount = p.failedItems.size
                                         } else {
@@ -401,6 +403,21 @@ fun DoubanSyncDialog(
                                 onDismiss()
                                 onTraktLogin()
                             }) { Text(stringResource(R.string.douban_sync_login_trakt)) }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
+                    }
+                }
+                // 豆瓣未登录(DoubanSyncManager 预检设置 phase="未登录豆瓣")
+                // 与 cookieExpired 分开:cookieExpired 是登录后过期,这里是从未登录
+                // 两者都跳转豆瓣登录页,但按钮文案不同(登录 vs 重新登录)
+                p.isComplete && p.phase.contains("未登录豆瓣") && !p.cookieExpired -> {
+                    Row {
+                        if (onRelogin != null) {
+                            TextButton(onClick = {
+                                onDismiss()
+                                onRelogin()
+                            }) { Text(stringResource(R.string.douban_sync_login_douban)) }
                             Spacer(modifier = Modifier.width(8.dp))
                         }
                         TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }

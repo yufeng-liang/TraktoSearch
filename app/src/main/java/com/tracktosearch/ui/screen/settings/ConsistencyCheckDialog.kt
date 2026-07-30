@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.service.ConsistencyCheckService
 import kotlinx.coroutines.delay
 
@@ -133,19 +134,33 @@ fun ConsistencyCheckDialog(
 
                 // 延时倒计时
                 if (p.isRunning && p.delayInfo != null && delayRemainingSeconds > 0) {
+                    // CC-L03: 用本地化字符串映射 DelayType,替代直接显示英文 displayKey
+                    val info = p.delayInfo
+                    val delayTypeText = when (info.type) {
+                        DelayType.DOUBAN_DETAIL_CRAWL -> stringResource(R.string.delay_type_douban_detail_crawl)
+                        DelayType.DOUBAN_LIST_CRAWL -> stringResource(R.string.delay_type_douban_list_crawl)
+                        DelayType.DOUBAN_RETRY -> stringResource(R.string.delay_type_douban_retry)
+                    }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "${p.delayInfo.type.displayKey} ${delayRemainingSeconds}s",
+                        text = "$delayTypeText ${delayRemainingSeconds}s",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )
                 }
 
-                // Cookie 过期提示
+                // Cookie 过期提示(登录后过期)或未登录豆瓣提示
                 if (p.cookieExpired) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "豆瓣登录已过期，请重新登录",
+                        text = stringResource(R.string.consistency_check_cookie_expired_prompt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                } else if (p.neverLoggedInDouban) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.consistency_check_not_logged_in_prompt),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )

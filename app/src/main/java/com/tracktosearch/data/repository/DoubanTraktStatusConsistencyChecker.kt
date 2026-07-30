@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import android.content.Context
 import android.os.PowerManager
 import android.util.Log
+import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
@@ -18,6 +19,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,8 +28,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.net.ssl.SSLException
 
 /**
  * 豆瓣与 Trakt 状态统一检查结果（兼进度数据类）
@@ -47,6 +53,8 @@ data class ConsistencyCheckResult(
     val errors: Int = 0,
     val delayInfo: DelayInfo? = null,  // 豆瓣反爬延迟信息
     val cookieExpired: Boolean = false,
+    /** 从未登录豆瓣(区分 cookieExpired:cookieExpired 是登录后过期,本字段是从未登录) */
+    val neverLoggedInDouban: Boolean = false,
     val isComplete: Boolean = false,
     val startTimeMs: Long = 0,
     val isCancelling: Boolean = false,  // true=用户已点击取消,正在停止中的中间态
@@ -100,6 +108,18 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     @Volatile
     private var cancelled = false
 
+    /**
+     * 检查完成事件是否已被消费（避免 ViewModel 重建后重复触发完成弹窗）。
+     *
+     * - 检查正常完成时设为 true
+     * - 新检查开始 / resetProgress() 时重置为 false
+     * - WatchlistViewModel 通过 [consumeCheckCompleteEvent] 消费一次后变回 false
+     *
+     * 注意：放在 Singleton 内而非 ViewModel 局部 var，确保 ViewModel 重建后状态不丢失。
+     */
+    @Volatile
+    private var checkCompleteHandled = false
+
     /** WakeLock:手动检查期间保持 CPU 唤醒,避免息屏后网络请求 timeout */
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -122,7 +142,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         // 同步更新 isCancelling 中间态:UI 立即禁用取消按钮 + 显示"正在取消..." 文案
         _checkProgress.value = _checkProgress.value.copy(
             isCancelling = true,
-            phase = "正在取消...",
+            phase = context.getString(R.string.consistency_check_phase_cancelling),
             subPhase = "",
             delayInfo = null
         )
@@ -131,7 +151,29 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     /** 重置进度状态（完成后调用，避免 StateFlow 旧值 isComplete=true 导致重复弹窗） */
     fun resetProgress() {
         if (isRunning()) return  // 运行中不重置
+        // 同步重置完成事件标志，允许下次检查完成时再次触发弹窗
+        checkCompleteHandled = false
         _checkProgress.value = ConsistencyCheckResult()
+    }
+
+    /**
+     * 消费一次"检查完成"事件。
+     *
+     * 用于替代 WatchlistViewModel 中的局部 var checkCompleteHandled，确保 ViewModel 重建后
+     * 状态不丢失：第一次调用返回 true（触发完成弹窗），之后调用返回 false，直到下次检查
+     * 完成或 resetProgress() 重置。
+     *
+     * 注意：取消（isCancelled=true）完成不设置该标志，因此不会触发弹窗。
+     *
+     * @return true 表示有待消费的完成事件（应触发弹窗），false 表示无
+     */
+    fun consumeCheckCompleteEvent(): Boolean {
+        return if (checkCompleteHandled) {
+            checkCompleteHandled = false
+            true
+        } else {
+            false
+        }
     }
 
     /**
@@ -143,46 +185,64 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
      * @return 检查结果
      */
     suspend fun checkAndUnify(): ConsistencyCheckResult = withContext(Dispatchers.IO) {
-        val allItems = runCatching { doubanSyncedItemDao.getAllSyncedItems() }.getOrDefault(emptyList())
-        if (allItems.isEmpty()) {
-            return@withContext ConsistencyCheckResult(isComplete = true)
+        // 同步后自动检查也占用 checkJob,防止与手动检查(checkAndUnifyWithCrawl)并发读写 DAO
+        // 注意:此处不调用 acquireWakeLock(同步流程已有自己的 WakeLock),不更新 checkProgress(静默执行)
+        if (isRunning()) {
+            return@withContext ConsistencyCheckResult(
+                isComplete = true,
+                errors = 1,
+                phase = "已有检查正在运行"
+            )
         }
+        checkJob = coroutineContext[Job]
+        try {
+            val allItems = runCatching { doubanSyncedItemDao.getAllSyncedItems() }.getOrDefault(emptyList())
+            if (allItems.isEmpty()) {
+                return@withContext ConsistencyCheckResult(isComplete = true)
+            }
 
-        // 确保 Trakt 侧 watchlistWatchedIds 已加载
-        runCatching { traktRepository.loadWatchlistWatchedIds() }
-        val watchedIds = traktRepository.getWatchlistWatchedIds()
+            // 确保 Trakt 侧 watchlistWatchedIds 已加载
+            runCatching { traktRepository.loadWatchlistWatchedIds() }
+            val watchedIds = traktRepository.getWatchlistWatchedIds()
 
-        val classifyResult = classifyConflicts(allItems, watchedIds)
-        val traktNeedWatched = classifyResult.traktNeedWatched
-        val traktNeedWatchlist = classifyResult.traktNeedWatchlist
-        val doubanNeedUpdate = classifyResult.doubanNeedUpdate
-        val conflicts = classifyResult.conflicts
-        val skipped = classifyResult.skipped
+            val classifyResult = classifyConflicts(allItems, watchedIds)
+            val traktNeedWatched = classifyResult.traktNeedWatched
+            val traktNeedWatchlist = classifyResult.traktNeedWatchlist
+            val doubanNeedUpdate = classifyResult.doubanNeedUpdate
+            val conflicts = classifyResult.conflicts
+            val skipped = classifyResult.skipped
 
-        // 1. 批量更新 Trakt 侧
-        var traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
+            // 1. 批量更新 Trakt 侧
+            var traktUpdated = batchUpdateTrakt(traktNeedWatched, traktNeedWatchlist)
 
-        // 1b. 全量清理 Trakt 侧想看+已看双状态冲突（覆盖非豆瓣来源的纯 Trakt 数据）
-        //     取最新缓存快照（batchUpdateTrakt 已同步更新缓存），避免与豆瓣表内冲突重复计数
-        val traktConflictRemoved = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
-        traktUpdated += traktConflictRemoved
+            // 1b. 全量清理 Trakt 侧想看+已看双状态冲突（覆盖非豆瓣来源的纯 Trakt 数据）
+            //     取最新缓存快照（batchUpdateTrakt 已同步更新缓存），避免与豆瓣表内冲突重复计数
+            val traktConflictRemoved = resolveTraktWatchlistWatchedConflicts(traktRepository.getWatchlistWatchedIds())
+            traktUpdated += traktConflictRemoved
 
-        // 2. 逐条更新豆瓣侧
-        val (doubanUpdated, errors) = batchUpdateDouban(doubanNeedUpdate)
+            // 2. 逐条更新豆瓣侧
+            val (doubanUpdated, errors) = batchUpdateDouban(doubanNeedUpdate)
 
-        val result = ConsistencyCheckResult(
-            totalChecked = allItems.size,
-            conflictsFound = conflicts + traktConflictRemoved,
-            doubanUpdated = doubanUpdated,
-            traktUpdated = traktUpdated,
-            skipped = skipped,
-            errors = errors,
-            isComplete = true
-        )
-        // 记录检查完成时间（供设置页二次确认弹窗显示）
-        runCatching { lastConsistencyCheckStorage.recordCheck() }
-        Log.i(TAG, "状态一致性检查完成（本地表对比）: $result")
-        result
+            val result = ConsistencyCheckResult(
+                totalChecked = allItems.size,
+                conflictsFound = conflicts + traktConflictRemoved,
+                doubanUpdated = doubanUpdated,
+                traktUpdated = traktUpdated,
+                skipped = skipped,
+                errors = errors,
+                isComplete = true
+            )
+            // 记录检查完成时间（供设置页二次确认弹窗显示）
+            runCatching { lastConsistencyCheckStorage.recordCheck() }
+            Log.i(TAG, "状态一致性检查完成（本地表对比）: $result")
+            result
+        } finally {
+            // 释放 checkJob,允许后续手动检查启动
+            // 仅当 checkJob 是当前协程 Job 时才清除(避免清除已被新检查占用的 checkJob)
+            if (checkJob === coroutineContext[Job]) {
+                checkJob = null
+            }
+        }
     }
 
     /**
@@ -200,6 +260,8 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
     fun checkAndUnifyWithCrawl(): Boolean {
         if (isRunning()) return false
         cancelled = false
+        // 新检查开始:重置完成事件标志,允许本次完成触发弹窗
+        checkCompleteHandled = false
         // 息屏时保持 CPU 唤醒,避免豆瓣爬取过程中网络请求 timeout
         acquireWakeLock()
         checkJob = appScope.launch {
@@ -212,22 +274,40 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isRunning = false,
                     isComplete = true,
                     isCancelled = true,
-                    phase = "已取消"
+                    phase = context.getString(R.string.consistency_check_phase_cancelled)
                 )
+                // 延迟清理:让 UI 短暂展示"已取消"终态后重置,避免 checkProgress 永远停留在取消状态
+                // 用独立 appScope launch,不阻塞当前被取消的协程
+                appScope.launch {
+                    delay(1500)
+                    // 仅当仍是取消状态时重置(避免新检查已开始时误清新状态)
+                    if (_checkProgress.value.isCancelled) {
+                        resetProgress()
+                    }
+                }
                 throw e
             } catch (e: Exception) {
-                // 网络错误(DNS 解析失败、连接超时等)提供友好提示,不暴露原始异常信息
-                val friendlyMsg = when {
-                    e.message?.contains("resolve", ignoreCase = true) == true ||
-                    e.message?.contains("address", ignoreCase = true) == true -> "网络连接失败,请检查网络后重试"
-                    e.message?.contains("timeout", ignoreCase = true) == true -> "网络请求超时,请重试"
-                    else -> "检查异常: ${e.message}"
+                // 网络错误(DNS 解析失败、连接超时、SSL 握手失败等)按异常类型提供友好提示,
+                // 不暴露原始异常信息。注意:取消时不设置 checkCompleteHandled,
+                // 避免错误完成事件被消费后触发 Watchlist 页弹窗
+                val friendlyMsg = when (e) {
+                    is UnknownHostException -> context.getString(R.string.consistency_check_network_failed)
+                    is SocketTimeoutException -> context.getString(R.string.consistency_check_network_timeout)
+                    is SSLException -> context.getString(R.string.consistency_check_network_failed)
+                    is ConnectException -> context.getString(R.string.consistency_check_network_failed)
+                    else -> when {
+                        e.message?.contains("timeout", ignoreCase = true) == true ->
+                            context.getString(R.string.consistency_check_network_timeout)
+                        else -> context.getString(R.string.consistency_check_exception, e.message ?: "")
+                    }
                 }
                 _checkProgress.value = _checkProgress.value.copy(
                     isRunning = false,
                     isComplete = true,
                     phase = friendlyMsg
                 )
+                // 错误完成也应触发一次完成弹窗,让用户看到错误信息
+                checkCompleteHandled = true
             } finally {
                 releaseWakeLock()
             }
@@ -260,20 +340,35 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         if (cred == null) {
             _checkProgress.value = ConsistencyCheckResult(
                 isComplete = true,
-                cookieExpired = true,
-                phase = "豆瓣未登录"
+                neverLoggedInDouban = true,
+                phase = context.getString(R.string.consistency_check_not_logged_in)
             )
+            // 错误完成也应触发一次完成弹窗,让用户看到错误信息
+            checkCompleteHandled = true
             return
         }
 
         // ========== 阶段1: 爬取豆瓣列表 ==========
         val latestDoubanStatuses = mutableMapOf<String, Pair<String, String>>() // doubanId → (status, title)
 
+        // 预加载阶段文案,避免循环内重复 getString
+        val phaseCrawl = context.getString(R.string.consistency_check_phase_crawl)
+        val subWish = context.getString(R.string.consistency_check_sub_wish)
+        val subCollect = context.getString(R.string.consistency_check_sub_collect)
         for (status in listOf(DoubanMarkStatus.WISH, DoubanMarkStatus.COLLECT)) {
-            if (cancelled) return
-            val subPhaseName = if (status == DoubanMarkStatus.WISH) "想看列表" else "已看列表"
+            // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
+            if (cancelled) {
+                _checkProgress.value = _checkProgress.value.copy(
+                    isRunning = false,
+                    isComplete = true,
+                    isCancelled = true,
+                    phase = context.getString(R.string.consistency_check_phase_cancelled)
+                )
+                return
+            }
+            val subPhaseName = if (status == DoubanMarkStatus.WISH) subWish else subCollect
             _checkProgress.value = _checkProgress.value.copy(
-                phase = "爬取豆瓣列表",
+                phase = phaseCrawl,
                 subPhase = subPhaseName,
                 current = 0,
                 total = 0
@@ -302,8 +397,10 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                     isRunning = false,
                     isComplete = true,
                     cookieExpired = true,
-                    phase = "豆瓣登录已过期"
+                    phase = context.getString(R.string.consistency_check_cookie_expired)
                 )
+                // 错误完成也应触发一次完成弹窗,让用户看到 cookie 过期提示
+                checkCompleteHandled = true
                 return
             }
         }
@@ -312,15 +409,26 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
             _checkProgress.value = ConsistencyCheckResult(
                 isComplete = true,
                 totalChecked = 0,
-                phase = "完成"
+                phase = context.getString(R.string.consistency_check_phase_done)
             )
+            // 正常完成(空列表),触发一次完成弹窗
+            checkCompleteHandled = true
             return
         }
 
         // ========== 阶段2: 对比状态 ==========
-        if (cancelled) return
+        // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
+        if (cancelled) {
+            _checkProgress.value = _checkProgress.value.copy(
+                isRunning = false,
+                isComplete = true,
+                isCancelled = true,
+                phase = context.getString(R.string.consistency_check_phase_cancelled)
+            )
+            return
+        }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = "对比状态",
+            phase = context.getString(R.string.consistency_check_phase_compare),
             subPhase = "",
             current = 0,
             total = latestDoubanStatuses.size
@@ -342,7 +450,16 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         var checked = 0
 
         for ((doubanId, pair) in latestDoubanStatuses) {
-            if (cancelled) return
+            // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
+            if (cancelled) {
+                _checkProgress.value = _checkProgress.value.copy(
+                    isRunning = false,
+                    isComplete = true,
+                    isCancelled = true,
+                    phase = context.getString(R.string.consistency_check_phase_cancelled)
+                )
+                return
+            }
             checked++
             val (status, title) = pair
             val doubanIsCollect = status == "collect"
@@ -400,9 +517,18 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         }
 
         // ========== 阶段3: 批量更新 Trakt 侧 ==========
-        if (cancelled) return
+        // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
+        if (cancelled) {
+            _checkProgress.value = _checkProgress.value.copy(
+                isRunning = false,
+                isComplete = true,
+                isCancelled = true,
+                phase = context.getString(R.string.consistency_check_phase_cancelled)
+            )
+            return
+        }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = "更新Trakt",
+            phase = context.getString(R.string.consistency_check_phase_update_trakt),
             subPhase = "",
             current = 0,
             total = traktNeedWatched.size + traktNeedWatchlist.size
@@ -420,10 +546,19 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         )
 
         // ========== 阶段4: 逐条更新豆瓣侧 ==========
-        if (cancelled) return
+        // CC-F03: 取消时显式设置终态,避免状态卡在"正在取消..."
+        if (cancelled) {
+            _checkProgress.value = _checkProgress.value.copy(
+                isRunning = false,
+                isComplete = true,
+                isCancelled = true,
+                phase = context.getString(R.string.consistency_check_phase_cancelled)
+            )
+            return
+        }
         _checkProgress.value = _checkProgress.value.copy(
-            phase = "更新豆瓣",
-            subPhase = "详情页拿ck",
+            phase = context.getString(R.string.consistency_check_phase_update_douban),
+            subPhase = context.getString(R.string.consistency_check_sub_detail_ck),
             current = 0,
             total = doubanNeedUpdate.size
         )
@@ -433,13 +568,15 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
         _checkProgress.value = _checkProgress.value.copy(
             isRunning = false,
             isComplete = true,
-            phase = "完成",
+            phase = context.getString(R.string.consistency_check_phase_done),
             subPhase = "",
             currentTitle = null,
             doubanUpdated = doubanUpdated,
             errors = errors,
             delayInfo = null
         )
+        // 正常完成,设置完成事件标志,允许 WatchlistViewModel 通过 consumeCheckCompleteEvent 触发一次弹窗
+        checkCompleteHandled = true
         // 记录检查完成时间（供设置页二次确认弹窗显示）
         runCatching { lastConsistencyCheckStorage.recordCheck() }
         Log.i(TAG, "状态一致性检查完成（爬豆瓣列表）: ${_checkProgress.value}")

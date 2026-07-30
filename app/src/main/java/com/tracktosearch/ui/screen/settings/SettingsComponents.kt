@@ -265,6 +265,8 @@ fun CustomSearchSourceItem(
 
 /**
  * 数据流通卡片：圆角居中布局（图标 + 标题），用于 2x2 网格入口
+ *
+ * @param enabled 是否启用。禁用时图标与文字 alpha 降至 0.38,点击无响应
  */
 @Composable
 internal fun DataFlowCard(
@@ -273,13 +275,19 @@ internal fun DataFlowCard(
     title: String,
     onClick: () -> Unit,
     containerColor: Color = Color.Transparent,
-    iconTintColor: Color = MaterialTheme.colorScheme.primary
+    iconTintColor: Color = MaterialTheme.colorScheme.primary,
+    enabled: Boolean = true
 ) {
     val view = LocalView.current
     val isDark = isAppDarkTheme()
+    // 禁用时图标/文字统一降透明度,提供视觉反馈
+    val disabledAlpha = if (enabled) 1f else 0.38f
+    val effectiveIconTint = iconTintColor.copy(alpha = disabledAlpha)
     Column(
         modifier = modifier
-            .clickable { view.performHaptic(HapticType.CLICK); onClick() }
+            .clickable(enabled = enabled) {
+                view.performHaptic(HapticType.CLICK); onClick()
+            }
             .padding(vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -288,7 +296,7 @@ internal fun DataFlowCard(
             modifier = Modifier
                 .size(48.dp)
                 .background(
-                    color = iconTintColor.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    color = effectiveIconTint.copy(alpha = if (isDark) 0.2f else 0.12f),
                     shape = RoundedCornerShape(14.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -296,7 +304,7 @@ internal fun DataFlowCard(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = iconTintColor,
+                tint = effectiveIconTint,
                 modifier = Modifier.size(26.dp)
             )
         }
@@ -304,7 +312,7 @@ internal fun DataFlowCard(
             title,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = disabledAlpha),
             textAlign = TextAlign.Center
         )
     }

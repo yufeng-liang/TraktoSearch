@@ -30,7 +30,6 @@ data class ExportItem(
 data class ImportItem(
     val title: String,
     val watchedAt: String? = null,
-    val source: String,
     val mediaType: String? = null  // "movie" or "show", null means unknown
 )
 
@@ -92,13 +91,11 @@ object DataExportImport {
     /** 验证 content 与 signature 是否匹配(常量时间比较) */
     fun verifySignature(content: String, signature: String): Boolean {
         val expected = signExport(content)
-        if (expected.length != signature.length) return false
-        // 常量时间比较防时序攻击
-        var result = 0
-        for (i in expected.indices) {
-            result = result or (expected[i].code xor signature[i].code)
-        }
-        return result == 0
+        // 使用 Java 标准库的常量时间比较，避免长度早期返回泄露信息
+        return MessageDigest.isEqual(
+            expected.toByteArray(Charsets.UTF_8),
+            signature.toByteArray(Charsets.UTF_8)
+        )
     }
 
     /** 导出 JSON 并附加 HMAC 签名(双段格式:JSON + 分隔符 + 签名) */
@@ -195,15 +192,15 @@ object DataExportImport {
                 val mediaType = if (titleTypeIdx >= 0 && titleTypeIdx < row.size) {
                     val titleType = row[titleTypeIdx].trim().lowercase()
                     when {
-                        titleType.contains("tvseries") || titleType.contains("tvminiseries") -> "show"
+                        // tv 前缀统一归 SHOW: tvSeries/tvMiniSeries/tvSpecial/tvEpisode/tvShort/tvPilot/tvMovie 等
+                        titleType.startsWith("tv") -> "show"
                         titleType.contains("movie") || titleType.contains("short") || titleType.contains("video") -> "movie"
-                        else -> null
+                        else -> null  // 其他类型(podcastSeries 等)跳过
                     }
                 } else null
                 ImportItem(
                     title = title,
                     watchedAt = watchedAt,
-                    source = "IMDb",
                     mediaType = mediaType
                 )
             }

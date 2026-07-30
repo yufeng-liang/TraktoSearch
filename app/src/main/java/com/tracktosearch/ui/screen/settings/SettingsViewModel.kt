@@ -12,7 +12,7 @@ import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.CustomSearchSourceStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
-import com.tracktosearch.data.local.CloudFailurePullMetaStorage
+import com.tracktosearch.data.local.CloudFailureSyncMetaStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.LastConsistencyCheckStorage
 import com.tracktosearch.data.local.CooldownStatus
@@ -54,6 +54,7 @@ import com.tracktosearch.data.util.VerifyResult
 import androidx.compose.runtime.Immutable
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -62,6 +63,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import javax.inject.Inject
 
 @Immutable
@@ -70,7 +73,7 @@ data class ExportImportState(
     val isImporting: Boolean = false,
     val message: String? = null,
     val importedItems: List<ImportItem> = emptyList(),
-    val syncProgress: String? = null,  // e.g. "正在同步 3/50..."
+    val syncProgress: String? = null,  // e.g. "Syncing 3/50..."
     val syncSuccess: Int = 0,
     val syncFailed: Int = 0
 )
@@ -99,7 +102,7 @@ class SettingsViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val cloudPersonalSyncManager: CloudPersonalSyncManager,
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
-    private val cloudFailurePullMetaStorage: CloudFailurePullMetaStorage,
+    private val cloudFailureSyncMetaStorage: CloudFailureSyncMetaStorage,
     private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
@@ -291,8 +294,10 @@ class SettingsViewModel @Inject constructor(
                     historyShows = historyShows.map { it.toExportItem() }
                 )
 
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    outputStream.write(content.toByteArray(Charsets.UTF_8))
+                withContext(Dispatchers.IO) {
+                    val outputStream = context.contentResolver.openOutputStream(uri)
+                        ?: throw IOException("Cannot open output stream for URI: $uri")
+                    outputStream.use { it.write(content.toByteArray(Charsets.UTF_8)) }
                 }
 
                 _exportImportState.value = _exportImportState.value.copy(
@@ -315,7 +320,7 @@ class SettingsViewModel @Inject constructor(
                 isExporting = true, message = null
             )
             try {
-                val content = readUriContent(uri)
+                val content = withContext(Dispatchers.IO) { readUriContent(uri) }
                 val message = when (val result = DataExportImport.verifyExportFile(content)) {
                     is VerifyResult.Valid -> context.getString(
                         R.string.export_verify_valid,
@@ -345,7 +350,7 @@ class SettingsViewModel @Inject constructor(
                 isImporting = true, message = null, syncProgress = null, syncSuccess = 0, syncFailed = 0
             )
             try {
-                val csvContent = readUriContent(uri)
+                val csvContent = withContext(Dispatchers.IO) { readUriContent(uri) }
                 // 严格校验:根据 ParseResult 分支处理
                 val items = when (val result = DataExportImport.parseImdbCsv(csvContent)) {
                     is ParseResult.Success -> result.items
@@ -391,7 +396,12 @@ class SettingsViewModel @Inject constructor(
                         val mediaType = when (item.mediaType) {
                             "show" -> MediaType.SHOW
                             "movie" -> MediaType.MOVIE
-                            else -> MediaType.MOVIE  // default to movie if unknown
+                            // parseImdbCsv 已过滤 podcastSeries 等非影视类型,null 视为未知跳过避免误识别
+                            else -> null
+                        }
+                        if (mediaType == null) {
+                            failed++
+                            return@forEachIndexed
                         }
                         val searchResult = when (mediaType) {
                             MediaType.MOVIE -> traktRepository.searchMovies(item.title, page = 1, limit = 1)
@@ -409,6 +419,9 @@ class SettingsViewModel @Inject constructor(
                             // addToWatchlist 内部已调用 addToWatchlistCache,
                             // WatchlistWatchedIds 全局缓存会同步新增该 traktId,
                             // 切回 Watchlist 页 MovieCard 的想看标记可立即命中缓存。
+                            // 注意:IMDb CSV 的 Created 列已解析到 item.watchedAt,但当前 addToWatchlist
+                            // API 不支持传入标记时间,IMDb 的标记时间会丢失。如需保留时间应改用
+                            // addToHistory 或带时间参数的 API(暂未实现,有意丢弃)。
                             traktRepository.addToWatchlist(traktId, mediaType)
                             success++
                         } else {
@@ -534,6 +547,23 @@ class SettingsViewModel @Inject constructor(
     private val _cooldownStatus = MutableStateFlow<CooldownStatus?>(null)
     val cooldownStatus: StateFlow<CooldownStatus?> = _cooldownStatus.asStateFlow()
 
+    // ========== 已同步条目数量(用于「重新同步豆瓣」模式选择对话框展示"已同步 N 项") ==========
+    private val _syncedCount = MutableStateFlow(0)
+    val syncedCount: StateFlow<Int> = _syncedCount.asStateFlow()
+
+    /**
+     * 刷新已同步条目数量(用户点击「重新同步豆瓣」弹出模式选择对话框前调用)。
+     */
+    fun refreshSyncedCount() {
+        viewModelScope.launch {
+            if (!doubanAuthStorage.isLoggedIn.value) {
+                _syncedCount.value = 0
+                return@launch
+            }
+            _syncedCount.value = doubanSyncManager.getSyncedCount()
+        }
+    }
+
     /**
      * 刷新冷却期状态:先轻量拉云端 sync_meta 合并到本地(确保跨设备 lastFullSyncAt 准确),
      * 再读本地冷却状态。用户点击「重新同步豆瓣」弹出模式选择对话框前调用。
@@ -599,9 +629,9 @@ class SettingsViewModel @Inject constructor(
     /** 清除豆瓣凭据（退出登录） */
     fun clearDoubanCredentials() {
         doubanAuthStorage.clearCredentials()
-        // 清除失败数据云端拉取版本记录（与账号绑定，换账号后不应残留导致误判）
+        // 清除失败数据云端同步版本记录（与账号绑定，换账号后不应残留导致误判）
         viewModelScope.launch {
-            runCatching { cloudFailurePullMetaStorage.clear() }
+            runCatching { cloudFailureSyncMetaStorage.clear() }
         }
     }
 
@@ -825,8 +855,8 @@ class SettingsViewModel @Inject constructor(
         return all
     }
 
-    private fun readUriContent(uri: Uri): String {
-        return context.contentResolver.openInputStream(uri)?.use { inputStream ->
+    private suspend fun readUriContent(uri: Uri): String = withContext(Dispatchers.IO) {
+        context.contentResolver.openInputStream(uri)?.use { inputStream ->
             inputStream.bufferedReader(Charsets.UTF_8).readText()
         } ?: throw Exception(context.getString(R.string.error_read_file_failed))
     }

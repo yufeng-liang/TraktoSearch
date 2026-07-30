@@ -161,6 +161,7 @@
     <string name="douban_sync_background">バックグラウンド</string>
     <string name="douban_sync_relogin">再ログイン</string>
     <string name="douban_sync_login_trakt">Trakt にログイン</string>
+    <string name="douban_sync_login_douban">Douban にログイン</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣ログイン期限切れ、タップして再ログイン</string>
     <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -705,6 +706,8 @@
     <string name="consistency_check_background">バックグラウンド</string>
     <string name="consistency_check_cancelling">キャンセル中...</string>
     <string name="consistency_check_cancel">キャンセル</string>
+    <string name="consistency_check_phase_preparing">チェックを準備中...</string>
+    <string name="consistency_check_channel_desc">状態一貫性チェックの進行状況</string>
     <string name="consistency_check_complete_banner">チェック完了</string>
     <string name="douban_batch_removal_title">豆瓣マーク削除</string>
     <string name="douban_batch_removal_cancel">キャンセル</string>
@@ -731,6 +734,7 @@
     <string name="consistency_check_not_logged_in">豆瓣未ログイン</string>
     <string name="consistency_check_cookie_expired">豆瓣ログイン期限切れ</string>
     <string name="consistency_check_cookie_expired_prompt">豆瓣ログインの有効期限が切れました。再度ログインしてください</string>
+    <string name="consistency_check_not_logged_in_prompt">豆瓣にログインしていません。先にログインしてください</string>
     <string name="delay_type_douban_detail_crawl">豆瓣詳細ページ遅延</string>
     <string name="delay_type_douban_list_crawl">豆瓣リストページ遅延</string>
     <string name="delay_type_douban_retry">豆瓣リトライ遅延</string>
@@ -755,6 +759,7 @@
     <string name="cloud_failures_download">ダウンロード</string>
     <string name="cloud_failures_dismiss">後で</string>
     <string name="cloud_failures_downloaded">クラウド失敗データをダウンロードしてマージしました</string>
+    <string name="cloud_failures_downloaded_with_count">クラウドの失敗データ %1$d 件をダウンロードしてマージし、ローカルデータを置き換えました</string>
 
     <!-- Manual cloud sync (settings page) -->
     <string name="settings_douban_upload_cloud">失敗データをアップロード</string>

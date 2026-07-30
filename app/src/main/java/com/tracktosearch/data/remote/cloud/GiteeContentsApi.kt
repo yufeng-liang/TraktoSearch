@@ -14,7 +14,7 @@ import retrofit2.http.Query
  * Gitee Contents API:用于豆瓣失败项的云端同步。
  *
  * 路径:failures/{hash}.json,hash = SHA256(doubanUserId).substring(0,16)
- * 仓库:yufeng-liang/TrackToSearch(私有,复用 BuildConfig.GITEE_ACCESS_TOKEN)
+ * 仓库:yufeng-liang/meta-data(私有)
  *
  * - 创建新文件:POST /repos/{owner}/{repo}/contents/{path},不传 sha
  * - 更新已有文件:PUT /repos/{owner}/{repo}/contents/{path},必传 sha
@@ -28,8 +28,8 @@ import retrofit2.http.Query
  * PUT 在文件不存在时会报 "sha is missing","sha is empty"。
  * 必须先用 POST 创建,再在文件已存在时用 PUT 更新。
  *
- * 鉴权:token 仅通过 `Authorization: Bearer {token}` header 传递(由 OkHttpClient 拦截器注入),
- * 不再走 URL query 参数 `?access_token=`,避免 token 出现在访问日志/nginx 反代日志中。
+ * 鉴权:请求统一走网关代理 /api/gitee/,由 auth-worker 注入 GITEE_ACCESS_TOKEN,
+ * 客户端无需自带 token,也不再通过 URL query 参数或 header 携带。
  */
 interface GiteeContentsApi {
 

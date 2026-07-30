@@ -90,7 +90,8 @@ class ConsistencyCheckService : Service() {
                             stopSelf()
                             return@collectLatest
                         }
-                        if (p.isRunning) {
+                        // isRunning 或 isCancelling 中间态都刷新通知,让用户看到"正在取消..."文案
+                        if (p.isRunning || p.isCancelling) {
                             val notif = buildNotification(p.current, p.total, p.phase)
                             getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notif)
                         }
@@ -129,7 +130,7 @@ class ConsistencyCheckService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID, getString(com.tracktosearch.R.string.consistency_check_title), NotificationManager.IMPORTANCE_LOW
-        ).apply { description = "Status consistency check progress" }
+        ).apply { description = getString(com.tracktosearch.R.string.consistency_check_channel_desc) }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 

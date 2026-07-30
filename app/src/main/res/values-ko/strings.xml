@@ -161,6 +161,7 @@
     <string name="douban_sync_background">백그라운드</string>
     <string name="douban_sync_relogin">재로그인</string>
     <string name="douban_sync_login_trakt">Trakt 로그인</string>
+    <string name="douban_sync_login_douban">Douban 로그인</string>
     <string name="douban_sync_cookie_expired_banner">더우반 로그인 만료, 탭하여 재로그인</string>
     <string name="douban_sync_complete_banner">동기화 완료, %1$d건 추가</string>
     <string name="douban_sync_progress_format">%1$s (%2$d/%3$d)</string>
@@ -705,6 +706,8 @@
     <string name="consistency_check_background">백그라운ด</string>
     <string name="consistency_check_cancelling">취소 중...</string>
     <string name="consistency_check_cancel">취소</string>
+    <string name="consistency_check_phase_preparing">확인 준비 중...</string>
+    <string name="consistency_check_channel_desc">상태 일관성 확인 진행 상황</string>
     <string name="consistency_check_complete_banner">확인 완료</string>
     <string name="douban_batch_removal_title">더우반 표시 제거</string>
     <string name="douban_batch_removal_cancel">취소</string>
@@ -731,6 +734,7 @@
     <string name="consistency_check_not_logged_in">더우반 미로그인</string>
     <string name="consistency_check_cookie_expired">더우반 로그인 만료</string>
     <string name="consistency_check_cookie_expired_prompt">더우반 로그인이 만료되었습니다. 다시 로그인하세요</string>
+    <string name="consistency_check_not_logged_in_prompt">더우반에 로그인하지 않았습니다. 먼저 로그인하세요</string>
     <string name="delay_type_douban_detail_crawl">더우반 상세 페이지 지연</string>
     <string name="delay_type_douban_list_crawl">더우반 목록 페이지 지연</string>
     <string name="delay_type_douban_retry">더우반 재시도 지연</string>
@@ -755,6 +759,7 @@
     <string name="cloud_failures_download">다운로드</string>
     <string name="cloud_failures_dismiss">나중에</string>
     <string name="cloud_failures_downloaded">클라우드 실패 데이터를 다운로드하고 병합했습니다</string>
+    <string name="cloud_failures_downloaded_with_count">클라우드 실패 데이터 %1$d건을 다운로드하고 병합하여 로컬 데이터를 교체했습니다</string>
 
     <!-- Manual cloud sync (settings page) -->
     <string name="settings_douban_upload_cloud">실패 데이터 업로드</string>

@@ -88,7 +88,7 @@ class SettingsViewModelTest {
     private lateinit var doubanRepository: DoubanRepository
     private lateinit var cloudPersonalSyncManager: CloudPersonalSyncManager
     private lateinit var doubanSyncMetaStorage: DoubanSyncMetaStorage
-    private lateinit var cloudFailurePullMetaStorage: com.tracktosearch.data.local.CloudFailurePullMetaStorage
+    private lateinit var cloudFailureSyncMetaStorage: com.tracktosearch.data.local.CloudFailureSyncMetaStorage
     private lateinit var lastConsistencyCheckStorage: LastConsistencyCheckStorage
     private lateinit var statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
     private lateinit var doubanSyncManager: DoubanSyncManager
@@ -121,7 +121,7 @@ class SettingsViewModelTest {
         doubanRepository = mockk(relaxed = true)
         cloudPersonalSyncManager = mockk(relaxed = true)
         doubanSyncMetaStorage = mockk(relaxed = true)
-        cloudFailurePullMetaStorage = mockk(relaxed = true)
+        cloudFailureSyncMetaStorage = mockk(relaxed = true)
         lastConsistencyCheckStorage = mockk(relaxed = true)
         statusConsistencyChecker = mockk(relaxed = true)
         doubanSyncManager = mockk(relaxed = true)
@@ -164,7 +164,7 @@ class SettingsViewModelTest {
             discoverSectionStorage, detailSectionStorage, customSearchSourceStorage,
             customSearchService, panHubConfigStorage, defaultTabStorage,
             doubanAuthStorage, doubanRepository, cloudPersonalSyncManager,
-            doubanSyncMetaStorage, cloudFailurePullMetaStorage, lastConsistencyCheckStorage,
+            doubanSyncMetaStorage, cloudFailureSyncMetaStorage, lastConsistencyCheckStorage,
             statusConsistencyChecker, doubanSyncManager, sharedTransitionStorage, context
         )
     }

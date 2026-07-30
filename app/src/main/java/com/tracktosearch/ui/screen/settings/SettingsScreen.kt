@@ -173,6 +173,8 @@ fun SettingsScreen(
     val doubanLoggedIn by viewModel.doubanLoggedIn.collectAsStateWithLifecycle()
     // 增量同步冷却期状态(跨设备同步显示)
     val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
+    // 已同步条目数量:用于模式选择对话框"已同步 N 项"展示
+    val syncedCount by viewModel.syncedCount.collectAsStateWithLifecycle()
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
@@ -296,10 +298,6 @@ fun SettingsScreen(
             is CloudSyncEvent.UploadFailed -> cloudSyncUploadFailed
             is CloudSyncEvent.CloudEmpty -> cloudSyncDownloadEmpty
             is CloudSyncEvent.DownloadFailed -> cloudSyncDownloadFailed
-            // 比较类结果已通过 cloudSyncDialog 展示,这里不弹 snackbar
-            is CloudSyncEvent.DownloadSuccess -> null
-            is CloudSyncEvent.LocalNewer -> null
-            is CloudSyncEvent.UploadSuccess -> null
         }
         if (msg != null) snackbarHostState.showSnackbar(msg)
         doubanRetryViewModel.clearCloudSyncEvent()
@@ -639,6 +637,7 @@ fun SettingsScreen(
                                             showSyncProgressDialog = true
                                         } else {
                                             scope.launch { viewModel.refreshCooldownStatus() }
+                                            viewModel.refreshSyncedCount()
                                             showSyncModePicker = true
                                         }
                                     } else {
@@ -1114,7 +1113,7 @@ fun SettingsScreen(
     // 豆瓣重新同步模式选择:点「重新同步豆瓣」时弹模式选择对话框(A/B/C)
     if (showSyncModePicker) {
         DoubanSyncModePickerDialog(
-            syncedCount = 0,
+            syncedCount = syncedCount,
             cooldownStatus = cooldownStatus,
             onDismiss = { showSyncModePicker = false },
             onModeSelected = { mode ->
