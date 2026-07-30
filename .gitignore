@@ -49,6 +49,7 @@ backup.kt
 # Local directories (not tracked in git)
 docs/
 .superpowers/
+/tracktosearch-website/
 auth-worker/node_modules/
 
 # Cloudflare Wrangler local state
