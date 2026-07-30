@@ -1,7 +1,7 @@
 <resources>
     <string name="auth_migration_invite_hint">静默恢复未完成，请输入迁移类型的邀请码继续。</string>
     <string name="auth_offline_mode">当前处于离线模式，将使用本地缓存数据。</string>
-    <string name="app_name">TraktToSearch</string>
+    <string name="app_name">TraktoSearch</string>
     <string name="splash_slogan">发现 · 追踪 · 搜索</string>
     <string name="auth_title">激活访问权限</string>
     <string name="auth_subtitle">请输入管理员提供的邀请码。</string>
@@ -214,7 +214,7 @@
     <string name="disk_magnet">磁力</string>
 
     <!-- Login Screen -->
-    <string name="login_title">TraktToSearch</string>
+    <string name="login_title">TraktoSearch</string>
     <string name="login_subtitle">从观影清单到网盘资源</string>
     <string name="login_button">使用 Trakt 登录</string>
     <string name="login_connecting">正在连接 Trakt…</string>
@@ -226,6 +226,7 @@
     <string name="login_sync_hint">登录后将同步你的 Trakt 想看列表</string>
     <string name="login_guest">以访客身份进入</string>
     <string name="login_douban_import">或从豆瓣导入标记</string>
+    <string name="login_douban">豆瓣登录</string>
     <string name="login_activation_hint">激活后同步你的 Trakt 想看列表</string>
     <string name="login_activation_locked">○ 尚未激活 · 输入邀请码解锁观影空间</string>
     <string name="login_activation_choose_path">已激活 · 请选择登录 Trakt，或暂时以访客身份进入</string>
@@ -248,7 +249,7 @@
     <string name="douban_login_privacy_detail">• 为什么需要登录：读取你的豆瓣标记列表（想看、看过、评分）\n• 存储什么：仅存储 Cookie 和 userId（用于本次爬取），不存储豆瓣密码\n• Cookie 用途：仅用于请求 movie.douban.com/people/{userId}/wish|collect 页面\n• 同步完成后：可随时在设置页清除豆瓣凭据\n• 数据流向：豆瓣 → App → Trakt，不经过任何中间服务器</string>
     <string name="douban_login_privacy_expand">查看详细说明</string>
     <string name="douban_login_privacy_collapse">收起</string>
-    <string name="douban_login_success_snackbar">豆瓣登录成功，正在同步标记…</string>
+    <string name="douban_login_success_snackbar">豆瓣登录成功</string>
     <string name="douban_login_load_failed">加载失败</string>
     <string name="douban_login_notification_rationale">后台同步需要通知权限以显示进度，请授予</string>
     <string name="douban_sync_title">豆瓣标记同步</string>
@@ -1425,6 +1426,8 @@
     <string name="settings_account_douban_login">登录</string>
     <string name="settings_account_douban_logout">退出</string>
     <string name="settings_douban_logout_done">已退出豆瓣</string>
+    <string name="douban_logout_confirm_title">退出豆瓣账号</string>
+    <string name="douban_logout_confirm_message">退出后将清除本地 %1$d 条豆瓣标记，是否继续？</string>
     <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
     <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分及豆瓣同步功能</string>
     <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>

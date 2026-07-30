@@ -134,6 +134,11 @@ import java.util.Locale
 fun SettingsScreen(
     onLogout: () -> Unit = {},
     isLoggedIn: Boolean = true,
+    /**
+     * Trakt 是否已连接(独立于综合 isLoggedIn)。
+     * AccountItem 用此值判断 Trakt 行显示登录还是登出,避免豆瓣单独登录时被综合 isLoggedIn 误判为 Trakt 已登录。
+     */
+    isTraktConnected: Boolean = false,
     onHelpClick: () -> Unit = {},
     onRestartOnboarding: () -> Unit = {},
     onDoubanResync: () -> Unit = {},
@@ -177,6 +182,8 @@ fun SettingsScreen(
     val syncedCount by viewModel.syncedCount.collectAsStateWithLifecycle()
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
+    // 豆瓣独立模式下隐藏手动一致性检查入口（豆瓣模式无 Trakt 可对比，检查无意义）
+    val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
     // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
     var showConsistencyConfirm by remember { mutableStateOf(false) }
@@ -248,20 +255,31 @@ fun SettingsScreen(
         }
     }
     // 账户资料加载：从账户 item 内上提，避免 item 滑出/滑入时重复触发网络请求
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) {
+    // Trakt profile 仅在 Trakt 已连接时加载,避免豆瓣单独登录时触发 401 失败
+    // 豆瓣 profile 在综合登录态下加载(豆瓣登录或 Trakt 登录都可能需要)
+    LaunchedEffect(isLoggedIn, isTraktConnected) {
+        if (isTraktConnected) {
             viewModel.loadUserProfile()
+        }
+        if (isLoggedIn) {
             viewModel.loadDoubanProfile()
         }
     }
     // 豆瓣登录态变化时刷新失败项状态:登录后若云端失败数据已下载合并到本地,
     // 返回设置页时 doubanLoggedIn 从 false→true 触发刷新,「查看同步失败项」入口卡片及时显示
-    // 冷却期仅从本地读取(豆瓣登录后已刷新云端 meta 到本地)
+    // 同时首次豆瓣登录成功后自动弹出导入标记弹窗(showSyncModePicker)
+    var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(doubanLoggedIn) {
         doubanRetryViewModel.refreshRetryState()
         // 豆瓣登录后检测云端失败项,用于「上传/拉取失败数据」入口可见性
         doubanRetryViewModel.refreshCloudFailureCount()
         viewModel.loadCooldownStatusFromLocal()
+        // 首次豆瓣登录成功(false→true): 自动弹出导入标记弹窗,提示用户选择增量/全量同步
+        // 用 hasShownDoubanImportDialog 避免重复弹出(旋屏/返回设置页不再弹)
+        if (doubanLoggedIn && !hasShownDoubanImportDialog) {
+            hasShownDoubanImportDialog = true
+            showSyncModePicker = true
+        }
     }
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -271,6 +289,8 @@ fun SettingsScreen(
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDoubanLogoutDialog by remember { mutableStateOf(false) }
+    // 退出豆瓣二次确认弹窗展示的本地标记条数（点击退出按钮时预查）
+    var doubanLogoutCount by remember { mutableIntStateOf(0) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearCategoryDialog by remember { mutableStateOf(false) }
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
@@ -394,7 +414,8 @@ fun SettingsScreen(
         ) {
             // 观看统计（第一位，独占整行卡片，无类目 Header）—— 仅登录可见
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
-            if (isLoggedIn) {
+            // 豆瓣独立模式: 统计数据来源是 Trakt watchlist/history,无 trakt token 时无意义,隐藏
+            if (isLoggedIn && !isDoubanMode) {
                 item(key = "statistics_entry") {
                     val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
                         with(sharedTransitionScope) {
@@ -412,8 +433,9 @@ fun SettingsScreen(
                 }
             }
 
-            // 标记记录（仅登录可见，独占整行卡片）
-            if (isLoggedIn) {
+            // 标记记录（仅 Trakt 登录可见，独占整行卡片）
+            // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
+            if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
                     MarkRecordsEntryCard(
                     onClick = onMarkRecordsClick,
@@ -507,8 +529,9 @@ fun SettingsScreen(
                 SearchSourcesItem(viewModel = viewModel, hazeState = settingsHazeState)
             }
 
-            // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
-            if (isLoggedIn) {
+            // 通知提醒（仅 Trakt 登录用户可见，通知依赖 Trakt 想看列表推送）
+            // 豆瓣独立模式: 无 trakt token,通知功能无法触发,隐藏入口
+            if (isLoggedIn && !isDoubanMode) {
                 item(key = "group_notification") {
                     SettingsGroupCard(
                         title = stringResource(R.string.settings_notification),
@@ -568,6 +591,7 @@ fun SettingsScreen(
 
                             // 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
                             // 「上传/拉取失败数据」入口仅在豆瓣已登录且(本地或云端存在失败数据)时显示
+                            // 豆瓣独立模式: 隐藏导入 IMDb（无 trakt token 无法写入 watchlist）
                             DataFlowGridItem(
                                 onExport = {
                                     if (!exportImportState.isExporting) {
@@ -575,9 +599,11 @@ fun SettingsScreen(
                                         exportJsonLauncher.launch("trakt-export-$timestamp.json")
                                     }
                                 },
-                                onImportImdb = {
-                                    if (!exportImportState.isImporting) {
-                                        importImdbLauncher.launch("text/*")
+                                onImportImdb = if (isDoubanMode) null else {
+                                    {
+                                        if (!exportImportState.isImporting) {
+                                            importImdbLauncher.launch("text/*")
+                                        }
                                     }
                                 },
                                 onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
@@ -694,8 +720,10 @@ fun SettingsScreen(
                                     containerColor = Color.Transparent
                                 )
                             }
-                            // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
-                            if (!isDoubanSyncRunning) {
+                            // 豆瓣同步进行中或豆瓣独立模式下隐藏手动检查入口
+                            // 同步进行中：同步后自动检查无需重复入口
+                            // 豆瓣独立模式：无 Trakt 可对比，一致性检查无意义
+                            if (!isDoubanSyncRunning && !isDoubanMode) {
                                 GroupDivider()
                                 SettingsItemCard(
                                     icon = Icons.Rounded.SyncAlt,
@@ -765,11 +793,19 @@ fun SettingsScreen(
                 ) {
                     AccountItem(
                         viewModel = viewModel,
-                        isTraktLoggedIn = isLoggedIn,
+                        // 用 Trakt 连接态(而非综合 isLoggedIn)判断 Trakt 行,
+                        // 避免豆瓣单独登录时 isLoggedIn=true 导致 Trakt 行误显示为已登录
+                        isTraktLoggedIn = isTraktConnected,
                         onTraktLogin = onNavigateToLogin,
                         onTraktLogout = { showLogoutDialog = true },
                         onDoubanLogin = { onNavigateToDoubanLogin() },
-                        onDoubanLogout = { showDoubanLogoutDialog = true },
+                        onDoubanLogout = {
+                            // 预查本地豆瓣标记条数，弹二次确认对话框
+                            scope.launch {
+                                doubanLogoutCount = viewModel.getDoubanSyncedItemCount()
+                                showDoubanLogoutDialog = true
+                            }
+                        },
                         containerColor = Color.Transparent
                     )
                 }
@@ -924,13 +960,13 @@ fun SettingsScreen(
         )
     }
 
-    // 豆瓣登出二次确认对话框(登出后用 Snackbar 提供"重新登录"入口)
+    // 豆瓣登出二次确认对话框(提示将清理本地 N 条标记，登出后用 Snackbar 提供"重新登录"入口)
     if (showDoubanLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.settings_account_douban)) },
-            text = { Text(stringResource(R.string.settings_logout_confirm)) },
+            title = { Text(stringResource(R.string.douban_logout_confirm_title)) },
+            text = { Text(stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount)) },
             confirmButton = {
                     val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
                     val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)
@@ -1781,11 +1817,13 @@ private fun NotificationItem(
  * @param exportEnabled 导出按钮是否启用(导出进行中应禁用)
  * @param importEnabled 导入按钮是否启用(导入进行中应禁用)
  * @param cloudEnabled 云端按钮是否启用(云端同步进行中应禁用)
+ * 豆瓣独立模式: [onImportImdb] 为 null 时隐藏导入 IMDb 卡片（无 trakt token 无法写入），
+ * 导出卡片独占整行宽度。
  */
 @Composable
 private fun DataFlowGridItem(
     onExport: () -> Unit,
-    onImportImdb: () -> Unit,
+    onImportImdb: (() -> Unit)?,
     onUploadCloud: () -> Unit,
     onDownloadCloud: () -> Unit,
     showCloudActions: Boolean = true,
@@ -1799,21 +1837,23 @@ private fun DataFlowGridItem(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         DataFlowCard(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(if (onImportImdb != null) 1f else 1f),
             icon = Icons.Rounded.FileUpload,
             title = stringResource(R.string.settings_export_marks_data),
             onClick = onExport,
             containerColor = containerColor,
             enabled = exportEnabled
         )
-        DataFlowCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Rounded.FileDownload,
-            title = stringResource(R.string.settings_import_imdb),
-            onClick = onImportImdb,
-            containerColor = containerColor,
-            enabled = importEnabled
-        )
+        if (onImportImdb != null) {
+            DataFlowCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Rounded.FileDownload,
+                title = stringResource(R.string.settings_import_imdb),
+                onClick = onImportImdb,
+                containerColor = containerColor,
+                enabled = importEnabled
+            )
+        }
     }
     if (showCloudActions) {
         Row(

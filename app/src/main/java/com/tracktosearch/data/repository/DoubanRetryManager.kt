@@ -1,6 +1,7 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import kotlinx.coroutines.CoroutineScope
@@ -76,7 +77,9 @@ data class RetryState(
 class DoubanRetryManager @Inject constructor(
     private val doubanSyncFailureDao: DoubanSyncFailureDao,
     private val doubanSyncManager: DoubanSyncManager,
-    private val cloudDetailsPoolManager: CloudDetailsPoolManager
+    private val cloudDetailsPoolManager: CloudDetailsPoolManager,
+    // 豆瓣独立模式: 失败项详情页 fallback 读取 + 标记操作双写本地表用
+    private val doubanSyncedItemDao: DoubanSyncedItemDao
 ) {
     private val _retryState = MutableStateFlow(RetryState())
     val retryState: StateFlow<RetryState> = _retryState.asStateFlow()
@@ -182,10 +185,37 @@ class DoubanRetryManager @Inject constructor(
         updated
     }
 
-    /** 按 doubanId 加载单条失败项(用于豆瓣条目详情页) */
+    /**
+     * 按 doubanId 加载单条失败项(用于豆瓣条目详情页)。
+     *
+     * 查询链路: douban_sync_failures 表 → fallback 查 douban_synced_items 本地表。
+     * 豆瓣独立模式下,无 imdbId 的条目不进失败项表(直接写本地表),详情页需通过 fallback 读取。
+     * fallback 数据用 NO_IMDB_ID 作为失败原因标记(实际并非失败,仅复用失败项详情页 UI),
+     * 缺失字段(comment/doubanUrl/subtitle)用合理默认值填充。
+     */
     suspend fun getFailure(doubanId: String): DoubanSyncFailure? = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.getById(doubanId)?.let { DoubanSyncFailure.fromEntity(it) }
+            ?: doubanSyncedItemDao.getByDoubanId(doubanId)?.let { it.toFailure() }
     }
+
+    /** DoubanSyncedItem → DoubanSyncFailure 映射（fallback 路径,缺失字段用默认值填充） */
+    private fun com.tracktosearch.data.local.db.DoubanSyncedItem.toFailure(): DoubanSyncFailure = DoubanSyncFailure(
+        doubanId = doubanId,
+        title = title,
+        posterUrl = posterUrl,
+        rating = rating,
+        comment = null,  // synced_items 表无 comment 字段
+        markedAt = listedAt ?: "",  // 用豆瓣标记时间兜底
+        doubanUrl = "https://movie.douban.com/subject/$doubanId/",  // 豆瓣电影 URL 固定模板
+        status = DoubanMarkStatus.fromString(status),
+        failureReason = FailureReason.NO_IMDB_ID,  // 进入 fallback 路径的主因是无 imdbId
+        failedAt = syncedAt,
+        updatedAt = 0L,
+        attemptCount = 0,
+        mediaType = mediaType,
+        mediaTypeCleared = false,
+        subtitle = null
+    )
 
     /**
      * 根据豆瓣详情的集数自动推断媒体类型（不覆盖用户已标注的值）。
@@ -242,6 +272,8 @@ class DoubanRetryManager @Inject constructor(
     /** 更新单条媒体类型标注(用户手动标注为电影/电视剧/综艺/纪录片/清除标注)，并异步上传到全局共享池 */
     suspend fun updateMediaType(doubanId: String, mediaType: String?) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateMediaType(doubanId, mediaType)
+        // 豆瓣独立模式 fallback 数据源场景: 同步双写本地表(保持两表 mediaType 一致)
+        runCatching { doubanSyncedItemDao.updateMediaType(doubanId, mediaType) }
         // 标注(含清除标注null)均异步上传到全局池强覆盖,供其他用户同步
         runCatching {
             cloudDetailsPoolManager.uploadUserMarkedMediaType(doubanId, mediaType)
@@ -285,16 +317,21 @@ class DoubanRetryManager @Inject constructor(
         doubanSyncFailureDao.updateSubtitle(doubanId, normalized)
     }
 
-    /** 删除单条失败项(用户在详情页删除,不同于 clearAll) */
+    /** 删除单条失败项(用户在详情页删除,不同于 clearAll)。同时删除本地表对应记录,保持双表一致 */
     suspend fun deleteFailure(doubanId: String) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.deleteByDoubanId(doubanId)
+        // 豆瓣独立模式: 同步删除本地表记录(fallback 数据源场景)
+        runCatching { doubanSyncedItemDao.deleteByDoubanId(doubanId) }
     }
 
     /**
      * 写回豆瓣成功后持久化新的标记状态(wish/collect)。
      * 持久化路径用 status.path(与 toEntity 一致),不从列表移除条目。
+     * 同时双写本地表(fallback 数据源场景),保持两表 status 一致。
      */
     suspend fun updateStatus(doubanId: String, status: DoubanMarkStatus) = withContext(Dispatchers.IO) {
         doubanSyncFailureDao.updateStatus(doubanId, status.path)
+        // 豆瓣独立模式: 同步更新本地表 status + pendingSync=true(下次同步重试豆瓣 API)
+        runCatching { doubanSyncedItemDao.updateStatusAndPendingSync(doubanId, status.path, true) }
     }
 }

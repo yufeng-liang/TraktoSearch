@@ -19,6 +19,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.io.IOException
@@ -417,6 +419,98 @@ class DoubanRepository(
         client.newCall(request).execute().use { response ->
             response.body?.string() ?: ""
         }
+    }
+
+    // ===== 豆瓣标记 API（独立模式标记操作用）=====
+    // 端点逆向自豆瓣网页前端: POST /j/subject/{id}/interest 标记 wish/collect/do,
+    // POST /j/mine/j_cat_ui 删除标记(sid + ck, Content-Type 必带 charset=UTF-8)。
+    // Cookie 依赖: dbcl2(登录凭证) + ck(CSRS 令牌, 从 cookie 提取) + bid。
+
+    /** 从 Cookie 字符串提取 ck 值（CSRF 令牌，4 位字母数字） */
+    private fun extractCk(cookie: String): String? {
+        // ck 可能在 cookie 中以 ck=xxxx 形式出现,值不含分号/空格/引号
+        val regex = Regex("ck=([^;\\s\"']+)")
+        return regex.find(cookie)?.groupValues?.getOrNull(1)
+    }
+
+    /**
+     * 标记豆瓣条目（想看/在看/看过）。
+     *
+     * @param doubanId 豆瓣条目 ID
+     * @param interest "wish"(想看) | "collect"(看过) | "do"(在看)
+     * @param cookie 完整 Cookie 字符串（含 dbcl2/ck/bid）
+     * @param rating 1-5 评分, null 不评分（想看通常不传）
+     * @param tags 标签（空格分隔，全量覆盖）
+     * @param comment 短评（全量覆盖）
+     * @return true=成功
+     */
+    suspend fun markInterest(
+        doubanId: String,
+        interest: String,
+        cookie: String,
+        rating: Int? = null,
+        tags: String = "",
+        comment: String = ""
+    ): Boolean = withContext(Dispatchers.IO) {
+        val ck = extractCk(cookie) ?: return@withContext false
+        val url = "https://movie.douban.com/j/subject/$doubanId/interest"
+        val formBuilder = FormBody.Builder()
+            .add("ck", ck)
+            .add("interest", interest)
+            .add("foldcollect", "F")
+            .add("tags", tags)
+            .add("comment", comment)
+        if (rating != null) {
+            formBuilder.add("rating", rating.coerceIn(1, 5).toString())
+        }
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/subject/$doubanId/")
+            .header("Origin", "https://movie.douban.com")
+            .header("X-Requested-With", "XMLHttpRequest")
+            .post(formBuilder.build())
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response -> response.isSuccessful }
+        }.getOrDefault(false)
+    }
+
+    /** 便捷: 标记想看 */
+    suspend fun markWish(doubanId: String, cookie: String): Boolean =
+        markInterest(doubanId, "wish", cookie)
+
+    /** 便捷: 标记看过（带评分） */
+    suspend fun markCollect(doubanId: String, cookie: String, rating: Int? = null): Boolean =
+        markInterest(doubanId, "collect", cookie, rating)
+
+    /**
+     * 移除豆瓣条目标记（取消想看/在看/看过）。
+     *
+     * POST /j/mine/j_cat_ui, form: sid={doubanId}&ck={ck}
+     * 注意: Content-Type 必须显式带 charset=UTF-8, 否则豆瓣会拒绝。
+     *
+     * @return true=成功
+     */
+    suspend fun removeInterest(doubanId: String, cookie: String): Boolean = withContext(Dispatchers.IO) {
+        val ck = extractCk(cookie) ?: return@withContext false
+        val url = "https://movie.douban.com/j/mine/j_cat_ui"
+        val body = "sid=$doubanId&ck=$ck"
+        val mediaType = "application/x-www-form-urlencoded; charset=UTF-8".toMediaTypeOrNull()
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", ua)
+            .header("Cookie", cookie)
+            .header("Referer", "https://movie.douban.com/")
+            .header("Origin", "https://movie.douban.com")
+            .header("Content-Type", mediaType.toString())
+            .header("X-Requested-With", "XMLHttpRequest")
+            .post(body.toRequestBody(mediaType))
+            .build()
+        runCatching {
+            client.newCall(request).execute().use { response -> response.isSuccessful }
+        }.getOrDefault(false)
     }
 
     // 移动端 UA(测试页用)

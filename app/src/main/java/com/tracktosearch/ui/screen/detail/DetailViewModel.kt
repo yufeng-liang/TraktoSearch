@@ -11,6 +11,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.ViewedItemStorage
+import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.UserReviewEntity
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -36,6 +37,8 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
+import com.tracktosearch.data.session.SessionMode
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.CommentTranslator
 import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -205,6 +208,8 @@ class DetailViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
+    // 会话模式管理器(豆瓣独立模式分支判断)
+    private val sessionModeManager: SessionModeManager,
     // 海报主色调提取器(对 DetailHeaderContent 暴露,用于在海报加载成功后提取主色)
     val posterColorExtractor: PosterColorExtractor,
     // 本地评分+短评缓存(优先读取 Trakt 之外的本地值,提交/更新时写回)
@@ -281,15 +286,31 @@ class DetailViewModel @Inject constructor(
             isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
         }
+        // 收集会话模式,供 toggleWatched/toggleWatchlist 同步判断豆瓣独立模式分支
+        // 同时用于豆瓣模式隐藏 trakt 专属模块（评论 tab 依赖 trakt API，豆瓣模式无 trakt token 会失败）
+        viewModelScope.launch {
+            sessionModeManager.sessionMode.collect { mode ->
+                currentSessionMode = mode
+                // 豆瓣模式: 强制隐藏评论 tab（trakt comments API 需要 trakt token）
+                if (mode == SessionMode.DOUBAN) {
+                    val cur = _uiState.value.sectionVisible
+                    _uiState.value = _uiState.value.copy(
+                        sectionVisible = cur.copy(comments = false)
+                    )
+                }
+            }
+        }
         // 监听详情页模块可见性设置
         viewModelScope.launch {
             detailSectionStorage.sectionConfigs.collect { configs ->
+                val isDouban = currentSessionMode == SessionMode.DOUBAN
                 val visibility = DetailSectionVisibility(
                     cast = configs.find { it.id == "cast" }?.visible ?: true,
                     videosImages = configs.find { it.id == "videos-images" }?.visible ?: true,
                     overview = configs.find { it.id == "overview" }?.visible ?: true,
                     myRating = configs.find { it.id == "my-rating" }?.visible ?: true,
-                    comments = configs.find { it.id == "comments" }?.visible ?: true,
+                    // 豆瓣模式: 强制隐藏评论 tab（依赖 trakt API，无 trakt token 时无法加载）
+                    comments = if (isDouban) false else (configs.find { it.id == "comments" }?.visible ?: true),
                     recommendations = configs.find { it.id == "recommendations" }?.visible ?: true
                 )
                 _uiState.value = _uiState.value.copy(sectionVisible = visibility)
@@ -320,6 +341,9 @@ class DetailViewModel @Inject constructor(
     // 全量结果（未按 filter 过滤）
     private var allResources: List<ResourceItem> = emptyList()
     private var isLoggedIn: Boolean = false
+    // 当前会话模式(在 init 中收集,供 toggleWatched/toggleWatchlist 同步判断豆瓣模式分支)
+    // 初始 null:sessionMode flow 未发出首值前降级到 trakt 原逻辑,避免误判
+    private var currentSessionMode: SessionMode? = null
 
     suspend fun loadDetail(traktId: Int, tmdbId: Int, title: String, mediaType: MediaType, year: Int? = null, imdbId: String = "", traktRating: Double = 0.0, inWatchlist: Boolean = false, isWatched: Boolean = false) {
         // 已加载相同影视则用缓存（从子详情页返回时不重新请求）
@@ -340,8 +364,8 @@ class DetailViewModel @Inject constructor(
             detailLoaded = true
             allResources = cached.allResources
             // 从全局缓存获取真实的想看/已看状态，不依赖路由参数（从推荐列表进入时默认为 false）
-            val realInWatchlist = traktRepository.checkInWatchlist(traktId, cached.currentMediaType)
-            val realWatched = traktRepository.checkWatched(traktId, cached.currentMediaType)
+            // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
+            val (realInWatchlist, realWatched) = resolveWatchStates(traktId, cached.currentMediaType, cached.currentImdbId)
             _uiState.value = cached.uiState.copy(
                 isMarkedWatchlist = realInWatchlist,
                 isMarkedWatched = realWatched
@@ -418,8 +442,8 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
 
             // 从全局缓存校正想看/已看状态（路由参数从推荐列表进入时可能为 false）
-            val realInWatchlist = traktRepository.checkInWatchlist(currentTraktId, currentMediaType)
-            val realWatched = traktRepository.checkWatched(currentTraktId, currentMediaType)
+            // 豆瓣独立模式从本地 douban_synced_items 表读取,其他模式走 trakt API
+            val (realInWatchlist, realWatched) = resolveWatchStates(currentTraktId, currentMediaType, currentImdbId)
             _uiState.value = _uiState.value.copy(
                 isMarkedWatchlist = realInWatchlist,
                 isMarkedWatched = realWatched
@@ -539,6 +563,35 @@ class DetailViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 解析当前条目的想看/已看状态。
+     *
+     * 豆瓣独立模式:从本地 douban_synced_items 表读取
+     *   - status="wish" → isInWatchlist=true
+     *   - status="collect" → isWatched=true
+     * 其他模式:走 traktRepository.checkInWatchlist/checkWatched
+     *
+     * @return Pair(inWatchlist, watched)
+     */
+    private suspend fun resolveWatchStates(
+        traktId: Int,
+        mediaType: MediaType,
+        imdbId: String
+    ): Pair<Boolean, Boolean> {
+        return if (currentSessionMode == SessionMode.DOUBAN && imdbId.isNotBlank()) {
+            val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+            Pair(
+                syncedItem?.status == "wish",
+                syncedItem?.status == "collect"
+            )
+        } else {
+            Pair(
+                traktRepository.checkInWatchlist(traktId, mediaType),
+                traktRepository.checkWatched(traktId, mediaType)
+            )
+        }
+    }
+
     private fun fetchRatingsAsync(tmdbRating: Double) {
         ratingsJob?.cancel()
         ratingsJob = viewModelScope.launch {
@@ -553,6 +606,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchComments() {
+        // 豆瓣模式: 无 trakt token,评论 tab 已隐藏,直接跳过避免 401 失败
+        if (currentSessionMode == SessionMode.DOUBAN) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             try {
@@ -1033,6 +1088,16 @@ class DetailViewModel @Inject constructor(
     fun setRating(rating: Int) {
         val current = _uiState.value
         if (current.isRating) return
+        // 豆瓣独立模式:评分走豆瓣 markWatchedWithRating(豆瓣评分=看过耦合) + 写本地表
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            // 点击与当前评分相同 → 取消评分
+            if (current.userRating == rating) {
+                removeRating()
+                return
+            }
+            setRatingDouban(rating, comment = null)
+            return
+        }
         // 未登录：弹出登录引导
         if (!isLoggedIn) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
@@ -1075,6 +1140,11 @@ class DetailViewModel @Inject constructor(
     fun setRatingWithComment(rating: Int, comment: String) {
         val current = _uiState.value
         if (current.isRating) return
+        // 豆瓣独立模式:评分+短评走豆瓣 markWatchedWithRating + 写本地表
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            setRatingDouban(rating, comment = comment)
+            return
+        }
         if (!isLoggedIn) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
             return
@@ -1152,6 +1222,11 @@ class DetailViewModel @Inject constructor(
     fun removeRating() {
         val current = _uiState.value
         if (current.isRating) return
+        // 豆瓣独立模式:取消评分需重新 markCollect 不带 rating(豆瓣评分与看过耦合,清除评分保留看过)
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            removeRatingDouban()
+            return
+        }
         // 未登录：弹出登录引导（与 setRating 保持一致）
         if (!isLoggedIn) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
@@ -1225,6 +1300,10 @@ class DetailViewModel @Inject constructor(
     fun toggleEpisodeWatched(seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) {
         val current = _uiState.value
         if (current.togglingEpisode == Pair(seasonNumber, episodeNumber)) return
+
+        // 豆瓣独立模式: 剧集标记依赖 trakt API,豆瓣网页 API 不支持单集标记
+        // 直接 return 避免触发 showLoginPrompt 错误引导用户去登录 Trakt
+        if (currentSessionMode == SessionMode.DOUBAN) return
 
         // 未登录：弹出登录引导
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
@@ -1615,6 +1694,12 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatched) return
 
+        // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            toggleWatchedDouban()
+            return
+        }
+
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
@@ -1732,6 +1817,12 @@ class DetailViewModel @Inject constructor(
         val current = _uiState.value
         if (current.isMarkingWatchlist) return
 
+        // 豆瓣独立模式:不检查 trakt token(网关已激活是豆瓣模式前提),走本地表 + 豆瓣 API
+        if (currentSessionMode == SessionMode.DOUBAN) {
+            toggleWatchlistDouban()
+            return
+        }
+
         // 未登录：弹出登录引导（使用 getCachedAccessToken 同步检查，避免异步时序问题）
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {
             _uiState.value = _uiState.value.copy(showLoginPrompt = true)
@@ -1772,6 +1863,291 @@ class DetailViewModel @Inject constructor(
                     isMarkingWatched = false
                 )
             }
+        }
+    }
+
+    // ===== 豆瓣独立模式标记操作 =====
+    // 豆瓣独立模式下不调 trakt API,直接调豆瓣标记 API + 写本地 douban_synced_items 表。
+    // doubanId 来自 uiState.doubanIdForSync(loadDetail 时 prefetchDoubanId 预查)。
+    // 豆瓣 API 失败用乐观更新:本地表立即反映,pendingSync=true 供下次同步重试。
+
+    /**
+     * 豆瓣独立模式:切换想看状态。
+     *
+     * - 添加想看: markWish → 写表 status="wish"
+     * - 取消想看: removeInterest → 删除本地记录
+     * - doubanId 未就绪 → 显示重试按钮(保留 pendingDoubanAction)
+     * - API 失败 → 乐观更新本地表,pendingSync=true
+     */
+    private fun toggleWatchlistDouban() {
+        val current = _uiState.value
+        if (current.isMarkingWatchlist) return
+
+        val doubanId = current.doubanIdForSync
+        if (doubanId.isNullOrBlank()) {
+            // doubanId 未就绪 → 显示重试按钮,保留动作供 retryDoubanSync 复用
+            _uiState.value = current.copy(
+                doubanSyncRetryable = true,
+                pendingDoubanAction = if (current.isMarkedWatchlist) DoubanSyncAction.REMOVE_WISH else DoubanSyncAction.WISH
+            )
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            return
+        }
+
+        val cred = doubanAuthStorage.getCredentials()
+        if (cred == null) {
+            // 豆瓣未登录(理论上豆瓣模式前提是已登录,此为防御性检查)
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            return
+        }
+
+        val targetState = !current.isMarkedWatchlist
+        _uiState.value = current.copy(
+            isMarkingWatchlist = true,
+            watchlistChanged = targetState || current.watchlistChanged
+        )
+
+        viewModelScope.launch {
+            val success = if (targetState) {
+                doubanRepository.markWish(doubanId, cred.cookie)
+            } else {
+                doubanRepository.removeInterest(doubanId, cred.cookie)
+            }
+
+            if (success) {
+                if (targetState) {
+                    // 添加想看成功:写本地表 status="wish",pendingSync=false
+                    upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = false)
+                } else {
+                    // 取消想看成功:删除本地记录
+                    runCatching { doubanSyncedItemDao.deleteByDoubanId(doubanId) }
+                }
+            } else {
+                // API 失败:乐观更新本地表,pendingSync=true(下次同步重试)
+                if (targetState) {
+                    upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = true)
+                } else {
+                    // 取消失败:乐观删除本地记录(UI 立即反映);pendingSync 信息随删除丢失,
+                    // 豆瓣侧仍保留标记,下次全量同步会纠正
+                    runCatching { doubanSyncedItemDao.deleteByDoubanId(doubanId) }
+                    Log.w("DetailViewModel", "Douban removeInterest failed for $doubanId, optimistic delete applied")
+                }
+            }
+
+            _uiState.value = _uiState.value.copy(
+                isMarkedWatchlist = targetState,
+                isMarkingWatchlist = false
+            )
+            saveToCache()
+        }
+    }
+
+    /**
+     * 豆瓣独立模式:切换已看状态。
+     *
+     * - 添加已看: markCollect → 写表 status="collect"
+     * - 取消已看: removeInterest → 删除本地记录(并回退为想看,与 trakt 模式 removeWatched 副操作一致)
+     * - 电视剧不弹选集弹窗(豆瓣 markCollect 针对整剧,不支持单集)
+     *
+     * @param rating 1-5 豆瓣五星制(可选,标记已看时一并提交评分)
+     */
+    private fun toggleWatchedDouban(rating: Int? = null) {
+        val current = _uiState.value
+        if (current.isMarkingWatched) return
+
+        val doubanId = current.doubanIdForSync
+        if (doubanId.isNullOrBlank()) {
+            _uiState.value = current.copy(
+                doubanSyncRetryable = true,
+                pendingDoubanAction = if (current.isMarkedWatched) DoubanSyncAction.REMOVE_COLLECT else DoubanSyncAction.COLLECT
+            )
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            return
+        }
+
+        val cred = doubanAuthStorage.getCredentials()
+        if (cred == null) {
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            return
+        }
+
+        // 已看 → 取消已看(副操作:回退为想看,与 trakt 模式 removeWatched 一致)
+        if (current.isMarkedWatched) {
+            _uiState.value = current.copy(
+                isMarkingWatched = true,
+                watchedChanged = true,
+                watchlistChanged = true
+            )
+            viewModelScope.launch {
+                val success = doubanRepository.removeInterest(doubanId, cred.cookie)
+                if (success) {
+                    // 取消已看成功:本地回退为想看(与 trakt removeWatched 副操作一致)
+                    upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = false)
+                } else {
+                    // 失败:乐观回退为想看,pendingSync=true
+                    upsertDoubanSyncedItem(doubanId, status = "wish", pendingSync = true)
+                    Log.w("DetailViewModel", "Douban removeInterest failed for $doubanId, optimistic rollback to wish applied")
+                }
+                _uiState.value = _uiState.value.copy(
+                    isMarkedWatched = false,
+                    isMarkedWatchlist = true,
+                    isMarkingWatched = false
+                )
+                saveToCache()
+            }
+            return
+        }
+
+        // 未看 → 标记已看(电影直接标记,电视剧豆瓣模式不弹选集弹窗,整剧标记)
+        _uiState.value = current.copy(
+            isMarkingWatched = true,
+            watchedChanged = true,
+            watchlistChanged = true
+        )
+        viewModelScope.launch {
+            val success = doubanRepository.markCollect(doubanId, cred.cookie, rating)
+            if (success) {
+                upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = false)
+            } else {
+                // 失败:乐观标记已看,pendingSync=true
+                upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = true)
+                Log.w("DetailViewModel", "Douban markCollect failed for $doubanId, optimistic collect applied")
+            }
+            _uiState.value = _uiState.value.copy(
+                isMarkedWatched = true,
+                isMarkedWatchlist = false,
+                isMarkingWatched = false
+            )
+            saveToCache()
+        }
+    }
+
+    /**
+     * 豆瓣独立模式辅助:写入/更新本地 douban_synced_items 表(REPLACE 策略)。
+     *
+     * 字段从当前详情页状态填充(tmdbId/displayTitle/year/genres/posterUrl 来自 TMDB 富化),
+     * 评分映射 Trakt 1-10 → 豆瓣 1-5(豆瓣模式评分暂未实现,通常为 null)。
+     */
+    private suspend fun upsertDoubanSyncedItem(doubanId: String, status: String, pendingSync: Boolean) {
+        val now = System.currentTimeMillis()
+        val mediaTypeStr = if (currentMediaType == MediaType.SHOW) "show" else "movie"
+        val state = _uiState.value
+        val item = DoubanSyncedItem(
+            doubanId = doubanId,
+            imdbId = currentImdbId.takeIf { it.isNotBlank() },
+            traktId = currentTraktId.takeIf { it > 0 },
+            title = currentTitle,
+            status = status,
+            rating = state.userRating?.let { Math.round(it / 2.0).toInt() },
+            syncedAt = now,
+            mediaType = mediaTypeStr,
+            tmdbId = currentTmdbId.takeIf { it > 0 },
+            displayTitle = state.displayTitle.takeIf { it.isNotBlank() },
+            year = state.year,
+            genres = state.genres.takeIf { it.isNotBlank() },
+            posterUrl = state.posterUrl,
+            listedAt = null,
+            pendingSync = pendingSync
+        )
+        runCatching { doubanSyncedItemDao.insertAll(listOf(item)) }
+    }
+
+    /**
+     * 豆瓣独立模式评分(含可选短评)。
+     *
+     * 豆瓣评分与看过耦合,统一走 markWatchedWithRating(interest=collect + rating)。
+     * - Trakt 1-10 → 豆瓣 1-5 映射: doubanRating = round(rating / 2.0)
+     * - 成功/失败均乐观更新 UI 与本地表,失败时 pendingSync=true 供下次同步重试
+     * - 评分后状态变为 collect(看过),isMarkedWatched=true
+     *
+     * @param rating Trakt 1-10 分
+     * @param comment 短评(可选,null 表示不写短评)
+     */
+    private fun setRatingDouban(rating: Int, comment: String?) {
+        val current = _uiState.value
+        val doubanId = current.doubanIdForSync
+        if (doubanId.isNullOrBlank()) {
+            _uiState.value = current.copy(
+                doubanSyncRetryable = true,
+                pendingDoubanAction = DoubanSyncAction.COLLECT
+            )
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            return
+        }
+        val cred = doubanAuthStorage.getCredentials()
+        if (cred == null) {
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            return
+        }
+        val doubanRating = Math.round(rating / 2.0).toInt()
+        _uiState.value = current.copy(isRating = true, showRatingDialog = false)
+        viewModelScope.launch {
+            // 豆瓣 markWatchedWithRating 需先 fetchCsrfToken 拿 ck
+            val ck = doubanRepository.fetchCsrfToken(doubanId, cred.cookie)
+            val success = if (ck != null) {
+                doubanRepository.markWatchedWithRating(doubanId, cred.cookie, ck, doubanRating, comment ?: "").success
+            } else false
+            // 乐观更新:UI 立即反映评分(豆瓣评分=看过,isMarkedWatched=true)
+            _uiState.value = _uiState.value.copy(
+                userRating = rating,
+                userComment = comment?.takeIf { it.isNotBlank() },
+                isRating = false,
+                isMarkedWatched = true,
+                isMarkedWatchlist = false,
+                watchedChanged = true,
+                watchlistChanged = true
+            )
+            // 写本地表:成功 pendingSync=false,失败 pendingSync=true
+            upsertDoubanSyncedItem(doubanId, status = "collect", pendingSync = !success)
+            if (!success) {
+                Log.w("DetailViewModel", "Douban markWatchedWithRating failed for $doubanId, optimistic rating applied")
+            }
+            saveToCache()
+            saveUserReviewToLocal(rating, comment?.takeIf { it.isNotBlank() })
+        }
+    }
+
+    /**
+     * 豆瓣独立模式取消评分。
+     *
+     * 豆瓣评分与看过耦合,无法只清除评分而保留看过。
+     * 方案:重新 markInterest(interest=collect, rating=null),覆盖提交无评分的 collect,
+     * 豆瓣会清除原评分但保留看过状态。
+     * - 若当前无评分(userRating==null) → no-op
+     * - 成功/失败均乐观更新 UI(userRating=null)与本地表,失败时 pendingSync=true
+     */
+    private fun removeRatingDouban() {
+        val current = _uiState.value
+        if (current.userRating == null) return  // 无评分可取消
+        val doubanId = current.doubanIdForSync
+        if (doubanId.isNullOrBlank()) {
+            _uiState.value = current.copy(doubanSyncRetryable = true)
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_id_not_ready) }
+            return
+        }
+        val cred = doubanAuthStorage.getCredentials()
+        if (cred == null) {
+            viewModelScope.launch { _toastEvent.emit(R.string.detail_douban_sync_failed) }
+            return
+        }
+        _uiState.value = current.copy(isRating = true, showRatingDialog = false)
+        viewModelScope.launch {
+            // 重新 markCollect 不带 rating,清除评分保留看过
+            val success = doubanRepository.markInterest(doubanId, "collect", cred.cookie, rating = null)
+            // 乐观更新:UI 立即清除评分(保留看过状态)
+            _uiState.value = _uiState.value.copy(
+                userRating = null,
+                userComment = null,
+                isRating = false
+            )
+            // 写本地表:rating 从 state 读取(此时已为 null),status 保留当前(应为 collect)
+            val currentStatus = if (_uiState.value.isMarkedWatched) "collect" else "wish"
+            upsertDoubanSyncedItem(doubanId, status = currentStatus, pendingSync = !success)
+            if (!success) {
+                Log.w("DetailViewModel", "Douban markInterest(collect, no rating) failed for $doubanId, optimistic rating removal applied")
+            }
+            saveToCache()
+            deleteUserReviewFromLocal()
         }
     }
 

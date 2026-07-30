@@ -18,6 +18,8 @@ import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import com.tracktosearch.data.remote.douban.DoubanRepository
+import com.tracktosearch.data.session.SessionMode
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -32,6 +34,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -108,6 +111,8 @@ class DoubanSyncManager @Inject constructor(
     private val doubanDetailCache: PersistentTtlCache<DoubanDetailCacheEntry>,
     private val tokenStorage: TokenStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
+    private val sessionModeManager: SessionModeManager,
+    private val tmdbRepository: TmdbRepository,
     @ApplicationContext private val appContext: Context
 ) {
     private val _progress = MutableStateFlow(DoubanSyncProgress())
@@ -118,6 +123,19 @@ class DoubanSyncManager @Inject constructor(
 
     /** Application scope：同步协程在此运行，Activity/Service 销毁不影响 */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * 当前是否豆瓣独立模式（已激活网关 + 已登录豆瓣 + 未连 trakt）。
+     *
+     * 豆瓣模式下:
+     * - 跳过 Trakt 登录态预检（不需要 trakt token）
+     * - 跳过 loadWatchlistWatchedIds（没有 trakt 连接，加载会失败）
+     * - syncBatchToTrakt 委托给 [syncBatchToDoubanLocal]，跳过 trakt 写入，
+     *   改写本地 douban_synced_items 扩展表作为 watchlist 数据源
+     * - 网关 API（searchByImdb、TMDB 富化）仍可用
+     */
+    private suspend fun isDoubanMode(): Boolean =
+        sessionModeManager.sessionMode.first() == SessionMode.DOUBAN
 
     init {
         // 监听 DoubanRepository 的延时事件,合并到 progress.delayInfo
@@ -215,8 +233,11 @@ class DoubanSyncManager @Inject constructor(
      *
      * 这是 UI 层前置引导的兜底:即使用户绕过 LoginScreen 直接调用同步
      * (如 DoubanLoginScreen 自动触发、设置页重试),也会被拦截。
+     *
+     * 豆瓣独立模式例外:不需要 trakt token,直接返回 true。
      */
     private suspend fun checkTraktAvailable(): Boolean {
+        if (isDoubanMode()) return true
         val token = tokenStorage.getCachedAccessToken()
         if (token == null || !tokenStorage.isTokenValid()) {
             _progress.value = DoubanSyncProgress(
@@ -498,8 +519,12 @@ class DoubanSyncManager @Inject constructor(
         }
 
         // 加载 Trakt 已有标记缓存（用于冲突检测）
-        traktRepository.loadWatchlistWatchedIds()
-        val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
+        // 豆瓣模式跳过 trakt watchlist 缓存加载（无 trakt 连接，加载会失败）
+        val isDoubanMode = isDoubanMode()
+        if (!isDoubanMode) {
+            traktRepository.loadWatchlistWatchedIds()
+        }
+        val watchlistWatchedIds = if (!isDoubanMode) traktRepository.getWatchlistWatchedIds() else null
 
         // 加载已同步记录（断点续传：跳过已同步条目）
         // 拉取云端后本地 synced_items 已包含 A 手机数据，B 手机可跳过已同步条目
@@ -674,8 +699,12 @@ class DoubanSyncManager @Inject constructor(
             )
         }
 
-        traktRepository.loadWatchlistWatchedIds()
-        val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
+        // 豆瓣模式跳过 trakt watchlist 缓存加载（无 trakt 连接，加载会失败）
+        val isDoubanMode = isDoubanMode()
+        if (!isDoubanMode) {
+            traktRepository.loadWatchlistWatchedIds()
+        }
+        val watchlistWatchedIds = if (!isDoubanMode) traktRepository.getWatchlistWatchedIds() else null
 
         // 加载已同步记录（模式 A 和模式 B 都需要）：
         // - 模式 A：跳过已同步条目（与 forceOverwrite=false 语义一致，避免重复 POST Trakt）
@@ -941,6 +970,20 @@ class DoubanSyncManager @Inject constructor(
                 return
             }
 
+        // 豆瓣独立模式:跳过 trakt batch remove + rollback,直接清本地表 + 重新同步
+        // (未连 trakt,batchRemoveFromWatchlist/Watched 会失败;豆瓣模式全量重写=清本地表+重爬豆瓣)
+        if (isDoubanMode()) {
+            val startTime = System.currentTimeMillis()
+            _progress.value = DoubanSyncProgress(
+                isRunning = true, startTimeMs = startTime,
+                phase = "清空本地标记", isRetry = false, currentTitle = null
+            )
+            doubanSyncedItemDao.clearAll()
+            _progress.value = _progress.value.copy(phase = "重新应用豆瓣状态")
+            runSyncLegacy(forceOverwrite = true)
+            return
+        }
+
         val startTime = System.currentTimeMillis()
         _progress.value = DoubanSyncProgress(
             isRunning = true, startTimeMs = startTime, phase = "清空已同步标记",
@@ -1037,8 +1080,12 @@ class DoubanSyncManager @Inject constructor(
         )
 
         // 加载 Trakt 已有标记缓存
-        traktRepository.loadWatchlistWatchedIds()
-        val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
+        // 豆瓣模式跳过 trakt watchlist 缓存加载（无 trakt 连接，加载会失败）
+        val isDoubanMode = isDoubanMode()
+        if (!isDoubanMode) {
+            traktRepository.loadWatchlistWatchedIds()
+        }
+        val watchlistWatchedIds = if (!isDoubanMode) traktRepository.getWatchlistWatchedIds() else null
 
         // 加载已同步记录(续传模式下,已成功的会通过 syncedIds 跳过)
         val syncedIds = doubanSyncedItemDao.getAllSyncedDoubanIds().toSet()
@@ -1156,8 +1203,12 @@ class DoubanSyncManager @Inject constructor(
         )
 
         // 加载 Trakt 已有标记缓存
-        traktRepository.loadWatchlistWatchedIds()
-        val watchlistWatchedIds = traktRepository.getWatchlistWatchedIds()
+        // 豆瓣模式跳过 trakt watchlist 缓存加载（无 trakt 连接，加载会失败）
+        val isDoubanMode = isDoubanMode()
+        if (!isDoubanMode) {
+            traktRepository.loadWatchlistWatchedIds()
+        }
+        val watchlistWatchedIds = if (!isDoubanMode) traktRepository.getWatchlistWatchedIds() else null
 
         // 加载已同步记录(重试成功的项要插入到这个表)
         val syncedIds = doubanSyncedItemDao.getAllSyncedDoubanIds().toSet()
@@ -1460,6 +1511,21 @@ class DoubanSyncManager @Inject constructor(
         val originalFailure: DoubanSyncFailure? = null  // 重试模式下传入,用于 attemptCount 累加
     )
 
+    /**
+     * 豆瓣独立模式单条解析结果。
+     *
+     * 与 [SyncResolve] 区别: traktId/tmdbId 均可空（豆瓣模式不要求 traktId，
+     * searchByImdb 失败时仍写本地表，traktId/tmdbId 留 null 供未来回写钩子使用）。
+     */
+    private data class DoubanLocalResolve(
+        val item: DoubanMarkItem,
+        val imdbId: String,
+        val mediaType: MediaType,
+        val traktId: Int? = null,
+        val tmdbId: Int? = null,
+        val detail: DoubanDetailInfo? = null
+    )
+
     private data class BatchSyncResult(
         val success: Int,
         val failed: List<DoubanSyncFailure>,
@@ -1495,6 +1561,19 @@ class DoubanSyncManager @Inject constructor(
         existingFailures: List<DoubanSyncFailure>? = null,
         skipFailuresIds: Set<String> = emptySet()
     ): BatchSyncResult {
+        // 豆瓣独立模式：跳过 trakt 写入，改写本地 douban_synced_items 扩展表（含 TMDB 富化字段）
+        if (isDoubanMode()) {
+            return syncBatchToDoubanLocal(
+                items = items,
+                status = status,
+                cookie = cookie,
+                syncedIds = syncedIds,
+                onProgress = onProgress,
+                existingFailures = existingFailures,
+                skipFailuresIds = skipFailuresIds
+            )
+        }
+
         val failed = mutableListOf<DoubanSyncFailure>()
         val existingMap = existingFailures?.associateBy { it.doubanId } ?: emptyMap()
 
@@ -1729,6 +1808,300 @@ class DoubanSyncManager @Inject constructor(
         // (failed 列表包含阶段1详情页失败项,不能直接用 withTraktId.size - failed.size)
         val successCount = withTraktId.size - writeFailedCount
         return BatchSyncResult(success = successCount, failed = failed, skipped = skippedCount, cacheHit = cacheHit, successDoubanIds = successDoubanIds.toSet())
+    }
+
+    /**
+     * 豆瓣独立模式批量同步（不写 trakt，改写本地 douban_synced_items 扩展表）。
+     *
+     * 流程:
+     * 1. 同步开始时重试上次乐观更新失败的豆瓣 API 标记（[retryPendingSyncItems]，幂等）
+     * 2. 过滤已同步条目（断点续传，与 trakt 模式一致）
+     * 3. 并发爬详情页拿 imdbId（并发度 3，优先查持久化缓存 + 全局详情池）
+     * 4. 并发 searchByImdb 拿 traktId + tmdbId（并发度 5，traktId 可空，查不到不记失败）
+     * 5. 用 tmdbId 调 TmdbRepository 富化拿中文标题/海报/年份/类型（失败字段留 null）
+     * 6. 构造扩展后的 DoubanSyncedItem（含富化字段 + listedAt=豆瓣标记时间 + pendingSync=false）
+     *    写本地 douban_synced_items 表，**跳过** batchAddToWatchlist/batchMarkAsWatched
+     *
+     * 与 [syncBatchToTrakt] 的区别:
+     * - 阶段 4 traktId 查不到不记失败（traktId 仅用于 TMDB 富化和未来回写钩子）
+     * - 阶段 5 新增 TMDB 富化（enrichMovie/enrichTv）
+     * - 阶段 6 写本地表，跳过 trakt API 写入
+     *
+     * traktId 仍调 searchByImdb 获取（走网关），用于 TMDB 富化和未来 trakt 回写钩子。
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private suspend fun syncBatchToDoubanLocal(
+        items: List<DoubanMarkItem>,
+        status: DoubanMarkStatus,
+        cookie: String,
+        syncedIds: Set<String>,
+        onProgress: (current: Int, subPhase: String, cacheHitDelta: Int, currentTitle: String?, recentFailure: DoubanSyncFailure?) -> Unit,
+        existingFailures: List<DoubanSyncFailure>? = null,
+        skipFailuresIds: Set<String> = emptySet()
+    ): BatchSyncResult {
+        // 同步开始时重试上次乐观更新失败的豆瓣 API 标记（幂等：pending 为空时直接返回）
+        runCatching { retryPendingSyncItems(cookie) }
+
+        val failed = mutableListOf<DoubanSyncFailure>()
+        val existingMap = existingFailures?.associateBy { it.doubanId } ?: emptyMap()
+
+        // 跳过已同步 + 已知失败项（与 trakt 模式一致）
+        val pending = items.filter { it.doubanId !in syncedIds && it.doubanId !in skipFailuresIds }
+        val skippedCount = items.size - pending.size
+
+        if (pending.isEmpty()) {
+            onProgress(items.size, "断点续传跳过", 0, null, null)
+            return BatchSyncResult(0, emptyList(), skippedCount, 0)
+        }
+
+        // 全局详情池前置查询（与 trakt 模式一致，减少豆瓣爬取）
+        runCatching {
+            val pendingDoubanIds = pending.map { it.doubanId }
+            cloudDetailsPoolManager.fetchAndMergeToLocal(pendingDoubanIds, doubanDetailCache)
+        }
+
+        // 阶段 1(详情页) → Channel → 阶段 2(searchByImdb 拿 traktId+tmdbId)
+        val detailChannel = Channel<DoubanLocalResolve>(capacity = pending.size)
+        val detailSemaphore = Semaphore(3)
+        val traktSemaphore = Semaphore(5)
+        val completedCount = AtomicInteger(0)
+        val detailCacheHit = AtomicInteger(0)
+        val resolvedList = mutableListOf<DoubanLocalResolve>()
+        // 无 imdbId 条目直接构造本地表记录(豆瓣模式不记失败),走独立写入批次,
+        // 不进 resolvedList 以跳过 searchByImdb/TMDB 富化阶段
+        val noImdbBatch = mutableListOf<Pair<DoubanMarkItem, DoubanSyncedItem>>()
+
+        coroutineScope {
+            // ===== 阶段 1: 详情页爬取(生产者,并发度 3) =====
+            val detailJobs = pending.map { item ->
+                async {
+                    if (cancelled) return@async
+                    try {
+                        val (detail, isCacheHit) = detailSemaphore.withPermit {
+                            if (cancelled) return@withPermit Pair<DoubanDetailInfo?, Boolean>(null, false)
+                            doubanRepository.fetchDetail(item.doubanUrl, cookie, item.title) { _, _ -> }
+                        }
+                        if (isCacheHit) detailCacheHit.incrementAndGet()
+                        else dirtyDetailIds.add(item.doubanId)
+                        if (detail == null) {
+                            val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
+                            synchronized(failed) { failed.add(failure) }
+                            val done = completedCount.incrementAndGet()
+                            onProgress(done, "详情页", 0, item.title, failure)
+                            return@async
+                        }
+                        val imdbId = detail.imdbId
+                        if (imdbId.isNullOrEmpty()) {
+                            // 豆瓣模式: 无 imdbId 不记失败,直接构造本地表记录
+                            // (imdbId/traktId/tmdbId 留 null,year/genres 留 null,
+                            //  posterUrl/displayTitle 用豆瓣列表兜底,mediaType 按详情页 isTvShow 推断)
+                            // 跳过 searchByImdb/TMDB 富化阶段,进 noImdbBatch 统一写入
+                            val noImdbItem = DoubanSyncedItem(
+                                doubanId = item.doubanId,
+                                imdbId = null,
+                                traktId = null,
+                                title = item.title,
+                                status = status.path,
+                                rating = item.rating,
+                                syncedAt = System.currentTimeMillis(),
+                                mediaType = if (detail.isTvShow) "show" else "movie",
+                                tmdbId = null,
+                                displayTitle = item.title,
+                                year = null,
+                                genres = null,
+                                posterUrl = item.posterUrl,
+                                listedAt = item.markedAt,
+                                pendingSync = false
+                            )
+                            synchronized(noImdbBatch) { noImdbBatch.add(item to noImdbItem) }
+                            val done = completedCount.incrementAndGet()
+                            onProgress(done, "详情页", 0, item.title, null)
+                            return@async
+                        }
+                        val mediaType = if (detail.isTvShow) MediaType.SHOW else MediaType.MOVIE
+                        detailChannel.send(DoubanLocalResolve(item, imdbId, mediaType))
+                    } catch (e: Exception) {
+                        val failure = buildFailure(item, status, FailureReason.DETAIL_FETCH_FAILED, existingMap)
+                        synchronized(failed) { failed.add(failure) }
+                        val done = completedCount.incrementAndGet()
+                        onProgress(done, "详情页", 0, item.title, failure)
+                    }
+                }
+            }
+
+            // ===== 阶段 2: searchByImdb 拿 traktId + tmdbId(消费者,并发度 5) =====
+            // 豆瓣模式: traktId 查不到不记失败（仅用于 TMDB 富化和未来回写钩子）
+            val traktJobs = (1..5).map {
+                async {
+                    for (r in detailChannel) {
+                        if (cancelled) break
+                        // searchByImdb 内部有持久化缓存（命中秒回，未命中走网关网络）
+                        val searchResult = traktSemaphore.withPermit {
+                            if (cancelled) null
+                            else try {
+                                traktRepository.searchByImdb(r.imdbId, r.mediaType).getOrNull()
+                            } catch (e: Exception) { null }
+                        }
+                        var traktId: Int? = null
+                        var tmdbId: Int? = null
+                        if (searchResult != null) {
+                            for (result in searchResult) {
+                                val ids = when (r.mediaType) {
+                                    MediaType.MOVIE -> result.movie?.ids
+                                    MediaType.SHOW -> result.show?.ids
+                                    else -> null
+                                }
+                                if (ids != null && ids.trakt > 0) {
+                                    traktId = ids.trakt
+                                    if (ids.tmdb > 0) tmdbId = ids.tmdb
+                                    break
+                                }
+                            }
+                        }
+                        synchronized(resolvedList) {
+                            resolvedList.add(r.copy(traktId = traktId, tmdbId = tmdbId))
+                        }
+                        val done = completedCount.incrementAndGet()
+                        onProgress(done, "Trakt 查询", 0, r.item.title, null)
+                    }
+                }
+            }
+
+            detailJobs.awaitAll()
+            detailChannel.close()
+            traktJobs.awaitAll()
+        }
+
+        if (cancelled) return BatchSyncResult(0, failed, skippedCount, detailCacheHit.get())
+
+        val cacheHit = detailCacheHit.get()
+        if (cacheHit > 0) {
+            onProgress(completedCount.get(), "详情页", cacheHit, null, null)
+        }
+
+        // ===== 阶段 3+4: TMDB 富化 + 写本地表（跳过 trakt 写入） =====
+        onProgress(resolvedList.size, "写入本地", 0, null, null)
+        if (cancelled) return BatchSyncResult(0, failed, skippedCount, cacheHit)
+
+        val batchToInsert = mutableListOf<DoubanSyncedItem>()
+        val successDoubanIds = mutableSetOf<String>()
+        for (r in resolvedList) {
+            // TMDB 富化（如果 tmdbId 可用，enrichMovie/enrichTv 内部有永久缓存）
+            var displayTitle: String? = null
+            var year: Int? = null
+            var genres: String? = null
+            var posterUrl: String? = null
+            val tmdbId = r.tmdbId
+            if (tmdbId != null && tmdbId > 0) {
+                try {
+                    when (r.mediaType) {
+                        MediaType.MOVIE -> {
+                            val enriched = tmdbRepository.enrichMovie(tmdbId, r.item.title, null)
+                            displayTitle = enriched.chineseTitle.ifBlank { null }
+                            year = enriched.year
+                            genres = enriched.genres.ifBlank { null }
+                            posterUrl = enriched.posterUrl
+                        }
+                        MediaType.SHOW -> {
+                            val enriched = tmdbRepository.enrichTv(tmdbId, r.item.title, null)
+                            displayTitle = enriched.chineseTitle.ifBlank { null }
+                            year = enriched.year
+                            genres = enriched.genres.ifBlank { null }
+                            posterUrl = enriched.posterUrl
+                        }
+                        else -> {}
+                    }
+                } catch (e: Exception) {
+                    // TMDB 富化失败不阻断,字段留 null
+                    android.util.Log.w("DoubanSync", "TMDB enrich failed for tmdbId=$tmdbId: ${e.message}")
+                }
+            }
+            // 富化失败时用豆瓣列表的 posterUrl/title 兜底
+            if (posterUrl == null) posterUrl = r.item.posterUrl
+            if (displayTitle == null) displayTitle = r.item.title
+
+            batchToInsert.add(
+                DoubanSyncedItem(
+                    doubanId = r.item.doubanId,
+                    imdbId = r.imdbId,
+                    traktId = r.traktId,
+                    title = r.item.title,
+                    status = status.path,
+                    rating = r.item.rating,
+                    syncedAt = System.currentTimeMillis(),
+                    mediaType = r.mediaType.name.lowercase(),
+                    tmdbId = r.tmdbId,
+                    displayTitle = displayTitle,
+                    year = year,
+                    genres = genres,
+                    posterUrl = posterUrl,
+                    listedAt = r.item.markedAt,  // 豆瓣标记时间（区别于 syncedAt 同步时间）
+                    pendingSync = false  // 主同步成功,无待重试标记
+                )
+            )
+            successDoubanIds.add(r.item.doubanId)
+        }
+
+        // 无 imdbId 条目加入写入批次（豆瓣模式不记失败,与 resolvedList 一起写本地表）
+        if (noImdbBatch.isNotEmpty()) {
+            batchToInsert.addAll(noImdbBatch.map { it.second })
+            successDoubanIds.addAll(noImdbBatch.map { it.first.doubanId })
+        }
+
+        // 写本地表（跳过 batchAddToWatchlist / batchMarkAsWatched）
+        var writeFailedCount = 0
+        try {
+            if (batchToInsert.isNotEmpty()) {
+                doubanSyncedItemDao.insertAll(batchToInsert)
+            }
+        } catch (e: Exception) {
+            writeFailedCount = batchToInsert.size
+            val writeFailures = resolvedList.map { r ->
+                buildFailure(r.item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            } + noImdbBatch.map { (item, _) ->
+                buildFailure(item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            }
+            synchronized(failed) { failed.addAll(writeFailures) }
+            successDoubanIds.clear()
+        }
+
+        val successCount = batchToInsert.size - writeFailedCount
+        return BatchSyncResult(
+            success = successCount,
+            failed = failed,
+            skipped = skippedCount,
+            cacheHit = cacheHit,
+            successDoubanIds = successDoubanIds.toSet()
+        )
+    }
+
+    /**
+     * 豆瓣模式: 重试上次乐观更新失败的豆瓣 API 标记。
+     *
+     * 场景: 用户在豆瓣模式下标记想看/看过时,本地表先乐观更新(pendingSync=true),
+     * 豆瓣 API 调用失败时保留 pendingSync=true。下次同步开始时调用本方法重试。
+     *
+     * 成功后清除 pendingSync 标记; 失败保留,下次再试。幂等: pending 为空时直接返回。
+     */
+    private suspend fun retryPendingSyncItems(cookie: String) {
+        val pending = doubanSyncedItemDao.getPendingSyncItems()
+        if (pending.isEmpty()) return
+        for (item in pending) {
+            if (cancelled) break
+            try {
+                val ok = when (item.status) {
+                    "wish" -> doubanRepository.markWish(item.doubanId, cookie)
+                    "collect" -> doubanRepository.markCollect(item.doubanId, cookie, item.rating)
+                    else -> false
+                }
+                if (ok) {
+                    doubanSyncedItemDao.clearPendingSync(item.doubanId)
+                }
+            } catch (e: Exception) {
+                // 重试失败,保留 pendingSync=true,下次同步再试
+                android.util.Log.w("DoubanSync", "retryPendingSyncItems failed for ${item.doubanId}: ${e.message}")
+            }
+        }
     }
 
     /**

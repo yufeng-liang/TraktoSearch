@@ -32,8 +32,10 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
+import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
@@ -86,6 +88,13 @@ interface SharedTransitionEntryPoint {
 @InstallIn(SingletonComponent::class)
 interface GuestModeEntryPoint {
     fun guestModeStorage(): com.tracktosearch.data.local.GuestModeStorage
+}
+
+/** EntryPoint 用于在 AppNavigation 读取豆瓣登录态（计算豆瓣独立模式） */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface DoubanAuthStorageEntryPoint {
+    fun doubanAuthStorage(): DoubanAuthStorage
 }
 
 object Routes {
@@ -170,13 +179,14 @@ class AuthStateHolder @Inject constructor(
 fun AppNavigation(
     startDestination: String,
     initialTab: Int = 0,
-    initialTraktLoggedIn: Boolean = false,
-    traktConnectionState: TraktConnectionState = if (initialTraktLoggedIn) {
-        TraktConnectionState.CONNECTED
-    } else {
-        TraktConnectionState.DISCONNECTED
-    },
     authStateHolder: AuthStateHolder,
+    /**
+     * 统一会话模式管理器：trakt 连接态、豆瓣登录态、sessionMode 三态合一。
+     * - UI 由 [SessionModeManager.traktConnectionState] / [SessionModeManager.traktConnected]
+     *   / [SessionModeManager.sessionMode] 派生，不再依赖 Compose 入参传递 trakt 连接态。
+     * - Trakt 网络校验结果由 MainActivity 调用 [SessionModeManager.setTraktConnectionState] 写入。
+     */
+    sessionModeManager: SessionModeManager,
     onLoginSuccess: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -204,17 +214,18 @@ fun AppNavigation(
     }
     val scope = rememberCoroutineScope()
     val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
-    // Trakt OAuth 与网关激活分开维护；网关 AUTHORIZED 不代表 Trakt 已登录。
-    var isTraktLoggedIn by remember { mutableStateOf(initialTraktLoggedIn) }
-
-    // CHECKING 期间保留上次缓存；只有明确失败后才显示 Trakt 登录提示。
-    LaunchedEffect(traktConnectionState) {
-        when (traktConnectionState) {
-            TraktConnectionState.CONNECTED -> isTraktLoggedIn = true
-            TraktConnectionState.DISCONNECTED -> isTraktLoggedIn = false
-            TraktConnectionState.CHECKING -> Unit
-        }
+    // Trakt 连接态：从 SessionModeManager 读取（MainActivity 在网络校验后写入）
+    val traktConnectionState by sessionModeManager.traktConnectionState.collectAsStateWithLifecycle()
+    val isTraktConnected by sessionModeManager.traktConnected.collectAsStateWithLifecycle()
+    // 豆瓣登录态：用于判定豆瓣独立模式（激活网关 + 已登录豆瓣 + 未连 trakt）
+    val doubanAuthStorage = remember {
+        EntryPointAccessors.fromApplication(context, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
     }
+    val isDoubanLoggedIn by doubanAuthStorage.isLoggedIn.collectAsStateWithLifecycle()
+    // 豆瓣独立模式：trakt 未连 + 豆瓣已登录
+    val isDoubanMode = isDoubanLoggedIn && !isTraktConnected
+    // MainScreen 的 isLoggedIn：trakt 已连 OR 豆瓣已登录（非 GUEST 模式才显示 WatchlistScreen）
+    val isLoggedIn = isTraktConnected || isDoubanLoggedIn
 
     LaunchedEffect(currentAuthState) {
         if (currentAuthState == AuthState.OFFLINE) {
@@ -264,7 +275,8 @@ fun AppNavigation(
                             redirectToBrowser = fromGuestMode,
                             expired = currentAuthState == AuthState.EXPIRED,
                             onLoginSuccess = {
-                                isTraktLoggedIn = true
+                                // Trakt 登录成功：写入 SessionModeManager，由其驱动 UI 切换到 TRAKT 模式
+                                sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
                                 onLoginSuccess()
                                 // 登录成功后清除访客模式标记
                                 val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
@@ -279,6 +291,11 @@ fun AppNavigation(
                                         popUpTo(0) { inclusive = true }
                                     }
                                 }
+                            },
+                            onDoubanLogin = {
+                                // 豆瓣登录入口：跳转到 DoubanLoginScreen，
+                                // 登录成功后由 DOUBAN_LOGIN composable 的 onLoginSuccess 处理进入主页
+                                navController.navigate(Routes.DOUBAN_LOGIN)
                             },
                             onGuestMode = {
                                 // 持久化访客模式状态，跨 App 重启保留
@@ -384,12 +401,17 @@ fun AppNavigation(
 
                         MainScreen(
                             initialTab = mainInitialTab,
-                            isLoggedIn = isTraktLoggedIn,
+                            isLoggedIn = isLoggedIn,
+                            isTraktConnected = isTraktConnected,
+                            isDoubanMode = isDoubanMode,
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
+                            },
+                            onDoubanFailureClick = { doubanId ->
+                                navController.navigate(Routes.doubanItemDetailRoute(doubanId))
                             },
                             onSearchClick = { keyword ->
                                 // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页(仅 DEBUG 构建可用)
@@ -422,7 +444,7 @@ fun AppNavigation(
                             onLogout = {
                                 // Trakt 退出登录：只清除 Trakt 连接状态，不清除网关激活令牌，
                                 // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
-                                isTraktLoggedIn = false
+                                sessionModeManager.setTraktConnectionState(TraktConnectionState.DISCONNECTED)
                                 scope.launch { authStateHolder.disconnectTrakt() }
                                 // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
                             },
@@ -676,8 +698,26 @@ fun AppNavigation(
 
                 composable(Routes.DOUBAN_LOGIN) {
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
+                        // 识别来源：从 ActivationLoginScreen 进入时，登录成功应直达主页（豆瓣独立模式）；
+                        // 从 MainScreen 进入时，沿用 onBack 返回上一页即可
+                        val previousRoute = navController.previousBackStackEntry?.destination?.route
+                        val fromActivationLogin = previousRoute == Routes.LOGIN
                         DoubanLoginScreen(
-                            onBack = { navController.popBackStack() }
+                            onBack = { navController.popBackStack() },
+                            onLoginSuccess = if (fromActivationLogin) {
+                                {
+                                    // 来自激活登录页：豆瓣登录成功后进入主页（豆瓣独立模式）
+                                    // 复用 Trakt 登录的 onboarding/默认 tab 选择逻辑
+                                    scope.launch {
+                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
+                                        mainInitialTab = if (onboardingCompleted) 2 else 0
+                                        currentStartDest = Routes.MAIN
+                                        navController.navigate(Routes.MAIN) {
+                                            popUpTo(0) { inclusive = true }
+                                        }
+                                    }
+                                }
+                            } else null
                         )
                     }
                 }

@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
+import com.tracktosearch.data.local.db.DoubanSyncedItem
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.repository.BatchRemovalItem
@@ -20,6 +22,8 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionMode
+import com.tracktosearch.data.session.SessionModeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -50,8 +55,20 @@ data class MediaUiItem(
     val posterUrl: String?,
     val imdbId: String = "",
     val traktRating: Double = 0.0,
-    val listedAt: String = ""
-)
+    val listedAt: String = "",
+    // 豆瓣模式本地数据用（无 imdb 条目走失败项详情页分流）
+    val doubanId: String? = null
+) {
+    /**
+     * 多选模式唯一标识。
+     *
+     * - traktId > 0: 用 `"t$traktId"`（trakt 模式主键）
+     * - traktId = 0 且 doubanId 非空: 用 `"d$doubanId"`（豆瓣模式无 imdb 条目主键）
+     *   避免所有 traktId=0 的条目共用 key=0 导致选中冲突
+     */
+    val selectionKey: String
+        get() = if (traktId > 0) "t$traktId" else if (doubanId != null) "d$doubanId" else "t$traktId"
+}
 
 // 筛选相关枚举（与豆瓣失败页独立定义，Watchlist 模块自包含）
 enum class MarkedTimePreset { SEVEN_DAYS, THIRTY_DAYS, ALL }
@@ -123,6 +140,8 @@ class WatchlistViewModel @Inject constructor(
     private val doubanSyncMetaStorage: DoubanSyncMetaStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
+    private val sessionModeManager: SessionModeManager,
+    private val doubanSyncedItemDao: DoubanSyncedItemDao,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -322,6 +341,11 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
         loadMoviesJob = viewModelScope.launch {
+            // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
+            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+                loadMoviesFromDouban(forceReload, silent)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isLoadingMovies = !silent,
                 moviesError = if (silent) _uiState.value.moviesError else null
@@ -398,6 +422,11 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
         loadShowsJob = viewModelScope.launch {
+            // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
+            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+                loadShowsFromDouban(forceReload, silent)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isLoadingShows = !silent,
                 showsError = if (silent) _uiState.value.showsError else null
@@ -475,6 +504,11 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingHistoryMovies) return
         loadHistoryMoviesJob = viewModelScope.launch {
+            // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
+            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+                loadHistoryMoviesFromDouban(forceReload)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isLoadingHistoryMovies = true,
                 historyMoviesError = null
@@ -527,6 +561,11 @@ class WatchlistViewModel @Inject constructor(
         }
         if (_uiState.value.isLoadingHistoryShows) return
         loadHistoryShowsJob = viewModelScope.launch {
+            // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
+            if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+                loadHistoryShowsFromDouban(forceReload)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(
                 isLoadingHistoryShows = true,
                 historyShowsError = null
@@ -571,6 +610,90 @@ class WatchlistViewModel @Inject constructor(
             }
         }
     }
+
+    // ========== 豆瓣独立模式：watchlist 数据源走本地 douban_synced_items 表 ==========
+
+    /** 豆瓣模式：想看电影列表（status="wish"） */
+    private suspend fun loadMoviesFromDouban(forceReload: Boolean, silent: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isLoadingMovies = !silent,
+            moviesError = if (silent) _uiState.value.moviesError else null
+        )
+        // 豆瓣模式数据全量本地,不分页;forceReload 时重新读表(数据可能在后台同步更新)
+        val items = doubanSyncedItemDao.getByStatusAndMediaType("wish", "movie")
+        val uiItems = items.map { it.toMediaUiItem() }
+        _uiState.value = _uiState.value.copy(
+            movies = uiItems,
+            isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
+            moviesLoaded = true,
+            hasMoreMovies = false,  // 豆瓣模式本地全量,不分页
+            moviesError = null
+        )
+    }
+
+    /** 豆瓣模式：想看剧集列表（status="wish"） */
+    private suspend fun loadShowsFromDouban(forceReload: Boolean, silent: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isLoadingShows = !silent,
+            showsError = if (silent) _uiState.value.showsError else null
+        )
+        val items = doubanSyncedItemDao.getByStatusAndMediaType("wish", "show")
+        val uiItems = items.map { it.toMediaUiItem() }
+        _uiState.value = _uiState.value.copy(
+            shows = uiItems,
+            isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
+            showsLoaded = true,
+            hasMoreShows = false,
+            showsError = null
+        )
+    }
+
+    /** 豆瓣模式：已看电影列表（status="collect"） */
+    private suspend fun loadHistoryMoviesFromDouban(forceReload: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isLoadingHistoryMovies = true,
+            historyMoviesError = null
+        )
+        val items = doubanSyncedItemDao.getByStatusAndMediaType("collect", "movie")
+        val uiItems = items.map { it.toMediaUiItem() }
+        _uiState.value = _uiState.value.copy(
+            historyMovies = uiItems,
+            isLoadingHistoryMovies = false,
+            historyMoviesLoaded = true,
+            historyMoviesError = null
+        )
+    }
+
+    /** 豆瓣模式：已看剧集列表（status="collect"） */
+    private suspend fun loadHistoryShowsFromDouban(forceReload: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            isLoadingHistoryShows = true,
+            historyShowsError = null
+        )
+        val items = doubanSyncedItemDao.getByStatusAndMediaType("collect", "show")
+        val uiItems = items.map { it.toMediaUiItem() }
+        _uiState.value = _uiState.value.copy(
+            historyShows = uiItems,
+            isLoadingHistoryShows = false,
+            historyShowsLoaded = true,
+            historyShowsError = null
+        )
+    }
+
+    /** DoubanSyncedItem → MediaUiItem 映射（豆瓣模式本地数据渲染用） */
+    private fun DoubanSyncedItem.toMediaUiItem() = MediaUiItem(
+        traktId = traktId ?: 0,
+        tmdbId = tmdbId ?: 0,
+        title = title,
+        displayTitle = displayTitle ?: title,
+        year = year,
+        genres = genres ?: "",
+        posterUrl = posterUrl,
+        imdbId = imdbId ?: "",
+        traktRating = 0.0,
+        listedAt = listedAt ?: "",
+        doubanId = doubanId
+    )
 
     private suspend fun enrichMediaItem(
         traktId: Int, tmdbId: Int, title: String, year: Int?,
@@ -679,8 +802,14 @@ class WatchlistViewModel @Inject constructor(
     /** 从想看列表批量移除（suspend，调用方等待完成后关闭多选栏）。
      *  部分成功时仍会更新 UI（移除已成功项）并启动豆瓣批量移除。
      *  @return true=有部分条目移除失败；false=全部成功 */
-    suspend fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType): Boolean {
+    suspend fun batchRemoveFromWatchlist(items: List<MediaUiItem>, type: MediaType): Boolean {
         val isMovie = type == MediaType.MOVIE
+        // 豆瓣独立模式: 从本地 douban_synced_items 表删除,并后台调用豆瓣 API 移除标记
+        if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            batchRemoveFromDouban(items, isMovie, isWatchlist = true)
+            return false
+        }
+        val traktIds = items.map { it.traktId }
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeFromWatchlist(id, type) }
@@ -691,7 +820,7 @@ class WatchlistViewModel @Inject constructor(
         if (successCount > 0) {
             // 仅对成功的 id 执行 UI 更新和豆瓣批量移除，避免部分失败时 UI 与服务端不一致
             val successIds = traktIds.filterIndexed { i, _ -> results[i].isSuccess }.toSet()
-            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title/doubanId），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
                 _uiState.value.movies.filter { it.traktId in successIds }
             } else {
@@ -704,7 +833,7 @@ class WatchlistViewModel @Inject constructor(
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
-                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle, it.doubanId) }
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
@@ -714,8 +843,14 @@ class WatchlistViewModel @Inject constructor(
     /** 从已看历史批量移除（suspend，调用方等待完成后关闭多选栏）。
      *  部分成功时仍会更新 UI（移除已成功项）并启动豆瓣批量移除。
      *  @return true=有部分条目移除失败；false=全部成功 */
-    suspend fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType): Boolean {
+    suspend fun batchRemoveFromHistory(items: List<MediaUiItem>, type: MediaType): Boolean {
         val isMovie = type == MediaType.MOVIE
+        // 豆瓣独立模式: 从本地 douban_synced_items 表删除,并后台调用豆瓣 API 移除标记
+        if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            batchRemoveFromDouban(items, isMovie, isWatchlist = false)
+            return false
+        }
+        val traktIds = items.map { it.traktId }
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeWatched(id, type) }
@@ -726,7 +861,7 @@ class WatchlistViewModel @Inject constructor(
         if (successCount > 0) {
             // 仅对成功的 id 执行 UI 更新和豆瓣批量移除，避免部分失败时 UI 与服务端不一致
             val successIds = traktIds.filterIndexed { i, _ -> results[i].isSuccess }.toSet()
-            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title/doubanId），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
                 _uiState.value.historyMovies.filter { it.traktId in successIds }
             } else {
@@ -739,7 +874,51 @@ class WatchlistViewModel @Inject constructor(
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
-                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle, it.doubanId) }
+                doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
+            }
+        }
+        return failedCount > 0
+    }
+
+    /**
+     * 豆瓣独立模式批量移除：从本地 douban_synced_items 表立即删除,并后台调用豆瓣 API 移除标记。
+     *
+     * 与 Trakt 模式不同：
+     * - 本地表删除立即生效（UI 立即更新），无需等待网络请求
+     * - 豆瓣 API 移除在 Application scope 后台运行，失败仅记录日志
+     * - UI 按 selectionKey 过滤（豆瓣模式无 traktId 条目也需正确移除）
+     */
+    private suspend fun batchRemoveFromDouban(items: List<MediaUiItem>, isMovie: Boolean, isWatchlist: Boolean) {
+        if (items.isEmpty()) return
+        val selectionKeys = items.map { it.selectionKey }.toSet()
+        // 1. 立即从本地表删除（按 doubanId,豆瓣模式条目必有 doubanId）
+        val doubanIds = items.mapNotNull { it.doubanId }
+        if (doubanIds.isNotEmpty()) {
+            doubanIds.forEach { doubanId ->
+                doubanSyncedItemDao.deleteByDoubanId(doubanId)
+            }
+        }
+        // 2. 立即更新 UI（按 selectionKey 过滤,避免无 traktId 条目残留）
+        _uiState.value = if (isWatchlist) {
+            if (isMovie) {
+                _uiState.value.copy(movies = _uiState.value.movies.filter { it.selectionKey !in selectionKeys })
+            } else {
+                _uiState.value.copy(shows = _uiState.value.shows.filter { it.selectionKey !in selectionKeys })
+            }
+        } else {
+            if (isMovie) {
+                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.selectionKey !in selectionKeys })
+            } else {
+                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.selectionKey !in selectionKeys })
+            }
+        }
+        // 3. 后台调用豆瓣 API 移除标记（Application scope,不阻塞 UI）
+        if (doubanIds.isNotEmpty()) {
+            val removalItems = items.mapNotNull { item ->
+                item.doubanId?.let { BatchRemovalItem(item.traktId, item.imdbId, item.displayTitle, it) }
+            }
+            if (removalItems.isNotEmpty()) {
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }

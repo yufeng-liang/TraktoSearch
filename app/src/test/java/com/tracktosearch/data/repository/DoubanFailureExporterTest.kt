@@ -201,7 +201,7 @@ class DoubanFailureExporterTest {
         assertThat(jsonStr).contains("version")
         assertThat(jsonStr).contains("exportedAt")
         assertThat(jsonStr).contains("source")
-        assertThat(jsonStr).contains("TraktToSearch")
+        assertThat(jsonStr).contains("TraktoSearch")
         assertThat(jsonStr).contains("totalFailures")
         assertThat(jsonStr).contains("failures")
         // 验证 FailureDto 字段
@@ -487,7 +487,7 @@ class DoubanFailureExporterTest {
             {
                 "version": 1,
                 "exportedAt": "2024-01-01T00:00:00Z",
-                "source": "TraktToSearch",
+                "source": "TraktoSearch",
                 "totalFailures": 0,
                 "failures": []
             }

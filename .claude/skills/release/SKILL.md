@@ -43,7 +43,7 @@ license: MIT
 
 - `.\gradlew assembleRelease`
 - 产物：`app/build/outputs/apk/release/app-release.apk`
-- 重命名为 `TraktToSearch-v{versionName}.apk`
+- 重命名为 `TraktoSearch-v{versionName}.apk`
 
 ### 4. 生成用户友好的更新日志
 

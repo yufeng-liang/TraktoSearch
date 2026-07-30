@@ -164,7 +164,7 @@ class UpdateRepositoryTest {
                 tagName = "v99.0.0",
                 assets = listOf(
                     GiteeAsset(
-                        name = "TraktToSearch-v99.0.0.apk",
+                        name = "TraktoSearch-v99.0.0.apk",
                         browser_download_url = "https://gitee.com/download/v99.0.0.apk"
                     )
                 )
@@ -219,7 +219,7 @@ class UpdateRepositoryTest {
                 tagName = "v99.0.0",
                 assets = listOf(
                     GiteeAsset(
-                        name = "TraktToSearch-v99.0.0.apk",
+                        name = "TraktoSearch-v99.0.0.apk",
                         browser_download_url = "https://gitee.com/v99.apk"
                     )
                 )
@@ -327,10 +327,10 @@ class UpdateRepositoryTest {
     // ============================================================
 
     @Test
-    fun fetchDownloadUrl_多APK取最后一个TraktToSearch命名的() = runTest {
+    fun fetchDownloadUrl_多APK取最后一个TraktoSearch命名的() = runTest {
         coEvery { changelogStorage.getLastCheckTimestamp() } returns 0L
         coEvery { gitHubApi.getLatestRelease(any(), any()) } returns buildGitHubRelease(tagName = "v99.0.0")
-        // 公开仓库返回多个 APK，含多个 TraktToSearch-*.apk
+        // 公开仓库返回多个 APK，含多个 TraktoSearch-*.apk
         coEvery {
             giteeApi.getLatestRelease("yufeng-liang", "TrackToSearch-release")
         } returns listOf(
@@ -338,8 +338,8 @@ class UpdateRepositoryTest {
                 tagName = "v99.0.0",
                 assets = listOf(
                     GiteeAsset(name = "other.apk", browser_download_url = "https://example.com/other.apk"),
-                    GiteeAsset(name = "TraktToSearch-v98.0.0.apk", browser_download_url = "https://example.com/v98.apk"),
-                    GiteeAsset(name = "TraktToSearch-v99.0.0.apk", browser_download_url = "https://example.com/v99.apk")
+                    GiteeAsset(name = "TraktoSearch-v98.0.0.apk", browser_download_url = "https://example.com/v98.apk"),
+                    GiteeAsset(name = "TraktoSearch-v99.0.0.apk", browser_download_url = "https://example.com/v99.apk")
                 )
             )
         )
@@ -348,7 +348,7 @@ class UpdateRepositoryTest {
 
         assertThat(result).isNotNull()
         assertThat(result!!.hasUpdate).isTrue()
-        // 应取最后一个 TraktToSearch-*.apk 命名的
+        // 应取最后一个 TraktoSearch-*.apk 命名的
         assertThat(result.downloadUrl).isEqualTo("https://example.com/v99.apk")
     }
 

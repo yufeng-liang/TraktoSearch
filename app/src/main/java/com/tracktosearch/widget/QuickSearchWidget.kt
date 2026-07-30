@@ -43,7 +43,7 @@ class QuickSearchWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "TraktToSearch",
+                            text = "TraktoSearch",
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold

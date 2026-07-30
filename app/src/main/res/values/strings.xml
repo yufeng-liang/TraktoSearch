@@ -1,7 +1,7 @@
 <resources>
     <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration invitation code to continue.</string>
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
-    <string name="app_name">TraktToSearch</string>
+    <string name="app_name">TraktoSearch</string>
     <string name="splash_slogan">Discover · Track · Search</string>
     <string name="auth_title">Activate access</string>
     <string name="auth_subtitle">Enter the invitation code provided by the administrator.</string>
@@ -214,7 +214,7 @@
     <string name="disk_other">Other</string>
 
     <!-- Login Screen -->
-    <string name="login_title">TraktToSearch</string>
+    <string name="login_title">TraktoSearch</string>
     <string name="login_subtitle">From watchlist to cloud resources</string>
     <string name="login_button">Sign in with Trakt</string>
     <string name="login_connecting">Connecting to Trakt…</string>
@@ -226,6 +226,7 @@
     <string name="login_sync_hint">Your Trakt watchlist will be synced after login</string>
     <string name="login_guest">Continue as guest</string>
     <string name="login_douban_import">Or import from Douban</string>
+    <string name="login_douban">Login with Douban</string>
     <string name="login_activation_hint">Activate access to sync your Trakt watchlist</string>
     <string name="login_activation_locked">○ Not activated · Enter your code to unlock</string>
     <string name="login_activation_choose_path">Activated · choose to sign in with Trakt or continue as a guest</string>
@@ -248,7 +249,7 @@
     <string name="douban_login_privacy_detail">• Why login: to read your Douban marks (wishlist, watched, ratings)\n• What is stored: only Cookie and userId (for this crawl), NOT your Douban password\n• Cookie usage: only for requesting movie.douban.com/people/{userId}/wish|collect pages\n• After sync: you can clear Douban credentials anytime in Settings\n• Data flow: Douban → App → Trakt, no intermediate servers</string>
     <string name="douban_login_privacy_expand">View details</string>
     <string name="douban_login_privacy_collapse">Collapse</string>
-    <string name="douban_login_success_snackbar">Douban login successful, syncing marks…</string>
+    <string name="douban_login_success_snackbar">Douban login successful</string>
     <string name="douban_login_load_failed">Load failed</string>
     <string name="douban_login_notification_rationale">Background sync needs notification permission to show progress. Please grant it.</string>
     <string name="douban_sync_title">Douban Marks Sync</string>
@@ -1439,6 +1440,8 @@ Config:
     <string name="settings_account_douban_login">Login</string>
     <string name="settings_account_douban_logout">Logout</string>
     <string name="settings_douban_logout_done">Douban logged out</string>
+    <string name="douban_logout_confirm_title">Log out of Douban</string>
+    <string name="douban_logout_confirm_message">Logging out will clear %1$d local Douban marks. Continue?</string>
     <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
     <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and Douban sync</string>
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>

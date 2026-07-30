@@ -10,11 +10,17 @@ import androidx.room.Query
 import androidx.room.Transaction
 
 /**
- * 豆瓣→Trakt 同步记录，用于「重新导入」时跳过已同步条目
+ * 豆瓣→Trakt 同步记录。
+ *
+ * 用途:
+ * - Trakt 模式: 记录已同步条目,「重新导入」时跳过
+ * - 豆瓣独立模式: 作为 watchlist 主数据源（未连接 trakt 时）,
+ *   扩展字段 tmdbId/displayTitle/year/genres/posterUrl/listedAt 支持本地列表渲染,
+ *   pendingSync 标记豆瓣 API 失败时的乐观更新条目,下次同步重试
  */
 @Entity(
     tableName = "douban_synced_items",
-    indices = [Index("imdbId"), Index("status")]
+    indices = [Index("imdbId"), Index("status"), Index("pendingSync")]
 )
 data class DoubanSyncedItem(
     @PrimaryKey val doubanId: String,
@@ -24,7 +30,15 @@ data class DoubanSyncedItem(
     val status: String,                 // "wish" | "collect"
     val rating: Int?,                   // 1-5
     val syncedAt: Long,
-    val mediaType: String               // "movie" | "show"
+    val mediaType: String,              // "movie" | "show"
+    // —— 豆瓣独立模式扩展字段（v12 新增）——
+    val tmdbId: Int? = null,            // TMDB 富化用,同步时 searchByImdb/Tmdb 拿到后回写
+    val displayTitle: String? = null,   // 中文标题,TMDB 富化
+    val year: Int? = null,              // 年份,TMDB 富化
+    val genres: String? = null,         // 类型,TMDB 富化
+    val posterUrl: String? = null,      // 海报,TMDB 富化
+    val listedAt: String? = null,       // 豆瓣标记时间（区别于 syncedAt 同步时间）
+    val pendingSync: Boolean = false    // 豆瓣 API 失败时乐观更新标记,下次同步重试
 )
 
 @Dao
@@ -41,6 +55,48 @@ interface DoubanSyncedItemDao {
 
     @Query("SELECT * FROM douban_synced_items")
     suspend fun getAllSyncedItems(): List<DoubanSyncedItem>
+
+    // —— 豆瓣独立模式专用查询（v12 新增）——
+
+    /** 按 status 拉取条目（豆瓣模式 watchlist 显示 wish / 已看显示 collect） */
+    @Query("SELECT * FROM douban_synced_items WHERE status = :status ORDER BY syncedAt DESC")
+    suspend fun getByStatus(status: String): List<DoubanSyncedItem>
+
+    /** 按 status + mediaType 拉取条目（豆瓣模式 watchlist 分电影/剧集 tab） */
+    @Query("SELECT * FROM douban_synced_items WHERE status = :status AND mediaType = :mediaType ORDER BY syncedAt DESC")
+    suspend fun getByStatusAndMediaType(status: String, mediaType: String): List<DoubanSyncedItem>
+
+    /** 拉取待重试的乐观更新条目（pendingSync=true），下次同步时重试豆瓣 API */
+    @Query("SELECT * FROM douban_synced_items WHERE pendingSync = 1")
+    suspend fun getPendingSyncItems(): List<DoubanSyncedItem>
+
+    /** 删除单条（豆瓣模式移除标记时清本地记录） */
+    @Query("DELETE FROM douban_synced_items WHERE doubanId = :doubanId")
+    suspend fun deleteByDoubanId(doubanId: String)
+
+    /** 同步时回写 TMDB 富化信息（tmdbId/displayTitle/year/genres/posterUrl/listedAt） */
+    @Query("UPDATE douban_synced_items SET tmdbId = :tmdbId, displayTitle = :displayTitle, year = :year, genres = :genres, posterUrl = :posterUrl, listedAt = :listedAt WHERE doubanId = :doubanId")
+    suspend fun updateRichInfo(
+        doubanId: String,
+        tmdbId: Int?,
+        displayTitle: String?,
+        year: Int?,
+        genres: String?,
+        posterUrl: String?,
+        listedAt: String?
+    )
+
+    /** 豆瓣模式标记操作后更新状态 + pendingSync 标记，同步刷新 syncedAt */
+    @Query("UPDATE douban_synced_items SET status = :status, pendingSync = :pendingSync, syncedAt = :now WHERE doubanId = :doubanId")
+    suspend fun updateStatusAndPendingSync(doubanId: String, status: String, pendingSync: Boolean, now: Long = System.currentTimeMillis())
+
+    /** 失败项详情页 fallback 数据源场景: 用户手动标注媒体类型时同步更新本地表（与 douban_sync_failures 双写） */
+    @Query("UPDATE douban_synced_items SET mediaType = :mediaType WHERE doubanId = :doubanId")
+    suspend fun updateMediaType(doubanId: String, mediaType: String?)
+
+    /** 重试成功后清除 pendingSync 标记 */
+    @Query("UPDATE douban_synced_items SET pendingSync = 0 WHERE doubanId = :doubanId")
+    suspend fun clearPendingSync(doubanId: String)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(items: List<DoubanSyncedItem>)

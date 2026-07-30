@@ -16,7 +16,7 @@ license: MIT
 ## 前置（由 release skill 保证）
 
 - `gh` 已登录
-- APK 已构建并重命名为 `TraktToSearch-v{versionName}.apk`
+- APK 已构建并重命名为 `TraktoSearch-v{versionName}.apk`
 - 更新日志 markdown 已生成（文件 `changelog.md`）
 - 代码与 tag 已 `git push origin master` + `git push origin v{versionName}`（走代理）
 

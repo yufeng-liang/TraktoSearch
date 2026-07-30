@@ -26,5 +26,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "TraktToSearch"
+rootProject.name = "TraktoSearch"
 include(":app")

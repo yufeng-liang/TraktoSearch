@@ -155,7 +155,7 @@ private fun monetColorScheme(seed: Color, dark: Boolean): androidx.compose.mater
 }
 
 @Composable
-fun TraktToSearchTheme(
+fun TraktoSearchTheme(
     themeMode: String = "system",
     accentColor: MonetAccent? = null,
     content: @Composable () -> Unit

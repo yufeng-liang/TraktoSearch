@@ -213,6 +213,22 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // v11 → v12: douban_synced_items 扩展为豆瓣独立模式 watchlist 主数据源
+            // 新增字段: tmdbId/displayTitle/year/genres/posterUrl/listedAt(可空) + pendingSync(NOT NULL 默认 0)
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN tmdbId INTEGER")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN displayTitle TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN year INTEGER")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN genres TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN posterUrl TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN listedAt TEXT")
+            db.execSQL("ALTER TABLE douban_synced_items ADD COLUMN pendingSync INTEGER NOT NULL DEFAULT 0")
+            // pendingSync 索引: 下次同步重试时按 pendingSync=1 拉取
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_douban_synced_items_pendingSync ON douban_synced_items(pendingSync)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -234,7 +250,7 @@ object DatabaseModule {
             "tracktosearch.db"
         )
             .openHelperFactory(factory)
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
             .build()
     }
 

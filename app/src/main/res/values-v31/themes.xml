@@ -13,6 +13,6 @@
         <item name="android:windowSplashScreenBrandingImage">@drawable/splash_branding_image</item>
         <item name="windowSplashScreenAnimationDuration">720</item>
         <!-- 启动完成后立即切换到的主题 -->
-        <item name="postSplashScreenTheme">@style/Theme.TraktToSearch</item>
+        <item name="postSplashScreenTheme">@style/Theme.TraktoSearch</item>
     </style>
 </resources>

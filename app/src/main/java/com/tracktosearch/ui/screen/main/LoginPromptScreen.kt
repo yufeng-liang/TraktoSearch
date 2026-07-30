@@ -16,6 +16,7 @@ import com.tracktosearch.R
 fun LoginPromptScreen(
     onNavigateToLogin: () -> Unit,
     onContinueAsGuest: () -> Unit,
+    onNavigateToDoubanLogin: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -65,6 +66,18 @@ fun LoginPromptScreen(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(
+            onClick = onNavigateToDoubanLogin,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = stringResource(R.string.login_douban),
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         TextButton(
             onClick = onContinueAsGuest,

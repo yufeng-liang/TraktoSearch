@@ -150,6 +150,12 @@ class DoubanLoginViewModel @Inject constructor(
 @Composable
 fun DoubanLoginScreen(
     onBack: () -> Unit,
+    /**
+     * 登录成功后的导航回调。若提供，则用此回调替代默认的 onBack。
+     * 用途：从 ActivationLoginScreen 进入时，登录成功需直接进入 MainScreen
+     * （豆瓣独立模式），而非返回激活登录页。
+     */
+    onLoginSuccess: (() -> Unit)? = null,
     viewModel: DoubanLoginViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -189,7 +195,9 @@ fun DoubanLoginScreen(
                 message = successMessage,
                 duration = androidx.compose.material3.SnackbarDuration.Short
             )
-            onBack()
+            // 提供专用 onLoginSuccess 时调用之（如从激活登录页进入后直达主页），
+            // 否则沿用 onBack 返回上一页
+            if (onLoginSuccess != null) onLoginSuccess() else onBack()
         }
     }
 
