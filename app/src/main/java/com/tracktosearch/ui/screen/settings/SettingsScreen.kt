@@ -269,17 +269,20 @@ fun SettingsScreen(
     // 返回设置页时 doubanLoggedIn 从 false→true 触发刷新,「查看同步失败项」入口卡片及时显示
     // 同时首次豆瓣登录成功后自动弹出导入标记弹窗(showSyncModePicker)
     var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
+    // 记录上一次的 doubanLoggedIn 值，仅在实际登录跳变(false→true)时弹窗，
+    // 避免从激活页登录后切到设置页首次组合时 doubanLoggedIn 已为 true 导致重复弹窗
+    var previousDoubanLoggedIn by remember { mutableStateOf(doubanLoggedIn) }
     LaunchedEffect(doubanLoggedIn) {
         doubanRetryViewModel.refreshRetryState()
         // 豆瓣登录后检测云端失败项,用于「上传/拉取失败数据」入口可见性
         doubanRetryViewModel.refreshCloudFailureCount()
         viewModel.loadCooldownStatusFromLocal()
-        // 首次豆瓣登录成功(false→true): 自动弹出导入标记弹窗,提示用户选择增量/全量同步
-        // 用 hasShownDoubanImportDialog 避免重复弹出(旋屏/返回设置页不再弹)
-        if (doubanLoggedIn && !hasShownDoubanImportDialog) {
+        // 仅在设置页期间实际登录(false→true)时弹窗，首次组合时 doubanLoggedIn 已为 true 不弹
+        if (!previousDoubanLoggedIn && doubanLoggedIn && !hasShownDoubanImportDialog) {
             hasShownDoubanImportDialog = true
             showSyncModePicker = true
         }
+        previousDoubanLoggedIn = doubanLoggedIn
     }
     val exportImportState by viewModel.exportImportState.collectAsStateWithLifecycle()
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -591,12 +594,14 @@ fun SettingsScreen(
 
                             // 数据流通卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
                             // 「上传/拉取失败数据」入口仅在豆瓣已登录且(本地或云端存在失败数据)时显示
-                            // 豆瓣独立模式: 隐藏导入 IMDb（无 trakt token 无法写入 watchlist）
+                            // 豆瓣独立模式: 隐藏导出 JSON 和导入 IMDb（无 trakt token 无法读写 watchlist）
                             DataFlowGridItem(
-                                onExport = {
-                                    if (!exportImportState.isExporting) {
-                                        val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
-                                        exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                                onExport = if (isDoubanMode) null else {
+                                    {
+                                        if (!exportImportState.isExporting) {
+                                            val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault()).format(java.util.Date())
+                                            exportJsonLauncher.launch("trakt-export-$timestamp.json")
+                                        }
                                     }
                                 },
                                 onImportImdb = if (isDoubanMode) null else {
@@ -1822,7 +1827,7 @@ private fun NotificationItem(
  */
 @Composable
 private fun DataFlowGridItem(
-    onExport: () -> Unit,
+    onExport: (() -> Unit)?,
     onImportImdb: (() -> Unit)?,
     onUploadCloud: () -> Unit,
     onDownloadCloud: () -> Unit,
@@ -1836,14 +1841,16 @@ private fun DataFlowGridItem(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        DataFlowCard(
-            modifier = Modifier.weight(if (onImportImdb != null) 1f else 1f),
-            icon = Icons.Rounded.FileUpload,
-            title = stringResource(R.string.settings_export_marks_data),
-            onClick = onExport,
-            containerColor = containerColor,
-            enabled = exportEnabled
-        )
+        if (onExport != null) {
+            DataFlowCard(
+                modifier = Modifier.weight(if (onImportImdb != null) 1f else 1f),
+                icon = Icons.Rounded.FileUpload,
+                title = stringResource(R.string.settings_export_marks_data),
+                onClick = onExport,
+                containerColor = containerColor,
+                enabled = exportEnabled
+            )
+        }
         if (onImportImdb != null) {
             DataFlowCard(
                 modifier = Modifier.weight(1f),

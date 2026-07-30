@@ -148,6 +148,10 @@ class WatchlistViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(WatchlistUiState())
     val uiState: StateFlow<WatchlistUiState> = _uiState.asStateFlow()
 
+    /** 当前是否处于豆瓣独立模式（UI 用于空状态文案区分等） */
+    val isDoubanMode: StateFlow<Boolean> = sessionModeManager.isDoubanMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // 各加载协程的 Job 引用,refresh() 前统一 cancel,避免旧协程写入覆盖新数据
     private var loadMoviesJob: Job? = null
     private var loadShowsJob: Job? = null

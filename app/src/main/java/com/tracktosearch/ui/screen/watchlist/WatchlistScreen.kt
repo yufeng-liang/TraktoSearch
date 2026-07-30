@@ -202,6 +202,7 @@ fun WatchlistScreen(
     val filterState by viewModel.filterState.collectAsStateWithLifecycle()
     val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
     val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
+    val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val view = LocalView.current
@@ -560,39 +561,67 @@ fun WatchlistScreen(
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
                                         buildAnnotatedString {
-                                            append(if (selectedMode == 0)
-                                                stringResource(R.string.watchlist_empty_hint_prefix)
-                                            else
-                                                stringResource(R.string.watched_empty_hint_prefix)
-                                            )
-                                            withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
-                                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
-                                            }) {
-                                                append(stringResource(R.string.watchlist_empty_go_trakt))
-                                            }
-                                            append(stringResource(R.string.watchlist_empty_hint_middle))
-                                            withLink(LinkAnnotation.Clickable(
-                                                tag = "discover",
-                                                linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                            )) {
-                                                append(stringResource(R.string.watchlist_empty_go_discover))
-                                            }
-                                            append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                            // 「，或从豆瓣导入标记」超链接
-                                            append(stringResource(R.string.watchlist_empty_douban_import_prefix))
-                                            withLink(LinkAnnotation.Clickable(
-                                                tag = "douban_import",
-                                                linkInteractionListener = LinkInteractionListener {
-                                                    // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
-                                                    val hasDouban = viewModel.isDoubanLoggedIn()
-                                                    if (hasDouban) {
+                                            if (isDoubanMode) {
+                                                // 豆瓣独立模式: 不显示"去 Trakt 注册"链接（用户无 Trakt 账号）
+                                                // 主 CTA 为"同步豆瓣标记"，已登录豆瓣直接弹模式选择弹窗
+                                                append(if (selectedMode == 0)
+                                                    stringResource(R.string.watchlist_empty_hint_prefix)
+                                                else
+                                                    stringResource(R.string.watched_empty_hint_prefix)
+                                                )
+                                                withLink(LinkAnnotation.Clickable(
+                                                    tag = "douban_import",
+                                                    linkInteractionListener = LinkInteractionListener {
+                                                        // 豆瓣模式必定已登录豆瓣，直接弹模式选择弹窗触发同步
                                                         showSyncModePicker = true
-                                                    } else {
-                                                        onNavigateToDoubanLogin()
                                                     }
+                                                )) {
+                                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
                                                 }
-                                            )) {
-                                                append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                                append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                                append(stringResource(R.string.watchlist_empty_hint_middle))
+                                                withLink(LinkAnnotation.Clickable(
+                                                    tag = "discover",
+                                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                                )) {
+                                                    append(stringResource(R.string.watchlist_empty_go_discover))
+                                                }
+                                            } else {
+                                                // Trakt/GUEST 模式: 显示完整文案含"去 Trakt 注册"
+                                                append(if (selectedMode == 0)
+                                                    stringResource(R.string.watchlist_empty_hint_prefix)
+                                                else
+                                                    stringResource(R.string.watched_empty_hint_prefix)
+                                                )
+                                                withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
+                                                }) {
+                                                    append(stringResource(R.string.watchlist_empty_go_trakt))
+                                                }
+                                                append(stringResource(R.string.watchlist_empty_hint_middle))
+                                                withLink(LinkAnnotation.Clickable(
+                                                    tag = "discover",
+                                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
+                                                )) {
+                                                    append(stringResource(R.string.watchlist_empty_go_discover))
+                                                }
+                                                append(stringResource(R.string.watchlist_empty_hint_suffix))
+                                                // 「，或从豆瓣导入标记」超链接
+                                                append(stringResource(R.string.watchlist_empty_douban_import_prefix))
+                                                withLink(LinkAnnotation.Clickable(
+                                                    tag = "douban_import",
+                                                    linkInteractionListener = LinkInteractionListener {
+                                                        // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
+                                                        val hasDouban = viewModel.isDoubanLoggedIn()
+                                                        if (hasDouban) {
+                                                            showSyncModePicker = true
+                                                        } else {
+                                                            onNavigateToDoubanLogin()
+                                                        }
+                                                    }
+                                                )) {
+                                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
+                                                }
                                             }
                                         },
                                         style = MaterialTheme.typography.bodyMedium,

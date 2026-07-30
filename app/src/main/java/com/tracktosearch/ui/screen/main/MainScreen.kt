@@ -252,12 +252,13 @@ fun MainScreen(
         }
     }
 
-    // 激活页豆瓣登录成功后,等新手引导完成再弹出导入标记弹窗
-    // 触发条件: doubanLoggedIn=true && onboardingCompleted=true && 未弹过
-    // 场景1: 首次使用,登录后新手引导显示 → 用户完成 → 弹出导入弹窗
+    // 激活页豆瓣登录成功后,等新手引导完全结束(含主题选择)再弹出导入标记弹窗
+    // 触发条件: doubanLoggedIn=true && onboardingCompleted=true && themeSelectionCompleted=true && 未弹过
+    // 增加 themeSelectionCompleted 条件避免新用户首次进入时 onboardingCompleted 初值 true 导致与新手引导遮罩同时弹出
+    // 场景1: 首次使用,登录后新手引导显示 → 用户完成主题选择+引导 → 弹出导入弹窗
     // 场景2: 非首次使用(已完成新手引导),登录后直接弹出导入弹窗
-    LaunchedEffect(doubanLoggedIn, onboardingCompleted) {
-        if (doubanLoggedIn && onboardingCompleted == true && !hasShownDoubanImportDialog) {
+    LaunchedEffect(doubanLoggedIn, onboardingCompleted, themeSelectionCompleted) {
+        if (doubanLoggedIn && onboardingCompleted == true && themeSelectionCompleted == true && !hasShownDoubanImportDialog) {
             hasShownDoubanImportDialog = true
             showDoubanImportDialog = true
         }

@@ -446,6 +446,15 @@ fun AppNavigation(
                                 // 也不跳转到激活/登录页——用户仍处于已激活或访客模式，留在设置页即可。
                                 sessionModeManager.setTraktConnectionState(TraktConnectionState.DISCONNECTED)
                                 scope.launch { authStateHolder.disconnectTrakt() }
+                                // 若豆瓣也未登录，用户实际进入访客状态，同步 isGuestMode 标记
+                                // 避免网关后续被撤销时重启 App 因 isGuestMode=false 而进入登录页（应进入主页访客模式）
+                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
+                                scope.launch {
+                                    val doubanLoggedIn = doubanAuthStorage.isLoggedIn.value
+                                    if (!doubanLoggedIn) {
+                                        guestModeStorage.setGuestMode(true)
+                                    }
+                                }
                                 // 不修改 currentStartDest，不导航；MainScreen 的「我的」tab 会自动显示登录提示
                             },
                             onHelpClick = {
@@ -705,19 +714,22 @@ fun AppNavigation(
                         DoubanLoginScreen(
                             onBack = { navController.popBackStack() },
                             onLoginSuccess = if (fromActivationLogin) {
-                                {
-                                    // 来自激活登录页：豆瓣登录成功后进入主页（豆瓣独立模式）
-                                    // 复用 Trakt 登录的 onboarding/默认 tab 选择逻辑
-                                    scope.launch {
-                                        val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
-                                        mainInitialTab = if (onboardingCompleted) 2 else 0
-                                        currentStartDest = Routes.MAIN
-                                        navController.navigate(Routes.MAIN) {
-                                            popUpTo(0) { inclusive = true }
-                                        }
+                            {
+                                // 来自激活登录页：豆瓣登录成功后进入主页（豆瓣独立模式）
+                                // 复用 Trakt 登录的 onboarding/默认 tab 选择逻辑
+                                // 登录成功后清除访客模式标记，避免网关撤销后状态不一致
+                                val guestModeStorage = EntryPointAccessors.fromApplication(context, GuestModeEntryPoint::class.java).guestModeStorage()
+                                scope.launch {
+                                    guestModeStorage.setGuestMode(false)
+                                    val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
+                                    mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    currentStartDest = Routes.MAIN
+                                    navController.navigate(Routes.MAIN) {
+                                        popUpTo(0) { inclusive = true }
                                     }
                                 }
-                            } else null
+                            }
+                        } else null
                         )
                     }
                 }

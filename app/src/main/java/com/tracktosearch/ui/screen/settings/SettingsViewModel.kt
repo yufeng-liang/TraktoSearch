@@ -39,6 +39,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.CloudPersonalSyncManager
 import com.tracktosearch.data.repository.ConsistencyCheckResult
+import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.MediaType
@@ -108,6 +109,7 @@ class SettingsViewModel @Inject constructor(
     private val lastConsistencyCheckStorage: LastConsistencyCheckStorage,
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
+    private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
     private val sessionModeManager: SessionModeManager,
@@ -634,8 +636,12 @@ class SettingsViewModel @Inject constructor(
         statusConsistencyChecker.resetProgress()
     }
 
-    /** 清除豆瓣凭据（退出登录）。同步清理本地豆瓣标记表和云端拉取版本记录 */
+    /** 清除豆瓣凭据（退出登录）。先取消进行中的同步/批量移除任务，再清理本地数据 */
     fun clearDoubanCredentials() {
+        // 先取消进行中的豆瓣同步和批量移除任务（它们在 Application scope 跑，不依赖 ViewModel 生命周期）
+        // 避免登出后任务继续用已清除的 cookie 跑导致 401 失败污染进度流
+        doubanSyncManager.cancel()
+        doubanBatchRemovalManager.cancel()
         doubanAuthStorage.clearCredentials()
         viewModelScope.launch {
             // 清理本地豆瓣同步标记表（douban_synced_items），避免换账号后旧数据残留
