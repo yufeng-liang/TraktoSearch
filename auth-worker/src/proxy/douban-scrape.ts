@@ -75,12 +75,22 @@ export async function scrapeDouban(
 ): Promise<Response> {
     const cacheKey = buildCacheKey(doubanPath, searchParams);
 
-    // 缓存命中时直接返回
-    const cached = await caches.default.match(cacheKey);
-    if (cached) {
-        const data: Record<string, unknown> = await cached.json();
-        data.cached = true;
-        return json(data);
+    // 支持 ?purge=1 强制刷新缓存(用于部署新代码后立即生效)
+    const purge = searchParams.get('purge') === '1';
+    if (purge) {
+        try {
+            await caches.default.delete(cacheKey);
+        } catch {
+            // 删除失败不影响后续抓取
+        }
+    } else {
+        // 缓存命中时直接返回
+        const cached = await caches.default.match(cacheKey);
+        if (cached) {
+            const data: Record<string, unknown> = await cached.json();
+            data.cached = true;
+            return json(data);
+        }
     }
 
     let result: Record<string, unknown>;
@@ -287,6 +297,10 @@ async function scrapeWeekly(): Promise<{ code: number; data: WeeklyItem[]; total
         items.push(finalizeWeeklyItem(state.current));
     }
 
+    // 豆瓣口碑榜页面 HTML 本身不含海报图片(只有排名/标题/升降趋势)
+    // 用豆瓣 suggest API 公开接口补全海报,每批 5 个并发避免限流
+    await enrichWeeklyPosters(items);
+
     return {
         code: 0,
         data: items,
@@ -294,6 +308,33 @@ async function scrapeWeekly(): Promise<{ code: number; data: WeeklyItem[]; total
         cached: false,
         updatedAt: new Date().toISOString(),
     };
+}
+
+/**
+ * 豆瓣 suggest API 补全口碑榜海报
+ * 豆瓣口碑榜页面 HTML 不含 img 标签,需通过 suggest API 搜索条目标题获取海报
+ * 优先匹配 type=movie 的条目,避免匹配到 celebrity 类型
+ */
+async function enrichWeeklyPosters(items: WeeklyItem[]): Promise<void> {
+    for (let i = 0; i < items.length; i += 5) {
+        const batch = items.slice(i, i + 5);
+        const posters = await Promise.all(batch.map(async (item) => {
+            if (item.poster) return item.poster;
+            try {
+                const resp = await fetch(
+                    `https://movie.douban.com/j/subject_suggest?q=${encodeURIComponent(item.title)}`,
+                    { headers: DOUBAN_HEADERS },
+                );
+                if (!resp.ok) return '';
+                const data = await resp.json() as Array<{ type?: string; img?: string }>;
+                const movie = data.find(it => it.type === 'movie' && it.img);
+                return movie?.img || data.find(it => it.img)?.img || '';
+            } catch {
+                return '';
+            }
+        }));
+        batch.forEach((item, j) => { item.poster = posters[j]; });
+    }
 }
 
 function finalizeWeeklyItem(item: Partial<WeeklyItem>): WeeklyItem {

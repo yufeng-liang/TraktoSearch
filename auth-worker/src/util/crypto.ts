@@ -44,11 +44,14 @@ export function generateId(): string {
 }
 
 // 常量时间字符串比较（防时序攻击）
+// 不在长度不同时提前返回，避免泄露长度信息
 export function timingSafeEqual(a: string, b: string): boolean {
-    if (a.length !== b.length) return false;
-    let result = 0;
-    for (let i = 0; i < a.length; i++) {
-        result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    const aBuf = Buffer.from(a);
+    const bBuf = Buffer.from(b);
+    const minLen = Math.min(aBuf.length, bBuf.length);
+    let result = aBuf.length ^ bBuf.length;
+    for (let i = 0; i < minLen; i++) {
+        result |= aBuf[i] ^ bBuf[i];
     }
     return result === 0;
 }
