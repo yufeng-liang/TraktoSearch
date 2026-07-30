@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.tracktosearch.R
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.blurEffect
@@ -165,6 +166,7 @@ private fun ScrollToTopButtonContent(
                 .size(HAZE_BUTTON_SIZE)
                 .clip(CircleShape)
                 .hazeEffect(state = hazeState) {
+                    inputScale = HazeInputScale.Auto
                     blurEffect { style = resolvedHazeStyle }
                 }
                 .border(

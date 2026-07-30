@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.ui.component.isAppDarkTheme
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
@@ -379,6 +380,7 @@ private fun ActivationCard(
             .clip(shape)
             .zIndex(1f)
             .hazeEffect(state = hazeState) {
+                inputScale = HazeInputScale.Auto
                 blurEffect {
                     style = hazeStyle
                     blurRadius = 36.dp

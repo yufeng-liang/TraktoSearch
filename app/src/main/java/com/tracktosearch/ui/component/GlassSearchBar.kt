@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.blur.blurEffect
@@ -81,6 +82,7 @@ fun GlassSearchBar(
             .then(
                 if (hazeState != null) {
                     Modifier.hazeEffect(state = hazeState) {
+                        inputScale = HazeInputScale.Auto
                         blurEffect { style = hazeStyle }
                     }
                 } else Modifier

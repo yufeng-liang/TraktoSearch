@@ -1227,7 +1227,6 @@ fun DoubanItemDetailScreen(
                     .align(Alignment.TopStart),
                 hazeState = hazeState,
                 hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                hazeDebugName = "douban.back",
                 size = 40.dp
             ) {
                 Icon(
@@ -1255,7 +1254,6 @@ fun DoubanItemDetailScreen(
                         isDark = isDarkTheme,
                         hazeState = hazeState,
                         hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                        hazeDebugName = "douban.mark",
                         size = 40.dp
                     ) {
                         Icon(
@@ -1370,7 +1368,6 @@ fun DoubanItemDetailScreen(
                     isDark = isDarkTheme,
                     hazeState = hazeState,
                     hazeStyle = dev.chrisbanes.haze.blur.materials.HazeMaterials.ultraThin(),
-                    hazeDebugName = "douban.share",
                     size = 40.dp
                 ) {
                     Icon(

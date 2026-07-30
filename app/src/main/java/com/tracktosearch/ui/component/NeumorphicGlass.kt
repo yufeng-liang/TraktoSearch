@@ -1,7 +1,5 @@
 package com.tracktosearch.ui.component
 
-import android.util.Log
-import com.tracktosearch.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,13 +13,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.innerShadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -31,15 +27,12 @@ import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeLogger
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
-import java.util.concurrent.atomic.AtomicBoolean
-
-private const val NEUMORPHIC_GLASS_TAG = "NeumorphicGlass"
 
 const val MODAL_BOTTOM_SHEET_HEIGHT_FRACTION = 0.8f
 
@@ -61,6 +54,8 @@ fun Modifier.hazeTopBar(
 ): Modifier {
     if (!isContentUnderTopBar) return this
     return hazeEffect(state = state) {
+        // 渲染降采样：Haze 官方基准显示可降低 5-20% 开销，肉眼几乎不可见
+        inputScale = HazeInputScale.Auto
         blurEffect {
             this.style = style
         }
@@ -263,11 +258,18 @@ fun NeumorphicFrostedSurface(
     hazeStyle: HazeBlurStyle? = null,
     hazeBlurRadius: Dp? = null,
     showHighlight: Boolean = true,
+    // 可选：过滤参与模糊的源区域。底部导航等"自身既作 source 又作 effect"的场景
+    // 应传入 { area -> area.zIndex < 自身 zIndex } 排除自采样，避免重复模糊与无谓开销
+    canDrawArea: ((dev.chrisbanes.haze.HazeArea) -> Boolean)? = null,
     content: @Composable () -> Unit
 ) {
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
     val hazeModifier = if (hazeState != null) {
         Modifier.hazeEffect(state = hazeState) {
+            inputScale = HazeInputScale.Auto
+            if (canDrawArea != null) {
+                this.canDrawArea = canDrawArea
+            }
             blurEffect {
                 style = resolvedHazeStyle
             }
@@ -315,17 +317,13 @@ fun NeumorphicIconButton(
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
-    hazeDebugName: String? = null,
     content: @Composable () -> Unit
 ) {
     val shape = CircleShape
-    SideEffect {
-        if (BuildConfig.DEBUG) HazeLogger.enabled = true
-    }
     val resolvedHazeStyle = hazeStyle ?: HazeMaterials.thin()
-    val hazeDrawLogged = remember(hazeState, hazeDebugName) { AtomicBoolean(false) }
     val hazeModifier = if (hazeState != null) {
         Modifier.hazeEffect(state = hazeState) {
+            inputScale = HazeInputScale.Auto
             blurEffect { style = resolvedHazeStyle }
         }
     } else {
@@ -358,16 +356,6 @@ fun NeumorphicIconButton(
                 color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE0E5EC).copy(alpha = 0.9f),
                 shape = shape
             )
-            .drawWithContent {
-                if (BuildConfig.DEBUG && hazeState != null && hazeDebugName != null && hazeDrawLogged.compareAndSet(false, true)) {
-                    Log.d(
-                        NEUMORPHIC_GLASS_TAG,
-                        "haze.draw name=$hazeDebugName enabled=true shape=circle sizeDp=$size " +
-                            "areas=${hazeState.areas.size} details=${hazeState.areas.joinToString()}"
-                    )
-                }
-                drawContent()
-            }
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,

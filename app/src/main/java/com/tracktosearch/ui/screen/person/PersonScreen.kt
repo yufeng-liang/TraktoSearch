@@ -61,6 +61,7 @@ import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.util.ToastEffect
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
@@ -376,6 +377,7 @@ fun PersonScreen(
                             .size(40.dp)
                             .clip(CircleShape)
                             .hazeEffect(state = hazeState) {
+                                inputScale = HazeInputScale.Auto
                                 blurEffect {
                                     backgroundColor = hazeSurface.copy(alpha = 0.6f)
                                     blurRadius = 20.dp

@@ -525,6 +525,9 @@ fun MainScreen(
                 hazeState = hazeState,
                 hazeStyle = navHazeStyle,
                 hazeBlurRadius = 40.dp,
+                // 底部导航自身作为 zIndex=1 的 source，effect 只采样 zIndex=0 的页面内容，
+                // 避免导航栏模糊自身导致重复模糊与无谓开销（Haze 最重的叠加场景）
+                canDrawArea = { area -> area.zIndex < 1f },
                 showHighlight = false
             ) {
                 val tabCount = tabs.size

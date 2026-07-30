@@ -131,6 +131,7 @@ import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
 import dagger.hilt.android.EntryPointAccessors
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.hazeEffect
@@ -642,6 +643,7 @@ fun TraktSearchScreen(
                         .size(58.dp)
                         .clip(CircleShape)
                         .hazeEffect(state = hazeState) {
+                            inputScale = HazeInputScale.Auto
                             blurEffect {
                                 backgroundColor = hazeSurface.copy(alpha = 0.6f)
                                 blurRadius = 20.dp

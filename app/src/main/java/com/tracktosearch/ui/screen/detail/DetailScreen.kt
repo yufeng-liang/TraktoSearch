@@ -97,6 +97,7 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
+import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.hazeEffect
@@ -748,7 +749,6 @@ fun DetailScreen(
                     .align(Alignment.TopStart),
                 hazeState = detailHazeState,
                 hazeStyle = HazeMaterials.ultraThin(),
-                hazeDebugName = "detail.back",
                 size = 40.dp
             ) {
                 Icon(
@@ -778,6 +778,7 @@ fun DetailScreen(
                             .size(40.dp)
                             .clip(CircleShape)
                             .hazeEffect(state = detailHazeState) {
+                                inputScale = HazeInputScale.Auto
                                 blurEffect { style = detailHazeStyle }
                             }
                             // alpha 0.50:无 Haze 时提高对比度保证可见性
@@ -847,7 +848,6 @@ fun DetailScreen(
                     isDark = detailIsDark,
                     hazeState = detailHazeState,
                     hazeStyle = HazeMaterials.ultraThin(),
-                    hazeDebugName = "detail.share",
                     size = 40.dp
                 ) {
                     Icon(
