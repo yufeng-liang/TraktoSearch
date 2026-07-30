@@ -8,10 +8,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -121,16 +123,17 @@ internal fun DetailHeaderContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .height(IntrinsicSize.Max)
                 .padding(bottom = 12.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // 海报（固定宽度 105dp，2:3 比例 → 高度自动 157.5dp）
-            // 不用 IntrinsicSize.Max + fillMaxHeight，避免额外测量 pass（降低进入组合开销）
-            // 固定宽度与右侧信息列各占其位，视觉一致且测量成本更低
-            val posterWidth = 105.dp
+            // 海报：fillMaxHeight 让海报高度跟随右侧信息列（含按钮组），
+            // 实现海报底部与想看/已看/评分按钮底部对齐。
+            // IntrinsicSize.Max 会多一次测量 pass，但进入卡顿已由 contentReady
+            // 延迟组合优化抵消，视觉对齐优先。
             Box(
                 modifier = Modifier
-                    .width(posterWidth)
+                    .fillMaxHeight()
                     .aspectRatio(2f / 3f)
             ) {
                 Surface(
