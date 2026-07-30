@@ -58,7 +58,17 @@ data class MediaUiItem(
     val listedAt: String = "",
     // 豆瓣模式本地数据用（无 imdb 条目走失败项详情页分流）
     val doubanId: String? = null
-)
+) {
+    /**
+     * 多选模式唯一标识。
+     *
+     * - traktId > 0: 用 `"t$traktId"`（trakt 模式主键）
+     * - traktId = 0 且 doubanId 非空: 用 `"d$doubanId"`（豆瓣模式无 imdb 条目主键）
+     *   避免所有 traktId=0 的条目共用 key=0 导致选中冲突
+     */
+    val selectionKey: String
+        get() = if (traktId > 0) "t$traktId" else if (doubanId != null) "d$doubanId" else "t$traktId"
+}
 
 // 筛选相关枚举（与豆瓣失败页独立定义，Watchlist 模块自包含）
 enum class MarkedTimePreset { SEVEN_DAYS, THIRTY_DAYS, ALL }
@@ -788,8 +798,14 @@ class WatchlistViewModel @Inject constructor(
     }
 
     /** 从想看列表批量移除（suspend，调用方等待完成后关闭多选栏） */
-    suspend fun batchRemoveFromWatchlist(traktIds: List<Int>, type: MediaType) {
+    suspend fun batchRemoveFromWatchlist(items: List<MediaUiItem>, type: MediaType) {
         val isMovie = type == MediaType.MOVIE
+        // 豆瓣独立模式: 从本地 douban_synced_items 表删除,并后台调用豆瓣 API 移除标记
+        if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            batchRemoveFromDouban(items, isMovie, isWatchlist = true)
+            return
+        }
+        val traktIds = items.map { it.traktId }
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeFromWatchlist(id, type) }
@@ -797,7 +813,7 @@ class WatchlistViewModel @Inject constructor(
         }
         val allSuccess = results.all { it.isSuccess }
         if (allSuccess) {
-            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title/doubanId），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
                 _uiState.value.movies.filter { it.traktId in traktIds }
             } else {
@@ -811,15 +827,21 @@ class WatchlistViewModel @Inject constructor(
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
-                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle, it.doubanId) }
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
     }
 
     /** 从已看历史批量移除（suspend，调用方等待完成后关闭多选栏） */
-    suspend fun batchRemoveFromHistory(traktIds: List<Int>, type: MediaType) {
+    suspend fun batchRemoveFromHistory(items: List<MediaUiItem>, type: MediaType) {
         val isMovie = type == MediaType.MOVIE
+        // 豆瓣独立模式: 从本地 douban_synced_items 表删除,并后台调用豆瓣 API 移除标记
+        if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
+            batchRemoveFromDouban(items, isMovie, isWatchlist = false)
+            return
+        }
+        val traktIds = items.map { it.traktId }
         val results = coroutineScope {
             traktIds.map { id ->
                 async { traktRepository.removeWatched(id, type) }
@@ -827,7 +849,7 @@ class WatchlistViewModel @Inject constructor(
         }
         val allSuccess = results.all { it.isSuccess }
         if (allSuccess) {
-            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title），在 UI 更新前抓取
+            // 先从当前列表中收集待同步移除豆瓣的条目（需要 imdbId/title/doubanId），在 UI 更新前抓取
             val itemsToSync = if (isMovie) {
                 _uiState.value.historyMovies.filter { it.traktId in traktIds }
             } else {
@@ -840,7 +862,50 @@ class WatchlistViewModel @Inject constructor(
             }
             // 后台同步移除豆瓣标记（在 Application scope 跑，不依赖 ViewModel 生命周期）
             if (itemsToSync.isNotEmpty()) {
-                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle) }
+                val removalItems = itemsToSync.map { BatchRemovalItem(it.traktId, it.imdbId, it.displayTitle, it.doubanId) }
+                doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
+            }
+        }
+    }
+
+    /**
+     * 豆瓣独立模式批量移除：从本地 douban_synced_items 表立即删除,并后台调用豆瓣 API 移除标记。
+     *
+     * 与 Trakt 模式不同：
+     * - 本地表删除立即生效（UI 立即更新），无需等待网络请求
+     * - 豆瓣 API 移除在 Application scope 后台运行，失败仅记录日志
+     * - UI 按 selectionKey 过滤（豆瓣模式无 traktId 条目也需正确移除）
+     */
+    private suspend fun batchRemoveFromDouban(items: List<MediaUiItem>, isMovie: Boolean, isWatchlist: Boolean) {
+        if (items.isEmpty()) return
+        val selectionKeys = items.map { it.selectionKey }.toSet()
+        // 1. 立即从本地表删除（按 doubanId,豆瓣模式条目必有 doubanId）
+        val doubanIds = items.mapNotNull { it.doubanId }
+        if (doubanIds.isNotEmpty()) {
+            doubanIds.forEach { doubanId ->
+                doubanSyncedItemDao.deleteByDoubanId(doubanId)
+            }
+        }
+        // 2. 立即更新 UI（按 selectionKey 过滤,避免无 traktId 条目残留）
+        _uiState.value = if (isWatchlist) {
+            if (isMovie) {
+                _uiState.value.copy(movies = _uiState.value.movies.filter { it.selectionKey !in selectionKeys })
+            } else {
+                _uiState.value.copy(shows = _uiState.value.shows.filter { it.selectionKey !in selectionKeys })
+            }
+        } else {
+            if (isMovie) {
+                _uiState.value.copy(historyMovies = _uiState.value.historyMovies.filter { it.selectionKey !in selectionKeys })
+            } else {
+                _uiState.value.copy(historyShows = _uiState.value.historyShows.filter { it.selectionKey !in selectionKeys })
+            }
+        }
+        // 3. 后台调用豆瓣 API 移除标记（Application scope,不阻塞 UI）
+        if (doubanIds.isNotEmpty()) {
+            val removalItems = items.mapNotNull { item ->
+                item.doubanId?.let { BatchRemovalItem(item.traktId, item.imdbId, item.displayTitle, it) }
+            }
+            if (removalItems.isNotEmpty()) {
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }

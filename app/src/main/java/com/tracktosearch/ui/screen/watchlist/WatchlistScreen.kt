@@ -377,10 +377,10 @@ fun WatchlistScreen(
         }
     }
 
-    // 长按多选状态
+    // 长按多选状态（用 String key 避免豆瓣模式无 traktId 条目冲突）
     var isMultiSelectMode by remember { mutableStateOf(false) }
     var isRemoving by remember { mutableStateOf(false) }
-    val selectedItems = remember { mutableStateMapOf<Int, Boolean>() }
+    val selectedItems = remember { mutableStateMapOf<String, Boolean>() }
     // 退出多选模式时清空选中
     LaunchedEffect(isMultiSelectMode) {
         if (!isMultiSelectMode) selectedItems.clear()
@@ -450,9 +450,9 @@ fun WatchlistScreen(
     // 监听列表变化，移除完成后关闭多选模式
     LaunchedEffect(currentItems.size, isRemoving) {
         if (isRemoving) {
-            val remainingIds = currentItems.map { it.traktId }.toSet()
-            val selectedIds = selectedItems.keys.toSet()
-            if (selectedIds.none { it in remainingIds }) {
+            val remainingKeys = currentItems.map { it.selectionKey }.toSet()
+            val selectedKeys = selectedItems.keys.toSet()
+            if (selectedKeys.none { it in remainingKeys }) {
                 isMultiSelectMode = false
                 isRemoving = false
             }
@@ -623,9 +623,9 @@ fun WatchlistScreen(
                     ) {
                         // 根据 selectedMode 和 selectedTab 渲染对应列表
                         val items = currentItems
-                        items(items.size, key = { items[it].traktId }, contentType = { "media_card" }) { index ->
+                        items(items.size, key = { items[it].selectionKey }, contentType = { "media_card" }) { index ->
                             val item = items[index]
-                            val isSelected = selectedItems[item.traktId] == true
+                            val isSelected = selectedItems[item.selectionKey] == true
                             val isResolving = isRemoving && isSelected
                             Box(modifier = Modifier.cardEnter(item.traktId.toLong(), index, enterMode, animatedIds)) {
                                 WatchlistPosterCard(
@@ -637,8 +637,8 @@ fun WatchlistScreen(
                                     isMultiSelectMode = isMultiSelectMode,
                                     onClick = {
                                         if (isMultiSelectMode) {
-                                            if (isSelected) selectedItems.remove(item.traktId)
-                                            else selectedItems[item.traktId] = true
+                                            if (isSelected) selectedItems.remove(item.selectionKey)
+                                            else selectedItems[item.selectionKey] = true
                                             if (selectedItems.isEmpty()) isMultiSelectMode = false
                                         } else {
                                             val inWatchlist = selectedMode == 0
@@ -657,7 +657,7 @@ fun WatchlistScreen(
                                         if (!isMultiSelectMode) {
                                             isMultiSelectMode = true
                                         }
-                                        selectedItems[item.traktId] = true
+                                        selectedItems[item.selectionKey] = true
                                     }
                                 )
                             }
@@ -1182,13 +1182,14 @@ fun WatchlistScreen(
                                         Button(
                                             onClick = {
                                                 isRemoving = true
-                                                val ids = selectedItems.keys.toList()
+                                                // 豆瓣模式无 traktId 条目也需正确移除,改用 selectionKey 匹配出完整 MediaUiItem
+                                                val selectedItemsList = currentItems.filter { it.selectionKey in selectedItems.keys }
                                                 val type = if (selectedTab == 0) MediaType.MOVIE else MediaType.SHOW
                                                 tabScope.launch {
                                                     if (selectedMode == 0) {
-                                                        viewModel.batchRemoveFromWatchlist(ids, type)
+                                                        viewModel.batchRemoveFromWatchlist(selectedItemsList, type)
                                                     } else {
-                                                        viewModel.batchRemoveFromHistory(ids, type)
+                                                        viewModel.batchRemoveFromHistory(selectedItemsList, type)
                                                     }
                                                     // 豆瓣批量移除在 Application scope 后台运行，启动前台服务显示通知栏进度
                                                     if (viewModel.isBatchRemovalRunning()) {

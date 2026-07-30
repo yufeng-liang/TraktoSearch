@@ -70,7 +70,9 @@ data class BatchRemovalProgress(
 data class BatchRemovalItem(
     val traktId: Int,
     val imdbId: String,
-    val title: String
+    val title: String,
+    // 豆瓣模式直接传入 doubanId,避免 findDoubanId 网络请求
+    val doubanId: String? = null
 )
 
 /**
@@ -196,12 +198,16 @@ class DoubanBatchRemovalManager @Inject constructor(
                                 )
 
                                 val ok = runCatching {
-                                    // 1. 先查同步表 by imdbId（快速路径，无网络请求）
-                                    val doubanId = if (item.imdbId.isNotBlank()) {
-                                        runCatching { doubanSyncedItemDao.getByImdbId(item.imdbId) }
-                                            .getOrNull()?.doubanId
-                                    } else null
-                                        ?: doubanRepository.findDoubanId(item.traktId, item.imdbId, mediaTypeStr)
+                                    // 1. 优先用 item.doubanId (豆瓣模式直接传,避免网络请求)
+                                    //    否则查同步表 by imdbId (Trakt 模式快速路径)
+                                    //    最后才 findDoubanId 网络搜索
+                                    // 注意: 用括号明确优先级,避免 ?: 被 else 分支吞掉
+                                    val doubanId = item.doubanId
+                                        ?: (if (item.imdbId.isNotBlank()) {
+                                            runCatching { doubanSyncedItemDao.getByImdbId(item.imdbId) }
+                                                .getOrNull()?.doubanId
+                                        } else null)
+                                            ?: doubanRepository.findDoubanId(item.traktId, item.imdbId, mediaTypeStr)
                                     if (doubanId == null) {
                                         Log.w(TAG, "找不到 doubanId, 跳过: traktId=${item.traktId}, imdbId=${item.imdbId}, title=${item.title}")
                                         return@runCatching null  // skip
