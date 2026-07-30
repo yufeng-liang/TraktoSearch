@@ -287,20 +287,30 @@ class DetailViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(isLoggedIn = isLoggedIn)
         }
         // 收集会话模式,供 toggleWatched/toggleWatchlist 同步判断豆瓣独立模式分支
+        // 同时用于豆瓣模式隐藏 trakt 专属模块（评论 tab 依赖 trakt API，豆瓣模式无 trakt token 会失败）
         viewModelScope.launch {
             sessionModeManager.sessionMode.collect { mode ->
                 currentSessionMode = mode
+                // 豆瓣模式: 强制隐藏评论 tab（trakt comments API 需要 trakt token）
+                if (mode == SessionMode.DOUBAN) {
+                    val cur = _uiState.value.sectionVisible
+                    _uiState.value = _uiState.value.copy(
+                        sectionVisible = cur.copy(comments = false)
+                    )
+                }
             }
         }
         // 监听详情页模块可见性设置
         viewModelScope.launch {
             detailSectionStorage.sectionConfigs.collect { configs ->
+                val isDouban = currentSessionMode == SessionMode.DOUBAN
                 val visibility = DetailSectionVisibility(
                     cast = configs.find { it.id == "cast" }?.visible ?: true,
                     videosImages = configs.find { it.id == "videos-images" }?.visible ?: true,
                     overview = configs.find { it.id == "overview" }?.visible ?: true,
                     myRating = configs.find { it.id == "my-rating" }?.visible ?: true,
-                    comments = configs.find { it.id == "comments" }?.visible ?: true,
+                    // 豆瓣模式: 强制隐藏评论 tab（依赖 trakt API，无 trakt token 时无法加载）
+                    comments = if (isDouban) false else (configs.find { it.id == "comments" }?.visible ?: true),
                     recommendations = configs.find { it.id == "recommendations" }?.visible ?: true
                 )
                 _uiState.value = _uiState.value.copy(sectionVisible = visibility)
@@ -596,6 +606,8 @@ class DetailViewModel @Inject constructor(
     }
 
     private fun fetchComments() {
+        // 豆瓣模式: 无 trakt token,评论 tab 已隐藏,直接跳过避免 401 失败
+        if (currentSessionMode == SessionMode.DOUBAN) return
         commentsJob?.cancel()
         commentsJob = viewModelScope.launch {
             try {
@@ -1288,6 +1300,10 @@ class DetailViewModel @Inject constructor(
     fun toggleEpisodeWatched(seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) {
         val current = _uiState.value
         if (current.togglingEpisode == Pair(seasonNumber, episodeNumber)) return
+
+        // 豆瓣独立模式: 剧集标记依赖 trakt API,豆瓣网页 API 不支持单集标记
+        // 直接 return 避免触发 showLoginPrompt 错误引导用户去登录 Trakt
+        if (currentSessionMode == SessionMode.DOUBAN) return
 
         // 未登录：弹出登录引导
         if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) {

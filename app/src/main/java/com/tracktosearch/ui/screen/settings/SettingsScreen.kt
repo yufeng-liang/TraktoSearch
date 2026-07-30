@@ -395,24 +395,28 @@ fun SettingsScreen(
         ) {
             // 观看统计（第一位，独占整行卡片，无类目 Header）
             // sharedBounds 与 StatisticsScreen 头部配对,实现卡片↔页面展开/收起转场
-            item(key = "statistics_entry") {
-                val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
-                    with(sharedTransitionScope) {
-                        Modifier.sharedBounds(
-                            sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                    }
-                } else { Modifier }
-                StatisticsCard(
-                    modifier = statisticsEntryModifier,
-                    hazeState = settingsHazeState,
-                    onClick = onStatisticsClick
-                )
+            // 豆瓣独立模式: 统计数据来源是 Trakt watchlist/history,无 trakt token 时无意义,隐藏
+            if (!isDoubanMode) {
+                item(key = "statistics_entry") {
+                    val statisticsEntryModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedTransitionEnabled) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedBounds(
+                                sharedContentState = rememberSharedContentState(key = "settings-statistics-entry"),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                        }
+                    } else { Modifier }
+                    StatisticsCard(
+                        modifier = statisticsEntryModifier,
+                        hazeState = settingsHazeState,
+                        onClick = onStatisticsClick
+                    )
+                }
             }
 
-            // 标记记录（仅登录可见，独占整行卡片）
-            if (isLoggedIn) {
+            // 标记记录（仅 Trakt 登录可见，独占整行卡片）
+            // 豆瓣独立模式: 标记记录页读取 Trakt history,无 trakt token,隐藏
+            if (isLoggedIn && !isDoubanMode) {
                 item(key = "mark_records_entry") {
                     MarkRecordsEntryCard(
                     onClick = onMarkRecordsClick,
@@ -506,8 +510,9 @@ fun SettingsScreen(
                 SearchSourcesItem(viewModel = viewModel, hazeState = settingsHazeState)
             }
 
-            // 通知提醒（仅登录用户可见，通知依赖 Trakt 想看列表）
-            if (isLoggedIn) {
+            // 通知提醒（仅 Trakt 登录用户可见，通知依赖 Trakt 想看列表推送）
+            // 豆瓣独立模式: 无 trakt token,通知功能无法触发,隐藏入口
+            if (isLoggedIn && !isDoubanMode) {
                 item(key = "group_notification") {
                     SettingsGroupCard(
                         title = stringResource(R.string.settings_notification),
@@ -566,6 +571,7 @@ fun SettingsScreen(
                             }
 
                             // 数据流通 2x2 卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）
+                            // 豆瓣独立模式: 隐藏导入 IMDb（无 trakt token 无法写入 watchlist）
                             DataFlowGridItem(
                                 onExport = {
                                     if (!exportImportState.isExporting) {
@@ -573,9 +579,11 @@ fun SettingsScreen(
                                         exportJsonLauncher.launch("trakt-export-$timestamp.json")
                                     }
                                 },
-                                onImportImdb = {
-                                    if (!exportImportState.isImporting) {
-                                        importImdbLauncher.launch("text/*")
+                                onImportImdb = if (isDoubanMode) null else {
+                                    {
+                                        if (!exportImportState.isImporting) {
+                                            importImdbLauncher.launch("text/*")
+                                        }
                                     }
                                 },
                                 onUploadCloud = { if (!cloudSyncLoading) doubanRetryViewModel.uploadToCloud() },
@@ -1773,11 +1781,14 @@ private fun NotificationItem(
 /**
  * 数据流通 2x2 卡片（导出 / 导入 IMDb / 上传云端 / 下载云端）。
  * 抽取为独立函数，避免 item lambda 捕获过多外部状态。
+ *
+ * 豆瓣独立模式: [onImportImdb] 为 null 时隐藏导入 IMDb 卡片（无 trakt token 无法写入），
+ * 导出卡片独占整行宽度。
  */
 @Composable
 private fun DataFlowGridItem(
     onExport: () -> Unit,
-    onImportImdb: () -> Unit,
+    onImportImdb: (() -> Unit)?,
     onUploadCloud: () -> Unit,
     onDownloadCloud: () -> Unit,
     containerColor: Color = MaterialTheme.colorScheme.surfaceVariant
@@ -1787,19 +1798,21 @@ private fun DataFlowGridItem(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         DataFlowCard(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(if (onImportImdb != null) 1f else 1f),
             icon = Icons.Rounded.FileUpload,
             title = stringResource(R.string.settings_export_marks_data),
             onClick = onExport,
             containerColor = containerColor
         )
-        DataFlowCard(
-            modifier = Modifier.weight(1f),
-            icon = Icons.Rounded.FileDownload,
-            title = stringResource(R.string.settings_import_imdb),
-            onClick = onImportImdb,
-            containerColor = containerColor
-        )
+        if (onImportImdb != null) {
+            DataFlowCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Rounded.FileDownload,
+                title = stringResource(R.string.settings_import_imdb),
+                onClick = onImportImdb,
+                containerColor = containerColor
+            )
+        }
     }
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),

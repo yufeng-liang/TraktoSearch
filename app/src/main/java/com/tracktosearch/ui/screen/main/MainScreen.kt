@@ -388,15 +388,17 @@ fun MainScreen(
                             SearchScreen(
                                 initialKeyword = "",
                                 onSearchClick = onSearchClick,
-                                onTraktSearch = { type, query ->
+                                // 豆瓣模式: 无 trakt token,Trakt 搜索会 401 失败,隐藏入口(传 null)
+                                // 同时隐藏 SearchSourceType 切换器(仅保留 DISK 资源搜索)
+                                onTraktSearch = if (isDoubanMode) null else { type, query ->
                                     traktSearchType = type
                                     traktSearchQuery = query
                                     showTraktSearch = true
                                 },
                                 onSpiderTest = onSpiderTest,
                                 onMovieClick = onMovieClick,
-                                searchSourceType = searchSourceType,
-                                onSearchSourceTypeChange = { searchSourceType = it },
+                                searchSourceType = if (isDoubanMode) SearchSourceType.DISK else searchSourceType,
+                                onSearchSourceTypeChange = if (isDoubanMode) null else ({ searchSourceType = it }),
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
@@ -417,7 +419,8 @@ fun MainScreen(
                                 onShowClick = onShowClick,
                                 onDoubanFailureClick = onDoubanFailureClick,
                                 onSearchClick = onSearchClick,
-                                onTraktSearch = onTraktSearch,
+                                // 豆瓣模式: watchlist 搜索框无结果时不跳转 Trakt 搜索(会 401 失败)
+                                onTraktSearch = if (isDoubanMode) { _, _ -> } else onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
                                 onNavigateToDoubanLogin = onNavigateToDoubanLogin,
                                 onNavigateToLogin = onNavigateToLogin,
