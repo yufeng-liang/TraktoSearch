@@ -408,6 +408,9 @@ fun AppNavigation(
                             onShowClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("show", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
+                            onDoubanFailureClick = { doubanId ->
+                                navController.navigate(Routes.doubanItemDetailRoute(doubanId))
+                            },
                             onSearchClick = { keyword ->
                                 // 调试入口:搜索框输入特定数字串进入豆瓣爬取测试页
                                 if (keyword.trim() == "13638719007") {

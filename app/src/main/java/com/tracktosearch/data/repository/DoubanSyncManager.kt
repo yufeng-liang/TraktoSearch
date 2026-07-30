@@ -1834,6 +1834,9 @@ class DoubanSyncManager @Inject constructor(
         val completedCount = AtomicInteger(0)
         val detailCacheHit = AtomicInteger(0)
         val resolvedList = mutableListOf<DoubanLocalResolve>()
+        // 无 imdbId 条目直接构造本地表记录(豆瓣模式不记失败),走独立写入批次,
+        // 不进 resolvedList 以跳过 searchByImdb/TMDB 富化阶段
+        val noImdbBatch = mutableListOf<Pair<DoubanMarkItem, DoubanSyncedItem>>()
 
         coroutineScope {
             // ===== 阶段 1: 详情页爬取(生产者,并发度 3) =====
@@ -1856,10 +1859,30 @@ class DoubanSyncManager @Inject constructor(
                         }
                         val imdbId = detail.imdbId
                         if (imdbId.isNullOrEmpty()) {
-                            val failure = buildFailure(item, status, FailureReason.NO_IMDB_ID, existingMap, inferMediaTypeFromDetail(detail))
-                            synchronized(failed) { failed.add(failure) }
+                            // 豆瓣模式: 无 imdbId 不记失败,直接构造本地表记录
+                            // (imdbId/traktId/tmdbId 留 null,year/genres 留 null,
+                            //  posterUrl/displayTitle 用豆瓣列表兜底,mediaType 按详情页 isTvShow 推断)
+                            // 跳过 searchByImdb/TMDB 富化阶段,进 noImdbBatch 统一写入
+                            val noImdbItem = DoubanSyncedItem(
+                                doubanId = item.doubanId,
+                                imdbId = null,
+                                traktId = null,
+                                title = item.title,
+                                status = status.path,
+                                rating = item.rating,
+                                syncedAt = System.currentTimeMillis(),
+                                mediaType = if (detail.isTvShow) "show" else "movie",
+                                tmdbId = null,
+                                displayTitle = item.title,
+                                year = null,
+                                genres = null,
+                                posterUrl = item.posterUrl,
+                                listedAt = item.markedAt,
+                                pendingSync = false
+                            )
+                            synchronized(noImdbBatch) { noImdbBatch.add(item to noImdbItem) }
                             val done = completedCount.incrementAndGet()
-                            onProgress(done, "详情页", 0, item.title, failure)
+                            onProgress(done, "详情页", 0, item.title, null)
                             return@async
                         }
                         val mediaType = if (detail.isTvShow) MediaType.SHOW else MediaType.MOVIE
@@ -1986,6 +2009,12 @@ class DoubanSyncManager @Inject constructor(
             successDoubanIds.add(r.item.doubanId)
         }
 
+        // 无 imdbId 条目加入写入批次（豆瓣模式不记失败,与 resolvedList 一起写本地表）
+        if (noImdbBatch.isNotEmpty()) {
+            batchToInsert.addAll(noImdbBatch.map { it.second })
+            successDoubanIds.addAll(noImdbBatch.map { it.first.doubanId })
+        }
+
         // 写本地表（跳过 batchAddToWatchlist / batchMarkAsWatched）
         var writeFailedCount = 0
         try {
@@ -1993,15 +2022,17 @@ class DoubanSyncManager @Inject constructor(
                 doubanSyncedItemDao.insertAll(batchToInsert)
             }
         } catch (e: Exception) {
-            writeFailedCount = resolvedList.size
+            writeFailedCount = batchToInsert.size
             val writeFailures = resolvedList.map { r ->
                 buildFailure(r.item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
+            } + noImdbBatch.map { (item, _) ->
+                buildFailure(item, status, FailureReason.TRAKT_WRITE_FAILED, existingMap)
             }
             synchronized(failed) { failed.addAll(writeFailures) }
             successDoubanIds.clear()
         }
 
-        val successCount = resolvedList.size - writeFailedCount
+        val successCount = batchToInsert.size - writeFailedCount
         return BatchSyncResult(
             success = successCount,
             failed = failed,

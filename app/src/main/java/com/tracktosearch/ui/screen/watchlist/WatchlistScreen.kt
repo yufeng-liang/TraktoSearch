@@ -188,6 +188,8 @@ import java.time.temporal.ChronoUnit
 fun WatchlistScreen(
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
+    // 豆瓣模式: 无 imdb 条目(traktId=0, tmdbId=0, doubanId 非空)跳转失败项详情页
+    onDoubanFailureClick: (doubanId: String) -> Unit = {},
     onSearchClick: (keyword: String) -> Unit,
     onTraktSearch: (type: String, query: String) -> Unit,
     onDiscoverClick: () -> Unit = {},
@@ -641,7 +643,10 @@ fun WatchlistScreen(
                                         } else {
                                             val inWatchlist = selectedMode == 0
                                             val isWatched = selectedMode == 1
-                                            if (selectedTab == 0) {
+                                            // 豆瓣模式无 imdb 条目(traktId=0, tmdbId=0, doubanId 非空) → 跳失败项详情页
+                                            if (item.doubanId != null && item.traktId == 0 && item.tmdbId == 0) {
+                                                onDoubanFailureClick(item.doubanId)
+                                            } else if (selectedTab == 0) {
                                                 onMovieClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)
                                             } else {
                                                 onShowClick(item.traktId, item.tmdbId, item.title, item.imdbId, item.traktRating, inWatchlist, isWatched)

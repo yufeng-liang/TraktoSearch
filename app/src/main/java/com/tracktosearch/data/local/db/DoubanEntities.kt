@@ -90,6 +90,10 @@ interface DoubanSyncedItemDao {
     @Query("UPDATE douban_synced_items SET status = :status, pendingSync = :pendingSync, syncedAt = :now WHERE doubanId = :doubanId")
     suspend fun updateStatusAndPendingSync(doubanId: String, status: String, pendingSync: Boolean, now: Long = System.currentTimeMillis())
 
+    /** 失败项详情页 fallback 数据源场景: 用户手动标注媒体类型时同步更新本地表（与 douban_sync_failures 双写） */
+    @Query("UPDATE douban_synced_items SET mediaType = :mediaType WHERE doubanId = :doubanId")
+    suspend fun updateMediaType(doubanId: String, mediaType: String?)
+
     /** 重试成功后清除 pendingSync 标记 */
     @Query("UPDATE douban_synced_items SET pendingSync = 0 WHERE doubanId = :doubanId")
     suspend fun clearPendingSync(doubanId: String)

@@ -55,7 +55,9 @@ data class MediaUiItem(
     val posterUrl: String?,
     val imdbId: String = "",
     val traktRating: Double = 0.0,
-    val listedAt: String = ""
+    val listedAt: String = "",
+    // 豆瓣模式本地数据用（无 imdb 条目走失败项详情页分流）
+    val doubanId: String? = null
 )
 
 // 筛选相关枚举（与豆瓣失败页独立定义，Watchlist 模块自包含）
@@ -677,7 +679,8 @@ class WatchlistViewModel @Inject constructor(
         posterUrl = posterUrl,
         imdbId = imdbId ?: "",
         traktRating = 0.0,
-        listedAt = listedAt ?: ""
+        listedAt = listedAt ?: "",
+        doubanId = doubanId
     )
 
     private suspend fun enrichMediaItem(

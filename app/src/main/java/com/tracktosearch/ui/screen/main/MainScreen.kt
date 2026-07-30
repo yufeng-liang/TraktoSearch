@@ -138,6 +138,8 @@ fun MainScreen(
     isDoubanMode: Boolean = false,
     onMovieClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
     onShowClick: (traktId: Int, tmdbId: Int, title: String, imdbId: String, traktRating: Double, inWatchlist: Boolean, isWatched: Boolean) -> Unit,
+    // 豆瓣模式: 无 imdb 条目跳转失败项详情页
+    onDoubanFailureClick: (doubanId: String) -> Unit = {},
     onSearchClick: (keyword: String) -> Unit,
     onNavigateToLogin: () -> Unit,
     onStatisticsClick: () -> Unit,
@@ -413,6 +415,7 @@ fun MainScreen(
                             WatchlistScreen(
                                 onMovieClick = onMovieClick,
                                 onShowClick = onShowClick,
+                                onDoubanFailureClick = onDoubanFailureClick,
                                 onSearchClick = onSearchClick,
                                 onTraktSearch = onTraktSearch,
                                 onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
