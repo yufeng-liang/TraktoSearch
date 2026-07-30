@@ -5,8 +5,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -17,15 +19,13 @@ import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.SentimentDissatisfied
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,6 +35,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.tracktosearch.R
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 private const val MAX_SCREENSHOTS = 5
 
@@ -103,24 +105,47 @@ fun NewFeedbackScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 类型选择 — 两行两列分散居中
+            // 类型选择 — 四个 chip 同一行平分宽度
             Text(stringResource(R.string.feedback_select_type), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                    FeedbackTypeChip(R.string.feedback_type_feature, Color(0xFF34D399), Icons.Rounded.Lightbulb, selectedType == "FEATURE") {
-                        selectedType = if (selectedType == "FEATURE") null else "FEATURE"
-                    }
-                    FeedbackTypeChip(R.string.feedback_type_bug, Color(0xFFFB7185), Icons.Rounded.BugReport, selectedType == "BUG") {
-                        selectedType = if (selectedType == "BUG") null else "BUG"
-                    }
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                FeedbackTypeChip(
+                    labelRes = R.string.feedback_type_feature,
+                    color = Color(0xFF34D399),
+                    icon = Icons.Rounded.Lightbulb,
+                    selected = selectedType == "FEATURE",
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedType = if (selectedType == "FEATURE") null else "FEATURE"
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                    FeedbackTypeChip(R.string.feedback_type_ux, Color(0xFFFBBF24), Icons.Rounded.SentimentDissatisfied, selectedType == "UX") {
-                        selectedType = if (selectedType == "UX") null else "UX"
-                    }
-                    FeedbackTypeChip(R.string.feedback_type_other, Color(0xFF9CA3AF), Icons.Rounded.MoreHoriz, selectedType == "OTHER") {
-                        selectedType = if (selectedType == "OTHER") null else "OTHER"
-                    }
+                FeedbackTypeChip(
+                    labelRes = R.string.feedback_type_bug,
+                    color = Color(0xFFFB7185),
+                    icon = Icons.Rounded.BugReport,
+                    selected = selectedType == "BUG",
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedType = if (selectedType == "BUG") null else "BUG"
+                }
+                FeedbackTypeChip(
+                    labelRes = R.string.feedback_type_ux,
+                    color = Color(0xFFFBBF24),
+                    icon = Icons.Rounded.SentimentDissatisfied,
+                    selected = selectedType == "UX",
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedType = if (selectedType == "UX") null else "UX"
+                }
+                FeedbackTypeChip(
+                    labelRes = R.string.feedback_type_other,
+                    color = Color(0xFF9CA3AF),
+                    icon = Icons.Rounded.MoreHoriz,
+                    selected = selectedType == "OTHER",
+                    modifier = Modifier.weight(1f)
+                ) {
+                    selectedType = if (selectedType == "OTHER") null else "OTHER"
                 }
             }
 
@@ -228,7 +253,8 @@ fun NewFeedbackScreen(
 }
 
 /**
- * 截图行：支持添加、删除、点击查看大图、长按拖动排序
+ * 截图行：支持添加、删除、点击查看大图、长按拖动排序（跟随手指 + 插入动画）。
+ * 使用 sh.calvin.reorderable 库实现：被拖项跟随手指平移，其他项通过 animateItem 平滑插入。
  */
 @Composable
 private fun ScreenshotRow(
@@ -240,94 +266,84 @@ private fun ScreenshotRow(
     onReorder: (Int, Int) -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    val swapThreshold = with(density) { (80.dp + 8.dp).toPx() }
+    val lazyListState = rememberLazyListState()
+    val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
+        onReorder(from.index, to.index)
+    }
 
-    var draggingIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffsetX by remember { mutableFloatStateOf(0f) }
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        screenshots.forEachIndexed { index, (bytes, _) ->
-            Box(
-                Modifier
-                    .size(80.dp)
-                    .pointerInput(enabled, screenshots.size) {
-                        if (!enabled || screenshots.size < 2) return@pointerInput
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                draggingIndex = index
-                                dragOffsetX = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                val current = draggingIndex ?: return@detectDragGesturesAfterLongPress
-                                dragOffsetX += dragAmount.x
-                                if (dragOffsetX > swapThreshold && current < screenshots.size - 1) {
-                                    onReorder(current, current + 1)
-                                    draggingIndex = current + 1
-                                    dragOffsetX -= swapThreshold
-                                } else if (dragOffsetX < -swapThreshold && current > 0) {
-                                    onReorder(current, current - 1)
-                                    draggingIndex = current - 1
-                                    dragOffsetX += swapThreshold
-                                }
-                            },
-                            onDragEnd = {
-                                draggingIndex = null
-                                dragOffsetX = 0f
-                            },
-                            onDragCancel = {
-                                draggingIndex = null
-                                dragOffsetX = 0f
-                            }
+    LazyRow(
+        state = lazyListState,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) ->
+            ReorderableItem(
+                state = reorderableState,
+                key = bytes,
+                enabled = enabled && screenshots.size >= 2
+            ) { isDragging ->
+                Box(
+                    // 长按触发拖动；库会自动通过 graphicsLayer 平移被拖项跟随手指。
+                    // longPressDraggableHandle 是 ReorderableCollectionItemScope 内 Modifier 的扩展。
+                    Modifier
+                        .size(80.dp)
+                        .longPressDraggableHandle(
+                            enabled = enabled && screenshots.size >= 2
                         )
-                    }
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable(enabled = enabled) { onImageClick(index) },
-                contentAlignment = Alignment.Center
-            ) {
-                AsyncImage(
-                    model = remember(bytes) {
-                        ImageRequest.Builder(context)
-                            .data(bytes)
-                            .crossfade(true)
-                            .build()
-                    },
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(80.dp)
-                )
-                // 右上角删除按钮
-                if (enabled) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(2.dp)
-                            .size(20.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                            .clickable { onRemoveClick(index) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        // 拖动时抬起阴影 + 轻微放大，强化"被抓住"反馈
+                        .graphicsLayer {
+                            scaleX = if (isDragging) 1.08f else 1f
+                            scaleY = if (isDragging) 1.08f else 1f
+                            shadowElevation = if (isDragging) 12f else 0f
+                        }
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = enabled) { onImageClick(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = remember(bytes) {
+                            ImageRequest.Builder(context)
+                                .data(bytes)
+                                .crossfade(true)
+                                .build()
+                        },
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(80.dp)
+                    )
+                    // 右上角删除按钮
+                    if (enabled) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(2.dp)
+                                .size(20.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                                .clickable { onRemoveClick(index) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }
         }
         if (screenshots.size < MAX_SCREENSHOTS && enabled) {
-            Box(
-                Modifier
-                    .size(80.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
-                    .clickable { onAddClick() },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            item(key = "add") {
+                Box(
+                    Modifier
+                        .size(80.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                        .clickable { onAddClick() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("+", fontSize = 24.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
@@ -339,13 +355,22 @@ private fun FeedbackTypeChip(
     color: Color,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     selected: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     FilterChip(
         selected = selected,
         onClick = onClick,
-        label = { Text(stringResource(labelRes)) },
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+        modifier = modifier,
+        label = {
+            Text(
+                text = stringResource(labelRes),
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+        },
+        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp)) },
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = color.copy(alpha = 0.2f),
             selectedLabelColor = color,
