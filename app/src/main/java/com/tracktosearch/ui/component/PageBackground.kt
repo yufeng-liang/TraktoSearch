@@ -1,10 +1,6 @@
 package com.tracktosearch.ui.component
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -15,22 +11,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
 
 /**
- * 跨页面共享背景：渐变底色 + 彩色漂浮光晕。
+ * 跨页面共享背景：渐变底色 + 彩色光晕。
  *
  * 光晕分布在一个宽为 pageCount * 屏幕宽度的画布上，并随当前页水平平移，
- * 从而在不同 Tab 页之间形成“同一水平画布连续运动”的视觉效果。
+ * 从而在不同 Tab 页之间形成“同一水平画布”的视觉效果。
+ *
+ * 注意：光晕位置为固定值（不再使用无限动画驱动 sin/cos 漂浮）。
+ * 原因：PageBackground 位于 hazeSource 采样层内，无限动画会每帧驱动
+ * HazeSourceNode.draw 重新捕获（实测静态下 252fps 无效重绘）。
+ * 移除无限动画后 Haze 仅在 Tab 切换平移期间短暂重绘，性能大幅提升，
+ * 视觉上光晕装饰保留、Tab 切换平移保留，仅丢失极缓慢的漂浮感。
  */
 @Composable
 fun PageBackground(
@@ -42,65 +41,6 @@ fun PageBackground(
 ) {
     val screenWidthDp = LocalConfiguration.current.screenWidthDp
     val canvasWidthDp = screenWidthDp * pageCount
-
-    val anim1 = remember { Animatable(0f) }
-    val anim2 = remember { Animatable(0f) }
-    val anim3 = remember { Animatable(0f) }
-    val anim4 = remember { Animatable(0f) }
-
-    LaunchedEffect(showColorGlow) {
-        if (showColorGlow) {
-            launch {
-                while (true) {
-                    anim1.animateTo(
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 20000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        )
-                    )
-                }
-            }
-            launch {
-                while (true) {
-                    anim2.animateTo(
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 25000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        )
-                    )
-                }
-            }
-            launch {
-                while (true) {
-                    anim3.animateTo(
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 22000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        )
-                    )
-                }
-            }
-            launch {
-                while (true) {
-                    anim4.animateTo(
-                        targetValue = 1f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(durationMillis = 26000, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    val t1 = anim1.value
-    val t2 = anim2.value
-    val t3 = anim3.value
-    val t4 = anim4.value
 
     val bgGradient = if (isDark) {
         Brush.linearGradient(
@@ -167,53 +107,54 @@ fun PageBackground(
                     .fillMaxHeight()
                     .offset(x = offsetX)
             ) {
+            // 光晕位置取原 sin/cos 动画的中点值（t=0.5），保持视觉分布一致
             // 蓝紫色光晕（第 0 页右侧 / 第 1 页左侧）
             Orb(
                 size = 300.dp,
                 x = (screenWidthDp * 0.45f).dp,
-                y = (-60 + kotlin.math.sin(t1 * Math.PI * 2).toFloat() * 50).dp,
+                y = (-10).dp,
                 colors = orb1Colors
             )
             // 粉色光晕（第 0 页左下）
             Orb(
                 size = 260.dp,
-                x = (-110 + kotlin.math.cos(t2 * Math.PI * 2).toFloat() * 70).dp,
-                y = (290 + kotlin.math.sin(t2 * Math.PI * 2).toFloat() * 100).dp,
+                x = (-40).dp,
+                y = (390).dp,
                 colors = orb2Colors
             )
             // 青色光晕（第 0 页中下 / 第 1 页左上）
             Orb(
                 size = 240.dp,
-                x = (screenWidthDp * 0.15f + kotlin.math.sin(t3 * Math.PI * 2 + 1).toFloat() * 80).dp,
-                y = (150 + kotlin.math.cos(t3 * Math.PI * 2 + 1).toFloat() * 80).dp,
+                x = (screenWidthDp * 0.15f).dp,
+                y = (230).dp,
                 colors = orb3Colors
             )
             // 橙色光晕（第 1 页右下）
             Orb(
                 size = 220.dp,
-                x = (screenWidthDp * 1.3f + kotlin.math.cos(t1 * Math.PI * 2 + 2).toFloat() * 60).dp,
-                y = (420 + kotlin.math.sin(t1 * Math.PI * 2 + 2).toFloat() * 70).dp,
+                x = (screenWidthDp * 1.3f).dp,
+                y = (420).dp,
                 colors = orb4Colors
             )
             // 紫色光晕（第 1 页上 / 第 2 页左上）
             Orb(
                 size = 280.dp,
-                x = (screenWidthDp * 1.0f + kotlin.math.sin(t4 * Math.PI * 2).toFloat() * 70).dp,
-                y = (60 + kotlin.math.cos(t4 * Math.PI * 2).toFloat() * 60).dp,
+                x = (screenWidthDp * 1.0f).dp,
+                y = (60).dp,
                 colors = orb5Colors
             )
             // 浅蓝光晕（第 2 页右 / 第 3 页左）
             Orb(
                 size = 240.dp,
-                x = (screenWidthDp * 2.2f + kotlin.math.cos(t3 * Math.PI * 2 + 1.5f).toFloat() * 80).dp,
-                y = (180 + kotlin.math.sin(t3 * Math.PI * 2 + 1.5f).toFloat() * 90).dp,
+                x = (screenWidthDp * 2.2f).dp,
+                y = (180).dp,
                 colors = orb6Colors
             )
             // 绿色光晕（第 3 页左上）
             Orb(
                 size = 220.dp,
-                x = (screenWidthDp * 2.85f + kotlin.math.sin(t2 * Math.PI * 2 + 0.5f).toFloat() * 60).dp,
-                y = (-40 + kotlin.math.cos(t2 * Math.PI * 2 + 0.5f).toFloat() * 50).dp,
+                x = (screenWidthDp * 2.85f).dp,
+                y = (-15).dp,
                 colors = if (isDark) {
                     listOf(Color(0xFF66BB6A).copy(alpha = 0.30f), Color(0xFF66BB6A).copy(alpha = 0f))
                 } else {
@@ -223,8 +164,8 @@ fun PageBackground(
             // 琥珀色光晕（第 3 页右下）
             Orb(
                 size = 200.dp,
-                x = (screenWidthDp * 3.3f + kotlin.math.cos(t4 * Math.PI * 2 + 2.5f).toFloat() * 50).dp,
-                y = (520 + kotlin.math.sin(t4 * Math.PI * 2 + 2.5f).toFloat() * 70).dp,
+                x = (screenWidthDp * 3.3f).dp,
+                y = (520).dp,
                 colors = if (isDark) {
                     listOf(Color(0xFFFFCA28).copy(alpha = 0.28f), Color(0xFFFFCA28).copy(alpha = 0f))
                 } else {
