@@ -67,6 +67,9 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
         onPrimaryContainer = Color(0xFFFFDBCA),
         secondary = Color(0xFFE5B5C1),
         onSecondary = Color(0xFF44232D),
+        // 显式覆盖 secondaryContainer，避免 Material3 baseline 紫色 fallback 导致 FilterChip 选中态变紫
+        secondaryContainer = Color(0xFF754832),
+        onSecondaryContainer = Color(0xFFFFDBCA),
         background = CinemaBackground,
         onBackground = Color(0xFFF7EDE3),
         // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
@@ -85,6 +88,9 @@ internal fun vintageTicketColorScheme(dark: Boolean): androidx.compose.material3
         onPrimaryContainer = Color(0xFF5D4638),
         secondary = Color(0xFFD9D2C6),
         onSecondary = Color.White,
+        // 显式覆盖 secondaryContainer，避免 Material3 baseline 紫色 fallback 导致 FilterChip 选中态变紫
+        secondaryContainer = Color(0xFFE9E2D4),
+        onSecondaryContainer = Color(0xFF5D4638),
         background = Color.White,
         onBackground = Color(0xFF5D4638),
         // Haze 默认使用 surface 作为填充色，保持与其他主题一致。
