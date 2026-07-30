@@ -941,6 +941,20 @@ class DoubanSyncManager @Inject constructor(
                 return
             }
 
+        // 豆瓣独立模式:跳过 trakt batch remove + rollback,直接清本地表 + 重新同步
+        // (未连 trakt,batchRemoveFromWatchlist/Watched 会失败;豆瓣模式全量重写=清本地表+重爬豆瓣)
+        if (isDoubanMode()) {
+            val startTime = System.currentTimeMillis()
+            _progress.value = DoubanSyncProgress(
+                isRunning = true, startTimeMs = startTime,
+                phase = "清空本地标记", isRetry = false, currentTitle = null
+            )
+            doubanSyncedItemDao.clearAll()
+            _progress.value = _progress.value.copy(phase = "重新应用豆瓣状态")
+            runSyncLegacy(forceOverwrite = true)
+            return
+        }
+
         val startTime = System.currentTimeMillis()
         _progress.value = DoubanSyncProgress(
             isRunning = true, startTimeMs = startTime, phase = "清空已同步标记",
