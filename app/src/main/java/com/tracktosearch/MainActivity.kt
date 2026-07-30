@@ -186,6 +186,10 @@ class MainActivity : AppCompatActivity() {
             }
             val authState = authManager.authState.value
             val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
+            // 读取访客模式持久化状态：访客模式用户重启 App 后应直接进主页，不被送回登录页
+            val isGuestMode = StartupTrace.measure("local.guest_mode") {
+                guestModeStorage.isGuestMode.first()
+            }
             // 判断 Trakt 授权状态
             // 已授权后检查 Trakt 连接状态
             val cachedTraktProfile = if (isAuthorized) {
@@ -203,8 +207,9 @@ class MainActivity : AppCompatActivity() {
                 TraktConnectionState.DISCONNECTED
             }
             startDest = when {
-                !isAuthorized -> Routes.LOGIN
-                else -> Routes.MAIN
+                isAuthorized -> Routes.MAIN
+                isGuestMode -> Routes.MAIN  // 访客模式：直接进主页，跨重启保留
+                else -> Routes.LOGIN
             }
             // 根据 Trakt 连接状态选择默认标签页
             initialTab = if (isAuthorized) {

@@ -1152,6 +1152,11 @@ class DetailViewModel @Inject constructor(
     fun removeRating() {
         val current = _uiState.value
         if (current.isRating) return
+        // 未登录：弹出登录引导（与 setRating 保持一致）
+        if (!isLoggedIn) {
+            _uiState.value = _uiState.value.copy(showLoginPrompt = true)
+            return
+        }
         _uiState.value = current.copy(isRating = true, showRatingDialog = false, pendingDoubanAction = null)
         viewModelScope.launch {
             traktRepository.removeRating(currentTraktId, currentMediaType)
