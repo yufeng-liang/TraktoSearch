@@ -103,7 +103,7 @@ internal fun TmdbMovieSection(
                 val internalState = rememberLazyListState()
                 val effectiveState = lazyListState ?: internalState
                 LazyRow(state = effectiveState, horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(movies, key = { index, movie -> "tmdb_movie_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                    itemsIndexed(movies, key = { _, movie -> "tmdb_movie_${movie.id}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = movie.title,
@@ -161,7 +161,7 @@ internal fun TraktRecommendationSection(
             }
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(movies, key = { index, movie -> "trakt_movie_${index}_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
+                    itemsIndexed(movies, key = { _, movie -> "trakt_movie_${movie.ids.trakt}_${movie.ids.tmdb}" }, contentType = { _, _ -> "media_card" }) { index, movie ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = movie.title,
@@ -212,7 +212,7 @@ internal fun TraktTrendingMovieSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { index, item -> "trending_movie_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "trending_movie_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.movie.title,
@@ -263,7 +263,7 @@ internal fun TraktTrendingShowSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -317,7 +317,7 @@ internal fun TraktAnticipatedSection(
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
                     // 先展示电影，再展示剧集
-                    itemsIndexed(anticipatedMovies, key = { index, item -> "anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(anticipatedMovies, key = { _, item -> "anticip_m_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.movie.title,
@@ -333,7 +333,7 @@ internal fun TraktAnticipatedSection(
                             )
                         }
                     }
-                    itemsIndexed(anticipatedShows, key = { index, item -> "anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(anticipatedShows, key = { _, item -> "anticip_s_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(anticipatedMovies.size + index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -392,7 +392,7 @@ internal fun TraktShowRecommendationSection(
             items.isEmpty() -> EmptyRow()
             else -> {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
-                    itemsIndexed(items, key = { index, item -> "show_rec_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
+                    itemsIndexed(items, key = { _, item -> "show_rec_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { index, item ->
                         Box(modifier = Modifier.fadeSlideIn(index)) {
                             MovieCard(
                                 title = item.show.title,
@@ -609,7 +609,7 @@ internal fun DoubanRecommendSection(
                     LazyRow(state = listState, horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 5.dp)) {
                         itemsIndexed(
                             items,
-                            key = { index, item -> "douban_rec_${state.currentTab.name.lowercase()}_${index}_${item.id}" },
+                            key = { _, item -> "douban_rec_${state.currentTab.name.lowercase()}_${item.id}" },
                             contentType = { _, _ -> "media_card" }
                         ) { index, item ->
                             Box(modifier = Modifier.fadeSlideIn(index)) {

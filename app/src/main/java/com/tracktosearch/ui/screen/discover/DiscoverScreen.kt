@@ -173,6 +173,8 @@ fun DiscoverScreen(
     }
 
     val discoverHazeState = remember { HazeState() }
+    // HazeMaterials.thin() 读取 MaterialTheme.colorScheme，是 @Composable 函数，不能用 remember 缓存
+    // DiscoverScreen 仅在 uiState 变化时重组，主题不变时 HazeStyle 开销可接受
     val discoverHazeStyle = HazeMaterials.thin()
     val discoverListState = rememberLazyListState()
     val discoverHasContentUnderTopBar by remember {
@@ -231,50 +233,70 @@ fun DiscoverScreen(
             ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
+                    // 缓存 5 个渐变 Brush，避免每次重组创建新实例（颜色和方向固定）
+                    val popularGradient = remember {
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFFF83600), Color(0xFFF9D423)),
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
+                    val upcomingGradient = remember {
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFFD299C2), Color(0xFFFEF9D7)),
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
+                    val recommendGradient = remember {
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFFA1C4FD), Color(0xFFC2E9FB)),
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
+                    val doubanGradient = remember {
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFF84FAB0), Color(0xFF8FD3F4)),
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
+                    val listsGradient = remember {
+                        Brush.linearGradient(
+                            colors = listOf(Color(0xFFFF9A9E), Color(0xFFFAD0C4)),
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
                     // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
                     val heroCategoryDefs = mapOf<String, HeroCategory>(
                         "tmdb-popular" to HeroCategory(
                             id = "tmdb-popular",
                             title = stringResource(R.string.discover_trending),
                             count = uiState.tmdbPopularMovies.size,
-                            gradient = Brush.linearGradient(
-                                colors = listOf(Color(0xFFF83600), Color(0xFFF9D423)),
-                                start = Offset(0f, Float.POSITIVE_INFINITY),
-                                end = Offset(Float.POSITIVE_INFINITY, 0f)
-                            ),
+                            gradient = popularGradient,
                             onClick = { showPopularAll = true }
                         ),
                         "tmdb-upcoming" to HeroCategory(
                             id = "tmdb-upcoming",
                             title = stringResource(R.string.discover_upcoming),
                             count = uiState.tmdbUpcomingMovies.size,
-                            gradient = Brush.linearGradient(
-                                colors = listOf(Color(0xFFD299C2), Color(0xFFFEF9D7)),
-                                start = Offset(0f, Float.POSITIVE_INFINITY),
-                                end = Offset(Float.POSITIVE_INFINITY, 0f)
-                            ),
+                            gradient = upcomingGradient,
                             onClick = { showUpcomingAll = true }
                         ),
                         "trakt-recommendations" to HeroCategory(
                             id = "trakt-recommendations",
                             title = stringResource(R.string.discover_recommended),
                             count = uiState.traktRecommendations.size,
-                            gradient = Brush.linearGradient(
-                                colors = listOf(Color(0xFFA1C4FD), Color(0xFFC2E9FB)),
-                                start = Offset(0f, Float.POSITIVE_INFINITY),
-                                end = Offset(Float.POSITIVE_INFINITY, 0f)
-                            ),
+                            gradient = recommendGradient,
                             onClick = { showRecommendationsAll = true }
                         ),
                         "douban-movie" to HeroCategory(
                             id = "douban-movie",
                             title = stringResource(R.string.discover_douban_new_movies),
                             count = uiState.doubanHotCategories.sumOf { it.items.size },
-                            gradient = Brush.linearGradient(
-                                colors = listOf(Color(0xFF84FAB0), Color(0xFF8FD3F4)),
-                                start = Offset(0f, Float.POSITIVE_INFINITY),
-                                end = Offset(Float.POSITIVE_INFINITY, 0f)
-                            ),
+                            gradient = doubanGradient,
                             onClick = {
                                 val firstCategory = uiState.doubanHotCategories.firstOrNull()
                                 showDoubanAllDialog = firstCategory?.id ?: "douban-movie"
@@ -284,11 +306,7 @@ fun DiscoverScreen(
                             id = "trakt-lists",
                             title = stringResource(R.string.discover_trending_lists),
                             count = uiState.trendingLists.size,
-                            gradient = Brush.linearGradient(
-                                colors = listOf(Color(0xFFFF9A9E), Color(0xFFFAD0C4)),
-                                start = Offset(0f, Float.POSITIVE_INFINITY),
-                                end = Offset(Float.POSITIVE_INFINITY, 0f)
-                            ),
+                            gradient = listsGradient,
                             onClick = { showTrendingListsAll = true }
                         )
                     )

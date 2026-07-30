@@ -195,7 +195,7 @@ internal fun TmdbAllSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(items, key = { index, movie -> "all_tmdb_${index}_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
+                itemsIndexed(items, key = { _, movie -> "all_tmdb_${movie.id}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
                     SheetMediaCard(
                         imageUrl = movie.poster_path?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
@@ -286,7 +286,7 @@ internal fun TraktMovieAllSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(items, key = { index, movie -> "all_trakt_${index}_${movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
+                itemsIndexed(items, key = { _, movie -> "all_trakt_${movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, movie ->
                     SheetMediaCard(
                         imageUrl = movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = movie.title,
@@ -362,7 +362,7 @@ internal fun TraktShowAllSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(items, key = { index, show -> "all_trakt_show_${index}_${show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, show ->
+                itemsIndexed(items, key = { _, show -> "all_trakt_show_${show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, show ->
                     SheetMediaCard(
                         imageUrl = show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = show.title,
@@ -428,7 +428,7 @@ internal fun TraktAnticipatedAllSheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // 先展示电影，再展示剧集
-                itemsIndexed(anticipatedMovies, key = { index, item -> "all_anticip_m_${index}_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
+                itemsIndexed(anticipatedMovies, key = { _, item -> "all_anticip_m_${item.movie.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                     SheetMediaCard(
                         imageUrl = item.movie.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.movie.title,
@@ -438,7 +438,7 @@ internal fun TraktAnticipatedAllSheet(
                         onClick = { onMovieClick(item.movie) }
                     )
                 }
-                itemsIndexed(anticipatedShows, key = { index, item -> "all_anticip_s_${index}_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
+                itemsIndexed(anticipatedShows, key = { _, item -> "all_anticip_s_${item.show.ids.trakt}" }, contentType = { _, _ -> "media_card" }) { _, item ->
                     SheetMediaCard(
                         imageUrl = item.show.posterPath?.let { TmdbImageUrls.build(it) },
                         title = item.show.title,

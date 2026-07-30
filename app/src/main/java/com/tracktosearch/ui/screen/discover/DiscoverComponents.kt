@@ -42,11 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -121,6 +118,8 @@ internal fun MovieCard(
     val ratingValue = rating?.toDoubleOrNull()
     val isDark = isAppDarkTheme()
     val posterShape = RoundedCornerShape(16.dp)
+    // 缓存顶部高光渐变 Brush,避免每次重组创建新实例
+    val topHighlightBrush = remember { Brush.verticalGradient(0f to Color.White.copy(alpha = 0.15f), 1f to Color.Transparent) }
 
     Column(
         modifier = Modifier
@@ -154,14 +153,6 @@ internal fun MovieCard(
                     darkAlpha = if (isDark) 0.38f else 0.20f,
                     blurRadius = 16.dp,
                     shadowOffset = 5.dp
-                )
-                .dropShadow(
-                    shape = posterShape,
-                    shadow = Shadow(
-                        radius = 8.dp,
-                        color = Color.White.copy(alpha = if (isDark) 0.08f else 0.40f),
-                        offset = DpOffset((-2).dp, (-2).dp)
-                    )
                 )
                 .border(
                     width = 1.dp,
@@ -216,12 +207,7 @@ internal fun MovieCard(
                     .align(Alignment.TopCenter)
                     .height(40.dp)
                     .clip(posterShape)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.White.copy(alpha = 0.15f),
-                            1f to Color.Transparent
-                        )
-                    )
+                    .background(topHighlightBrush)
             )
             // 想看/已看角标（海报左上角）
             if (isWatched || isInWatchlist) {
