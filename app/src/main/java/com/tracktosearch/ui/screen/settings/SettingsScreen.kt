@@ -172,6 +172,8 @@ fun SettingsScreen(
     val cooldownStatus by viewModel.cooldownStatus.collectAsStateWithLifecycle()
     val consistencyCheckState by viewModel.checkProgress.collectAsStateWithLifecycle()
     val isDoubanSyncRunning by viewModel.isDoubanSyncRunning.collectAsStateWithLifecycle()
+    // 豆瓣独立模式下隐藏手动一致性检查入口（豆瓣模式无 Trakt 可对比，检查无意义）
+    val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     var showConsistencyDialog by remember { mutableStateOf(false) }
     // 状态一致性检查二次确认弹窗（显示上次检查时间，确认后才执行检查）
     var showConsistencyConfirm by remember { mutableStateOf(false) }
@@ -264,6 +266,8 @@ fun SettingsScreen(
     var showChangelogDialog by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showDoubanLogoutDialog by remember { mutableStateOf(false) }
+    // 退出豆瓣二次确认弹窗展示的本地标记条数（点击退出按钮时预查）
+    var doubanLogoutCount by remember { mutableIntStateOf(0) }
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showClearCategoryDialog by remember { mutableStateOf(false) }
     var pendingClearCategory by remember { mutableStateOf<SettingsViewModel.CacheCategory?>(null) }
@@ -662,8 +666,10 @@ fun SettingsScreen(
                                     containerColor = Color.Transparent
                                 )
                             }
-                            // 豆瓣同步进行中时隐藏手动检查入口（同步后自动检查）
-                            if (!isDoubanSyncRunning) {
+                            // 豆瓣同步进行中或豆瓣独立模式下隐藏手动检查入口
+                            // 同步进行中：同步后自动检查无需重复入口
+                            // 豆瓣独立模式：无 Trakt 可对比，一致性检查无意义
+                            if (!isDoubanSyncRunning && !isDoubanMode) {
                                 GroupDivider()
                                 SettingsItemCard(
                                     icon = Icons.Rounded.SyncAlt,
@@ -755,7 +761,13 @@ fun SettingsScreen(
                         onTraktLogin = onNavigateToLogin,
                         onTraktLogout = { showLogoutDialog = true },
                         onDoubanLogin = { onNavigateToDoubanLogin() },
-                        onDoubanLogout = { showDoubanLogoutDialog = true },
+                        onDoubanLogout = {
+                            // 预查本地豆瓣标记条数，弹二次确认对话框
+                            scope.launch {
+                                doubanLogoutCount = viewModel.getDoubanSyncedItemCount()
+                                showDoubanLogoutDialog = true
+                            }
+                        },
                         containerColor = Color.Transparent
                     )
                 }
@@ -910,13 +922,13 @@ fun SettingsScreen(
         )
     }
 
-    // 豆瓣登出二次确认对话框(登出后用 Snackbar 提供"重新登录"入口)
+    // 豆瓣登出二次确认对话框(提示将清理本地 N 条标记，登出后用 Snackbar 提供"重新登录"入口)
     if (showDoubanLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showDoubanLogoutDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            title = { Text(stringResource(R.string.settings_account_douban)) },
-            text = { Text(stringResource(R.string.settings_logout_confirm)) },
+            title = { Text(stringResource(R.string.douban_logout_confirm_title)) },
+            text = { Text(stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount)) },
             confirmButton = {
                     val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
                     val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)

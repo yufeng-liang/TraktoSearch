@@ -1406,6 +1406,8 @@
     <string name="settings_account_douban_login">ログイン</string>
     <string name="settings_account_douban_logout">ログアウト</string>
     <string name="settings_douban_logout_done">Douban からログアウトしました</string>
+    <string name="douban_logout_confirm_title">Douban からログアウト</string>
+    <string name="douban_logout_confirm_message">ログアウトするとローカルの %1$d 件の Douban マークが削除されます。続行しますか？</string>
     <string name="settings_douban_login_hint">ログインして豆瓣のマークを Trakt に同期</string>
     <string name="settings_guest_login_hint">Trakt にログインしてウォッチリスト、視聴済み、評価、豆瓣同期機能を利用</string>
     <!-- 豆瓣スパイダーテスト（マーク書き戻し） -->

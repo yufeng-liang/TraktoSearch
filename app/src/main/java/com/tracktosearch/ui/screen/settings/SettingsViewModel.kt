@@ -26,8 +26,10 @@ import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.notification.NotificationScheduler
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -104,6 +106,8 @@ class SettingsViewModel @Inject constructor(
     private val statusConsistencyChecker: DoubanTraktStatusConsistencyChecker,
     private val doubanSyncManager: DoubanSyncManager,
     private val sharedTransitionStorage: SharedTransitionStorage,
+    private val doubanSyncedItemDao: DoubanSyncedItemDao,
+    private val sessionModeManager: SessionModeManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -575,6 +579,10 @@ class SettingsViewModel @Inject constructor(
         .map { it.isRunning }
         .stateIn(viewModelScope, SharingStarted.Lazily, false)
 
+    /** 是否处于豆瓣独立模式（未连 Trakt + 已登录豆瓣）。豆瓣模式下隐藏手动一致性检查入口 */
+    val isDoubanMode: StateFlow<Boolean> = sessionModeManager.isDoubanMode
+        .stateIn(viewModelScope, SharingStarted.Lazily, false)
+
     /** 检查是否在运行中 */
     fun isCheckRunning(): Boolean = statusConsistencyChecker.isRunning()
 
@@ -596,14 +604,19 @@ class SettingsViewModel @Inject constructor(
         statusConsistencyChecker.resetProgress()
     }
 
-    /** 清除豆瓣凭据（退出登录） */
+    /** 清除豆瓣凭据（退出登录）。同步清理本地豆瓣标记表和云端拉取版本记录 */
     fun clearDoubanCredentials() {
         doubanAuthStorage.clearCredentials()
-        // 清除失败数据云端拉取版本记录（与账号绑定，换账号后不应残留导致误判）
         viewModelScope.launch {
+            // 清理本地豆瓣同步标记表（douban_synced_items），避免换账号后旧数据残留
+            runCatching { doubanSyncedItemDao.clearAll() }
+            // 清除失败数据云端拉取版本记录（与账号绑定，换账号后不应残留导致误判）
             runCatching { cloudFailurePullMetaStorage.clear() }
         }
     }
+
+    /** 获取本地豆瓣标记条数（退出登录二次确认弹窗展示用） */
+    suspend fun getDoubanSyncedItemCount(): Int = doubanSyncedItemDao.count()
 
     /**
      * 异步抓取豆瓣用户主页，刷新头像/昵称并持久化。
