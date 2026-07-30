@@ -922,7 +922,6 @@ class WatchlistViewModel @Inject constructor(
                 doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
             }
         }
-        return failedCount > 0
     }
 }
 
