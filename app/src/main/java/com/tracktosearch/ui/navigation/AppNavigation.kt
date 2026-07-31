@@ -385,7 +385,12 @@ fun AppNavigation(
                         if (pendingCount > 0) {
                             com.tracktosearch.ui.screen.douban.DoubanPendingItemsDialog(
                                 pendingCount = pendingCount,
-                                onDismiss = { pendingCount = 0 },
+                                onDismiss = {
+                                    // 用户点取消:清空数据库 pending items,避免下次启动再次弹窗
+                                    // pending items 只是已爬到但未处理的列表数据,丢弃不影响已同步标记
+                                    pendingCount = 0
+                                    scope.launch { doubanSyncManager.clearPendingItems() }
+                                },
                                 onContinue = {
                                     // 继续同步:走 startResume,跳过列表爬取
                                     // 留在 MainScreen，Watchlist 横幅会显示进度
