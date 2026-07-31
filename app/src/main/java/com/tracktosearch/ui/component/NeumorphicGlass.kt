@@ -342,10 +342,7 @@ fun NeumorphicIconButton(
             )
             .clip(shape)
             .then(hazeModifier)
-            .background(
-                if (isDark) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
-                shape
-            )
+            .background(Color.Transparent, shape)
             .neumorphicInnerShadow(
                 shape = shape,
                 isDark = isDark,
