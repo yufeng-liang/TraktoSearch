@@ -535,7 +535,9 @@ fun WatchlistScreen(
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 32.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 32.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Movie,

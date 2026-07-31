@@ -212,7 +212,8 @@ internal fun AccentColorDialog(
                                         maxFontSize = 11.sp,
                                         minFontSize = 8.5.sp,
                                         modifier = Modifier.width(72.dp),
-                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        fillMaxWidth = true
                                     )
                                 }
                             }

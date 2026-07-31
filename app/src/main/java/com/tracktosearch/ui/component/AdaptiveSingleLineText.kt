@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.component
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -42,7 +43,8 @@ internal fun AdaptiveSingleLineText(
     maxFontSize: TextUnit,
     modifier: Modifier = Modifier,
     minFontSize: TextUnit = 10.sp,
-    textAlign: TextAlign? = null
+    textAlign: TextAlign? = null,
+    fillMaxWidth: Boolean = false
 ) {
     val textMeasurer = rememberTextMeasurer()
     BoxWithConstraints(modifier = modifier) {
@@ -69,6 +71,7 @@ internal fun AdaptiveSingleLineText(
         Text(
             text = text,
             style = style.copy(fontSize = fontSize),
+            modifier = if (fillMaxWidth) Modifier.fillMaxWidth() else Modifier,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = textAlign
