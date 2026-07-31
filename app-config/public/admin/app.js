@@ -372,6 +372,9 @@ const API = {
             lastRecoveryAt: source.last_recovery_at,
             expiresAt: source.expires_at,
             lastSeen: source.last_seen,
+            lastIp: source.last_ip,
+            lastIpGeo: source.last_ip_geo,
+            ipUpdatedAt: source.ip_updated_at,
             devicesList: (data.devices || []).map((d) => ({
             id: d.id,
             name: d.device_name,
@@ -1204,11 +1207,11 @@ function renderFriendDetail(container, renderToken) {
         ipCard.className = 'card';
         ipCard.innerHTML = `
             <div class="card-header"><span class="card-title">最近活动 IP</span></div>
-            ${f.last_ip ? `
+            ${f.lastIp ? `
                 <div style="display:grid;gap:10px;font-size:13px">
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">IP 地址</span><span style="font-family:var(--font-mono)">${escapeHtml(f.last_ip)}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">地理位置</span><span>${escapeHtml(f.last_ip_geo || '未知')}</span></div>
-                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">更新时间</span><span>${formatTime(f.ip_updated_at)}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">IP 地址</span><span style="font-family:var(--font-mono)">${escapeHtml(f.lastIp)}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">地理位置</span><span>${escapeHtml(f.lastIpGeo || '未知')}</span></div>
+                    <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">更新时间</span><span>${formatTime(f.ipUpdatedAt)}</span></div>
                 </div>
                 <button class="btn btn-ghost btn-sm" id="show-ip-logs" style="margin-top:12px">查看 IP 历史</button>
                 <div id="ip-logs-list" hidden style="margin-top:12px"></div>
@@ -1234,7 +1237,10 @@ function renderFriendDetail(container, renderToken) {
                     if (ipLogs.length === 0) {
                         logsDiv.innerHTML = '<div style="text-align:center;padding:12px;color:var(--text-dim)">暂无历史记录</div>';
                     } else {
-                        logsDiv.innerHTML = `<div class="table-scroll"><table><thead><tr><th>IP</th><th>地理位置</th><th>时间</th></tr></thead><tbody>${ipLogs.map(l => `<tr><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.ip || '—')}</td><td>${escapeHtml(l.ip_geo || '未知')}</td><td style="color:var(--text-dim);font-size:12px">${formatTime(l.logged_at)}</td></tr>`).join('')}</tbody></table></div>`;
+                        logsDiv.innerHTML = `<div class="table-scroll"><table><thead><tr><th>IP</th><th>地理位置</th><th>ISP</th><th>时间</th></tr></thead><tbody>${ipLogs.map(l => {
+                            const geo = [l.country, l.region, l.city].filter(Boolean).join(' ') || '未知';
+                            return `<tr><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.ip || '—')}</td><td>${escapeHtml(geo)}</td><td style="font-size:12px;color:var(--text-dim)">${escapeHtml(l.isp || '—')}</td><td style="color:var(--text-dim);font-size:12px">${formatTime(l.created_at)}</td></tr>`;
+                        }).join('')}</tbody></table></div>`;
                     }
                 }).catch(err => {
                     showIpLogsBtn.disabled = false;

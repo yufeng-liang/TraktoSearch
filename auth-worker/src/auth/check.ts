@@ -96,16 +96,16 @@ export async function handleCheck(
             country?: string; region?: string; city?: string;
             latitude?: string; longitude?: string; asOrganization?: string;
         } | null;
-    if (clientIp && cf) {
-        const geoParts = [cf.country, cf.region, cf.city].filter(Boolean);
+    if (clientIp) {
+        const geoParts = cf ? [cf.country, cf.region, cf.city].filter(Boolean) : [];
         const ipGeo = geoParts.join(' ') || null;
         statements.push(
             env.DB.prepare(`
                 INSERT INTO friend_ip_logs (friend_id, ip, country, region, city, latitude, longitude, isp, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(payload.sub, clientIp, cf.country || null, cf.region || null,
-                    cf.city || null, cf.latitude || null, cf.longitude || null,
-                    cf.asOrganization || null, currentTime),
+            `).bind(payload.sub, clientIp, cf?.country || null, cf?.region || null,
+                    cf?.city || null, cf?.latitude || null, cf?.longitude || null,
+                    cf?.asOrganization || null, currentTime),
             env.DB.prepare(`
                 UPDATE friends SET last_ip = ?, last_ip_geo = ?, ip_updated_at = ? WHERE id = ?
             `).bind(clientIp, ipGeo, currentTime, payload.sub)
