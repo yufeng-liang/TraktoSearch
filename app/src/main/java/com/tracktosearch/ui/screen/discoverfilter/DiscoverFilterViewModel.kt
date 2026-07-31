@@ -3,19 +3,16 @@ package com.tracktosearch.ui.screen.discoverfilter
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import javax.inject.Inject
@@ -46,7 +43,7 @@ data class DiscoverFilterUiState(
 class DiscoverFilterViewModel @Inject constructor(
     private val tmdbRepository: TmdbRepository,
     private val traktRepository: TraktRepository,
-    private val tokenStorage: TokenStorage,
+    private val sessionModeManager: SessionModeManager,
     val posterColorExtractor: PosterColorExtractor
 ) : ViewModel() {
 
@@ -109,9 +106,8 @@ class DiscoverFilterViewModel @Inject constructor(
     private val _watchlistWatchedIds = MutableStateFlow<TraktRepository.WatchlistWatchedIds?>(null)
     val watchlistWatchedIds: StateFlow<TraktRepository.WatchlistWatchedIds?> = _watchlistWatchedIds.asStateFlow()
 
-    val isLoggedIn: StateFlow<Boolean> = tokenStorage.accessToken
-        .map { !it.isNullOrBlank() }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    /** 只有 Trakt 已连接时才显示并使用想看/已看筛选。 */
+    val isLoggedIn: StateFlow<Boolean> = sessionModeManager.traktConnected
 
     /** 年代选项列表（动态生成，含当前年份） */
     val decadeOptions: List<DiscoverFilterConstants.DecadeOption> by lazy {
@@ -124,6 +120,10 @@ class DiscoverFilterViewModel @Inject constructor(
 
     private fun loadWatchlistWatchedIds() {
         viewModelScope.launch {
+            if (!sessionModeManager.traktConnected.value) {
+                _watchlistWatchedIds.value = TraktRepository.WatchlistWatchedIds()
+                return@launch
+            }
             traktRepository.loadWatchlistWatchedIds()
             _watchlistWatchedIds.value = traktRepository.getWatchlistWatchedIds()
         }

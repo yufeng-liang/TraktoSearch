@@ -5,15 +5,18 @@ import com.tracktosearch.data.local.db.UserReviewEntity
 import com.tracktosearch.data.remote.trakt.dto.*
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -47,7 +50,23 @@ class StatisticsViewModelTest {
 
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val userReviewRepository = mockk<UserReviewRepository>(relaxed = true)
+    private val traktConnected = MutableStateFlow(true)
+    private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private lateinit var viewModel: StatisticsViewModel
+
+    @Test
+    fun `未连接Trakt时统计页不请求任何私有数据`() = runTest {
+        io.mockk.clearMocks(traktRepository, userReviewRepository)
+        traktConnected.value = false
+
+        viewModel.loadStatistics()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getAllMovieHistory(any()) }
+        coVerify(exactly = 0) { traktRepository.getAllShowHistory(any()) }
+        coVerify(exactly = 0) { traktRepository.getWatchedShowsWithEpisodes() }
+        assertThat(viewModel.uiState.value.initialLoading).isFalse()
+    }
 
     // ==================== 测试数据 ====================
 
@@ -117,9 +136,12 @@ class StatisticsViewModelTest {
     @Before
     fun setup() {
         clearMocks(traktRepository, userReviewRepository)
+        traktConnected.value = true
+        every { sessionModeManager.traktConnected } returns traktConnected
         viewModel = StatisticsViewModel(
             traktRepository,
             userReviewRepository,
+            sessionModeManager,
             RuntimeEnvironment.getApplication()
         )
     }

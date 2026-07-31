@@ -1,10 +1,10 @@
 package com.tracktosearch.ui.screen.discoverfilter
 
 import com.google.common.truth.Truth.assertThat
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.clearMocks
@@ -35,7 +35,7 @@ import java.io.IOException
  * - search() 成功/失败/防重复
  *
  * 测试策略：
- * 1. tokenStorage.accessToken 桩为 MutableStateFlow(null)，避免 isLoggedIn 上游触发异常
+ * 1. SessionModeManager.traktConnected 桩为 false，模拟未连接 Trakt 的会话
  * 2. traktRepository.loadWatchlistWatchedIds/getWatchlistWatchedIds 桩为默认空值，
  *    避免 init 协程干扰（hideWatched 过滤分支在 _watchlistWatchedIds=null 时不进入）
  * 3. toggle/switchType/setXxx 是同步方法，直接验证 uiState.value 字段变化，无需 advanceUntilIdle
@@ -51,9 +51,26 @@ class DiscoverFilterViewModelTest {
 
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
-    private val tokenStorage = mockk<TokenStorage>(relaxed = true)
+    private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private val posterColorExtractor = mockk<PosterColorExtractor>(relaxed = true)
     private lateinit var viewModel: DiscoverFilterViewModel
+
+    @Test
+    fun `仅登录豆瓣时不加载Trakt私有想看已看数据`() = runTest {
+        io.mockk.clearMocks(traktRepository)
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
+
+        viewModel = DiscoverFilterViewModel(
+            tmdbRepository,
+            traktRepository,
+            sessionModeManager,
+            posterColorExtractor
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+        assertThat(viewModel.isLoggedIn.value).isFalse()
+    }
 
     // ==================== 测试数据 ====================
 
@@ -66,20 +83,19 @@ class DiscoverFilterViewModelTest {
 
     @Before
     fun setup() {
-        clearMocks(tmdbRepository, traktRepository, tokenStorage, posterColorExtractor)
+        clearMocks(tmdbRepository, traktRepository, sessionModeManager, posterColorExtractor)
 
         // init 块调用 loadWatchlistWatchedIds（suspend）+ getWatchlistWatchedIds（非 suspend）
         // 桩为默认空值，hideWatched 过滤分支不进入
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns TraktRepository.WatchlistWatchedIds()
         every { traktRepository.getWatchlistWatchedIds() } returns null
 
-        // isLoggedIn 从 tokenStorage.accessToken map 而来，桩为空 token（未登录）
-        every { tokenStorage.accessToken } returns MutableStateFlow<String?>(null)
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
 
         viewModel = DiscoverFilterViewModel(
             tmdbRepository,
             traktRepository,
-            tokenStorage,
+            sessionModeManager,
             posterColorExtractor
         )
         // 不在此处 advanceUntilIdle：StandardTestDispatcher 下 init 协程处于 pending，

@@ -52,6 +52,9 @@ class ReleaseCheckWorker @AssistedInject constructor(
         // 检查通知总开关
         val enabled = notificationStorage.enabled.first()
         if (!enabled) return Result.success()
+        // Worker 可能在 App 进程之外启动，不能依赖内存中的 Trakt 连接态。
+        // 豆瓣独立模式先在这里结束，避免继续请求私有想看列表。
+        if (!traktRepository.checkTraktConnection()) return Result.success()
 
         // 确保通知渠道已创建
         notificationHelper.createChannels()

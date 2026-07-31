@@ -33,14 +33,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -141,12 +139,11 @@ import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.GlassHighlight
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
-import com.tracktosearch.ui.component.hazeBottomSheetContent
-import com.tracktosearch.ui.component.hazeBottomSheetSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.component.neumorphicShadow
 import com.tracktosearch.ui.util.HapticType
@@ -1672,16 +1669,10 @@ fun DoubanHotAllSheet(
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    val navBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.hazeBottomSheetSurface(),
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        scrimColor = Color.Black.copy(alpha = 0.32f),
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+    DiscoverModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
-        Column(modifier = Modifier.hazeBottomSheetContent()) {
+        Column(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1704,7 +1695,7 @@ fun DoubanHotAllSheet(
 
             androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
-                modifier = Modifier.weight(1f).padding(bottom = navBarHeight),
+                modifier = Modifier.fillMaxHeight(0.8f),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)

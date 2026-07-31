@@ -9,6 +9,7 @@ import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.data.util.UserActionTracker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,6 +74,7 @@ class MarkRecordViewModel @Inject constructor(
     private val markActionRecordDao: MarkActionRecordDao,
     private val traktRepository: TraktRepository,
     val posterColorExtractor: PosterColorExtractor,
+    private val sessionModeManager: SessionModeManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -177,6 +179,7 @@ class MarkRecordViewModel @Inject constructor(
 
     /** 计算当前状态徽标（从 WatchlistWatchedIds 全局缓存查询） */
     private suspend fun updateCurrentStatusMap() {
+        if (!sessionModeManager.traktConnected.value) return
         val items = _uiState.value.items
         if (items.isEmpty()) return
         val ids = traktRepository.getWatchlistWatchedIds() ?: return
@@ -207,20 +210,24 @@ class MarkRecordViewModel @Inject constructor(
             var allTabLocalItemCount = 0
             val newItems: List<MarkRecordItem> = when (state.currentTab) {
             MarkRecordTab.WATCHED -> {
-                loadFromTraktHistory(
-                    page = page,
-                    mediaTypesFilter = state.filterMediaTypes,
-                    onFirstBatch = { firstBatch ->
-                        _uiState.update { it.copy(items = firstBatch, isLoading = false) }
-                    }
-                )
+                if (sessionModeManager.traktConnected.value) {
+                    loadFromTraktHistory(
+                        page = page,
+                        mediaTypesFilter = state.filterMediaTypes,
+                        onFirstBatch = { firstBatch ->
+                            _uiState.update { it.copy(items = firstBatch, isLoading = false) }
+                        }
+                    )
+                } else emptyList()
             }
             MarkRecordTab.ALL -> {
                 val localItems = loadFromDao(page, state)
                 allTabLocalItemCount = localItems.size
                 // Trakt 已看历史分页:首次(page=1)必拉以获取 totalPages,后续页按 totalPages 判断
-                val shouldFetchTrakt = page == 1 ||
+                val shouldFetchTrakt = sessionModeManager.traktConnected.value &&
+                    (page == 1 ||
                     (traktHistoryTotalPages > 0 && page <= traktHistoryTotalPages)
+                    )
                 val traktItems = if (shouldFetchTrakt) {
                     try {
                         loadFromTraktHistoryAll(page, state.filterMediaTypes)

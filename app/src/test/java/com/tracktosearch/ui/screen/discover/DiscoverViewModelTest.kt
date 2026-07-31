@@ -6,7 +6,6 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.SearchHistoryStorage
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -21,6 +20,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingMovieResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
@@ -71,7 +71,7 @@ class DiscoverViewModelTest {
     private lateinit var searchHistoryStorage: SearchHistoryStorage
     private lateinit var viewedItemStorage: ViewedItemStorage
     private lateinit var discoverSectionStorage: DiscoverSectionStorage
-    private lateinit var tokenStorage: TokenStorage
+    private lateinit var sessionModeManager: SessionModeManager
     private lateinit var sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
     private lateinit var doubanRepository: DoubanRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
@@ -79,6 +79,34 @@ class DiscoverViewModelTest {
     private lateinit var context: Context
 
     private lateinit var viewModel: DiscoverViewModel
+
+    @Test
+    fun `仅登录豆瓣时不加载Trakt私有想看已看数据`() = runTest {
+        advanceUntilIdle()
+        io.mockk.clearMocks(traktRepository)
+        viewModel = DiscoverViewModel(
+            doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
+            viewedItemStorage, discoverSectionStorage,
+            sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
+            doubanRecommendCache, sessionModeManager, context
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+        assertThat(viewModel.watchlistWatchedIds.value?.movieWatchlistTraktIds).isEmpty()
+    }
+
+    @Test
+    fun `仅登录豆瓣时查看全部推荐不请求Trakt个性化接口`() = runTest {
+        advanceUntilIdle()
+        io.mockk.clearMocks(traktRepository)
+
+        viewModel.loadRecommendationsAll()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getRecommendations(any()) }
+        assertThat(viewModel.uiState.value.isLoadingRecommendationsAll).isFalse()
+    }
 
     @Before
     fun setup() {
@@ -88,7 +116,7 @@ class DiscoverViewModelTest {
         searchHistoryStorage = mockk(relaxed = true)
         viewedItemStorage = mockk(relaxed = true)
         discoverSectionStorage = mockk(relaxed = true)
-        tokenStorage = mockk(relaxed = true)
+        sessionModeManager = mockk(relaxed = true)
         sharedDoubanHotCache = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
@@ -100,7 +128,7 @@ class DiscoverViewModelTest {
         every { doubanAuthStorage.getCredentials() } returns null
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns mockk(relaxed = true)
         every { traktRepository.getWatchlistWatchedIds() } returns null
-        every { tokenStorage.accessToken } returns MutableStateFlow(null)
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
 
         // sectionConfigs 的 stateIn 初始值是 ALL_SECTION_IDS（全部可见），
         // init 块的 loadInitialSections 会触发 loadDoubanHot/loadTmdbPopular/loadTmdbUpcoming
@@ -110,9 +138,9 @@ class DiscoverViewModelTest {
 
         viewModel = DiscoverViewModel(
             doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
-            viewedItemStorage, discoverSectionStorage, tokenStorage,
+            viewedItemStorage, discoverSectionStorage,
             sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
-            doubanRecommendCache, context
+            doubanRecommendCache, sessionModeManager, context
         )
     }
 
@@ -181,6 +209,35 @@ class DiscoverViewModelTest {
     }
 
     // ===== Trakt 加载测试 =====
+
+    @Test
+    fun `仅有网关令牌但未连接Trakt时电影推荐显示未登录`() = runTest {
+        viewModel.loadTraktRecommendations()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.traktRecommendationsLoggedIn).isFalse()
+        coVerify(exactly = 0) { traktRepository.getRecommendations(any()) }
+    }
+
+    @Test
+    fun `仅有网关令牌但未连接Trakt时剧集推荐显示未登录`() = runTest {
+        coEvery { traktRepository.getTrendingMovies(any(), any()) } returns
+            Result.success(emptyList<TraktTrendingMovieResponse>() to 0)
+        coEvery { traktRepository.getTrendingShows(any(), any()) } returns
+            Result.success(emptyList<TraktTrendingShowResponse>() to 0)
+        coEvery { traktRepository.getAnticipatedMovies(any(), any()) } returns
+            Result.success(emptyList<TraktAnticipatedMovieResponse>() to 0)
+        coEvery { traktRepository.getAnticipatedShows(any(), any()) } returns
+            Result.success(emptyList<TraktAnticipatedShowResponse>() to 0)
+        coEvery { traktRepository.getShowRecommendations(any()) } returns
+            Result.success(emptyList())
+
+        viewModel.loadTraktData()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.traktShowRecommendationsLoggedIn).isFalse()
+        coVerify(exactly = 0) { traktRepository.getShowRecommendations(any()) }
+    }
 
     @Test
     fun `loadTraktLists 成功加载社区列表`() = runTest {
