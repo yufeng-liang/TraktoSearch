@@ -514,7 +514,7 @@
     <string name="settings_logout_confirm">Are you sure you want to log out?</string>
     <string name="settings_source_repo">Source Code</string>
     <string name="settings_feedback">Feedback &amp; Suggestions</string>
-    <string name="settings_feedback_subtitle">Submit suggestions, report issues</string>
+    <string name="settings_feedback_subtitle">Developer on duty: send us your ideas and bugs 🧑‍💻🍿</string>
     <string name="feedback_title">Feedback</string>
     <string name="feedback_new">New Feedback</string>
     <string name="feedback_my_feedbacks">My Feedback</string>

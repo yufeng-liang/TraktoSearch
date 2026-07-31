@@ -514,7 +514,7 @@
     <string name="settings_logout_confirm">确定要退出登录吗？</string>
     <string name="settings_source_repo">源代码仓库</string>
     <string name="settings_feedback">反馈与建议</string>
-    <string name="settings_feedback_subtitle">提交建议、报告问题</string>
+    <string name="settings_feedback_subtitle">开发者在线营业，欢迎投喂建议和 Bug 🧑‍💻🍿</string>
     <string name="feedback_title">反馈与建议</string>
     <string name="feedback_new">写新反馈</string>
     <string name="feedback_my_feedbacks">我的反馈</string>
@@ -778,6 +778,7 @@
     <string name="mark_records_settings_entry">标记记录</string>
     <string name="mark_records_settings_entry_desc">查看你的想看/已看/移除操作历史</string>
     <string name="settings_douban_resync">重新同步豆瓣</string>
+    <string name="settings_douban_sync">从豆瓣同步</string>
     <string name="settings_douban_resync_desc">选择同步模式,处理豆瓣状态变化</string>
     <string name="settings_douban_resync_running">同步进行中…</string>
     <string name="settings_douban_resync_running_desc">正在同步豆瓣数据,点击查看进度</string>

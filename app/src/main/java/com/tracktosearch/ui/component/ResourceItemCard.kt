@@ -207,7 +207,9 @@ fun ResourceItemCard(
                     Surface(
                         shape = RoundedCornerShape(10.dp),
                         color = style.backgroundColor,
-                        modifier = Modifier.height(28.dp)
+                        modifier = Modifier
+                            .height(28.dp)
+                            .widthIn(max = 88.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -224,13 +226,16 @@ fun ResourceItemCard(
                                     modifier = Modifier.size(14.dp)
                                 )
                             }
-                            Text(
+                            AdaptiveSingleLineText(
                                 text = stringResource(style.shortNameResId),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp
+                                    fontSize = 11.sp,
+                                    color = Color.White
                                 ),
-                                color = Color.White
+                                maxFontSize = 11.sp,
+                                minFontSize = 9.sp,
+                                modifier = Modifier.widthIn(max = 68.dp)
                             )
                         }
                     }
@@ -240,13 +245,19 @@ fun ResourceItemCard(
                     // 来源标签
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = sourceColors.background
+                        color = sourceColors.background,
+                        modifier = Modifier.widthIn(max = 120.dp)
                     ) {
-                        Text(
+                        AdaptiveSingleLineText(
                             text = sourceTagLabel(item.source, sourceName),
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            color = sourceColors.content,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Medium,
+                                color = sourceColors.content
+                            ),
+                            maxFontSize = 11.sp,
+                            minFontSize = 8.5.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
 
@@ -255,13 +266,18 @@ fun ResourceItemCard(
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(
                             shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.widthIn(max = 80.dp)
                         ) {
-                            Text(
+                            AdaptiveSingleLineText(
                                 text = stringResource(R.string.resource_viewed),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = MaterialTheme.colorScheme.outline
+                                ),
+                                maxFontSize = 10.sp,
+                                minFontSize = 8.sp,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
                     }

@@ -594,7 +594,7 @@
     <string name="settings_logout_confirm">로그아웃하시겠습니까?</string>
     <string name="settings_source_repo">소스 코드</string>
     <string name="settings_feedback">피드백</string>
-    <string name="settings_feedback_subtitle">제안 제출, 문제 보고</string>
+    <string name="settings_feedback_subtitle">개발자 영업 중! 아이디어와 버그를 마음껏 던져 주세요 🧑‍💻🍿</string>
     <string name="feedback_title">피드백</string>
     <string name="feedback_new">새 피드백</string>
     <string name="feedback_my_feedbacks">내 피드백</string>

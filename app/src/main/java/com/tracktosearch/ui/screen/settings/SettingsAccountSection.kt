@@ -41,8 +41,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 
@@ -106,7 +108,12 @@ fun VersionItem(
                     onClick = { view.performHaptic(HapticType.CLICK); onCheckUpdate() },
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
                 ) {
-                    Text(stringResource(R.string.settings_check_update), maxLines = 1)
+                    AdaptiveSingleLineText(
+                        text = stringResource(R.string.settings_check_update),
+                        style = MaterialTheme.typography.labelLarge,
+                        maxFontSize = 14.sp,
+                        minFontSize = 10.sp
+                    )
                 }
             }
         }
@@ -224,6 +231,7 @@ internal fun AccountRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -264,7 +272,12 @@ internal fun AccountRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
             modifier = Modifier.height(36.dp)
         ) {
-            Text(stringResource(R.string.settings_logout_button))
+            AdaptiveSingleLineText(
+                text = stringResource(R.string.settings_logout_button),
+                style = MaterialTheme.typography.labelLarge,
+                maxFontSize = 14.sp,
+                minFontSize = 10.sp
+            )
         }
     }
 }
@@ -309,7 +322,12 @@ internal fun DoubanLoginPromptRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
             modifier = Modifier.height(36.dp)
         ) {
-            Text(stringResource(R.string.settings_account_douban_login))
+            AdaptiveSingleLineText(
+                text = stringResource(R.string.settings_account_douban_login),
+                style = MaterialTheme.typography.labelLarge,
+                maxFontSize = 14.sp,
+                minFontSize = 10.sp
+            )
         }
     }
 }
@@ -347,7 +365,12 @@ internal fun TraktLoginPromptRow(
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
             modifier = Modifier.height(36.dp)
         ) {
-            Text(stringResource(R.string.settings_account_trakt_login))
+            AdaptiveSingleLineText(
+                text = stringResource(R.string.settings_account_trakt_login),
+                style = MaterialTheme.typography.labelLarge,
+                maxFontSize = 14.sp,
+                minFontSize = 10.sp
+            )
         }
     }
 }
@@ -389,7 +412,12 @@ fun GuestLoginItem(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                 modifier = Modifier.height(36.dp)
             ) {
-                Text(stringResource(R.string.login_button))
+                AdaptiveSingleLineText(
+                    text = stringResource(R.string.login_button),
+                    style = MaterialTheme.typography.labelLarge,
+                    maxFontSize = 14.sp,
+                    minFontSize = 10.sp
+                )
             }
         }
     }

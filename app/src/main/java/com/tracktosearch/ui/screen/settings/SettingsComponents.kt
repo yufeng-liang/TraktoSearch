@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
+import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.theme.appSwitchColors
@@ -81,10 +83,10 @@ fun SettingsGroupCard(
             modifier = Modifier.fillMaxWidth(),
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
-            backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                              else Color.White.copy(alpha = 0.70f),
-            borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
-                          else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+             backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                               else Color.White.copy(alpha = 0.70f),
+             borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                           else Color(0xFFE0E5EC).copy(alpha = 0.9f),
             elevation = 6.dp,
             blurRadius = 18.dp,
             hazeState = hazeState,
@@ -218,22 +220,40 @@ fun CustomSearchSourceItem(
                 Text(
                     text = source.name.ifBlank { stringResource(R.string.settings_source_unnamed) },
                     style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = source.baseUrl,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Switch(
+                checked = source.enabled,
+                onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
+                colors = appSwitchColors()
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             IconButton(onClick = onTest, enabled = source.enabled) {
                 if (testResult?.isTesting == true) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
-                    Text(
-                        stringResource(R.string.settings_source_test),
+                    AdaptiveSingleLineText(
+                        text = stringResource(R.string.settings_source_test),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        maxFontSize = 12.sp,
+                        minFontSize = 9.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
@@ -243,11 +263,6 @@ fun CustomSearchSourceItem(
             IconButton(onClick = onDelete) {
                 Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.cd_delete), modifier = Modifier.size(20.dp))
             }
-            Switch(
-                checked = source.enabled,
-                onCheckedChange = { view.performHaptic(HapticType.CLICK); onToggle(it) },
-                colors = appSwitchColors()
-            )
         }
         // 测试结果
         testResult?.message?.let { msg ->
@@ -552,13 +567,16 @@ internal fun SearchSourceAddCard(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
+            AdaptiveSingleLineText(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                maxFontSize = 14.sp,
+                minFontSize = 10.sp,
+                modifier = Modifier.widthIn(max = 120.dp),
+                textAlign = TextAlign.Center
             )
         }
     }
@@ -664,10 +682,10 @@ fun SettingsSectionCard(
             modifier = Modifier.fillMaxWidth(),
             isDark = isDark,
             shape = RoundedCornerShape(20.dp),
-            backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
-                              else Color.White.copy(alpha = 0.55f),
-            borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
-                          else Color.White.copy(alpha = 0.75f),
+             backgroundColor = if (isDark) Color.White.copy(alpha = 0.08f)
+                               else Color.White.copy(alpha = 0.55f),
+             borderColor = if (isDark) Color.White.copy(alpha = 0.10f)
+                           else Color.White.copy(alpha = 0.75f),
             elevation = 4.dp,
             blurRadius = 16.dp,
             hazeState = hazeState,

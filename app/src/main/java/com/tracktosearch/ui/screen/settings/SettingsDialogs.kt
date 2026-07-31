@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -53,6 +52,7 @@ import com.tracktosearch.R
 import com.tracktosearch.data.local.CustomSearchSource
 import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
+import com.tracktosearch.ui.component.AdaptiveSingleLineText
 import com.tracktosearch.ui.component.StickyHeaderChangelogContent
 import com.tracktosearch.ui.theme.appSwitchColors
 import com.tracktosearch.ui.util.HapticType
@@ -206,12 +206,12 @@ internal fun AccentColorDialog(
                                     modifier = Modifier.width(72.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
+                                    AdaptiveSingleLineText(
                                         text = stringResource(accent.labelResId),
-                                        modifier = Modifier.width(72.dp),
                                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        maxFontSize = 11.sp,
+                                        minFontSize = 8.5.sp,
+                                        modifier = Modifier.width(72.dp),
                                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                     )
                                 }
