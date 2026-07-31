@@ -150,6 +150,7 @@ fun MainScreen(
     onDoubanFailureClick: (doubanId: String) -> Unit = {},
     onSearchClick: (keyword: String) -> Unit,
     onNavigateToLogin: () -> Unit,
+    onTraktLogin: () -> Unit = { onNavigateToLogin() },
     onStatisticsClick: () -> Unit,
     onMarkRecordsClick: () -> Unit = {},
     onTraktSearch: (type: String, query: String) -> Unit,
@@ -424,7 +425,7 @@ fun MainScreen(
                         onListClick = onListClick,
                         onFilterDiscoverClick = onFilterDiscoverClick,
                         onDoubanLoginClick = onNavigateToDoubanLogin,
-                        onTraktLoginClick = onNavigateToLogin,
+                        onTraktLoginClick = onTraktLogin,
                         modifier = Modifier.fillMaxSize()
                     )
                     2 -> {

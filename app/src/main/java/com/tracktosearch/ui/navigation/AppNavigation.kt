@@ -5,6 +5,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
 import android.widget.Toast
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,6 +33,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.tracktosearch.BuildConfig
 import com.tracktosearch.DeepLinkNavigator
+import com.tracktosearch.OAuthCallback
 import com.tracktosearch.R
 import com.tracktosearch.data.local.OnboardingStorage
 import com.tracktosearch.data.auth.AuthManager
@@ -73,6 +76,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -179,6 +185,17 @@ class AuthStateHolder @Inject constructor(
             traktRepository.clearTraktAccountCaches()
         }
     }
+
+    suspend fun buildTraktAuthorizationUrl(): Result<String> =
+        traktAuthManager.buildAuthorizationUrl()
+
+    suspend fun exchangeTraktCode(code: String): Result<Unit> {
+        val result = traktAuthManager.exchangeCodeForToken(code)
+        if (result.isSuccess) {
+            traktRepository.clearTraktAccountCaches()
+        }
+        return result
+    }
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -227,6 +244,52 @@ fun AppNavigation(
         }
     }
     val scope = rememberCoroutineScope()
+    var directTraktLoginActive by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(directTraktLoginActive) {
+        if (!directTraktLoginActive) return@LaunchedEffect
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                OAuthCallback.pendingCodeFlow
+                    .filterNotNull()
+                    .collect { code ->
+                        OAuthCallback.setPendingCode(null)
+                        val result = authStateHolder.exchangeTraktCode(code)
+                        directTraktLoginActive = false
+                        if (result.isSuccess) {
+                            sessionModeManager.setTraktConnectionState(TraktConnectionState.CONNECTED)
+                            onLoginSuccess()
+                        } else {
+                            Toast.makeText(context, context.getString(R.string.login_failed), Toast.LENGTH_SHORT).show()
+                        }
+                    }
+            }
+            launch {
+                OAuthCallback.authDeniedFlow
+                    .filter { it }
+                    .collect {
+                        OAuthCallback.setAuthDenied(false)
+                        directTraktLoginActive = false
+                        Toast.makeText(context, context.getString(R.string.login_denied), Toast.LENGTH_SHORT).show()
+                    }
+            }
+        }
+    }
+
+    fun launchDirectTraktLogin() {
+        if (directTraktLoginActive) return
+        directTraktLoginActive = true
+        scope.launch {
+            authStateHolder.buildTraktAuthorizationUrl()
+                .onSuccess { authUrl ->
+                    CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(authUrl))
+                }
+                .onFailure {
+                    directTraktLoginActive = false
+                    Toast.makeText(context, context.getString(R.string.login_failed), Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
     val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
     // Trakt 连接态：从 SessionModeManager 读取（MainActivity 在网络校验后写入）
     val traktConnectionState by sessionModeManager.traktConnectionState.collectAsStateWithLifecycle()
@@ -446,6 +509,7 @@ fun AppNavigation(
                                     popUpTo(Routes.MAIN) { inclusive = false }
                                 }
                             },
+                            onTraktLogin = { launchDirectTraktLogin() },
                             onStatisticsClick = {
                                 navController.navigate(Routes.STATISTICS)
                             },
