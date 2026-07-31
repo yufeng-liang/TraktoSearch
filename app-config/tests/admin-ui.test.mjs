@@ -167,18 +167,16 @@ test('formatTime uses normalized milliseconds for dates beyond 30 days', () => {
     assert.match(appSource, /return new Date\(dateMs\)\.toLocaleDateString\('zh-CN'\)/);
 });
 
-test('feedback screenshots load directly from feedback-worker', () => {
-    assert.match(appSource, /const FEEDBACK_WORKER_BASE_URL = 'https:\/\/feedback-worker\.douban-movie-api-peak\.workers\.dev'/);
-    assert.match(appSource, /const FEEDBACK_SCREENSHOT_BASE_URL = `\$\{FEEDBACK_WORKER_BASE_URL\}\/feedback-api\/screenshot`/);
+test('feedback screenshots use the same-origin admin proxy', () => {
+    assert.match(appSource, /const FEEDBACK_SCREENSHOT_BASE_URL = `\$\{API_BASE\}\/fb\/feedback-api\/screenshot`/);
     assert.match(appSource, /FEEDBACK_SCREENSHOT_BASE_URL\}\/\$\{encodeURIComponent\(k\)\}/);
-    assert.doesNotMatch(appSource, /\/admin-api\/fb\/feedback-api\/screenshot/);
+    assert.doesNotMatch(appSource, /feedback-worker\.douban-movie-api-peak\.workers\.dev/);
 });
 
-test('feedback admin APIs load directly from feedback-worker', () => {
-    assert.match(appSource, /const isFeedbackRequest = path\.startsWith\('\/fb\/'\)/);
-    assert.match(appSource, /const requestBase = isFeedbackRequest \? FEEDBACK_WORKER_BASE_URL : API_BASE/);
-    assert.match(appSource, /const requestPath = isFeedbackRequest \? path\.slice\(3\) : path/);
-    assert.match(appSource, /fetch\(`\$\{requestBase\}\$\{requestPath\}`/);
+test('feedback admin APIs use the app-config Service Binding proxy', () => {
+    assert.doesNotMatch(appSource, /const isFeedbackRequest = path\.startsWith\('\/fb\/'\)/);
+    assert.doesNotMatch(appSource, /const requestBase = isFeedbackRequest/);
+    assert.match(appSource, /fetch\(`\$\{API_BASE\}\$\{path\}`/);
 });
 
 test('navigation renders once through hashchange for a changed route', () => {

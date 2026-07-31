@@ -154,6 +154,9 @@ class TmdbRepository @Inject constructor(
     // 人物图片缓存：避免二次进入人物详情页时重复请求图片 URL 列表
     private val personImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
     private val personTaggedImagesCache = TtlCache<List<String>>(TTL_PERSON, maxSize = 30)
+    private val similarMoviesCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 100)
+    private val similarShowsCache = TtlCache<List<TmdbSearchResult>>(TTL_LISTS, maxSize = 100)
+    private val collectionCache = TtlCache<Result<TmdbCollectionResponse?>>(TTL_LISTS, maxSize = 50)
     private val reviewsCache = TtlCache<TmdbReviewsResponse?>(TTL_REVIEWS, maxSize = 50)
     // 搜索人物/多类型搜索结果缓存（10 分钟），避免重复搜索同关键词时重复请求
     private val searchPersonCache = TtlCache<List<TmdbPersonSearchResult>>(TTL_SEARCH, maxSize = 50)
@@ -810,15 +813,14 @@ class TmdbRepository @Inject constructor(
     /** 获取人物图片（TMDB profiles） */
     suspend fun getPersonImages(personId: Int): List<String> {
         val key = langKey(personId)
-        personImagesCache.get(key)?.let { return it }
-        return try {
-            val response = tmdbApiService.getPersonImages(personId)
-            if (response.isSuccessful) {
-                val urls = response.body()?.profiles?.map { TmdbImageUrls.H632 + it.file_path } ?: emptyList()
-                personImagesCache.put(key, urls)
-                urls
-            } else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        return personImagesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getPersonImages(personId)
+                if (response.isSuccessful) {
+                    response.body()?.profiles?.map { TmdbImageUrls.H632 + it.file_path } ?: emptyList()
+                } else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     /** 获取人物被标注的图片（TMDB tagged images） */
@@ -837,28 +839,38 @@ class TmdbRepository @Inject constructor(
 
     /** 获取相似电影（TMDB） */
     suspend fun getSimilarMovies(tmdbId: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getSimilarMovies(tmdbId, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body()?.results ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(tmdbId)
+        return similarMoviesCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getSimilarMovies(tmdbId, language = getTmdbLanguage())
+                if (response.isSuccessful) response.body()?.results ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     /** 获取相似剧集（TMDB） */
     suspend fun getSimilarShows(tmdbId: Int): List<TmdbSearchResult> {
-        return try {
-            val response = tmdbApiService.getSimilarShows(tmdbId, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body()?.results ?: emptyList()
-            else emptyList()
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        val key = langKey(tmdbId)
+        return similarShowsCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getSimilarShows(tmdbId, language = getTmdbLanguage())
+                if (response.isSuccessful) response.body()?.results ?: emptyList()
+                else emptyList()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+        }
     }
 
     /** 获取系列信息（TMDB） */
     suspend fun getCollection(collectionId: Int): TmdbCollectionResponse? {
-        return try {
-            val response = tmdbApiService.getCollection(collectionId, language = getTmdbLanguage())
-            if (response.isSuccessful) response.body() else null
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { null }
+        val key = langKey(collectionId)
+        return collectionCache.getOrAwait(key) {
+            try {
+                val response = tmdbApiService.getCollection(collectionId, language = getTmdbLanguage())
+                if (response.isSuccessful) Result.success(response.body())
+                else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }.getOrNull()
     }
 
     /** 获取电视剧季详情（用于本地化集标题） */

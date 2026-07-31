@@ -46,8 +46,8 @@ export function generateId(): string {
 // 常量时间字符串比较（防时序攻击）
 // 不在长度不同时提前返回，避免泄露长度信息
 export function timingSafeEqual(a: string, b: string): boolean {
-    const aBuf = Buffer.from(a);
-    const bBuf = Buffer.from(b);
+    const aBuf = new TextEncoder().encode(a);
+    const bBuf = new TextEncoder().encode(b);
     const minLen = Math.min(aBuf.length, bBuf.length);
     let result = aBuf.length ^ bBuf.length;
     for (let i = 0; i < minLen; i++) {

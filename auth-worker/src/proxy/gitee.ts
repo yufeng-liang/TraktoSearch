@@ -97,7 +97,8 @@ async function encryptContentField(body: ArrayBuffer, keyString: string): Promis
         const encrypted = await aesEncrypt(plaintext, keyString);
         bodyJson.content = encrypted;
 
-        return new TextEncoder().encode(JSON.stringify(bodyJson));
+        const encoded = new TextEncoder().encode(JSON.stringify(bodyJson));
+        return encoded.buffer as ArrayBuffer;
     } catch {
         return body;
     }

@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * 崩溃日志上报器（Hilt 单例）。
  *
  * 走 auth-worker 代理（${GATEWAY_BASE_URL}/api/crash-logs），
- * 客户端不持有 CRASH_LOG_TOKEN，避免密钥编译进 APK 被反编译泄露。
+ * 客户端不持有崩溃日志写入密钥，避免敏感凭据编译进 APK 被反编译泄露。
  *
  * 隐私规范：仅在用户授权后上报（[CrashLogStorage.enabled]）。
  * 未授权时本地日志保留，等待用户开启后下次启动重试。

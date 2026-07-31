@@ -6,3 +6,11 @@ pages_build_output_dir = "public"
 kv_namespaces = [
   { binding = "CRASH_LOGS", id = "d6fc37992e6d47fc9fe45207923627a3" }
 ]
+
+[[services]]
+binding = "AUTH_WORKER"
+service = "auth-worker"
+
+[[services]]
+binding = "FEEDBACK_WORKER"
+service = "feedback-worker"

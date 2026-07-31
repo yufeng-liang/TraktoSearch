@@ -40,6 +40,8 @@ import { handleConfigProxy } from './proxy/config';
 export interface Env {
     DB: D1Database;
     KV: KVNamespace;
+    CRASH_LOGS: KVNamespace;
+    DOUBAN_WORKER: Fetcher;
     JWT_SIGNING_KEY: string;
     DEVICE_RECOVERY_HMAC_KEY: string;
     TRAKT_CLIENT_ID: string;
@@ -58,7 +60,6 @@ export interface Env {
     BAIDU_APP_ID: string;
     BAIDU_SECRET_KEY: string;
     BAIDU_API_KEY: string;
-    CRASH_LOG_TOKEN: string;
     // 云端配置服务端解密（原客户端 BuildConfig.CONFIG_AES_KEY）
     CONFIG_AES_KEY: string;
     CONFIG_BASE_URL: string;

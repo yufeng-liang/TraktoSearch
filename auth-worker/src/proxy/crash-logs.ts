@@ -1,45 +1,54 @@
-// 崩溃日志代理（转发到 app-config Pages Functions）
-//
-// 客户端原直连 app-config-1qe.pages.dev/api/crash-logs 并自带 Bearer token，
-// 现改为走网关 /api/crash-logs ，由 worker 注入 CRASH_LOG_TOKEN，
-// 避免密钥编译进 APK 被反编译泄露。
+// 崩溃日志写入器：直接写入与 app-config 共用的 KV，避免 auth-worker 再调用 Pages。
 //
 // 鉴权：仍要求 auth-worker 的 JWT（与其它 /api/* 端点一致）。
-// 崩溃可能发生在 token 失效时，此时本地保留日志，下次启动 token 恢复后重试。
+// 崩溃可能发生在 JWT 失效时，此时本地保留日志，下次启动认证恢复后重试。
 
-import { Env } from '../index';
-import { AppError } from '../util/errors';
-
-const CRASH_LOG_UPSTREAM = 'https://app-config-1qe.pages.dev/api/crash-logs';
+import type { Env } from '../index.ts';
+import { AppError } from '../util/errors.ts';
 
 export async function handleCrashLogProxy(
     request: Request,
     env: Env
 ): Promise<Response> {
-    if (!env.CRASH_LOG_TOKEN) {
-        throw new AppError('SERVICE_UNAVAILABLE', 'Crash log proxy not configured', 503);
-    }
-
     // 仅允许 POST
     if (request.method !== 'POST') {
         throw new AppError('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
     }
 
-    const body = await request.arrayBuffer();
+    const raw: unknown = await request.json();
+    if (!raw || typeof raw !== 'object') {
+        throw new AppError('INVALID_REQUEST', 'Invalid crash log payload', 400);
+    }
 
-    const upstream = await fetch(CRASH_LOG_UPSTREAM, {
-        method: 'POST',
+    const payload = raw as Record<string, unknown>;
+    const stackTrace = readString(payload, 'stackTrace');
+    if (!stackTrace) {
+        throw new AppError('INVALID_REQUEST', 'stackTrace is required', 400);
+    }
+
+    const id = `crash_${Date.now()}_${crypto.randomUUID().replaceAll('-', '').slice(0, 8)}`;
+    const entry = {
+        id,
+        timestamp: readString(payload, 'timestamp') || new Date().toISOString(),
+        appVersion: readString(payload, 'appVersion'),
+        androidVersion: readString(payload, 'androidVersion'),
+        device: readString(payload, 'device'),
+        currentPage: readString(payload, 'currentPage'),
+        recentActions: readString(payload, 'recentActions'),
+        stackTrace,
+    };
+
+    await env.CRASH_LOGS.put(id, JSON.stringify(entry));
+
+    return new Response(JSON.stringify({ ok: true, id }), {
+        status: 201,
         headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${env.CRASH_LOG_TOKEN}`,
         },
-        body,
     });
+}
 
-    return new Response(upstream.body, {
-        status: upstream.status,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    });
+function readString(payload: Record<string, unknown>, key: string): string {
+    const value = payload[key];
+    return typeof value === 'string' ? value : '';
 }

@@ -9,7 +9,7 @@ import retrofit2.http.POST
  * 崩溃日志上报接口（走 auth-worker 代理）。
  *
  * baseUrl = ${GATEWAY_BASE_URL}/api/crash-logs/
- * Worker 接收后注入 CRASH_LOG_TOKEN 转发到 app-config Pages Functions，
+ * Worker 接收后直接写入与 app-config 共用的 CRASH_LOGS KV，
  * 客户端不再持有上报密钥，避免反编译泄露。
  */
 interface CrashLogApiService {

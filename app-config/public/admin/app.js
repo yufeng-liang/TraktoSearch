@@ -220,8 +220,7 @@ const Palettes = {
 // ===== API Client =====
 // API 根域名（部署时替换为实际 Worker 域名）
 const API_BASE = `${window.location.origin}/admin-api`;
-const FEEDBACK_WORKER_BASE_URL = 'https://feedback-worker.douban-movie-api-peak.workers.dev';
-const FEEDBACK_SCREENSHOT_BASE_URL = `${FEEDBACK_WORKER_BASE_URL}/feedback-api/screenshot`;
+const FEEDBACK_SCREENSHOT_BASE_URL = `${API_BASE}/fb/feedback-api/screenshot`;
 const REQUEST_TIMEOUT_MS = 15000;
 const activeRequestControllers = new Set();
 
@@ -245,9 +244,6 @@ const API = {
     // 通用请求
     async request(method, path, body = null) {
         const token = this.getToken();
-        const isFeedbackRequest = path.startsWith('/fb/');
-        const requestBase = isFeedbackRequest ? FEEDBACK_WORKER_BASE_URL : API_BASE;
-        const requestPath = isFeedbackRequest ? path.slice(3) : path;
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
@@ -260,7 +256,7 @@ const API = {
         }, REQUEST_TIMEOUT_MS);
         let response;
         try {
-            response = await fetch(`${requestBase}${requestPath}`, {
+            response = await fetch(`${API_BASE}${path}`, {
                 method,
                 headers,
                 body: body ? JSON.stringify(body) : null,

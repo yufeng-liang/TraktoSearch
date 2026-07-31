@@ -4,7 +4,7 @@
 // HTMLRewriter 是 Workers 运行时内置的 C++ 流式 HTML 解析器，CPU 开销远低于 JS regex，
 // 可在 10ms 内完成解析。缓存命中时直接返回，不触发抓取。
 
-import { AppError } from '../util/errors';
+import { AppError } from '../util/errors.ts';
 
 const DOUBAN_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

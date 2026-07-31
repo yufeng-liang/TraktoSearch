@@ -534,7 +534,7 @@ object NetworkModule {
         loggingInterceptor: HttpLoggingInterceptor,
         authInterceptor: AuthInterceptor
     ): OkHttpClient {
-        // 崩溃日志走网关代理（auth-worker 注入 CRASH_LOG_TOKEN 转发到 app-config），
+        // 崩溃日志走网关代理，由 auth-worker 直接写入共享 CRASH_LOGS KV，
         // 客户端只需带网关 JWT，不再持有上报密钥。
         return baseClient.newBuilder()
             .addInterceptor(authInterceptor)

@@ -1,6 +1,7 @@
 /**
  * Auth middleware for /api/*
- * Verifies Bearer token against CRASH_LOG_TOKEN env var.
+ * 兼容旧版客户端直连的崩溃日志接口，验证历史 CRASH_LOG_TOKEN。
+ * 当前客户端统一走 gateway -> auth-worker -> CRASH_LOGS KV。
  */
 export async function onRequest(context) {
     const { request, env } = context;

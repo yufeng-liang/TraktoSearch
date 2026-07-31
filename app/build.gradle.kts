@@ -37,7 +37,7 @@ android {
         // 授权网关根域名（固定，不可被远程配置替换）
         buildConfigField("String", "GATEWAY_BASE_URL", "\"${properties.getProperty("gateway.base.url", "https://tracktosearch-gateway.pages.dev/gateway-api")}\"")
         // 已迁移到 auth-worker Secrets 的密钥（不再编译进 APK）：
-        // GITEE_ACCESS_TOKEN / GITHUB_UPDATE_TOKEN / BAIDU_APP_ID / BAIDU_SECRET_KEY / BAIDU_API_KEY / CRASH_LOG_TOKEN
+        // GITEE_ACCESS_TOKEN / GITHUB_UPDATE_TOKEN / BAIDU_APP_ID / BAIDU_SECRET_KEY / BAIDU_API_KEY
     }
 
     signingConfigs {

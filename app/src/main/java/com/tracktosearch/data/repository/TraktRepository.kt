@@ -51,6 +51,7 @@ class TraktRepository @Inject constructor(
         private const val TTL_ID_MAPPING = Long.MAX_VALUE    // ID 转换永不过期（tmdb↔trkt 映射不会变）
         private const val TTL_COMMENTS = 10 * 60 * 1000L     // 评论 10 分钟
         private const val TTL_RELATED = 30 * 60 * 1000L      // 相关推荐 30 分钟
+        private const val TTL_DETAIL_MEDIA = 6 * 60 * 60 * 1000L // 详情静态媒体数据 6 小时
         private const val TTL_RECOMMENDATIONS = 6 * 60 * 60 * 1000L // 个性化推荐 6 小时
         private const val TTL_STATS = 5 * 60 * 1000L         // 统计数据 5 分钟
         private const val TTL_TRENDING = 6 * 60 * 60 * 1000L  // 趋势/最受期待/社区列表 6 小时（榜单更新不频繁）
@@ -444,6 +445,14 @@ class TraktRepository @Inject constructor(
     private val commentsCache = TtlCache<List<TraktComment>>(TTL_COMMENTS, maxSize = 50)
     private val relatedMoviesCache = TtlCache<List<TraktMovie>>(TTL_RELATED, maxSize = 50)
     private val relatedShowsCache = TtlCache<List<TraktShow>>(TTL_RELATED, maxSize = 50)
+    // 详情页静态数据：避免返回详情页后重复拉取视频、剧照、人物图片和别名。
+    // 使用 getOrAwait，多个组件同时读取同一条数据时只发一个网络请求。
+    private val videosCache = TtlCache<Result<List<TraktVideo>>>(TTL_DETAIL_MEDIA, maxSize = 100)
+    private val imagesCache = TtlCache<Result<TraktImages>>(TTL_DETAIL_MEDIA, maxSize = 100)
+    private val personImagesCache = TtlCache<Result<TraktImages>>(TTL_DETAIL_MEDIA, maxSize = 50)
+    private val personAliasesCache = TtlCache<Result<List<TraktPersonAlias>>>(TTL_DETAIL_MEDIA, maxSize = 50)
+    private val seasonEpisodesCache = TtlCache<Result<List<TraktEpisode>>>(TTL_RELATED, maxSize = 100)
+    private val listItemsCache = TtlCache<Result<List<TraktListItemResponse>>>(TTL_STATS, maxSize = 100)
     // 统计页专用缓存：频繁进出页面时避免重复全量拉取
     private val movieHistoryCache = TtlCache<List<TraktWatchlistMovieItem>>(TTL_STATS, maxSize = 5)
     private val showHistoryCache = TtlCache<List<TraktWatchlistShowItem>>(TTL_STATS, maxSize = 5)
@@ -805,15 +814,18 @@ class TraktRepository @Inject constructor(
     }
 
     suspend fun getSeasonEpisodes(showTraktId: Int, seasonNumber: Int): Result<List<TraktEpisode>> {
-        return try {
-            val response = traktApiService.getSeasonEpisodes(showTraktId, seasonNumber)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
-            } else {
-                Result.failure(Exception("Failed to fetch episodes: ${response.code()}"))
+        val key = "${showTraktId}_$seasonNumber"
+        return seasonEpisodesCache.getOrAwait(key) {
+            try {
+                val response = traktApiService.getSeasonEpisodes(showTraktId, seasonNumber)
+                if (response.isSuccessful) {
+                    Result.success(response.body() ?: emptyList())
+                } else {
+                    Result.failure(Exception("Failed to fetch episodes: ${response.code()}"))
+                }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                Result.failure(e)
             }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) {
-            Result.failure(e)
         }
     }
 
@@ -1782,49 +1794,61 @@ class TraktRepository @Inject constructor(
 
     /** 获取影视的 Trakt 视频列表 */
     suspend fun getVideos(traktId: String, mediaType: MediaType): Result<List<TraktVideo>> {
-        return try {
-            val response = when (mediaType) {
-                MediaType.MOVIE -> traktApiService.getMovieVideos(traktId)
-                MediaType.SHOW -> traktApiService.getShowVideos(traktId)
-                MediaType.PERSON -> return Result.success(emptyList())
-                MediaType.DISK -> return Result.success(emptyList())
-            }
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
-            } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        if (mediaType == MediaType.PERSON || mediaType == MediaType.DISK) {
+            return Result.success(emptyList())
+        }
+        val key = "${mediaType.name}_$traktId"
+        return videosCache.getOrAwait(key) {
+            try {
+                val response = when (mediaType) {
+                    MediaType.MOVIE -> traktApiService.getMovieVideos(traktId)
+                    MediaType.SHOW -> traktApiService.getShowVideos(traktId)
+                    MediaType.PERSON, MediaType.DISK -> error("Unsupported media type")
+                }
+                if (response.isSuccessful) {
+                    Result.success(response.body() ?: emptyList())
+                } else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     /** 获取影视的 Trakt 图片（fanart等） */
     suspend fun getImages(traktId: String, mediaType: MediaType): Result<TraktImages> {
-        return try {
-            when (mediaType) {
-                MediaType.MOVIE -> {
-                    val response = traktApiService.getMovieWithImages(traktId)
-                    if (response.isSuccessful) {
-                        Result.success(response.body()?.images ?: TraktImages())
-                    } else Result.failure(Exception("HTTP ${response.code()}"))
+        if (mediaType == MediaType.PERSON || mediaType == MediaType.DISK) {
+            return Result.success(TraktImages())
+        }
+        val key = "${mediaType.name}_$traktId"
+        return imagesCache.getOrAwait(key) {
+            try {
+                when (mediaType) {
+                    MediaType.MOVIE -> {
+                        val response = traktApiService.getMovieWithImages(traktId)
+                        if (response.isSuccessful) {
+                            Result.success(response.body()?.images ?: TraktImages())
+                        } else Result.failure(Exception("HTTP ${response.code()}"))
+                    }
+                    MediaType.SHOW -> {
+                        val response = traktApiService.getShowWithImages(traktId)
+                        if (response.isSuccessful) {
+                            Result.success(response.body()?.images ?: TraktImages())
+                        } else Result.failure(Exception("HTTP ${response.code()}"))
+                    }
+                    MediaType.PERSON, MediaType.DISK -> Result.success(TraktImages())
                 }
-                MediaType.SHOW -> {
-                    val response = traktApiService.getShowWithImages(traktId)
-                    if (response.isSuccessful) {
-                        Result.success(response.body()?.images ?: TraktImages())
-                    } else Result.failure(Exception("HTTP ${response.code()}"))
-                }
-                MediaType.PERSON -> Result.success(TraktImages())
-                MediaType.DISK -> Result.success(TraktImages())
-            }
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     /** 获取人物的 Trakt 图片 */
     suspend fun getPersonImages(personSlug: String): Result<TraktImages> {
-        return try {
-            val response = traktApiService.getPersonWithImages(personSlug)
-            if (response.isSuccessful) {
-                Result.success(response.body()?.images ?: TraktImages())
-            } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        return personImagesCache.getOrAwait(personSlug) {
+            try {
+                val response = traktApiService.getPersonWithImages(personSlug)
+                if (response.isSuccessful) {
+                    Result.success(response.body()?.images ?: TraktImages())
+                } else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     /** 获取人物电影参演 */
@@ -1853,12 +1877,14 @@ class TraktRepository @Inject constructor(
 
     /** 获取人物别名 */
     suspend fun getPersonAliases(personSlug: String): Result<List<TraktPersonAlias>> {
-        return try {
-            val response = traktApiService.getPersonAliases(personSlug)
-            if (response.isSuccessful) {
-                Result.success(response.body() ?: emptyList())
-            } else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        return personAliasesCache.getOrAwait(personSlug) {
+            try {
+                val response = traktApiService.getPersonAliases(personSlug)
+                if (response.isSuccessful) {
+                    Result.success(response.body() ?: emptyList())
+                } else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     // 社区热门列表
@@ -1882,11 +1908,14 @@ class TraktRepository @Inject constructor(
         limit: Int = 20,
         page: Int = 1
     ): Result<List<TraktListItemResponse>> {
-        return try {
-            val response = traktApiService.getListItems(listId, limit, page)
-            if (response.isSuccessful) Result.success(response.body() ?: emptyList())
-            else Result.failure(Exception("HTTP ${response.code()}"))
-        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        val key = "${listId}_${limit}_$page"
+        return listItemsCache.getOrAwait(key) {
+            try {
+                val response = traktApiService.getListItems(listId, limit, page)
+                if (response.isSuccessful) Result.success(response.body() ?: emptyList())
+                else Result.failure(Exception("HTTP ${response.code()}"))
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+        }
     }
 
     // 用户统计。带 5 分钟 TTL 缓存

@@ -16,6 +16,16 @@ database_id = "f8db6c43-7fbe-4747-a7b7-364a5ea09d30"
 binding = "KV"
 id = "5e2b3731a5284fedb9d17093a86218ea"
 
+# Worker 间调用：避免 auth-worker 通过公网再次请求豆瓣代理 Worker
+[[services]]
+binding = "DOUBAN_WORKER"
+service = "douban-movie-api"
+
+# 与 app-config Pages 共用，崩溃日志由 auth-worker 直接写入
+[[kv_namespaces]]
+binding = "CRASH_LOGS"
+id = "d6fc37992e6d47fc9fe45207923627a3"
+
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY
 # DEVICE_RECOVERY_HMAC_KEY
@@ -35,7 +45,7 @@ id = "5e2b3731a5284fedb9d17093a86218ea"
 # BAIDU_APP_ID —— 百度翻译 appid
 # BAIDU_SECRET_KEY —— 百度翻译通用 API MD5 签名密钥
 # BAIDU_API_KEY —— 百度翻译 AI API Bearer token
-# CRASH_LOG_TOKEN —— app-config 崩溃日志上报 Bearer token
+# 崩溃日志现在由 auth-worker 直接写入共享 CRASH_LOGS KV，不再需要单独的上报 token。
 
 [vars]
 ENVIRONMENT = "production"

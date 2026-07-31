@@ -1,12 +1,10 @@
 // 豆瓣代理
 
-import { Env } from '../index';
-import { buildDoubanHeaders } from './douban-token';
-import { KeyPool, fetchWithKeyRotation } from '../util/key-pool';
-import { scrapeDouban } from './douban-scrape';
-
-// 上游豆瓣热榜服务（仅作为非热榜单点的 fallback）
-const DOUBAN_BASE_URL = 'https://douban-movie-api.douban-movie-api-peak.workers.dev';
+import type { Env } from '../index.ts';
+import { buildDoubanHeaders } from './douban-token.ts';
+import { KeyPool, fetchWithKeyRotation } from '../util/key-pool.ts';
+import { scrapeDouban } from './douban-scrape.ts';
+import { AppError } from '../util/errors.ts';
 
 const DOUBAN_PREFIX = '/api/douban/';
 
@@ -27,7 +25,11 @@ export async function handleDoubanProxy(
         return scrapeDouban(doubanPath, clientUrl.searchParams);
     }
 
-    // 其他豆瓣端点：继续走 douban-movie-api worker 代理
+    // 其他豆瓣端点：通过 Service Binding 调用 douban-movie-api，避免公网二次计费请求
+    if (!env.DOUBAN_WORKER || typeof env.DOUBAN_WORKER.fetch !== 'function') {
+        throw new AppError('SERVICE_UNAVAILABLE', 'Douban service binding is not configured', 503);
+    }
+
     const body = request.method === 'GET' || request.method === 'HEAD'
         ? undefined
         : await request.arrayBuffer();
@@ -35,15 +37,15 @@ export async function handleDoubanProxy(
     const upstreamResponse = await fetchWithKeyRotation(
         pool,
         async (key) => {
-            const url = new URL(`${DOUBAN_BASE_URL}/${doubanPath}`);
+            const url = new URL(`https://douban-movie-api.internal/${doubanPath}`);
             for (const [queryKey, value] of clientUrl.searchParams) {
                 url.searchParams.set(queryKey, value);
             }
-            return fetch(url.toString(), {
+            return env.DOUBAN_WORKER.fetch(new Request(url, {
                 method: request.method,
                 headers: buildDoubanHeaders(key),
                 body,
-            });
+            }));
         },
         [401, 403, 429],
     );

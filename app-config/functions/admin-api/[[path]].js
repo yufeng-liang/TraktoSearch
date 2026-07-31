@@ -3,11 +3,8 @@
  * Cloudflare Access 会把 JWT 放在 Cf-Access-Jwt-Assertion 请求头中，
  * 代理将其转换为 Worker 需要的 Authorization Bearer 头，避免前端读取 Cookie。
  */
-const WORKER_ORIGIN = 'https://auth-worker.douban-movie-api-peak.workers.dev';
-const FEEDBACK_WORKER_ORIGIN = 'https://feedback-worker.douban-movie-api-peak.workers.dev';
-
 export async function onRequest(context) {
-    const { request } = context;
+    const { request, env } = context;
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') {
@@ -24,14 +21,20 @@ export async function onRequest(context) {
     const upstreamPath = url.pathname.slice('/admin-api'.length) || '/';
 
     // 按路径前缀选择 worker：/fb/* → feedback-worker（去掉 /fb 前缀），其余 → auth-worker
-    let workerOrigin = WORKER_ORIGIN;
     let actualPath = upstreamPath;
+    let worker;
     if (upstreamPath.startsWith('/fb/')) {
-        workerOrigin = FEEDBACK_WORKER_ORIGIN;
+        worker = env?.FEEDBACK_WORKER;
         actualPath = upstreamPath.slice(3); // 去掉 /fb 前缀
+    } else {
+        worker = env?.AUTH_WORKER;
     }
 
-    const upstreamUrl = new URL(`${workerOrigin}${actualPath}`);
+    if (!worker || typeof worker.fetch !== 'function') {
+        return jsonResponse({ code: 'UPSTREAM_BINDING_UNAVAILABLE', message: 'Admin service unavailable' }, 503);
+    }
+
+    const upstreamUrl = new URL(`https://app-config.internal${actualPath}`);
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
@@ -48,21 +51,26 @@ export async function onRequest(context) {
     headers.delete('Cf-Access-Jwt-Assertion');
     headers.delete('Host');
     headers.delete('Content-Length');
-    headers.set('Origin', workerOrigin);
+    headers.set('Origin', url.origin);
 
     let upstream;
     try {
-        upstream = await fetch(new Request(upstreamUrl, {
+        upstream = await worker.fetch(new Request(upstreamUrl, {
             method: request.method,
             headers,
             body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
+            duplex: 'half',
         }));
     } catch {
         return jsonResponse({ code: 'UPSTREAM_UNAVAILABLE', message: 'Admin service unavailable' }, 502);
     }
 
     const responseHeaders = new Headers(upstream.headers);
-    responseHeaders.set('Cache-Control', 'no-store');
+    const isImmutableScreenshot = actualPath.startsWith('/feedback-api/screenshot/');
+    responseHeaders.set(
+        'Cache-Control',
+        isImmutableScreenshot ? 'private, max-age=2592000' : 'no-store'
+    );
     return new Response(upstream.body, {
         status: upstream.status,
         statusText: upstream.statusText,

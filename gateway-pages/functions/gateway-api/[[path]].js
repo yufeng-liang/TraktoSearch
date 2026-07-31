@@ -20,7 +20,7 @@ const SECURITY_HEADERS = {
  * 不转发 Admin 接口，避免变成公开代理。
  */
 export async function onRequest(context) {
-    const { request } = context;
+    const { request, env } = context;
     const url = new URL(request.url);
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
@@ -39,12 +39,32 @@ export async function onRequest(context) {
         });
     }
 
-    const worker = context.env?.[bindingName];
+    const worker = env?.[bindingName];
     if (!worker || typeof worker.fetch !== 'function') {
         return jsonResponse({
             code: 'UPSTREAM_BINDING_UNAVAILABLE',
             message: 'Gateway service unavailable',
         }, 503);
+    }
+
+    const cachePlan = getPublicCachePlan(request, upstreamPath);
+    const cache = cachePlan ? globalThis.caches?.default : undefined;
+    const cacheKey = cache ? new Request(url.toString(), { method: 'GET' }) : null;
+    if (cache && cacheKey) {
+        try {
+            const cached = await cache.match(cacheKey);
+            if (cached) {
+                const headers = new Headers(cached.headers);
+                headers.set('X-Gateway-Cache', 'HIT');
+                return new Response(cached.body, {
+                    status: cached.status,
+                    statusText: cached.statusText,
+                    headers,
+                });
+            }
+        } catch {
+            // 缓存不可用时继续走 Service Binding，不影响 API 正常请求。
+        }
     }
 
     const upstreamUrl = new URL(`https://gateway.internal${upstreamPath}`);
@@ -89,7 +109,13 @@ export async function onRequest(context) {
         }));
 
         const responseHeaders = new Headers(upstream.headers);
-        responseHeaders.set('Cache-Control', 'no-store');
+        responseHeaders.set(
+            'Cache-Control',
+            cachePlan && upstream.status === 200
+                ? `public, max-age=0, s-maxage=${cachePlan.ttlSeconds}, stale-while-revalidate=60`
+                : 'no-store'
+        );
+        responseHeaders.set('X-Gateway-Cache', cachePlan ? 'MISS' : 'BYPASS');
         for (const [name, value] of Object.entries(corsHeaders())) {
             if (!responseHeaders.has(name)) responseHeaders.set(name, value);
         }
@@ -98,14 +124,50 @@ export async function onRequest(context) {
             responseHeaders.set(name, value);
         }
 
-        return new Response(upstream.body, {
+        const response = new Response(upstream.body, {
             status: upstream.status,
             statusText: upstream.statusText,
             headers: responseHeaders,
         });
+
+        if (cache && cacheKey && cachePlan && upstream.status === 200) {
+            const cacheWrite = cache.put(cacheKey, response.clone()).catch(() => undefined);
+            if (typeof context.waitUntil === 'function') {
+                context.waitUntil(cacheWrite);
+            } else {
+                await cacheWrite;
+            }
+        }
+
+        return response;
     } catch {
         return jsonResponse({ code: 'UPSTREAM_UNAVAILABLE', message: 'Gateway unavailable' }, 502);
     }
+}
+
+/**
+ * 仅缓存不带用户凭据的只读资源。带 Authorization 的请求永远绕过缓存，
+ * 因此不会把 watchlist、历史、评分或同步结果写入共享边缘缓存。
+ */
+function getPublicCachePlan(request, path) {
+    if (request.method !== 'GET' || request.headers.has('Authorization') || request.headers.has('Cookie')) return null;
+
+    if (path.startsWith('/api/tmdb/')) return { ttlSeconds: 600 };
+    if (path.startsWith('/api/douban/')) return { ttlSeconds: 300 };
+    if (path.startsWith('/api/omdb/')) return { ttlSeconds: 600 };
+
+    if (path.startsWith('/api/trakt/')) {
+        const traktPath = path.slice('/api/trakt/'.length);
+        if (traktPath.startsWith('oauth/')) return null;
+        if (traktPath.startsWith('sync/')) return null;
+        if (traktPath.startsWith('recommendations/')) return null;
+        if (traktPath.startsWith('users/')) return null;
+        if (/^shows\/\d+\/progress\//.test(traktPath)) return null;
+        if (traktPath === 'comments') return null;
+        return { ttlSeconds: 300 };
+    }
+
+    return null;
 }
 
 function corsHeaders() {
