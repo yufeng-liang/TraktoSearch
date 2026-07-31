@@ -17,6 +17,7 @@ import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.config.RemoteConfigManager
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.repository.FeedbackRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.PersistentTtlCache
@@ -48,6 +49,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var remoteConfigManager: RemoteConfigManager
     @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
+    @Inject lateinit var feedbackRepository: FeedbackRepository
 
     // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
@@ -90,6 +92,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
                             add(async { doubanHotCache.loadFromDisk() })
                             add(async { doubanDetailCache.loadFromDisk() })
                             add(async { doubanIdMappingCache.loadFromDisk() })
+                            add(async { feedbackRepository.loadCacheFromDisk() })
                         }
                         jobs.awaitAll()
                     }

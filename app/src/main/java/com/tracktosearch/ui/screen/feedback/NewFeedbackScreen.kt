@@ -105,18 +105,17 @@ fun NewFeedbackScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 类型选择 — 四个 chip 同一行平分宽度
+            // 类型选择 — 四个 chip 宽度符合文字宽度，左对齐排列
             Text(stringResource(R.string.feedback_select_type), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)
             ) {
                 FeedbackTypeChip(
                     labelRes = R.string.feedback_type_feature,
                     color = Color(0xFF34D399),
                     icon = Icons.Rounded.Lightbulb,
-                    selected = selectedType == "FEATURE",
-                    modifier = Modifier.weight(1f)
+                    selected = selectedType == "FEATURE"
                 ) {
                     selectedType = if (selectedType == "FEATURE") null else "FEATURE"
                 }
@@ -124,8 +123,7 @@ fun NewFeedbackScreen(
                     labelRes = R.string.feedback_type_bug,
                     color = Color(0xFFFB7185),
                     icon = Icons.Rounded.BugReport,
-                    selected = selectedType == "BUG",
-                    modifier = Modifier.weight(1f)
+                    selected = selectedType == "BUG"
                 ) {
                     selectedType = if (selectedType == "BUG") null else "BUG"
                 }
@@ -133,8 +131,7 @@ fun NewFeedbackScreen(
                     labelRes = R.string.feedback_type_ux,
                     color = Color(0xFFFBBF24),
                     icon = Icons.Rounded.SentimentDissatisfied,
-                    selected = selectedType == "UX",
-                    modifier = Modifier.weight(1f)
+                    selected = selectedType == "UX"
                 ) {
                     selectedType = if (selectedType == "UX") null else "UX"
                 }
@@ -142,8 +139,7 @@ fun NewFeedbackScreen(
                     labelRes = R.string.feedback_type_other,
                     color = Color(0xFF9CA3AF),
                     icon = Icons.Rounded.MoreHoriz,
-                    selected = selectedType == "OTHER",
-                    modifier = Modifier.weight(1f)
+                    selected = selectedType == "OTHER"
                 ) {
                     selectedType = if (selectedType == "OTHER") null else "OTHER"
                 }
@@ -358,23 +354,16 @@ private fun FeedbackTypeChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        modifier = modifier,
-        label = {
-            Text(
-                text = stringResource(labelRes),
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-        },
-        leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp)) },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = color.copy(alpha = 0.2f),
-            selectedLabelColor = color,
-            selectedLeadingIconColor = color
-        )
-    )
+    Surface(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(8.dp),
+        color = if (selected) color.copy(alpha = 0.2f) else MaterialTheme.colorScheme.surface,
+        tonalElevation = if (selected) 0.dp else 1.dp,
+        shadowElevation = if (selected) 0.dp else 1.dp
+    ) {
+        Row(modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = if (selected) color else MaterialTheme.colorScheme.onSurface)
+            Text(text = stringResource(labelRes), fontSize = 12.sp, maxLines = 1, color = if (selected) color else MaterialTheme.colorScheme.onSurface)
+        }
+    }
 }

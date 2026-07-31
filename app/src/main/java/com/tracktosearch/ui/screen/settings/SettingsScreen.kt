@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Feedback
+import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.History
@@ -59,6 +60,8 @@ import androidx.compose.material.icons.rounded.SyncAlt
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -83,6 +86,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -108,6 +113,7 @@ import com.tracktosearch.ui.component.UpdateDialog
 import com.tracktosearch.ui.screen.douban.CloudSyncEvent
 import com.tracktosearch.ui.screen.douban.DoubanRetryDialog
 import com.tracktosearch.ui.screen.douban.DoubanRetryViewModel
+import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.douban.DoubanSyncDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.douban.DoubanSyncViewModel
@@ -148,10 +154,14 @@ fun SettingsScreen(
     onStatisticsClick: () -> Unit = {},
     onMarkRecordsClick: () -> Unit = {},
     onFeedbackClick: () -> Unit = {},
+    onMessagesClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settingsHazeState = remember { HazeState() }
+    val feedbackViewModel: FeedbackViewModel = hiltViewModel()
+    val unreadCount by feedbackViewModel.unreadCount.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { feedbackViewModel.fetchUnreadCount() }
     val settingsHazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
@@ -891,6 +901,18 @@ fun SettingsScreen(
                             letterSpacing = (-0.5).sp,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+                        Spacer(Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
+                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
+                                .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp))
+                                .clickable { onMessagesClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
+                                Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                            }
+                        }
                     }
                 }
             }

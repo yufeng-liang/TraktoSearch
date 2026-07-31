@@ -176,6 +176,14 @@ private fun FeedbackCard(item: com.tracktosearch.data.remote.feedback.FeedbackLi
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(typeIcon, contentDescription = null, tint = typeColor, modifier = Modifier.size(18.dp))
                 Text(stringResource(typeLabel), fontSize = 12.sp, color = typeColor, fontWeight = FontWeight.SemiBold)
+                if (item.display_id.isNotBlank()) {
+                    Text(
+                        text = stringResource(R.string.feedback_id_format, item.display_id),
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
                 Spacer(Modifier.weight(1f))
                 Text(stringResource(statusLabel), fontSize = 12.sp, color = statusColor, fontWeight = FontWeight.SemiBold)
             }

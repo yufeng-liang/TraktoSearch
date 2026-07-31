@@ -9,6 +9,10 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.UserProfileStorage
 import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
 import com.tracktosearch.data.remote.feedback.FeedbackListItem
+import com.tracktosearch.data.remote.feedback.MessageItem
+import com.tracktosearch.data.remote.feedback.MessagesResponse
+import com.tracktosearch.data.remote.feedback.UnreadCountResponse
+import com.tracktosearch.data.repository.FeedbackCacheStore
 import com.tracktosearch.data.repository.FeedbackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -27,6 +31,7 @@ import javax.inject.Inject
 @HiltViewModel
 class FeedbackViewModel @Inject constructor(
     private val feedbackRepository: FeedbackRepository,
+    private val cacheStore: FeedbackCacheStore,
     private val authManager: AuthManager,
     private val userProfileStorage: UserProfileStorage,
     private val doubanAuthStorage: DoubanAuthStorage
@@ -60,6 +65,37 @@ class FeedbackViewModel @Inject constructor(
 
     private val _submitState = MutableStateFlow<SubmitState>(SubmitState.Idle)
     val submitState: StateFlow<SubmitState> = _submitState.asStateFlow()
+
+    private val _unreadCount = MutableStateFlow(0)
+    val unreadCount: StateFlow<Int> = _unreadCount.asStateFlow()
+
+    private val _unreadItems = MutableStateFlow<List<com.tracktosearch.data.remote.feedback.UnreadItem>>(emptyList())
+    val unreadItems: StateFlow<List<com.tracktosearch.data.remote.feedback.UnreadItem>> = _unreadItems.asStateFlow()
+
+    sealed interface MessagesState {
+        data object Loading : MessagesState
+        data class Success(val items: List<MessageItem>, val hasMore: Boolean, val offset: Int) : MessagesState
+        data class Error(val message: String) : MessagesState
+    }
+
+    enum class MessageFilter { ALL, UNREAD, DEVELOPER, USER }
+
+    private val _messagesState = MutableStateFlow<MessagesState>(MessagesState.Loading)
+    val messagesState: StateFlow<MessagesState> = _messagesState.asStateFlow()
+
+    private val _messagesFilter = MutableStateFlow(MessageFilter.ALL)
+    val messagesFilter: StateFlow<MessageFilter> = _messagesFilter.asStateFlow()
+
+    private val _replyState = MutableStateFlow<ReplyState>(ReplyState.Idle)
+    val replyState: StateFlow<ReplyState> = _replyState.asStateFlow()
+
+    sealed interface ReplyState {
+        data object Idle : ReplyState
+        data class Uploading(val current: Int, val total: Int) : ReplyState
+        data object Sending : ReplyState
+        data class Success(val replyId: String) : ReplyState
+        data class Error(val message: String) : ReplyState
+    }
 
     private var loadListJob: Job? = null
 
@@ -165,4 +201,108 @@ class FeedbackViewModel @Inject constructor(
     fun resetSubmitState() {
         _submitState.value = SubmitState.Idle
     }
+
+    fun fetchUnreadCount() {
+        viewModelScope.launch {
+            try {
+                val result = feedbackRepository.getUnreadCount()
+                result.onSuccess {
+                    _unreadCount.value = it.count
+                    _unreadItems.value = it.items
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        }
+    }
+
+    fun markAsRead(feedbackId: String) {
+        viewModelScope.launch {
+            try {
+                feedbackRepository.markAsRead(feedbackId)
+                val removed = _unreadItems.value.filter { it.feedback_id != feedbackId }
+                val reduced = _unreadItems.value.size - removed.size
+                if (reduced > 0) {
+                    _unreadItems.value = removed
+                    _unreadCount.value = (_unreadCount.value - reduced).coerceAtLeast(0)
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        }
+    }
+
+    fun markAllRead() {
+        viewModelScope.launch {
+            try {
+                feedbackRepository.markAllRead()
+                _unreadCount.value = 0
+                _unreadItems.value = emptyList()
+                val current = (_messagesState.value as? MessagesState.Success)
+                if (current != null) {
+                    _messagesState.value = MessagesState.Success(items = current.items.map { it.copy(is_unread = false) }, hasMore = current.hasMore, offset = current.offset)
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {}
+        }
+    }
+
+    fun loadMessages(refresh: Boolean = false, filter: MessageFilter? = null) {
+        if (filter != null) _messagesFilter.value = filter
+        val currentOffset = (_messagesState.value as? MessagesState.Success)?.offset ?: 0
+        val offset = if (refresh) 0 else currentOffset
+        if (refresh) _messagesState.value = MessagesState.Loading
+        viewModelScope.launch {
+            try {
+                val result = feedbackRepository.getMessages(limit = 50, offset = offset)
+                result.onSuccess { response ->
+                    val prev = (_messagesState.value as? MessagesState.Success)?.items ?: emptyList()
+                    val items = if (refresh) response.messages else prev + response.messages
+                    val filtered = applyFilter(items, _messagesFilter.value)
+                    _messagesState.value = MessagesState.Success(filtered, response.hasMore, offset + response.messages.size)
+                }.onFailure { e ->
+                    _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+                }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
+            }
+        }
+    }
+
+    fun setMessagesFilter(filter: MessageFilter) {
+        _messagesFilter.value = filter
+        val current = (_messagesState.value as? MessagesState.Success)
+        if (current != null) {
+            _messagesState.value = MessagesState.Success(items = applyFilter(current.items, filter), hasMore = current.hasMore, offset = current.offset)
+        }
+    }
+
+    private fun applyFilter(items: List<MessageItem>, filter: MessageFilter): List<MessageItem> {
+        return when (filter) {
+            MessageFilter.ALL -> items
+            MessageFilter.UNREAD -> items.filter { it.is_unread }
+            MessageFilter.DEVELOPER -> items.filter { it.author_role == "developer" }
+            MessageFilter.USER -> items.filter { it.author_role == "user" }
+        }
+    }
+
+    fun reply(feedbackId: String, content: String, screenshotBytes: List<ByteArray>, screenshotMimeTypes: List<String>) {
+        _replyState.value = ReplyState.Uploading(0, screenshotBytes.size)
+        viewModelScope.launch {
+            try {
+                val keys = mutableListOf<String>()
+                for ((index, bytes) in screenshotBytes.withIndex()) {
+                    _replyState.value = ReplyState.Uploading(index, screenshotBytes.size)
+                    val mimeType = screenshotMimeTypes.getOrNull(index) ?: "image/jpeg"
+                    val keyResult = feedbackRepository.uploadScreenshot(bytes, mimeType)
+                    keyResult.onSuccess { keys.add(it) }.onFailure {
+                        _replyState.value = ReplyState.Error("SCREENSHOT_UPLOAD_FAILED: ${it.message}")
+                        return@launch
+                    }
+                }
+                _replyState.value = ReplyState.Sending
+                val result = feedbackRepository.reply(feedbackId, content.trim(), keys)
+                result.onSuccess { _replyState.value = ReplyState.Success(it.reply.id) }.onFailure { _replyState.value = ReplyState.Error(it.message ?: "REPLY_FAILED") }
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                _replyState.value = ReplyState.Error(e.message ?: "REPLY_FAILED")
+            }
+        }
+    }
+
+    fun resetReplyState() { _replyState.value = ReplyState.Idle }
 }

@@ -49,6 +49,8 @@ import com.tracktosearch.ui.screen.discoverfilter.DiscoverFilterScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackScreen
 import com.tracktosearch.ui.screen.feedback.NewFeedbackScreen
 import com.tracktosearch.ui.screen.feedback.FeedbackDetailScreen
+import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
+import com.tracktosearch.ui.screen.messages.MessagesScreen
 import com.tracktosearch.ui.screen.douban.DoubanFailuresScreen
 import com.tracktosearch.ui.screen.douban.DoubanItemDetailScreen
 import com.tracktosearch.ui.screen.douban.DoubanLoginScreen
@@ -117,10 +119,12 @@ object Routes {
     const val DOUBAN_SPIDER_TEST = "doubanSpiderTest"
     const val MARK_RECORDS = "markRecords"
     const val FEEDBACK = "feedback"
-    const val FEEDBACK_DETAIL = "feedbackDetail/{feedbackId}"
+    const val FEEDBACK_DETAIL = "feedbackDetail/{feedbackId}?replyId={replyId}"
     const val NEW_FEEDBACK = "newFeedback"
+    const val MESSAGES = "messages"
 
-    fun feedbackDetailRoute(feedbackId: String): String = "feedbackDetail/$feedbackId"
+    fun feedbackDetailRoute(feedbackId: String, replyId: String? = null): String =
+        "feedbackDetail/$feedbackId?replyId=${replyId ?: ""}"
 
     fun doubanItemDetailRoute(doubanId: String): String = "doubanItemDetail/$doubanId"
 
@@ -503,6 +507,9 @@ fun AppNavigation(
                             },
                             onFeedbackClick = {
                                 navController.navigate(Routes.FEEDBACK)
+                            },
+                            onMessagesClick = {
+                                navController.navigate(Routes.MESSAGES)
                             }
                         )
                     }
@@ -813,10 +820,14 @@ fun AppNavigation(
                 }
 
                 composable(Routes.FEEDBACK) {
+                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        navController.getBackStackEntry(Routes.MAIN)
+                    )
                     FeedbackScreen(
                         onBack = { navController.popBackStack() },
                         onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
-                        onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) }
+                        onFeedbackClick = { id -> navController.navigate(Routes.feedbackDetailRoute(id)) },
+                        viewModel = sharedViewModel
                     )
                 }
                 composable(Routes.NEW_FEEDBACK) {
@@ -827,13 +838,34 @@ fun AppNavigation(
                 }
                 composable(
                     route = Routes.FEEDBACK_DETAIL,
-                    arguments = listOf(navArgument("feedbackId") { type = NavType.StringType })
+                    arguments = listOf(
+                        navArgument("feedbackId") { type = NavType.StringType },
+                        navArgument("replyId") { type = NavType.StringType; defaultValue = "" }
+                    )
                 ) { backStackEntry ->
                     val feedbackId = backStackEntry.arguments?.getString("feedbackId") ?: return@composable
+                    val replyId = backStackEntry.arguments?.getString("replyId")?.takeIf { it.isNotBlank() }
+                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        navController.getBackStackEntry(Routes.MAIN)
+                    )
                     FeedbackDetailScreen(
                         feedbackId = feedbackId,
+                        replyId = replyId,
                         onBack = { navController.popBackStack() },
-                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) }
+                        onNewFeedback = { navController.navigate(Routes.NEW_FEEDBACK) },
+                        viewModel = sharedViewModel
+                    )
+                }
+                composable(Routes.MESSAGES) {
+                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        navController.getBackStackEntry(Routes.MAIN)
+                    )
+                    MessagesScreen(
+                        onBack = { navController.popBackStack() },
+                        onMessageClick = { feedbackId, replyId ->
+                            navController.navigate(Routes.feedbackDetailRoute(feedbackId, replyId))
+                        },
+                        viewModel = sharedViewModel
                     )
                 }
             }

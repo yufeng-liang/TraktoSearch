@@ -31,6 +31,8 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -84,6 +86,7 @@ import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
+import com.tracktosearch.ui.screen.feedback.FeedbackViewModel
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
@@ -160,9 +163,13 @@ fun MainScreen(
     onDoubanFailures: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onSpiderTest: () -> Unit = {},
-    onFeedbackClick: () -> Unit = {}
+    onFeedbackClick: () -> Unit = {},
+    onMessagesClick: () -> Unit = {}
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    val feedbackViewModel: FeedbackViewModel = hiltViewModel()
+    val unreadCount by feedbackViewModel.unreadCount.collectAsState()
+    LaunchedEffect(Unit) { feedbackViewModel.fetchUnreadCount() }
     var searchSourceType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
     var traktSearchQuery by rememberSaveable { mutableStateOf("") }
     var traktSearchType by rememberSaveable { mutableStateOf(SearchSourceType.MOVIE) }
@@ -462,6 +469,7 @@ fun MainScreen(
                         onStatisticsClick = onStatisticsClick,
                         onMarkRecordsClick = onMarkRecordsClick,
                         onFeedbackClick = onFeedbackClick,
+                        onMessagesClick = onMessagesClick,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -552,6 +560,7 @@ fun MainScreen(
                             selected = isSelected,
                             weight = 1f,
                             avatarUrl = avatarUrl,
+                            badgeCount = if (index == 3) unreadCount else 0,
                             onClick = {
                                 if (selectedTab != index) {
                                     view.performHaptic(HapticType.CLICK)
@@ -634,6 +643,7 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
     weight: Float,
     onClick: () -> Unit,
     avatarUrl: String? = null,
+    badgeCount: Int = 0,
     onPositioned: (Rect) -> Unit = {}
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -706,14 +716,9 @@ private fun androidx.compose.foundation.layout.RowScope.NavTabItem(
                     .clip(RoundedCornerShape(12.dp))
             )
         } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = stringResource(labelRes),
-                tint = selectedColor,
-                modifier = Modifier
-                    .size(24.dp)
-                    .offset(y = 3.dp)
-            )
+            BadgedBox(badge = { if (badgeCount > 0) { Badge { Text(if (badgeCount > 99) "99+" else badgeCount.toString()) } } }) {
+                Icon(imageVector = icon, contentDescription = stringResource(labelRes), tint = selectedColor, modifier = Modifier.size(24.dp).offset(y = 3.dp))
+            }
         }
         Spacer(modifier = Modifier.height(0.dp))
         Text(
