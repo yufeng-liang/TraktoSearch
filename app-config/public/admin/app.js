@@ -375,6 +375,7 @@ const API = {
             friends: (data.friends || []).map((f) => ({
                 id: f.id,
                 nickname: f.nickname,
+                email: f.email,
                 note: f.note,
                 status: f.status,
                 devices: f.active_devices,
@@ -396,6 +397,7 @@ const API = {
         const f = {
             id: source.id,
             nickname: source.nickname,
+            email: source.email,
             note: source.note,
             status: source.status,
             devices: source.active_devices,
@@ -1090,8 +1092,10 @@ function renderFriends(container, renderToken) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="8"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
     container.appendChild(tableWrap);
+    const friendHeaderRow = tableWrap.querySelector('thead tr');
+    friendHeaderRow?.children[0]?.insertAdjacentHTML('afterend', '<th>邮箱</th>');
 
     const searchInput = toolbar.querySelector('#searchInput');
     const statusFilter = toolbar.querySelector('#statusFilter');
@@ -1113,7 +1117,7 @@ function renderFriends(container, renderToken) {
             const friends = friendsPage.friends;
 
             if (friends.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friendsPage.total === 0 && !query && !filter ? '还没有朋友' : '没有匹配结果'}</div><div class="empty-desc">${friendsPage.total === 0 && !query && !filter ? '点击右上角按钮创建第一个朋友' : '尝试调整搜索或筛选条件'}</div>${friendsPage.total === 0 && !query && !filter ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建朋友</button>' : ''}</div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friendsPage.total === 0 && !query && !filter ? '还没有朋友' : '没有匹配结果'}</div><div class="empty-desc">${friendsPage.total === 0 && !query && !filter ? '点击右上角按钮创建第一个朋友' : '尝试调整搜索或筛选条件'}</div>${friendsPage.total === 0 && !query && !filter ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建朋友</button>' : ''}</div></td></tr>`;
                 tbody.querySelector('.js-create-friend')?.addEventListener('click', showCreateFriendModal);
             } else {
                 tbody.innerHTML = friends.map(f => `
@@ -1127,6 +1131,10 @@ function renderFriends(container, renderToken) {
                         <td><button class="btn btn-ghost btn-sm js-friend-detail" data-id="${escapeHtml(f.id)}">详情</button></td>
                     </tr>
                 `).join('');
+                tbody.querySelectorAll('tr').forEach((row, index) => {
+                    const friend = friends[index];
+                    if (friend) row.children[0]?.insertAdjacentHTML('afterend', `<td style="font-size:12px;color:var(--text-dim)">${escapeHtml(friend.email || '—')}</td>`);
+                });
                 tbody.querySelectorAll('.js-friend-detail').forEach(button => {
                     button.addEventListener('click', () => navigate('friend-detail', { id: button.dataset.id }));
                 });
@@ -1138,7 +1146,7 @@ function renderFriends(container, renderToken) {
         }).catch(err => {
             if (renderToken !== state.renderToken || !container.isConnected) return;
             if (sequence !== loadSequence) return;
-            tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendsRetry">重试</button></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="8"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendsRetry">重试</button></div></td></tr>`;
             tbody.querySelector('#friendsRetry')?.addEventListener('click', loadAndRender);
         });
     }
@@ -1205,6 +1213,8 @@ function renderFriendDetail(container, renderToken) {
                     </tbody></table></div>
                 </div>
         `;
+        const basicInfo = content.querySelector('.detail-card > div:last-child');
+        basicInfo?.insertAdjacentHTML('beforeend', `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">邮箱</span><span>${escapeHtml(f.email || '—')}</span></div>`);
         const deviceRows = content.querySelectorAll('tbody tr');
         deviceRows.forEach((row, index) => {
             const device = f.devicesList[index];
@@ -1519,6 +1529,11 @@ function showCreateFriendModal() {
         <p class="form-hint">朋友长期有效；邀请码单独设置有效期。</p>
     `;
 
+    const createEmailGroup = document.createElement('div');
+    createEmailGroup.className = 'form-group';
+    createEmailGroup.innerHTML = '<label class="form-label" for="create-friend-email">邮箱</label><input class="form-input" id="create-friend-email" name="email" type="email" maxlength="254" autocomplete="email" placeholder="user@example.com">';
+    form.querySelector('#create-friend-nickname')?.closest('.form-group')?.after(createEmailGroup);
+
     const submitBtn = document.createElement('button');
     submitBtn.className = 'btn btn-primary';
     submitBtn.type = 'submit';
@@ -1540,11 +1555,17 @@ function showCreateFriendModal() {
         e.preventDefault();
         clearFormError(form);
         const nickname = form.nickname.value.trim();
+        const email = form.email.value.trim();
         const note = form.note.value.trim();
         const maxDevices = Number.parseInt(form.maxDevices.value, 10);
         if (!nickname) {
             showFormError(form, '请输入昵称。');
             form.nickname.focus();
+            return;
+        }
+        if (email && (!email.includes('@') || email.length > 254)) {
+            showFormError(form, '请输入有效的邮箱，或留空');
+            form.email.focus();
             return;
         }
         if (nickname.length > 32 || note.length > 64) {
@@ -1560,6 +1581,7 @@ function showCreateFriendModal() {
         submitBtn.textContent = '创建中...';
         const data = {
             nickname,
+            email: email || null,
             note,
             maxDevices,
         };
@@ -1585,6 +1607,11 @@ function showEditFriendModal(friend) {
         <div class="form-group"><label class="form-label" for="edit-friend-max-devices">设备上限</label><input class="form-input" id="edit-friend-max-devices" name="maxDevices" type="number" min="1" max="10" value="${Number(friend.maxDevices) || 1}" autocomplete="off"><p class="form-hint">不能低于当前活跃设备数（${Number(friend.devices) || 0} 台）。</p></div>
         <div class="form-group"><label class="form-label" for="edit-friend-expires-at">有效期至</label><div style="display:flex;align-items:center;gap:10px"><input class="form-input" id="edit-friend-expires-at" name="expiresAt" type="datetime-local" autocomplete="off" style="flex:1"><label for="edit-friend-no-expiry" style="display:flex;align-items:center;gap:6px;white-space:nowrap;font-size:12px;color:var(--text-muted)"><input id="edit-friend-no-expiry" name="noExpiry" type="checkbox">长期有效</label></div></div>
     `;
+
+    const editEmailGroup = document.createElement('div');
+    editEmailGroup.className = 'form-group';
+    editEmailGroup.innerHTML = `<label class="form-label" for="edit-friend-email">邮箱</label><input class="form-input" id="edit-friend-email" name="email" type="email" maxlength="254" autocomplete="email" value="${escapeHtml(friend.email || '')}">`;
+    form.querySelector('#edit-friend-nickname')?.closest('.form-group')?.after(editEmailGroup);
 
     const expiresInput = form.expiresAt;
     const noExpiryInput = form.noExpiry;
@@ -1616,11 +1643,17 @@ function showEditFriendModal(friend) {
         event.preventDefault();
         clearFormError(form);
         const nickname = form.nickname.value.trim();
+        const email = form.email.value.trim();
         const note = form.note.value.trim();
         const maxDevices = Number.parseInt(form.maxDevices.value, 10);
         if (!nickname) {
             showFormError(form, '请输入昵称。');
             form.nickname.focus();
+            return;
+        }
+        if (email && (!email.includes('@') || email.length > 254)) {
+            showFormError(form, '请输入有效的邮箱，或留空');
+            form.email.focus();
             return;
         }
         if (nickname.length > 32 || note.length > 64) {
@@ -1652,7 +1685,7 @@ function showEditFriendModal(friend) {
         submitBtn.disabled = true;
         submitBtn.textContent = '保存中...';
         try {
-            await API.updateFriend(friend.id, { nickname, note, maxDevices, expiresAt });
+            await API.updateFriend(friend.id, { nickname, email: email || null, note, maxDevices, expiresAt });
             modal.close();
             showToast(`朋友「${nickname}」已更新`);
             navigate('friend-detail', { id: friend.id });

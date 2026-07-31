@@ -26,6 +26,11 @@ service = "douban-movie-api"
 binding = "CRASH_LOGS"
 id = "d6fc37992e6d47fc9fe45207923627a3"
 
+# Cloudflare Email Service（需要在账户中先完成发件域名验证）
+[[send_email]]
+name = "EMAIL"
+remote = true
+
 # Secrets（通过 wrangler secret put 注入）
 # JWT_SIGNING_KEY
 # DEVICE_RECOVERY_HMAC_KEY
@@ -49,3 +54,7 @@ id = "d6fc37992e6d47fc9fe45207923627a3"
 
 [vars]
 ENVIRONMENT = "production"
+PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
+# 上线前替换为 Email Service 已验证域名下的发件地址。
+EMAIL_FROM = "TraktoSearch <noreply@tracktosearch.pages.dev>"
+EMAIL_REPLY_TO = "1577865546@qq.com"

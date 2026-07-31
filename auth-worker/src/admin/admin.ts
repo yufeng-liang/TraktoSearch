@@ -20,12 +20,12 @@ export async function listFriends(request: Request, env: { DB: D1Database }, req
     const queryPattern = `%${query}%`;
     const conditions = `
         (? = '' OR f.status = ?)
-        AND (? = '' OR LOWER(f.nickname) LIKE LOWER(?) OR LOWER(COALESCE(f.note, '')) LIKE LOWER(?))
+        AND (? = '' OR LOWER(f.nickname) LIKE LOWER(?) OR LOWER(COALESCE(f.note, '')) LIKE LOWER(?) OR LOWER(COALESCE(f.email, '')) LIKE LOWER(?))
     `;
-    const values = [requestedStatus, requestedStatus, query, queryPattern, queryPattern];
+    const values = [requestedStatus, requestedStatus, query, queryPattern, queryPattern, queryPattern];
 
     const { results } = await env.DB.prepare(`
-        SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+        SELECT f.id, f.nickname, f.email, f.note, f.status, f.max_devices, f.expires_at,
                f.last_ip, f.last_ip_geo, f.ip_updated_at,
                f.created_at, f.updated_at,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) as active_devices,
@@ -57,7 +57,7 @@ export async function getFriendDetail(
     friendId: string,
 ): Promise<Response> {
     const friend = await env.DB.prepare(`
-        SELECT f.id, f.nickname, f.note, f.status, f.max_devices, f.expires_at,
+        SELECT f.id, f.nickname, f.email, f.note, f.status, f.max_devices, f.expires_at,
                f.last_ip, f.last_ip_geo, f.ip_updated_at,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.deleted_at IS NULL) AS total_devices,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = f.id AND d.status = 'ACTIVE' AND d.deleted_at IS NULL) AS active_devices,
@@ -110,11 +110,13 @@ export async function createFriend(
 ): Promise<Response> {
     const body = await readJson<{
         nickname: string;
+        email?: string;
         note?: string;
         maxDevices?: number;
     }>(request);
 
     const nickname = typeof body.nickname === 'string' ? body.nickname.trim() : '';
+    const email = normalizeOptionalEmail(body.email);
     const note = typeof body.note === 'string' ? body.note.trim() : '';
     const maxDevices = body.maxDevices ?? 2;
 
@@ -132,16 +134,16 @@ export async function createFriend(
     const currentTime = now();
 
     await env.DB.prepare(`
-        INSERT INTO friends (id, nickname, note, status, max_devices, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, 'ACTIVE', ?, NULL, ?, ?)
-    `).bind(id, nickname, note || null, maxDevices, currentTime, currentTime).run();
+        INSERT INTO friends (id, nickname, email, note, status, max_devices, expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'ACTIVE', ?, NULL, ?, ?)
+    `).bind(id, nickname, email, note || null, maxDevices, currentTime, currentTime).run();
 
     await env.DB.prepare(`
         INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
         VALUES ('FRIEND_CREATE', ?, ?, 'SUCCESS', 'friend_created', ?)
     `).bind(id, requestId, currentTime).run();
 
-    return successResponse({ id, nickname, status: 'ACTIVE' }, requestId);
+    return successResponse({ id, nickname, email, status: 'ACTIVE' }, requestId);
 }
 
 // PATCH /admin/friends/:id — 更新朋友
@@ -152,7 +154,7 @@ export async function updateFriend(
     friendId: string
 ): Promise<Response> {
     const existing = await env.DB.prepare(`
-        SELECT id,
+        SELECT id, email,
                (SELECT COUNT(*) FROM devices d WHERE d.friend_id = friends.id AND d.status = 'ACTIVE') AS active_devices
         FROM friends
         WHERE id = ?
@@ -161,6 +163,7 @@ export async function updateFriend(
 
     const body = await readJson<{
         nickname?: string;
+        email?: string | null;
         note?: string;
         maxDevices?: number;
         expiresAt?: number | null;
@@ -175,6 +178,10 @@ export async function updateFriend(
         if (!nickname || nickname.length > 32) throw new AppError('INVALID_REQUEST', 'Invalid nickname', 400);
         updates.push('nickname = ?');
         values.push(nickname);
+    }
+    if (body.email !== undefined) {
+        updates.push('email = ?');
+        values.push(normalizeOptionalEmail(body.email));
     }
     if (body.note !== undefined) {
         if (typeof body.note !== 'string') throw new AppError('INVALID_REQUEST', 'Invalid note', 400);
@@ -707,6 +714,18 @@ export async function healthCheck(env: { DB: D1Database }, requestId: string): P
         timestamp: currentTime,
         stats: stats || { active_friends: 0, active_devices: 0, recent_failures: 0 },
     }, requestId);
+}
+
+function normalizeOptionalEmail(value: unknown): string | null {
+    if (value === undefined || value === null || value === '') return null;
+    if (typeof value !== 'string') {
+        throw new AppError('INVALID_REQUEST', 'Invalid email', 400);
+    }
+    const email = value.trim().toLowerCase();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new AppError('INVALID_REQUEST', 'Invalid email', 400);
+    }
+    return email;
 }
 
 async function readJson<T>(request: Request): Promise<T> {

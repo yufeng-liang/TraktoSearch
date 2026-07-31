@@ -27,7 +27,7 @@ test('朋友创建不提交朋友到期时间，邀请码单独携带有效期',
     const createFriendModal = appSource.match(/function showCreateFriendModal\([\s\S]*?function showEditFriendModal\(/);
     assert.ok(createFriendModal, 'create friend modal should exist');
     assert.doesNotMatch(createFriendModal[0], /name="expiresAt"/);
-    assert.match(workerSource, /VALUES \(\?, \?, \?, 'ACTIVE', \?, NULL, \?, \?\)/);
+    assert.match(workerSource, /INSERT INTO friends \(id, nickname, email, note, status, max_devices, expires_at, created_at, updated_at\)[\s\S]*VALUES \(\?, \?, \?, \?, 'ACTIVE', \?, NULL, \?, \?\)/);
 });
 
 test('后台表单和仪表盘关键错误不会静默失败', () => {
@@ -120,6 +120,15 @@ test('friend detail exposes device identity and recovery summaries', () => {
     assert.match(workerSource, /export async function listDevices/);
     assert.match(workerSource, /summary: friend/);
     assert.match(workerSource, /recovery_id_hmac IS NOT NULL AS has_recovery_identity/);
+});
+
+test('friend records expose and edit the user email address', () => {
+    assert.match(workerSource, /f\.email/);
+    assert.match(workerSource, /email\?: string/);
+    assert.match(workerSource, /normalizeOptionalEmail/);
+    assert.match(appSource, /email: f\.email/);
+    assert.match(appSource, /name="email"/);
+    assert.match(appSource, /API\.updateFriend\(friend\.id, \{ nickname, email: email \|\| null/);
 });
 
 test('revoked device records can be soft-deleted from the admin UI', () => {

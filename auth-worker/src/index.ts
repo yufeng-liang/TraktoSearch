@@ -36,6 +36,7 @@ import { handleGithubProxy } from './proxy/github';
 import { handleTranslateProxy } from './proxy/translate';
 import { handleCrashLogProxy } from './proxy/crash-logs';
 import { handleConfigProxy } from './proxy/config';
+import { handleInviteRequest, handleInviteVerification } from './invitations';
 
 export interface Env {
     DB: D1Database;
@@ -65,6 +66,10 @@ export interface Env {
     CONFIG_BASE_URL: string;
     // 云端同步数据服务端加密（原客户端 AesCrypto 硬编码密钥）
     CLOUD_SYNC_AES_KEY: string;
+    EMAIL: SendEmail;
+    EMAIL_FROM: string;
+    EMAIL_REPLY_TO?: string;
+    PUBLIC_SITE_ORIGIN: string;
 }
 
 export default {
@@ -153,6 +158,12 @@ async function handleAuthApi(
     path: string
 ): Promise<Response> {
     // 公开端点（无需 JWT）
+    if (path === '/api/invite-requests' && request.method === 'POST') {
+        return handleInviteRequest(request, env, requestId);
+    }
+    if (path === '/api/invite-requests/verify' && request.method === 'GET') {
+        return handleInviteVerification(request, env, requestId);
+    }
     if (path === '/api/auth/activate' && request.method === 'POST') {
         return handleActivate(request, env, requestId);
     }
