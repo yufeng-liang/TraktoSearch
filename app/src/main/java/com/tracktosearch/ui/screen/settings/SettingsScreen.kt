@@ -86,8 +86,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
@@ -96,6 +94,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.hasListScrolled
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -952,12 +951,9 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Spacer(Modifier.weight(1f))
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(20.dp))
-                                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
-                                .shadow(elevation = 4.dp, shape = RoundedCornerShape(20.dp))
-                                .clickable { onMessagesClick() },
-                            contentAlignment = Alignment.Center
+                        NeumorphicIconButton(
+                            onClick = onMessagesClick,
+                            isDark = isDark
                         ) {
                             BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
                                 Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
