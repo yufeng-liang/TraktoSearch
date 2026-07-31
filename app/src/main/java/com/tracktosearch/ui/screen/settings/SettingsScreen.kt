@@ -164,6 +164,7 @@ fun SettingsScreen(
     LaunchedEffect(Unit) { feedbackViewModel.fetchUnreadCount() }
     val settingsHazeStyle = HazeMaterials.thin()
     val isDark = isAppDarkTheme()
+    val view = LocalView.current
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
     val currentAccent by viewModel.accentColor.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.language.collectAsStateWithLifecycle()
@@ -171,6 +172,7 @@ fun SettingsScreen(
     // 共享元素转场动画开关:读 AppNavigation 顶层 collect 的值(App 启动即开始收集,
     // 进设置页时已稳定,避免 SettingsViewModel 延迟构造导致的初始 false→true 跳变)
     val sharedTransitionEnabled = LocalSharedTransitionEnabled.current
+    val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
     // 共享元素转场 scope（帮助与说明入口 → 帮助页标题栏配对）
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalAnimatedVisibilityScope.current
@@ -872,6 +874,54 @@ fun SettingsScreen(
                         onClick = onFeedbackClick,
                         containerColor = Color.Transparent
                     )
+                    GroupDivider()
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(!crashLogEnabled) }
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .background(
+                                    color = MaterialTheme.colorScheme.error.copy(alpha = if (isDark) 0.2f else 0.12f),
+                                    shape = RoundedCornerShape(12.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Rounded.BugReport,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.settings_crash_log_title),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 15.sp
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.settings_crash_log_subtitle),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Switch(
+                            checked = crashLogEnabled,
+                            onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(it) },
+                            colors = appSwitchColors()
+                        )
+                    }
                 }
             }
         }
@@ -1623,7 +1673,6 @@ private fun NotificationItem(
     val notificationEnabled by viewModel.notificationEnabled.collectAsStateWithLifecycle()
     val releaseEnabled by viewModel.releaseReminderEnabled.collectAsStateWithLifecycle()
     val newSeasonEnabled by viewModel.newSeasonReminderEnabled.collectAsStateWithLifecycle()
-    val crashLogEnabled by viewModel.crashLogEnabled.collectAsStateWithLifecycle()
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -1797,55 +1846,7 @@ private fun NotificationItem(
                         colors = appSwitchColors()
                     )
                 }
-                GroupDivider()
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(!crashLogEnabled) }
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.error.copy(alpha = if (isDark) 0.2f else 0.12f),
-                                shape = RoundedCornerShape(12.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Rounded.BugReport,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.settings_crash_log_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = 15.sp
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.settings_crash_log_subtitle),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Switch(
-                        checked = crashLogEnabled,
-                        onCheckedChange = { view.performHaptic(HapticType.CLICK); viewModel.setCrashLogEnabled(it) },
-                        colors = appSwitchColors()
-                    )
                 }
-            }
         }
     }
 }
