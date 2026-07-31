@@ -86,7 +86,8 @@ export async function onRequest(context) {
     if (clientIp) {
         headers.set('X-Real-IP', clientIp);
     }
-    const cf = context.cf;
+    // Pages Functions 中 request.cf 才是标准属性（context.cf 不一定可用）
+    const cf = request.cf;
     if (cf) {
         // 仅转发 IP 上报所需的地理字段，避免 header 过大
         const geo = {
