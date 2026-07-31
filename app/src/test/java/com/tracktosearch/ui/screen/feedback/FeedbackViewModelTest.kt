@@ -64,6 +64,25 @@ class FeedbackViewModelTest {
     }
 
     @Test
+    fun `loadList refresh replaces previous items`() = runTest {
+        val oldItem = FeedbackListItem("old", "BUG", "old", null, "PENDING", 1700000000L)
+        val newItem = FeedbackListItem("new", "FEATURE", "new", null, "PENDING", 1700000100L)
+        coEvery { feedbackRepository.getMine(any(), any()) } returnsMany listOf(
+            Result.success(MineResponse(listOf(oldItem), 20, 0, 1, false)),
+            Result.success(MineResponse(listOf(newItem), 20, 0, 1, false))
+        )
+        val viewModel = createViewModel()
+
+        viewModel.loadList(refresh = true)
+        advanceUntilIdle()
+        viewModel.loadList(refresh = true)
+        advanceUntilIdle()
+
+        val state = viewModel.listState.value as FeedbackViewModel.ListState.Success
+        assertThat(state.items.map { it.id }).containsExactly("new")
+    }
+
+    @Test
     fun `loadList failure updates listState to Error`() = runTest {
         coEvery { feedbackRepository.getMine(any(), any()) } returns Result.failure(Exception("LOAD_FAILED"))
         val viewModel = createViewModel()
