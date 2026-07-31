@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -40,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -437,15 +439,11 @@ internal fun SearchSourceCard(
             modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
+            AdaptiveSourceNameText(
                 text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
                 color = if (checked) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                modifier = Modifier.weight(1f)
             )
             if (onConfigClick != null) {
                 IconButton(
@@ -468,6 +466,56 @@ internal fun SearchSourceCard(
                 colors = appSwitchColors()
             )
         }
+    }
+}
+
+@Composable
+private fun AdaptiveSourceNameText(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val maxFontSize = 16.sp
+    val minFontSize = 12.sp
+    val baseStyle = MaterialTheme.typography.bodyMedium.copy(
+        color = color,
+        fontWeight = FontWeight.Medium
+    )
+
+    BoxWithConstraints(modifier = modifier) {
+        val maxWidthPx = constraints.maxWidth
+        val fontSize = if (maxWidthPx <= 0) {
+            maxFontSize
+        } else {
+            var low = minFontSize.value
+            var high = maxFontSize.value
+            var best = minFontSize.value
+            while (low <= high) {
+                val candidate = (low + high) / 2f
+                val result = textMeasurer.measure(
+                    text = text,
+                    style = baseStyle.copy(fontSize = candidate.sp),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip
+                )
+                if (result.size.width <= maxWidthPx) {
+                    best = candidate
+                    low = candidate + 0.5f
+                } else {
+                    high = candidate - 0.5f
+                }
+            }
+            best.sp
+        }
+
+        Text(
+            text = text,
+            style = baseStyle.copy(fontSize = fontSize),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
