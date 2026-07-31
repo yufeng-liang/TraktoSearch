@@ -895,9 +895,16 @@ fun AppNavigation(
                     )
                 }
                 composable(Routes.NEW_FEEDBACK) {
+                    val sharedViewModel: FeedbackViewModel = hiltViewModel(
+                        navController.getBackStackEntry(Routes.MAIN)
+                    )
                     NewFeedbackScreen(
                         onBack = { navController.popBackStack() },
-                        onSuccess = { navController.popBackStack() }
+                        onSuccess = {
+                            sharedViewModel.loadList(refresh = true)
+                            navController.popBackStack(Routes.FEEDBACK, inclusive = false)
+                        },
+                        viewModel = sharedViewModel
                     )
                 }
                 composable(
