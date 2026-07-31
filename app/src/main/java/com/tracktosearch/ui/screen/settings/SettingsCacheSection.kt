@@ -70,7 +70,7 @@ fun CacheManagementItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { expanded = !expanded }
-                    .padding(horizontal = 6.dp, vertical = 16.dp),
+                    .padding(horizontal = 6.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(

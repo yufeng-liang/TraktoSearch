@@ -123,6 +123,15 @@ internal fun cardSurfaceColor(): Color {
     return MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isLight) 1.0f else 0.3f)
 }
 
+@Composable
+internal fun settingsIconContainerColor(
+    isDark: Boolean,
+    alphaMultiplier: Float = 1f
+): Color {
+    val alpha = if (isDark) 0.2f else 0.12f
+    return MaterialTheme.colorScheme.primary.copy(alpha = alpha * alphaMultiplier)
+}
+
 /**
  * 设置项：玻璃卡片内的列表项（彩色图标块 + 标题 + 小字 + 右箭头/开关）。
  */
@@ -142,14 +151,14 @@ internal fun SettingsItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() }
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
             modifier = Modifier
                 .size(40.dp)
                 .background(
-                    color = iconTint.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    color = settingsIconContainerColor(isDark),
                     shape = RoundedCornerShape(12.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -305,15 +314,15 @@ internal fun DataFlowCard(
             .clickable(enabled = enabled) {
                 view.performHaptic(HapticType.CLICK); onClick()
             }
-            .padding(vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .background(
-                    color = effectiveIconTint.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    color = settingsIconContainerColor(isDark, disabledAlpha),
                     shape = RoundedCornerShape(14.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -362,15 +371,15 @@ internal fun SettingsCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable { view.performHaptic(HapticType.CLICK); onClick() }
-            .padding(vertical = 16.dp),
+            .padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Box(
             modifier = Modifier
                 .size(48.dp)
                 .background(
-                    color = iconTintColor.copy(alpha = if (isDark) 0.2f else 0.12f),
+                    color = settingsIconContainerColor(isDark),
                     shape = RoundedCornerShape(14.dp)
                 ),
             contentAlignment = Alignment.Center
@@ -613,14 +622,14 @@ internal fun StatisticsCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 18.dp),
+                .padding(horizontal = 18.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .background(
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                        color = settingsIconContainerColor(isDark),
                         shape = RoundedCornerShape(14.dp)
                     ),
                 contentAlignment = Alignment.Center
