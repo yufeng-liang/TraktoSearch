@@ -60,6 +60,17 @@ feedback-worker/.wrangler/
 # Cloudflare Worker node_modules
 feedback-worker/node_modules/
 
+# feedback-worker 备份与日志
+feedback-worker/backups/
+auth-worker/tail_*.txt
+
+# 临时调试与扫描产物
+.codex-trakt-*
+.firecrawl/
+perf-artifacts/
+module-audit-report.html
+privacy-security-report.html
+
 # Perfetto / ART trace files (large, local performance analysis only)
 *.trace
 
