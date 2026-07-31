@@ -11,14 +11,17 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -60,7 +63,17 @@ class TraktSearchViewModelTest {
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val resourceRepository = mockk<ResourceRepository>(relaxed = true)
+    private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private lateinit var viewModel: TraktSearchViewModel
+
+    @Test
+    fun `仅登录豆瓣时搜索页不加载Trakt私有想看已看数据`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+        assertThat(viewModel.watchlistWatchedIds.value?.movieWatchlistTraktIds).isEmpty()
+    }
 
     // ==================== 测试数据 ====================
 
@@ -106,6 +119,7 @@ class TraktSearchViewModelTest {
         // 桩为空数据，避免 init 协程干扰主流程断言
         coEvery { traktRepository.getWatchlistWatchedIds() } returns null
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns WatchlistWatchedIds()
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
     }
 
     /**
@@ -119,6 +133,7 @@ class TraktSearchViewModelTest {
             traktRepository = traktRepository,
             tmdbRepository = tmdbRepository,
             resourceRepository = resourceRepository,
+            sessionModeManager = sessionModeManager,
             savedStateHandle = savedStateHandle,
             context = RuntimeEnvironment.getApplication()
         )

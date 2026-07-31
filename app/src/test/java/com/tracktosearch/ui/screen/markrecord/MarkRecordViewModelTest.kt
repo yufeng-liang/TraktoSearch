@@ -8,6 +8,7 @@ import com.tracktosearch.data.local.db.MarkActionRecordEntity
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -17,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -33,12 +35,28 @@ class MarkRecordViewModelTest {
     private lateinit var traktRepo: TraktRepository
     private lateinit var context: Context
     private lateinit var viewModel: MarkRecordViewModel
+    private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var traktConnected: MutableStateFlow<Boolean>
+
+    @Test
+    fun `未连接Trakt时标记记录页不请求观看历史`() = runTest {
+        io.mockk.clearMocks(traktRepo)
+        traktConnected.value = false
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepo.fetchWatchHistory(any()) }
+    }
 
     @Before
     fun setup() = runTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         dao = mockk(relaxed = true)
         traktRepo = mockk(relaxed = true)
+        sessionModeManager = mockk(relaxed = true)
+        traktConnected = MutableStateFlow(true)
+        every { sessionModeManager.traktConnected } returns traktConnected
         context = mockk(relaxed = true)
         every { context.getString(R.string.error_load_failed) } returns "Load failed"
         coEvery { dao.count() } returns 0
@@ -49,6 +67,7 @@ class MarkRecordViewModelTest {
             dao,
             traktRepo,
             mockk(relaxed = true),
+            sessionModeManager,
             context
         )
     }

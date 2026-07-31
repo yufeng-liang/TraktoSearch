@@ -6,7 +6,6 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.SearchHistoryStorage
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRepository
@@ -72,7 +71,6 @@ class DiscoverViewModelTest {
     private lateinit var searchHistoryStorage: SearchHistoryStorage
     private lateinit var viewedItemStorage: ViewedItemStorage
     private lateinit var discoverSectionStorage: DiscoverSectionStorage
-    private lateinit var tokenStorage: TokenStorage
     private lateinit var sessionModeManager: SessionModeManager
     private lateinit var sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
     private lateinit var doubanRepository: DoubanRepository
@@ -82,6 +80,34 @@ class DiscoverViewModelTest {
 
     private lateinit var viewModel: DiscoverViewModel
 
+    @Test
+    fun `仅登录豆瓣时不加载Trakt私有想看已看数据`() = runTest {
+        advanceUntilIdle()
+        io.mockk.clearMocks(traktRepository)
+        viewModel = DiscoverViewModel(
+            doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
+            viewedItemStorage, discoverSectionStorage,
+            sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
+            doubanRecommendCache, sessionModeManager, context
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+        assertThat(viewModel.watchlistWatchedIds.value?.movieWatchlistTraktIds).isEmpty()
+    }
+
+    @Test
+    fun `仅登录豆瓣时查看全部推荐不请求Trakt个性化接口`() = runTest {
+        advanceUntilIdle()
+        io.mockk.clearMocks(traktRepository)
+
+        viewModel.loadRecommendationsAll()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getRecommendations(any()) }
+        assertThat(viewModel.uiState.value.isLoadingRecommendationsAll).isFalse()
+    }
+
     @Before
     fun setup() {
         doubanHotApi = mockk(relaxed = true)
@@ -90,7 +116,6 @@ class DiscoverViewModelTest {
         searchHistoryStorage = mockk(relaxed = true)
         viewedItemStorage = mockk(relaxed = true)
         discoverSectionStorage = mockk(relaxed = true)
-        tokenStorage = mockk(relaxed = true)
         sessionModeManager = mockk(relaxed = true)
         sharedDoubanHotCache = mockk(relaxed = true)
         doubanRepository = mockk(relaxed = true)
@@ -103,7 +128,6 @@ class DiscoverViewModelTest {
         every { doubanAuthStorage.getCredentials() } returns null
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns mockk(relaxed = true)
         every { traktRepository.getWatchlistWatchedIds() } returns null
-        every { tokenStorage.accessToken } returns MutableStateFlow(null)
         every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
 
         // sectionConfigs 的 stateIn 初始值是 ALL_SECTION_IDS（全部可见），
@@ -114,7 +138,7 @@ class DiscoverViewModelTest {
 
         viewModel = DiscoverViewModel(
             doubanHotApi, tmdbRepository, traktRepository, searchHistoryStorage,
-            viewedItemStorage, discoverSectionStorage, tokenStorage,
+            viewedItemStorage, discoverSectionStorage,
             sharedDoubanHotCache, doubanRepository, doubanAuthStorage,
             doubanRecommendCache, sessionModeManager, context
         )
@@ -188,8 +212,6 @@ class DiscoverViewModelTest {
 
     @Test
     fun `仅有网关令牌但未连接Trakt时电影推荐显示未登录`() = runTest {
-        every { tokenStorage.accessToken } returns MutableStateFlow("gateway-token")
-
         viewModel.loadTraktRecommendations()
         advanceUntilIdle()
 
@@ -199,7 +221,6 @@ class DiscoverViewModelTest {
 
     @Test
     fun `仅有网关令牌但未连接Trakt时剧集推荐显示未登录`() = runTest {
-        every { tokenStorage.accessToken } returns MutableStateFlow("gateway-token")
         coEvery { traktRepository.getTrendingMovies(any(), any()) } returns
             Result.success(emptyList<TraktTrendingMovieResponse>() to 0)
         coEvery { traktRepository.getTrendingShows(any(), any()) } returns

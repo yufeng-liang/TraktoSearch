@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.remote.trakt.dto.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -54,6 +55,7 @@ data class StatisticsUiState(
 class StatisticsViewModel @Inject constructor(
     private val traktRepository: TraktRepository,
     private val userReviewRepository: UserReviewRepository,
+    private val sessionModeManager: SessionModeManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -85,6 +87,10 @@ class StatisticsViewModel @Inject constructor(
 
     fun loadStatistics() {
         loadJob?.cancel()
+        if (!sessionModeManager.traktConnected.value) {
+            _uiState.value = StatisticsUiState(initialLoading = false)
+            return
+        }
         _uiState.value = StatisticsUiState(initialLoading = true, error = null)
         loadJob = viewModelScope.launch {
             try {

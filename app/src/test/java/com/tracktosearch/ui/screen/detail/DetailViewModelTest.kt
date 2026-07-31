@@ -17,6 +17,8 @@ import com.tracktosearch.data.repository.ResourceRepository
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UserReviewRepository
+import com.tracktosearch.data.session.SessionMode
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.CommentTranslator
 import com.tracktosearch.data.util.PosterColorExtractor
 import com.tracktosearch.test.MainDispatcherRule
@@ -71,6 +73,8 @@ class DetailViewModelTest {
     private lateinit var doubanRepository: DoubanRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
     private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
+    private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var posterColorExtractor: PosterColorExtractor
     private lateinit var userReviewRepository: UserReviewRepository
 
@@ -97,6 +101,10 @@ class DetailViewModelTest {
         doubanRepository = mockk(relaxed = true)
         doubanAuthStorage = mockk(relaxed = true)
         doubanSyncedItemDao = mockk(relaxed = true)
+        sessionModeManager = mockk(relaxed = true)
+        traktConnected = MutableStateFlow(false)
+        every { sessionModeManager.traktConnected } returns traktConnected
+        every { sessionModeManager.sessionMode } returns flowOf(SessionMode.TRAKT)
         posterColorExtractor = mockk(relaxed = true)
         userReviewRepository = mockk(relaxed = true)
 
@@ -115,6 +123,7 @@ class DetailViewModelTest {
             tmdbRepository, traktRepository, resourceRepository, ratingsRepository,
             viewedItemStorage, commentTranslator, tokenStorage, detailSectionStorage,
             languageStorage, doubanRepository, doubanAuthStorage, doubanSyncedItemDao,
+            sessionModeManager,
             posterColorExtractor, userReviewRepository
         )
     }
@@ -144,6 +153,20 @@ class DetailViewModelTest {
         setPrivateField("currentTmdbId", 200)
         setPrivateField("isLoggedIn", true)
         every { tokenStorage.getCachedAccessToken() } returns "fake-token"
+        traktConnected.value = true
+    }
+
+    @Test
+    fun `仅登录豆瓣时详情页不查询Trakt用户评分`() = runTest {
+        setupLoggedInState()
+        traktConnected.value = false
+
+        val method = DetailViewModel::class.java.getDeclaredMethod("fetchUserRating")
+        method.isAccessible = true
+        method.invoke(viewModel)
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.getUserRating(any(), any()) }
     }
 
     // ==================== 同步方法测试（7个）====================

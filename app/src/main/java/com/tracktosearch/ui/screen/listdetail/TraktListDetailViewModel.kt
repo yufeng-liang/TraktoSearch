@@ -10,6 +10,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktShow
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -72,6 +73,7 @@ class TraktListDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val traktRepository: TraktRepository,
     private val tmdbRepository: TmdbRepository,
+    private val sessionModeManager: SessionModeManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -93,6 +95,10 @@ class TraktListDetailViewModel @Inject constructor(
     init {
         // 加载全局想看/已看缓存
         viewModelScope.launch {
+            if (!sessionModeManager.traktConnected.value) {
+                _watchlistWatchedIds.value = WatchlistWatchedIds()
+                return@launch
+            }
             traktRepository.getWatchlistWatchedIds()?.let { _watchlistWatchedIds.value = it }
             traktRepository.loadWatchlistWatchedIds().let { _watchlistWatchedIds.value = it }
         }

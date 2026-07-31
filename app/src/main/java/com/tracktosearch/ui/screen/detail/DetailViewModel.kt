@@ -578,12 +578,18 @@ class DetailViewModel @Inject constructor(
         mediaType: MediaType,
         imdbId: String
     ): Pair<Boolean, Boolean> {
-        return if (currentSessionMode == SessionMode.DOUBAN && imdbId.isNotBlank()) {
-            val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
-            Pair(
-                syncedItem?.status == "wish",
-                syncedItem?.status == "collect"
-            )
+        return if (currentSessionMode == SessionMode.DOUBAN) {
+            if (imdbId.isBlank()) {
+                Pair(false, false)
+            } else {
+                val syncedItem = runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()
+                Pair(
+                    syncedItem?.status == "wish",
+                    syncedItem?.status == "collect"
+                )
+            }
+        } else if (!sessionModeManager.traktConnected.value) {
+            Pair(false, false)
         } else {
             Pair(
                 traktRepository.checkInWatchlist(traktId, mediaType),
@@ -773,7 +779,7 @@ class DetailViewModel @Inject constructor(
     /** 获取已看剧集进度，转换为 季号 -> 已看集号集合 */
     private fun fetchWatchedProgress() {
         // 未登录跳过观看进度查询
-        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) return
+        if (!sessionModeManager.traktConnected.value) return
         viewModelScope.launch {
             val result = traktRepository.getShowWatchedProgress(currentTraktId)
             result.onSuccess { progress ->
@@ -1020,7 +1026,7 @@ class DetailViewModel @Inject constructor(
 
                 val filtered = enriched.filter { it.tmdbId > 0 }
 
-                if (tokenStorage.getCachedAccessToken() != null) {
+                if (sessionModeManager.traktConnected.value) {
                     // 已登录：使用全局想看/已看 ID 缓存检查状态（避免重复 API 调用）
                     var cachedIds = traktRepository.getWatchlistWatchedIds()
                     if (cachedIds == null) {
@@ -1057,7 +1063,7 @@ class DetailViewModel @Inject constructor(
 
     private fun fetchUserRating() {
         // 未登录跳过用户评分查询
-        if (tokenStorage.getCachedAccessToken().isNullOrEmpty()) return
+        if (!sessionModeManager.traktConnected.value) return
         // traktId 无效(未登录/无 traktId)时跳过,避免崩溃
         if (currentTraktId <= 0) return
         viewModelScope.launch {

@@ -10,7 +10,6 @@ import com.tracktosearch.data.local.DiscoverSectionStorage
 import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.SearchHistoryStorage
-import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanCookieExpiredException
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
@@ -47,7 +46,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -135,7 +133,6 @@ class DiscoverViewModel @Inject constructor(
     private val searchHistoryStorage: SearchHistoryStorage,
     private val viewedItemStorage: ViewedItemStorage,
     private val discoverSectionStorage: DiscoverSectionStorage,
-    private val tokenStorage: TokenStorage,
     private val sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>,
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
@@ -188,17 +185,16 @@ class DiscoverViewModel @Inject constructor(
         loadInitialSections()
         // 猜你喜欢（首屏优先，与豆瓣热榜同级）
         loadDoubanRecommend()
-        // 登录后加载全局想看/已看 ID 缓存
+        // Trakt 连接后加载全局想看/已看 ID 缓存
         loadWatchlistWatchedIds()
     }
 
     /** 加载全局想看/已看 ID 缓存 */
     private fun loadWatchlistWatchedIds() {
         viewModelScope.launch {
-            // 访客模式（无 token）：直接返回空对象，避免发 4 个 /sync/* 请求全部 401
-            // 已登录用户：走 Repository 完整链路（持久化缓存优先，未命中才发请求）
-            val token = tokenStorage.accessToken.first()
-            if (token.isNullOrEmpty()) {
+            // 未连接 Trakt（访客/豆瓣独立模式）：直接返回空对象，避免发 4 个 /sync/* 请求。
+            // Trakt 已连接用户：走 Repository 完整链路（持久化缓存优先，未命中才发请求）。
+            if (!sessionModeManager.traktConnected.value) {
                 _watchlistWatchedIds.value = TraktRepository.WatchlistWatchedIds()
                 return@launch
             }
@@ -1376,6 +1372,15 @@ class DiscoverViewModel @Inject constructor(
     /** 加载为你推荐全部（分页） */
     fun loadRecommendationsAll(page: Int = 1) {
         if (_uiState.value.isLoadingRecommendationsAll) return
+        if (!sessionModeManager.traktConnected.value) {
+            _uiState.value = _uiState.value.copy(
+                recommendationsAllItems = emptyList(),
+                recommendationsAllPage = 0,
+                recommendationsAllHasMore = false,
+                isLoadingRecommendationsAll = false
+            )
+            return
+        }
         // page 1 时，如果已有横向卡片数据，先预填充避免空白转圈
         if (page == 1 && _uiState.value.recommendationsAllItems.isEmpty() && _uiState.value.traktRecommendations.isNotEmpty()) {
             _uiState.value = _uiState.value.copy(

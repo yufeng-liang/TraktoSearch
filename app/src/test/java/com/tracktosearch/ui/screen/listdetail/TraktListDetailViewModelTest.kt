@@ -11,14 +11,17 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.TraktRepository.WatchlistWatchedIds
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -51,7 +54,16 @@ class TraktListDetailViewModelTest {
 
     private val traktRepository = mockk<TraktRepository>(relaxed = true)
     private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
+    private val sessionModeManager = mockk<SessionModeManager>(relaxed = true)
     private lateinit var viewModel: TraktListDetailViewModel
+
+    @Test
+    fun `仅登录豆瓣时榜单详情不加载Trakt私有想看已看数据`() = runTest {
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { traktRepository.loadWatchlistWatchedIds() }
+        assertThat(viewModel.watchlistWatchedIds.value?.movieWatchlistTraktIds).isEmpty()
+    }
 
     private val testListId = 123
     private val testListName = "测试列表"
@@ -108,6 +120,7 @@ class TraktListDetailViewModelTest {
         // init 块会调用这些方法（init 触发 loadItems(1)，返回空列表 → hasMore=false）
         coEvery { traktRepository.getWatchlistWatchedIds() } returns null
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns WatchlistWatchedIds()
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
         coEvery { traktRepository.getListItems(testListId, 20, 1) } returns Result.success(emptyList())
 
         val savedStateHandle = SavedStateHandle(mapOf("listId" to testListId, "listName" to testListName))
@@ -115,6 +128,7 @@ class TraktListDetailViewModelTest {
             savedStateHandle,
             traktRepository,
             tmdbRepository,
+            sessionModeManager,
             RuntimeEnvironment.getApplication()
         )
         // 不在此处 advanceUntilIdle：StandardTestDispatcher 下 init 协程处于 pending
