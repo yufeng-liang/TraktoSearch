@@ -9,6 +9,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
@@ -109,6 +110,8 @@ data class WatchlistUiState(
     val historyShowsLoaded: Boolean = false,
     // 豆瓣同步进度（isRunning 时在 Tab 栏下方显示横幅，点击重新打开同步弹窗）
     val doubanSyncProgress: DoubanSyncProgress? = null,
+    val doubanImported: Boolean = false,
+    val doubanFailureCount: Int = 0,
     // 状态一致性检查进度（isRunning 时显示横幅，点击重新打开检查弹窗）
     val consistencyCheckProgress: ConsistencyCheckResult? = null,
     // 豆瓣标记批量移除进度（多选移除后后台同步移除豆瓣标记，isRunning 时显示横幅）
@@ -143,6 +146,7 @@ class WatchlistViewModel @Inject constructor(
     private val doubanBatchRemovalManager: DoubanBatchRemovalManager,
     private val sessionModeManager: SessionModeManager,
     private val doubanSyncedItemDao: DoubanSyncedItemDao,
+    private val doubanSyncFailureDao: DoubanSyncFailureDao,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -152,6 +156,9 @@ class WatchlistViewModel @Inject constructor(
     /** 当前是否处于豆瓣独立模式（UI 用于空状态文案区分等） */
     val isDoubanMode: StateFlow<Boolean> = sessionModeManager.isDoubanMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val isTraktConnected: StateFlow<Boolean> = sessionModeManager.traktConnected
+    val isDoubanLoggedInFlow: StateFlow<Boolean> = doubanAuthStorage.isLoggedIn
 
     // 各加载协程的 Job 引用,refresh() 前统一 cancel,避免旧协程写入覆盖新数据
     private var loadMoviesJob: Job? = null
@@ -190,6 +197,19 @@ class WatchlistViewModel @Inject constructor(
             val status = doubanSyncMetaStorage.getCooldownStatus()
             if (status.neverSynced) {
                 _needFirstSyncGuide.value = true
+            }
+        }
+    }
+
+    private fun refreshDoubanEmptyState() {
+        viewModelScope.launch {
+            val imported = !doubanSyncMetaStorage.getCooldownStatus().neverSynced
+            val failureCount = doubanSyncFailureDao.count()
+            _uiState.update {
+                it.copy(
+                    doubanImported = imported,
+                    doubanFailureCount = failureCount
+                )
             }
         }
     }
@@ -270,6 +290,7 @@ class WatchlistViewModel @Inject constructor(
     init {
         // 检查首次同步引导
         checkFirstSyncNeeded()
+        refreshDoubanEmptyState()
         // 监听豆瓣同步进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
         viewModelScope.launch {
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
@@ -282,6 +303,7 @@ class WatchlistViewModel @Inject constructor(
                     }
                     // 完成后：发事件让 UI 自动弹出 DoubanSyncDialog，横幅 5 秒后消失
                     if (progress.isComplete) {
+                        refreshDoubanEmptyState()
                         _syncCompleteEvent.emit(Unit)
                         delay(5000)
                         _uiState.update { it.copy(doubanSyncProgress = null) }
@@ -752,6 +774,7 @@ class WatchlistViewModel @Inject constructor(
 
         val wasHistoryLoaded = _uiState.value.historyMoviesLoaded || _uiState.value.historyShowsLoaded
         _uiState.value = WatchlistUiState()
+        refreshDoubanEmptyState()
         loadMovies(forceReload = true)
         loadShows(forceReload = true)
         if (wasHistoryLoaded) {

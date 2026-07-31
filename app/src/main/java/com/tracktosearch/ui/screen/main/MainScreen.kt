@@ -428,26 +428,18 @@ fun MainScreen(
                         modifier = Modifier.fillMaxSize()
                     )
                     2 -> {
-                        if (isLoggedIn) {
-                            WatchlistScreen(
-                                onMovieClick = onMovieClick,
-                                onShowClick = onShowClick,
-                                onDoubanFailureClick = onDoubanFailureClick,
-                                onSearchClick = onSearchClick,
-                                onTraktSearch = onTraktSearch,
-                                onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
-                                onNavigateToDoubanLogin = onNavigateToDoubanLogin,
-                                onNavigateToLogin = onNavigateToLogin,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            LoginPromptScreen(
-                                onNavigateToLogin = onNavigateToLogin,
-                                onNavigateToDoubanLogin = onNavigateToDoubanLogin,
-                                onContinueAsGuest = { scope.launch { pagerState.scrollToPage(0) } },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        WatchlistScreen(
+                            onMovieClick = onMovieClick,
+                            onShowClick = onShowClick,
+                            onDoubanFailureClick = onDoubanFailureClick,
+                            onSearchClick = onSearchClick,
+                            onTraktSearch = onTraktSearch,
+                            onDiscoverClick = { scope.launch { pagerState.scrollToPage(1) } },
+                            onNavigateToDoubanLogin = onNavigateToDoubanLogin,
+                            onNavigateToLogin = onNavigateToLogin,
+                            onDoubanFailures = onDoubanFailures,
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                     3 -> SettingsScreen(
                         onLogout = onLogout,

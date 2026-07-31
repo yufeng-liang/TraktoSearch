@@ -337,12 +337,6 @@
     <string name="douban_rollback_discard">Discard</string>
     <string name="douban_rollback_discard_desc">Marks will be permanently lost</string>
 
-    <!-- Login Prompt Screen -->
-    <string name="login_prompt_title">Sign in to Trakt</string>
-    <string name="login_prompt_desc">Sync your watchlist after login\nQuickly find resources for what you want to watch</string>
-    <string name="login_prompt_button">Sign in with Trakt</string>
-    <string name="login_prompt_guest">Continue as guest</string>
-
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">Loading…</string>
     <string name="empty_default">No data</string>
@@ -1405,6 +1399,20 @@ Config:
     <string name="watchlist_empty_douban_import_link">import from Douban</string>
     <string name="watched_empty_hint_prefix">You can try: go to </string>
     <string name="watched_empty_hint_middle"> to mark as watched, </string>
+    <string name="watchlist_empty_no_accounts">Sign in to Trakt or Douban to start building your list.</string>
+    <string name="watched_empty_no_accounts">Sign in to Trakt or Douban to start marking what you have watched.</string>
+    <string name="watchlist_empty_trakt_only">Your Trakt list is empty. Sign in to Douban to import your marks, or discover something new.</string>
+    <string name="watched_empty_trakt_only">Your watched list is empty. Sign in to Douban to import your marks, or discover something new.</string>
+    <string name="watchlist_empty_douban_not_imported">Your Douban marks are ready. Import them to fill this list.</string>
+    <string name="watched_empty_douban_not_imported">Your Douban marks are ready. Import them to fill this watched list.</string>
+    <string name="watchlist_empty_imported_failures">%1$d Douban marks could not be imported. View the failed items in Settings.</string>
+    <string name="watched_empty_imported_failures">%1$d Douban marks could not be imported. View the failed items in Settings.</string>
+    <string name="watchlist_empty_imported_empty">Your Douban marks have been imported, but this list is empty.</string>
+    <string name="watched_empty_imported_empty">Your Douban marks have been imported, but this watched list is empty.</string>
+    <string name="watchlist_empty_login_trakt">Sign in to Trakt</string>
+    <string name="watchlist_empty_login_douban">Sign in to Douban and import</string>
+    <string name="watchlist_empty_start_douban_import">Import Douban marks</string>
+    <string name="watchlist_empty_view_failures">View failed items</string>
 
     <!-- Easter Egg Messages (9 animations × 3 messages) -->
     <string name="easter_msg_shy_1">You poked me, it tickles!</string>

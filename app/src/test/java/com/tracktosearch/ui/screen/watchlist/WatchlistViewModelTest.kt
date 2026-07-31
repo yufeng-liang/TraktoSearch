@@ -8,6 +8,8 @@ import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
+import com.tracktosearch.data.local.db.DoubanSyncFailureDao
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.trakt.dto.TraktIds
 import com.tracktosearch.data.remote.trakt.dto.TraktMovie
 import com.tracktosearch.data.remote.trakt.dto.TraktShow
@@ -24,6 +26,8 @@ import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.SyncMode
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionMode
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -78,6 +82,9 @@ class WatchlistViewModelTest {
     private lateinit var doubanSyncMetaStorage: DoubanSyncMetaStorage
     private lateinit var statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
     private lateinit var doubanBatchRemovalManager: DoubanBatchRemovalManager
+    private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
+    private lateinit var doubanSyncFailureDao: DoubanSyncFailureDao
     private lateinit var context: Context
 
     private lateinit var viewModel: WatchlistViewModel
@@ -96,14 +103,22 @@ class WatchlistViewModelTest {
         doubanSyncMetaStorage = mockk(relaxed = true)
         statusConsistencyChecker = mockk(relaxed = true)
         doubanBatchRemovalManager = mockk(relaxed = true)
+        sessionModeManager = mockk(relaxed = true)
+        doubanSyncedItemDao = mockk(relaxed = true)
+        doubanSyncFailureDao = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
 
         // init 块副作用 stub
         every { doubanSyncManager.progress } returns syncProgressFlow
         every { statusConsistencyChecker.checkProgress } returns consistencyProgressFlow
         every { doubanBatchRemovalManager.progress } returns batchRemovalProgressFlow
+        every { sessionModeManager.isDoubanMode } returns MutableStateFlow(false)
+        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
+        every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.GUEST)
+        every { doubanAuthStorage.isLoggedIn } returns MutableStateFlow(false)
         every { doubanAuthStorage.getCredentials() } returns null
         coEvery { doubanSyncMetaStorage.getCooldownStatus(any()) } returns CooldownStatus(neverSynced = false)
+        coEvery { doubanSyncFailureDao.count() } returns 0
 
         coEvery { offlineCacheManager.getMediaItems(any()) } returns emptyList()
         every { traktRepository.getLocallyWatchedOnlyTraktIds(any()) } returns emptySet()
@@ -121,7 +136,8 @@ class WatchlistViewModelTest {
         viewModel = WatchlistViewModel(
             traktRepository, tmdbRepository, offlineCacheManager,
             doubanSyncManager, doubanAuthStorage, doubanSyncMetaStorage,
-            statusConsistencyChecker, doubanBatchRemovalManager, context
+            statusConsistencyChecker, doubanBatchRemovalManager,
+            sessionModeManager, doubanSyncedItemDao, doubanSyncFailureDao, context
         )
     }
 

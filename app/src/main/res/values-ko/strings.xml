@@ -483,12 +483,6 @@
     <string name="login_activation_choose_path">활성화됨 · Trakt로 로그인하거나 게스트로 계속하세요</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
-    <!-- Login Prompt Screen -->
-    <string name="login_prompt_title">Trakt에 로그인</string>
-    <string name="login_prompt_desc">로그인 후 관심목록 동기화\n보고 싶은 리소스를 바로 찾아보세요</string>
-    <string name="login_prompt_button">Trakt로 로그인</string>
-    <string name="login_prompt_guest">게스트로 계속</string>
-
     <!-- Ratings -->
     <string name="rating_trakt">Trakt</string>
 
@@ -1269,6 +1263,20 @@
     <string name="watchlist_empty_douban_import_link">Douban에서 가져오기</string>
     <string name="watched_empty_hint_prefix">시도해 보세요: </string>
     <string name="watched_empty_hint_middle">에서 시청 표시, </string>
+    <string name="watchlist_empty_no_accounts">Trakt 또는 더우반에 로그인하여 목록을 시작하세요.</string>
+    <string name="watched_empty_no_accounts">Trakt 또는 더우반에 로그인하여 본 작품을 표시하세요.</string>
+    <string name="watchlist_empty_trakt_only">Trakt 목록이 비어 있습니다. 더우반에 로그인해 마크를 가져오거나 발견에서 작품을 찾아보세요.</string>
+    <string name="watched_empty_trakt_only">시청 목록이 비어 있습니다. 더우반에 로그인해 마크를 가져오거나 발견에서 작품을 찾아보세요.</string>
+    <string name="watchlist_empty_douban_not_imported">더우반 마크를 가져오면 이 목록에 표시됩니다.</string>
+    <string name="watched_empty_douban_not_imported">더우반 마크를 가져오면 시청 목록에 표시됩니다.</string>
+    <string name="watchlist_empty_imported_failures">더우반 마크 %1$d개를 가져오지 못했습니다. 설정에서 실패 항목을 확인하세요.</string>
+    <string name="watched_empty_imported_failures">더우반 마크 %1$d개를 가져오지 못했습니다. 설정에서 실패 항목을 확인하세요.</string>
+    <string name="watchlist_empty_imported_empty">더우반 마크를 가져왔지만 이 목록은 아직 비어 있습니다.</string>
+    <string name="watched_empty_imported_empty">더우반 마크를 가져왔지만 시청 목록은 아직 비어 있습니다.</string>
+    <string name="watchlist_empty_login_trakt">Trakt 로그인</string>
+    <string name="watchlist_empty_login_douban">더우반 로그인 및 가져오기</string>
+    <string name="watchlist_empty_start_douban_import">더우반 마크 가져오기</string>
+    <string name="watchlist_empty_view_failures">실패 항목 보기</string>
 
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">더우반 마크 동기화</string>

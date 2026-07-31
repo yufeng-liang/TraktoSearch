@@ -127,16 +127,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -195,6 +191,7 @@ fun WatchlistScreen(
     onDiscoverClick: () -> Unit = {},
     onNavigateToDoubanLogin: () -> Unit = {},
     onNavigateToLogin: () -> Unit = {},
+    onDoubanFailures: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: WatchlistViewModel = hiltViewModel()
 ) {
@@ -202,7 +199,14 @@ fun WatchlistScreen(
     val filterState by viewModel.filterState.collectAsStateWithLifecycle()
     val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
     val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
-    val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
+    val isTraktConnected by viewModel.isTraktConnected.collectAsStateWithLifecycle()
+    val isDoubanLoggedIn by viewModel.isDoubanLoggedInFlow.collectAsStateWithLifecycle()
+    val emptyState = resolveWatchlistEmptyState(
+        traktConnected = isTraktConnected,
+        doubanLoggedIn = isDoubanLoggedIn,
+        doubanImported = uiState.doubanImported,
+        failureCount = uiState.doubanFailureCount
+    )
     var showFilterSheet by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val view = LocalView.current
@@ -560,74 +564,72 @@ fun WatchlistScreen(
                                     )
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Text(
-                                        buildAnnotatedString {
-                                            if (isDoubanMode) {
-                                                // 豆瓣独立模式: 不显示"去 Trakt 注册"链接（用户无 Trakt 账号）
-                                                // 主 CTA 为"同步豆瓣标记"，已登录豆瓣直接弹模式选择弹窗
-                                                append(if (selectedMode == 0)
-                                                    stringResource(R.string.watchlist_empty_hint_prefix)
-                                                else
-                                                    stringResource(R.string.watched_empty_hint_prefix)
-                                                )
-                                                withLink(LinkAnnotation.Clickable(
-                                                    tag = "douban_import",
-                                                    linkInteractionListener = LinkInteractionListener {
-                                                        // 豆瓣模式必定已登录豆瓣，直接弹模式选择弹窗触发同步
-                                                        showSyncModePicker = true
-                                                    }
-                                                )) {
-                                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
-                                                }
-                                                append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                                append(stringResource(R.string.watchlist_empty_hint_middle))
-                                                withLink(LinkAnnotation.Clickable(
-                                                    tag = "discover",
-                                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                                )) {
-                                                    append(stringResource(R.string.watchlist_empty_go_discover))
-                                                }
-                                            } else {
-                                                // Trakt/GUEST 模式: 显示完整文案含"去 Trakt 注册"
-                                                append(if (selectedMode == 0)
-                                                    stringResource(R.string.watchlist_empty_hint_prefix)
-                                                else
-                                                    stringResource(R.string.watched_empty_hint_prefix)
-                                                )
-                                                withLink(LinkAnnotation.Url("https://app.trakt.tv/") {
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://app.trakt.tv/")))
-                                                }) {
-                                                    append(stringResource(R.string.watchlist_empty_go_trakt))
-                                                }
-                                                append(stringResource(R.string.watchlist_empty_hint_middle))
-                                                withLink(LinkAnnotation.Clickable(
-                                                    tag = "discover",
-                                                    linkInteractionListener = LinkInteractionListener { onDiscoverClick() }
-                                                )) {
-                                                    append(stringResource(R.string.watchlist_empty_go_discover))
-                                                }
-                                                append(stringResource(R.string.watchlist_empty_hint_suffix))
-                                                // 「，或从豆瓣导入标记」超链接
-                                                append(stringResource(R.string.watchlist_empty_douban_import_prefix))
-                                                withLink(LinkAnnotation.Clickable(
-                                                    tag = "douban_import",
-                                                    linkInteractionListener = LinkInteractionListener {
-                                                        // 已登录豆瓣 → 弹模式选择弹窗；未登录 → 跳转豆瓣登录页
-                                                        val hasDouban = viewModel.isDoubanLoggedIn()
-                                                        if (hasDouban) {
-                                                            showSyncModePicker = true
-                                                        } else {
-                                                            onNavigateToDoubanLogin()
-                                                        }
-                                                    }
-                                                )) {
-                                                    append(stringResource(R.string.watchlist_empty_douban_import_link))
-                                                }
-                                            }
+                                        text = when (emptyState) {
+                                            WatchlistEmptyState.NO_ACCOUNTS -> stringResource(
+                                                if (selectedMode == 0) R.string.watchlist_empty_no_accounts
+                                                else R.string.watched_empty_no_accounts
+                                            )
+                                            WatchlistEmptyState.TRAKT_ONLY -> stringResource(
+                                                if (selectedMode == 0) R.string.watchlist_empty_trakt_only
+                                                else R.string.watched_empty_trakt_only
+                                            )
+                                            WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> stringResource(
+                                                if (selectedMode == 0) R.string.watchlist_empty_douban_not_imported
+                                                else R.string.watched_empty_douban_not_imported
+                                            )
+                                            WatchlistEmptyState.IMPORTED_WITH_FAILURES -> stringResource(
+                                                if (selectedMode == 0) R.string.watchlist_empty_imported_failures
+                                                else R.string.watched_empty_imported_failures,
+                                                uiState.doubanFailureCount
+                                            )
+                                            WatchlistEmptyState.IMPORTED_EMPTY -> stringResource(
+                                                if (selectedMode == 0) R.string.watchlist_empty_imported_empty
+                                                else R.string.watched_empty_imported_empty
+                                            )
                                         },
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         textAlign = TextAlign.Center
                                     )
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    when (emptyState) {
+                                        WatchlistEmptyState.NO_ACCOUNTS -> {
+                                            TextButton(onClick = onNavigateToLogin) {
+                                                Text(stringResource(R.string.watchlist_empty_login_trakt))
+                                            }
+                                            TextButton(onClick = onNavigateToDoubanLogin) {
+                                                Text(stringResource(R.string.watchlist_empty_login_douban))
+                                            }
+                                            TextButton(onClick = onDiscoverClick) {
+                                                Text(stringResource(R.string.watchlist_empty_go_discover))
+                                            }
+                                        }
+                                        WatchlistEmptyState.TRAKT_ONLY -> {
+                                            TextButton(onClick = onNavigateToDoubanLogin) {
+                                                Text(stringResource(R.string.watchlist_empty_login_douban))
+                                            }
+                                            TextButton(onClick = onDiscoverClick) {
+                                                Text(stringResource(R.string.watchlist_empty_go_discover))
+                                            }
+                                        }
+                                        WatchlistEmptyState.DOUBAN_NOT_IMPORTED -> {
+                                            TextButton(onClick = {
+                                                if (isDoubanLoggedIn) showSyncModePicker = true else onNavigateToDoubanLogin()
+                                            }) {
+                                                Text(stringResource(R.string.watchlist_empty_start_douban_import))
+                                            }
+                                        }
+                                        WatchlistEmptyState.IMPORTED_WITH_FAILURES -> {
+                                            TextButton(onClick = onDoubanFailures) {
+                                                Text(stringResource(R.string.watchlist_empty_view_failures))
+                                            }
+                                        }
+                                        WatchlistEmptyState.IMPORTED_EMPTY -> {
+                                            TextButton(onClick = onDiscoverClick) {
+                                                Text(stringResource(R.string.watchlist_empty_go_discover))
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

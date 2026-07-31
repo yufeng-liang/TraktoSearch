@@ -483,12 +483,6 @@
     <string name="login_activation_choose_path">有効化済み · Traktにログインするか、ゲストとして続行してください</string>
     <string name="login_personal_cinema_access">PERSONAL CINEMA ACCESS</string>
 
-    <!-- Login Prompt Screen -->
-    <string name="login_prompt_title">Traktにログイン</string>
-    <string name="login_prompt_desc">ログイン後にウォッチリストを同期\n見たいリソースをすぐに見つけよう</string>
-    <string name="login_prompt_button">Traktでログイン</string>
-    <string name="login_prompt_guest">ゲストとして続ける</string>
-
     <!-- Ratings -->
     <string name="rating_trakt">Trakt</string>
 
@@ -1269,6 +1263,20 @@
     <string name="watchlist_empty_douban_import_link">Doubanからインポート</string>
     <string name="watched_empty_hint_prefix">こちらを試す：</string>
     <string name="watched_empty_hint_middle">で視聴済みにマーク、</string>
+    <string name="watchlist_empty_no_accounts">Trakt または豆瓣にログインして、リストを作成しましょう。</string>
+    <string name="watched_empty_no_accounts">Trakt または豆瓣にログインして、視聴済み作品を記録しましょう。</string>
+    <string name="watchlist_empty_trakt_only">Trakt のリストは空です。豆瓣にログインしてマークをインポートするか、発見ページで作品を探しましょう。</string>
+    <string name="watched_empty_trakt_only">視聴済みリストは空です。豆瓣にログインしてマークをインポートするか、発見ページで作品を探しましょう。</string>
+    <string name="watchlist_empty_douban_not_imported">豆瓣のマークをインポートすると、このリストに表示できます。</string>
+    <string name="watched_empty_douban_not_imported">豆瓣のマークをインポートすると、視聴済みリストに表示できます。</string>
+    <string name="watchlist_empty_imported_failures">豆瓣の %1$d 件をインポートできませんでした。設定で失敗項目を確認できます。</string>
+    <string name="watched_empty_imported_failures">豆瓣の %1$d 件をインポートできませんでした。設定で失敗項目を確認できます。</string>
+    <string name="watchlist_empty_imported_empty">豆瓣のマークはインポート済みですが、このリストはまだ空です。</string>
+    <string name="watched_empty_imported_empty">豆瓣のマークはインポート済みですが、視聴済みリストはまだ空です。</string>
+    <string name="watchlist_empty_login_trakt">Trakt にログイン</string>
+    <string name="watchlist_empty_login_douban">豆瓣にログインしてインポート</string>
+    <string name="watchlist_empty_start_douban_import">豆瓣のマークをインポート</string>
+    <string name="watchlist_empty_view_failures">失敗項目を確認</string>
 
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">豆瓣マーク同期</string>

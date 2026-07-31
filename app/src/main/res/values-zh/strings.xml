@@ -337,12 +337,6 @@
     <string name="douban_rollback_discard">不恢复</string>
     <string name="douban_rollback_discard_desc">放弃恢复，标记将永久丢失</string>
 
-    <!-- Login Prompt Screen -->
-    <string name="login_prompt_title">登录 Trakt</string>
-    <string name="login_prompt_desc">登录后可同步你的想看列表\n快速找到想看的影视资源</string>
-    <string name="login_prompt_button">使用 Trakt 登录</string>
-    <string name="login_prompt_guest">继续以访客身份浏览</string>
-
     <!-- Loading / Empty / Error Views -->
     <string name="loading_default">加载中…</string>
     <string name="empty_default">暂无数据</string>
@@ -1390,6 +1384,20 @@
     <string name="watchlist_empty_douban_import_link">豆瓣导入标记</string>
     <string name="watched_empty_hint_prefix">你可以尝试：去</string>
     <string name="watched_empty_hint_middle">标记已看过的影视，去</string>
+    <string name="watchlist_empty_no_accounts">登录 Trakt 或豆瓣，开始建立你的列表。</string>
+    <string name="watched_empty_no_accounts">登录 Trakt 或豆瓣，开始标记已看过的影视。</string>
+    <string name="watchlist_empty_trakt_only">Trakt 列表为空。登录豆瓣导入标记，或去发现页探索更多影视。</string>
+    <string name="watched_empty_trakt_only">已看列表为空。登录豆瓣导入标记，或去发现页探索更多影视。</string>
+    <string name="watchlist_empty_douban_not_imported">豆瓣标记已准备好，导入后即可填充此列表。</string>
+    <string name="watched_empty_douban_not_imported">豆瓣标记已准备好，导入后即可填充已看列表。</string>
+    <string name="watchlist_empty_imported_failures">%1$d 条豆瓣标记未能导入，请前往设置查看失败数据。</string>
+    <string name="watched_empty_imported_failures">%1$d 条豆瓣标记未能导入，请前往设置查看失败数据。</string>
+    <string name="watchlist_empty_imported_empty">豆瓣标记已导入，但当前列表还没有内容。</string>
+    <string name="watched_empty_imported_empty">豆瓣标记已导入，但已看列表还没有内容。</string>
+    <string name="watchlist_empty_login_trakt">登录 Trakt</string>
+    <string name="watchlist_empty_login_douban">登录豆瓣并导入</string>
+    <string name="watchlist_empty_start_douban_import">导入豆瓣标记</string>
+    <string name="watchlist_empty_view_failures">查看失败数据</string>
 
     <!-- 彩蛋文案（9 个动画 × 3 条文案） -->
     <string name="easter_msg_shy_1">你戳到我了，好痒！</string>

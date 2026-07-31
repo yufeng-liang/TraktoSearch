@@ -460,6 +460,8 @@ class WatchlistScreenTest {
         every { mock.hasActiveFilters } returns MutableStateFlow(false)
         every { mock.availableGenres } returns MutableStateFlow(emptyList())
         every { mock.decadeOptions } returns MutableStateFlow(emptyList())
+        every { mock.isTraktConnected } returns MutableStateFlow(false)
+        every { mock.isDoubanLoggedInFlow } returns MutableStateFlow(false)
         every { mock.needFirstSyncGuide } returns MutableStateFlow(false)
         every { mock.syncCompleteEvent } returns MutableSharedFlow()
         every { mock.consistencyCheckCompleteEvent } returns MutableSharedFlow()
