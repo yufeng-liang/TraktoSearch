@@ -1,5 +1,6 @@
 package com.tracktosearch.ui.screen.discover
 
+import android.app.Application
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.DoubanAuthStorage
@@ -59,7 +60,7 @@ import java.io.IOException
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(application = Application::class, sdk = [33])
 class DiscoverViewModelTest {
 
     @get:Rule
@@ -72,6 +73,7 @@ class DiscoverViewModelTest {
     private lateinit var viewedItemStorage: ViewedItemStorage
     private lateinit var discoverSectionStorage: DiscoverSectionStorage
     private lateinit var sessionModeManager: SessionModeManager
+    private lateinit var traktConnected: MutableStateFlow<Boolean>
     private lateinit var sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
     private lateinit var doubanRepository: DoubanRepository
     private lateinit var doubanAuthStorage: DoubanAuthStorage
@@ -122,13 +124,18 @@ class DiscoverViewModelTest {
         doubanAuthStorage = mockk(relaxed = true)
         doubanRecommendCache = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
+        traktConnected = MutableStateFlow(false)
 
         // init 块副作用 stub
-        every { discoverSectionStorage.sectionConfigs } returns MutableStateFlow(emptyList())
+        every { discoverSectionStorage.sectionConfigs } returns MutableStateFlow(
+            DiscoverSectionStorage.ALL_SECTION_IDS.mapIndexed { index, id ->
+                com.tracktosearch.data.local.DiscoverSectionConfig(id = id, visible = true, order = index)
+            }
+        )
         every { doubanAuthStorage.getCredentials() } returns null
         coEvery { traktRepository.loadWatchlistWatchedIds() } returns mockk(relaxed = true)
         every { traktRepository.getWatchlistWatchedIds() } returns null
-        every { sessionModeManager.traktConnected } returns MutableStateFlow(false)
+        every { sessionModeManager.traktConnected } returns traktConnected
 
         // sectionConfigs 的 stateIn 初始值是 ALL_SECTION_IDS（全部可见），
         // init 块的 loadInitialSections 会触发 loadDoubanHot/loadTmdbPopular/loadTmdbUpcoming
@@ -240,6 +247,30 @@ class DiscoverViewModelTest {
     }
 
     @Test
+    fun `Trakt连接状态从未连接变为已连接时刷新剧集推荐`() = runTest {
+        coEvery { traktRepository.getTrendingMovies(any(), any()) } returns
+            Result.success(emptyList<TraktTrendingMovieResponse>() to 0)
+        coEvery { traktRepository.getTrendingShows(any(), any()) } returns
+            Result.success(emptyList<TraktTrendingShowResponse>() to 0)
+        coEvery { traktRepository.getAnticipatedMovies(any(), any()) } returns
+            Result.success(emptyList<TraktAnticipatedMovieResponse>() to 0)
+        coEvery { traktRepository.getAnticipatedShows(any(), any()) } returns
+            Result.success(emptyList<TraktAnticipatedShowResponse>() to 0)
+        coEvery { traktRepository.getShowRecommendations(any()) } returns
+            Result.success(emptyList())
+
+        viewModel.loadTraktData()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.traktShowRecommendationsLoggedIn).isFalse()
+
+        traktConnected.value = true
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.traktShowRecommendationsLoggedIn).isTrue()
+        coVerify(exactly = 1) { traktRepository.getShowRecommendations(any()) }
+    }
+
+    @Test
     fun `loadTraktLists 成功加载社区列表`() = runTest {
         coEvery { traktRepository.getTrendingLists(any(), any()) } returns
             Result.success(listOf(mockk(relaxed = true)))
@@ -286,12 +317,12 @@ class DiscoverViewModelTest {
 
     @Test
     fun `refreshDoubanRecommendOnResume refreshes recommendations after login`() = runTest {
-        every { doubanAuthStorage.getCredentials() } returnsMany listOf(
-            null,
-            DoubanCredentials("user1", "cookie")
-        )
+        // ViewModel 构造期间会读取多次凭据，不能用固定长度的 returnsMany 模拟登录切换。
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user1", "cookie")
         coEvery { doubanRecommendCache.getOrAwait(any(), any(), any()) } returns emptyList()
 
+        assertThat(viewModel.uiState.value.doubanRecommendState)
+            .isEqualTo(DoubanRecommendState.NotLoggedIn)
         viewModel.refreshDoubanRecommendOnResume()
         advanceUntilIdle()
 

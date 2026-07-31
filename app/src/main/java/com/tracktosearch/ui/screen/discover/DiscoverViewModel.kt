@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -187,6 +189,28 @@ class DiscoverViewModel @Inject constructor(
         loadDoubanRecommend()
         // Trakt 连接后加载全局想看/已看 ID 缓存
         loadWatchlistWatchedIds()
+        // 启动时 Trakt 网络校验是异步的，发现页可能先按未连接状态渲染登录卡片。
+        // 连接状态变为已连接后重新加载 Trakt 栏目，避免卡片停留在旧快照。
+        viewModelScope.launch {
+            sessionModeManager.traktConnected
+                .drop(1)
+                .collect { connected ->
+                    if (connected) {
+                        loadWatchlistWatchedIds()
+                        loadRemainingSections(force = true)
+                    } else {
+                        _watchlistWatchedIds.value = TraktRepository.WatchlistWatchedIds()
+                        _uiState.value = _uiState.value.copy(
+                            traktRecommendations = emptyList(),
+                            traktRecommendationsLoggedIn = false,
+                            recommendationsError = null,
+                            traktShowRecommendations = emptyList(),
+                            traktShowRecommendationsLoggedIn = false,
+                            traktShowRecommendationsError = null
+                        )
+                    }
+                }
+        }
     }
 
     /** 加载全局想看/已看 ID 缓存 */
