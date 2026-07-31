@@ -30,6 +30,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktTrendingShowResponse
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.TtlCache
 import com.tracktosearch.ui.screen.search.DoubanHotCategory
@@ -139,6 +140,7 @@ class DiscoverViewModel @Inject constructor(
     private val doubanRepository: DoubanRepository,
     private val doubanAuthStorage: DoubanAuthStorage,
     private val doubanRecommendCache: PersistentTtlCache<List<DoubanRecommendItem>>,
+    private val sessionModeManager: SessionModeManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -664,10 +666,9 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun loadTraktRecommendations() {
-        // 访客模式（无 token）：不发 /recommendations/movies 请求（会 401），直接显示登录解锁卡片
+        // 未连接 Trakt：不发 /recommendations/movies 请求（会 401），直接显示登录解锁卡片
         viewModelScope.launch {
-            val token = tokenStorage.accessToken.first()
-            if (token.isNullOrEmpty()) {
+            if (!sessionModeManager.traktConnected.value) {
                 _uiState.value = _uiState.value.copy(
                     traktRecommendationsLoggedIn = false,
                     isLoadingRecommendations = false,
@@ -715,8 +716,8 @@ class DiscoverViewModel @Inject constructor(
         )
         viewModelScope.launch {
             try {
-                val isLoggedIn = !tokenStorage.accessToken.first().isNullOrEmpty()
-                // 访客模式：为你推荐剧集栏目显示登录解锁卡片，不调 /recommendations/shows
+                val isLoggedIn = sessionModeManager.traktConnected.value
+                // 未连接 Trakt：为你推荐剧集栏目显示登录解锁卡片，不调 /recommendations/shows
                 _uiState.value = _uiState.value.copy(
                     traktShowRecommendationsLoggedIn = isLoggedIn
                 )
