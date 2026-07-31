@@ -1,0 +1,11 @@
+name = "tracktosearch-gateway"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "public"
+
+[[services]]
+binding = "AUTH_WORKER"
+service = "auth-worker"
+
+[[services]]
+binding = "FEEDBACK_WORKER"
+service = "feedback-worker"
