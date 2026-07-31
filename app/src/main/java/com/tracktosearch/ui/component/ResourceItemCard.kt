@@ -91,6 +91,18 @@ internal fun sourceTagLabel(source: String, customName: String?): String {
     }
 }
 
+internal fun resourceCardGradientColors(
+    diskColor: Color,
+    sourceColors: SourceTagColors,
+    isDark: Boolean
+): List<Color> {
+    return listOf(
+        diskColor.copy(alpha = if (isDark) 0.22f else 0.14f),
+        diskColor.copy(alpha = if (isDark) 0.08f else 0.05f),
+        sourceColors.background.copy(alpha = if (isDark) 0.26f else 0.18f)
+    )
+}
+
 fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
     DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.drawable.ic_disk_quark)
     DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.drawable.ic_disk_baidu)
@@ -128,6 +140,7 @@ fun ResourceItemCard(
     val contentAlpha = if (isViewed) 0.5f else 1f
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
     val sourceColors = sourceTagColors(item.source, isDark = !isLight)
+    val gradientColors = resourceCardGradientColors(style.backgroundColor, sourceColors, isDark = !isLight)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -157,11 +170,7 @@ fun ResourceItemCard(
                 .fillMaxWidth()
                 .background(
                     Brush.horizontalGradient(
-                        colors = listOf(
-                            style.backgroundColor.copy(alpha = if (isLight) 0.14f else 0.22f),
-                            style.backgroundColor.copy(alpha = if (isLight) 0.05f else 0.08f),
-                            MaterialTheme.colorScheme.surface
-                        )
+                        colors = gradientColors
                     )
                 )
                 .padding(start = 14.dp, end = 14.dp, top = 14.dp, bottom = 12.dp)

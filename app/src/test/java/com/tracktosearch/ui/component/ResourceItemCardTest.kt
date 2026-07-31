@@ -67,6 +67,27 @@ class ResourceItemCardTest {
     }
 
     @Test
+    fun `resource card gradient transitions from disk color to source color`() {
+        val light = resourceCardGradientColors(
+            diskColor = Color(0xFF1E88E5),
+            sourceColors = sourceTagColors("pansou", isDark = false),
+            isDark = false
+        )
+        val dark = resourceCardGradientColors(
+            diskColor = Color(0xFF1E88E5),
+            sourceColors = sourceTagColors("pansou", isDark = true),
+            isDark = true
+        )
+
+        assertThat(light[0].alpha).isWithin(0.001f).of(0.14f)
+        assertThat(light[1].alpha).isWithin(0.001f).of(0.05f)
+        assertThat(light.last()).isEqualTo(Color(0xFFE8C8B8).copy(alpha = 0.18f))
+        assertThat(dark[0].alpha).isWithin(0.001f).of(0.22f)
+        assertThat(dark[1].alpha).isWithin(0.001f).of(0.08f)
+        assertThat(dark.last()).isEqualTo(Color(0xFF6F453A).copy(alpha = 0.26f))
+    }
+
+    @Test
     fun `source tag label uses custom name only for custom source`() {
         assertThat(sourceTagLabel("pansou", "自定义名称")).isEqualTo("PanSou")
         assertThat(sourceTagLabel("custom-source-a", "自定义名称")).isEqualTo("自定义名称")
