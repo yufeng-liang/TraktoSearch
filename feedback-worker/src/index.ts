@@ -14,6 +14,11 @@ import { handleAdminReply } from './admin/reply';
 import { handleAdminClose } from './admin/close';
 import { verifyAccessJWT } from './admin/access';
 import { handleCleanupScreenshots } from './cron/cleanup-screenshots';
+import { handleMarkRead, handleMarkAllRead } from './api/read';
+import { handleUnreadCount } from './api/unread-count';
+import { handleMessages } from './api/messages';
+import { handleUserReply } from './api/reply';
+import { handleAdminUploadScreenshot } from './admin/upload-screenshot';
 
 export interface Env {
     DB: D1Database;
@@ -134,6 +139,24 @@ async function handleAppApi(
     if (path === '/feedback-api/mine' && request.method === 'GET') {
         return handleMine(request, env, requestId, payload);
     }
+    if (path === '/feedback-api/unread-count' && request.method === 'GET') {
+        return handleUnreadCount(env, requestId, payload);
+    }
+    if (path === '/feedback-api/messages' && request.method === 'GET') {
+        return handleMessages(request, env, requestId, payload);
+    }
+    if (path === '/feedback-api/read-all' && request.method === 'POST') {
+        return handleMarkAllRead(env, requestId, payload);
+    }
+    // /feedback-api/{id}/read 和 /feedback-api/{id}/reply
+    const readMatch = path.match(/^\/feedback-api\/([^/]+)\/read$/);
+    if (readMatch && request.method === 'POST') {
+        return handleMarkRead(env, requestId, payload, readMatch[1]);
+    }
+    const replyMatch = path.match(/^\/feedback-api\/([^/]+)\/reply$/);
+    if (replyMatch && request.method === 'POST') {
+        return handleUserReply(request, env, requestId, payload, replyMatch[1]);
+    }
     const detailMatch = path.match(/^\/feedback-api\/([^/]+)$/);
     if (detailMatch && request.method === 'GET') {
         return handleDetail(env, requestId, payload, detailMatch[1]);
@@ -147,7 +170,7 @@ async function handleAdminApi(
     requestId: string,
     path: string
 ): Promise<Response> {
-    await verifyAccessJWT(request, env);
+    const adminEmail = await verifyAccessJWT(request, env);
 
     if (path === '/admin/list' && request.method === 'POST') {
         return handleAdminList(request, env, requestId);
@@ -161,6 +184,9 @@ async function handleAdminApi(
     }
     if (path === '/admin/close' && request.method === 'POST') {
         return handleAdminClose(request, env, requestId);
+    }
+    if (path === '/admin/upload-screenshot' && request.method === 'POST') {
+        return handleAdminUploadScreenshot(request, env, requestId, { email: adminEmail });
     }
     throw new AppError('NOT_FOUND', 'Not found', 404);
 }

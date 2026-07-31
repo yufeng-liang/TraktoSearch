@@ -36,7 +36,7 @@ const ACCESS_CERTS_CACHE_TTL = 24 * 60 * 60;
 export async function verifyAccessJWT(
     request: Request,
     env: AccessEnv
-): Promise<AccessPayload> {
+): Promise<string> {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
         throw new AppError('UNAUTHORIZED', 'Missing or invalid authorization header', 401);
@@ -115,11 +115,14 @@ export async function verifyAccessJWT(
     if (!Number.isFinite(payload.exp) || payload.exp < Math.floor(Date.now() / 1000)) {
         throw new AppError('UNAUTHORIZED', 'Token has expired', 401);
     }
+    if (!payload.email) {
+        throw new AppError('UNAUTHORIZED', 'Email not found in token', 401);
+    }
     if (payload.email !== (env.ADMIN_EMAIL || '').trim()) {
         throw new AppError('FORBIDDEN', 'Email not authorized', 403);
     }
 
-    return payload;
+    return payload.email;
 }
 
 async function getCachedKeys(env: AccessEnv): Promise<AccessJwk[]> {

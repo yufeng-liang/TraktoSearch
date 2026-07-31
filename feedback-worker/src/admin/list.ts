@@ -46,7 +46,7 @@ export async function handleAdminList(
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const { results } = await env.DB.prepare(`
-        SELECT id, friend_id, friend_nickname, type, content, screenshots, status, created_at
+        SELECT id, display_id, friend_id, friend_nickname, type, content, screenshots, status, created_at
         FROM feedbacks
         ${where}
         ORDER BY
@@ -55,14 +55,19 @@ export async function handleAdminList(
         LIMIT ? OFFSET ?
     `).bind(...values, limit, offset).all();
 
+    const feedbacks = results.map((r: any) => ({
+        ...r,
+        displayId: r.display_id,
+    }));
+
     const countResult = await env.DB.prepare(`
         SELECT COUNT(*) AS count FROM feedbacks ${where}
     `).bind(...values).first<{ count: number }>();
     const total = Number(countResult?.count || 0);
 
     return successResponse({
-        feedbacks: results,
+        feedbacks,
         limit, offset, total,
-        hasMore: offset + results.length < total,
+        hasMore: offset + feedbacks.length < total,
     }, requestId);
 }

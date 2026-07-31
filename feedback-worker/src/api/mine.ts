@@ -24,12 +24,17 @@ export async function handleMine(
     const offset = Number.isInteger(requestedOffset) && requestedOffset >= 0 ? requestedOffset : 0;
 
     const { results } = await env.DB.prepare(`
-        SELECT id, type, content, screenshots, status, created_at
+        SELECT id, display_id, type, content, screenshots, status, created_at
         FROM feedbacks
         WHERE friend_id = ?
         ORDER BY created_at DESC
         LIMIT ? OFFSET ?
     `).bind(payload.sub, limit, offset).all();
+
+    const feedbacks = results.map((r: any) => ({
+        ...r,
+        displayId: r.display_id,
+    }));
 
     const countResult = await env.DB.prepare(`
         SELECT COUNT(*) AS count FROM feedbacks WHERE friend_id = ?
@@ -37,8 +42,8 @@ export async function handleMine(
     const total = Number(countResult?.count || 0);
 
     return successResponse({
-        feedbacks: results,
+        feedbacks,
         limit, offset, total,
-        hasMore: offset + results.length < total,
+        hasMore: offset + feedbacks.length < total,
     }, requestId);
 }

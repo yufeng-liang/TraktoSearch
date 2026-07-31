@@ -3,6 +3,7 @@
 import { AppError, successResponse, now, readJson } from '../util/errors';
 import { generateId } from '../util/crypto';
 import { checkRateLimit } from '../util/rate-limit';
+import { generateDisplayId } from '../util/display-id';
 
 interface Env {
     DB: D1Database;
@@ -85,18 +86,29 @@ export async function handleSubmit(
     const currentTime = now();
     const screenshotsJson = screenshots.length > 0 ? JSON.stringify(screenshots) : null;
 
+    // 从 feedback_seq 原子获取该类型的下一个序号，用于生成 display_id
+    const seqResult = await env.DB.prepare(`
+        UPDATE feedback_seq SET seq = seq + 1 WHERE type = ?
+        RETURNING seq
+    `).bind(body.type).first<{ seq: number }>();
+
+    if (!seqResult) {
+        throw new AppError('INTERNAL_ERROR', 'Failed to allocate display_id', 500);
+    }
+    const displayId = generateDisplayId(body.type, seqResult.seq);
+
     await env.DB.prepare(`
-        INSERT INTO feedbacks (id, friend_id, friend_nickname, device_id, trakt_username, douban_username,
+        INSERT INTO feedbacks (id, display_id, friend_id, friend_nickname, device_id, trakt_username, douban_username,
                                type, content, contact, screenshots,
-                               app_version, os_version, device_model, status, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
+                               app_version, os_version, device_model, status, created_at, last_read_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
     `).bind(
-        id, payload.sub, friendNickname, payload.device,
+        id, displayId, payload.sub, friendNickname, payload.device,
         body.traktUsername || null, body.doubanUsername || null,
         body.type, content, contact, screenshotsJson,
         body.appVersion, body.osVersion, body.deviceModel,
-        currentTime
+        currentTime, currentTime
     ).run();
 
-    return successResponse({ id, createdAt: currentTime }, requestId);
+    return successResponse({ id, displayId, createdAt: currentTime }, requestId);
 }
