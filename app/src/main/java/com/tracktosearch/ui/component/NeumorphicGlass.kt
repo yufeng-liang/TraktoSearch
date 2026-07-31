@@ -342,7 +342,10 @@ fun NeumorphicIconButton(
             )
             .clip(shape)
             .then(hazeModifier)
-            .background(Color.Transparent, shape)
+            .background(
+                if (isDark) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+                shape
+            )
             .neumorphicInnerShadow(
                 shape = shape,
                 isDark = isDark,
@@ -353,7 +356,7 @@ fun NeumorphicIconButton(
             )
             .border(
                 width = 1.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFFE0E5EC).copy(alpha = 0.9f),
+                color = if (isDark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
                 shape = shape
             )
             .clickable(
