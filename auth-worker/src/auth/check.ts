@@ -66,16 +66,36 @@ export async function handleCheck(
             WHERE id = ? AND recovery_id_hmac IS NULL
         `).bind(recoveryIdHmac, currentTime, payload.device));
     }
-    // === IP 上报：从 Cloudflare request.cf 读取 ===
-    const cf = (request as any).cf as {
-        country?: string;
-        region?: string;
-        city?: string;
-        latitude?: string;
-        longitude?: string;
-        asOrganization?: string;
-    } | null;
-    const clientIp = request.headers.get('CF-Connecting-IP') || '';
+    // === IP 上报 ===
+    // 请求经 gateway-pages service binding 转发时，CF-Connecting-IP 与 request.cf
+    // 都会被 Cloudflare 覆盖为边缘节点出口 IP（非用户真实 IP）。
+    // gateway 在转发前把原始 CF-Connecting-IP 写入 X-Real-IP，
+    // 并把原始 request.cf 地理信息序列化到 X-Client-Geo，故优先读之。
+    const clientIp = request.headers.get('X-Real-IP') || request.headers.get('CF-Connecting-IP') || '';
+    const clientGeoHeader = request.headers.get('X-Client-Geo');
+    const cf = clientGeoHeader
+        ? (() => {
+            try {
+                const parsed = JSON.parse(clientGeoHeader);
+                return {
+                    country: parsed.country || undefined,
+                    region: parsed.region || undefined,
+                    city: parsed.city || undefined,
+                    latitude: parsed.latitude || undefined,
+                    longitude: parsed.longitude || undefined,
+                    asOrganization: parsed.asOrganization || undefined
+                };
+            } catch {
+                return (request as any).cf as {
+                    country?: string; region?: string; city?: string;
+                    latitude?: string; longitude?: string; asOrganization?: string;
+                } | null;
+            }
+        })()
+        : (request as any).cf as {
+            country?: string; region?: string; city?: string;
+            latitude?: string; longitude?: string; asOrganization?: string;
+        } | null;
     if (clientIp && cf) {
         const geoParts = [cf.country, cf.region, cf.city].filter(Boolean);
         const ipGeo = geoParts.join(' ') || null;

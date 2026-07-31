@@ -1,5 +1,3 @@
-const AUTH_WORKER_ORIGIN = 'https://auth-worker.douban-movie-api-peak.workers.dev';
-const FEEDBACK_WORKER_ORIGIN = 'https://feedback-worker.douban-movie-api-peak.workers.dev';
 const PUBLIC_PREFIX = '/gateway-api';
 
 /**
@@ -27,9 +25,9 @@ export async function onRequest(context) {
     const upstreamPath = url.pathname.slice(PUBLIC_PREFIX.length) || '/';
 
     // 路由：/feedback-api/* → feedback-worker，其余 → auth-worker
-    let workerOrigin = AUTH_WORKER_ORIGIN;
+    let bindingName = 'AUTH_WORKER';
     if (upstreamPath.startsWith('/feedback-api/')) {
-        workerOrigin = FEEDBACK_WORKER_ORIGIN;
+        bindingName = 'FEEDBACK_WORKER';
     } else if (upstreamPath !== '/health' && !upstreamPath.startsWith('/api/')) {
         return jsonResponse({ code: 'NOT_FOUND', message: 'Not found' }, 404);
     }
@@ -41,7 +39,15 @@ export async function onRequest(context) {
         });
     }
 
-    const upstreamUrl = new URL(`${workerOrigin}${upstreamPath}`);
+    const worker = context.env?.[bindingName];
+    if (!worker || typeof worker.fetch !== 'function') {
+        return jsonResponse({
+            code: 'UPSTREAM_BINDING_UNAVAILABLE',
+            message: 'Gateway service unavailable',
+        }, 503);
+    }
+
+    const upstreamUrl = new URL(`https://gateway.internal${upstreamPath}`);
     upstreamUrl.search = url.search;
 
     const headers = new Headers(request.headers);
@@ -49,10 +55,33 @@ export async function onRequest(context) {
     headers.delete('Content-Length');
     headers.delete('Cookie');
     headers.delete('Cf-Access-Jwt-Assertion');
-    headers.set('Origin', workerOrigin);
+    headers.set('Origin', url.origin);
+
+    // 保留原始客户端 IP 与地理信息：service binding 调用下游 Worker 时，
+    // Cloudflare 会用当前边缘节点出口 IP 覆盖 CF-Connecting-IP，
+    // 且 request.cf 也会反映调用方（gateway）的边缘节点而非原始客户端。
+    // 这里在 gateway 层把原始 CF-Connecting-IP 写入 X-Real-IP，
+    // 并把 request.cf 的地理信息序列化到 X-Client-Geo，供下游 Worker 读取。
+    const clientIp = request.headers.get('CF-Connecting-IP');
+    if (clientIp) {
+        headers.set('X-Real-IP', clientIp);
+    }
+    const cf = context.cf;
+    if (cf) {
+        // 仅转发 IP 上报所需的地理字段，避免 header 过大
+        const geo = {
+            country: cf.country || '',
+            region: cf.region || '',
+            city: cf.city || '',
+            latitude: cf.latitude || '',
+            longitude: cf.longitude || '',
+            asOrganization: cf.asOrganization || ''
+        };
+        headers.set('X-Client-Geo', JSON.stringify(geo));
+    }
 
     try {
-        const upstream = await fetch(new Request(upstreamUrl, {
+        const upstream = await worker.fetch(new Request(upstreamUrl, {
             method: request.method,
             headers,
             body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
