@@ -654,8 +654,8 @@ class DetailViewModelSupplementTest {
         every { cred.cookie } returns "fake_cookie"
         every { doubanAuthStorage.getCredentials() } returns cred
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "fake_ck"
-        coEvery { doubanRepository.markInterest(any(), any(), any(), any()) } returns
-            true
+        coEvery { doubanRepository.markInterestByCk(any(), any(), any(), any()) } returns
+            com.tracktosearch.data.remote.douban.MarkWriteResult(success = true, statusCode = 200, message = "ok")
 
         viewModel.retryDoubanSync()
         advanceUntilIdle()
@@ -678,8 +678,8 @@ class DetailViewModelSupplementTest {
         every { cred.cookie } returns "fake_cookie"
         every { doubanAuthStorage.getCredentials() } returns cred
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "fake_ck"
-        coEvery { doubanRepository.markInterest(any(), any(), any(), any()) } returns
-            false
+        coEvery { doubanRepository.markInterestByCk(any(), any(), any(), any()) } returns
+            com.tracktosearch.data.remote.douban.MarkWriteResult(success = false, statusCode = 500, message = "fail")
 
         viewModel.retryDoubanSync()
         advanceUntilIdle()

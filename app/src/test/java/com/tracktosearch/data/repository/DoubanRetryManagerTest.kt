@@ -65,6 +65,7 @@ class DoubanRetryManagerTest {
         clearMocks(doubanSyncFailureDao, doubanSyncManager, cloudDetailsPoolManager, doubanSyncedItemDao)
         // 重新 stub progress（虽然 init 块不再访问，但保持 mock 状态一致）
         every { doubanSyncManager.progress } returns syncProgress
+        coEvery { doubanSyncedItemDao.getByDoubanId(any()) } returns null
     }
 
     // ============================================================

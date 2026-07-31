@@ -129,8 +129,8 @@ class DoubanTraktStatusConsistencyCheckerTest {
     private fun stubDoubanMarkSuccess() {
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "csrf-token"
         coEvery {
-            doubanRepository.markInterest(any(), any(), any(), any())
-        } returns true
+            doubanRepository.markInterestByCk(any(), any(), any(), any())
+        } returns MarkWriteResult(success = true, statusCode = 200, message = "ok")
     }
 
     /** 轮询等待 checkProgress.isComplete == true 且 !isRunning()，带超时保护避免死锁 */
@@ -177,7 +177,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(result.conflictsFound).isEqualTo(0)
         coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
         coVerify(exactly = 0) { traktRepository.batchAddToWatchlist(any(), any()) }
-        coVerify(exactly = 0) { doubanRepository.markInterest(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { doubanRepository.markInterestByCk(any(), any(), any(), any()) }
     }
 
     // ============================================================
@@ -212,7 +212,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(result.totalChecked).isEqualTo(2)
         coVerify(exactly = 0) { traktRepository.batchMarkAsWatched(any(), any()) }
         coVerify(exactly = 0) { traktRepository.batchAddToWatchlist(any(), any()) }
-        coVerify(exactly = 0) { doubanRepository.markInterest(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { doubanRepository.markInterestByCk(any(), any(), any(), any()) }
     }
 
     // ============================================================
@@ -333,7 +333,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(result.conflictsFound).isEqualTo(1)
         assertThat(result.doubanUpdated).isEqualTo(1)
         // markInterest 以 action="collect" 调用（豆瓣 wish → collect 对齐 trakt watched）
-        coVerify(exactly = 1) { doubanRepository.markInterest("collect", "db-1", any(), any()) }
+        coVerify(exactly = 1) { doubanRepository.markInterestByCk("collect", "db-1", any(), any()) }
     }
 
     // ============================================================
@@ -437,8 +437,8 @@ class DoubanTraktStatusConsistencyCheckerTest {
         assertThat(result.doubanUpdated).isEqualTo(2)
         assertThat(result.conflictsFound).isEqualTo(2)
         // 每条 markInterest 成功后调用 updateStatus(doubanId, "collect")
-        coVerify(exactly = 1) { doubanSyncedItemDao.updateStatus("db-1", "collect") }
-        coVerify(exactly = 1) { doubanSyncedItemDao.updateStatus("db-2", "collect") }
+        coVerify(exactly = 1) { doubanSyncedItemDao.updateStatus("db-1", "collect", any()) }
+        coVerify(exactly = 1) { doubanSyncedItemDao.updateStatus("db-2", "collect", any()) }
     }
 
     // ============================================================
@@ -461,7 +461,8 @@ class DoubanTraktStatusConsistencyCheckerTest {
 
         val p = checker.checkProgress.value
         assertThat(p.isComplete).isTrue()
-        assertThat(p.cookieExpired).isTrue()
+        assertThat(p.cookieExpired).isFalse()
+        assertThat(p.neverLoggedInDouban).isTrue()
         assertThat(p.isRunning).isFalse()
     }
 
@@ -522,7 +523,9 @@ class DoubanTraktStatusConsistencyCheckerTest {
         // cancel() 会修改 _checkProgress（isCancelling=true），即使没有运行中的 job
         checker.cancel()
         assertThat(checker.checkProgress.value.isCancelling).isTrue()
-        assertThat(checker.checkProgress.value.phase).isEqualTo("正在取消...")
+        assertThat(checker.checkProgress.value.phase).isEqualTo(
+            appContext.getString(com.tracktosearch.R.string.consistency_check_phase_cancelling)
+        )
 
         // resetProgress 应重置（isRunning 为 false，不阻止）
         checker.resetProgress()
@@ -592,7 +595,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
         // 清理 watchlist
         coVerify(exactly = 1) { traktRepository.batchRemoveFromWatchlist(listOf(1), emptyList()) }
         // 豆瓣升级为 collect（已看优先）
-        coVerify(exactly = 1) { doubanRepository.markInterest(eq("collect"), any(), any(), any()) }
+        coVerify(exactly = 1) { doubanRepository.markInterestByCk(eq("collect"), any(), any(), any()) }
     }
 
     /**

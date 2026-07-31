@@ -111,6 +111,7 @@ class WatchlistViewModelTest {
         // init 块副作用 stub
         every { doubanSyncManager.progress } returns syncProgressFlow
         every { statusConsistencyChecker.checkProgress } returns consistencyProgressFlow
+        every { statusConsistencyChecker.consumeCheckCompleteEvent() } returns true
         every { doubanBatchRemovalManager.progress } returns batchRemovalProgressFlow
         every { sessionModeManager.isDoubanMode } returns MutableStateFlow(false)
         every { sessionModeManager.traktConnected } returns MutableStateFlow(false)

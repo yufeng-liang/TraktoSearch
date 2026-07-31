@@ -111,6 +111,7 @@ class DoubanSyncManagerBatchPipelineTest {
         )
         // 重新 stub delayEvent(clearMocks 后需重新设置,否则 init 块 collect 会 NPE)
         every { doubanRepository.delayEvent } returns delayEventFlow
+        every { sessionModeManager.sessionMode } returns kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.TRAKT)
 
         // 默认:已登录 Trakt,未登录豆瓣(避免进入实际同步流程)
         every { tokenStorage.getCachedAccessToken() } returns "fake-token"

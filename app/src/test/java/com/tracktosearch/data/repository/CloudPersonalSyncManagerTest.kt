@@ -50,7 +50,7 @@ import retrofit2.Response
  *
  * 注意：SyncedItemsPayload/PendingItemsPayload/IdMappingsPayload/SyncMetaPayload 是私有类，
  * 测试通过手动构造 JsonObject 构建 payload JSON，加密方式与 Manager 一致：
- * AesCrypto.encrypt(payloadJson) → base64(encrypted.toByteArray(UTF-8))。
+ * 网关解密后的 payloadJson → base64(payloadJson.toByteArray(UTF-8))。
  *
  * 节流测试说明：refreshMetaOnly 用 System.currentTimeMillis() 真实时间。由于每个测试方法
  * 都在 @Before 中重新创建 manager 实例，节流状态（lastMetaRefreshSuccessAt/FailedAt）
@@ -221,7 +221,7 @@ class CloudPersonalSyncManagerTest {
     // ============================================================
 
     /**
-     * 构造云端文件响应 JsonObject：content 为 base64(AesCrypto.encrypt(payloadJson))，sha 为文件 sha。
+     * 构造云端文件响应 JsonObject：content 为 base64(payloadJson)，sha 为文件 sha。
      * 加密链路与 Manager.uploadEncrypted 完全一致。
      */
     private fun buildCloudResponseJson(payloadJson: String, sha: String): JsonObject {

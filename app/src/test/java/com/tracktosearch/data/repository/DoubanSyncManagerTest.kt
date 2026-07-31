@@ -113,6 +113,7 @@ class DoubanSyncManagerTest {
         )
         // 重新 stub delayEvent（init 块已 collect 过，但保持 stub 一致避免后续访问 NPE）
         every { doubanRepository.delayEvent } returns delayEventFlow
+        every { sessionModeManager.sessionMode } returns kotlinx.coroutines.flow.flowOf(com.tracktosearch.data.session.SessionMode.TRAKT)
         // 每个测试创建新的 manager 实例，避免 progress/syncJob 状态泄漏
         manager = DoubanSyncManager(
             doubanRepository,

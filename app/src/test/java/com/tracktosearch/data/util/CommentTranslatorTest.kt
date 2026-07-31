@@ -70,12 +70,6 @@ class CommentTranslatorTest {
     }
 
     /** 反射调用 private md5(str) */
-    private fun callMd5(str: String): String {
-        val method = CommentTranslator::class.java.getDeclaredMethod("md5", String::class.java)
-        method.isAccessible = true
-        return method.invoke(translator, str) as String
-    }
-
     /** mock translateWithBaiduAI 返回指定结果 */
     private fun mockBaiduAI(result: String?) {
         coEvery {
@@ -185,26 +179,6 @@ class CommentTranslatorTest {
     }
 
     // ==================== md5 签名 ====================
-
-    @Test
-    fun md5_正常字符串计算正确() {
-        // MD5("hello") = 5d41402abc4b2a76b9719d911017c592
-        assertThat(callMd5("hello")).isEqualTo("5d41402abc4b2a76b9719d911017c592")
-    }
-
-    @Test
-    fun md5_空字符串() {
-        // MD5("") = d41d8cd98f00b204e9800998ecf8427e
-        assertThat(callMd5("")).isEqualTo("d41d8cd98f00b204e9800998ecf8427e")
-    }
-
-    @Test
-    fun md5_包含中文字符() {
-        // 验证不抛异常且返回 32 位十六进制字符串
-        val result = callMd5("测试中文")
-        assertThat(result).hasLength(32)
-        assertThat(result).matches("[0-9a-f]{32}")
-    }
 
     // ==================== translateSingleComment ====================
 

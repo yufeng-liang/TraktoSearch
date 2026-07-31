@@ -58,7 +58,7 @@ class CloudDetailsPoolManagerTest {
         return json.encodeToString(JsonObject.serializer(), payload)
     }
 
-    // 辅助：构造云端文件响应（base64(AesCrypto.encrypt(payloadJson)) + sha）
+    // 辅助：构造云端文件响应（base64(payloadJson) + sha）
     private fun buildCloudResponseJson(
         entries: Map<String, DoubanDetailCacheEntry>,
         sha: String

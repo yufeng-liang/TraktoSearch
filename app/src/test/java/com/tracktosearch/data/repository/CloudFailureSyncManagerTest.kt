@@ -47,7 +47,7 @@ import retrofit2.Response
  * 使用 Robolectric：AesCrypto 和 CloudFailureSyncManager 内部依赖 android.util.Base64 和 android.util.Log。
  *
  * 注意：CloudPayload/CloudFailureDto 是私有类，测试通过手动构造 JsonObject 构建 payload JSON，
- * 加密方式与 Manager 一致：AesCrypto.encrypt(payloadJson) → base64(encrypted.toByteArray(UTF-8))。
+ * 云端响应格式与 Manager 一致：base64(payloadJson.toByteArray(UTF-8))。
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33], application = android.app.Application::class)
@@ -141,7 +141,7 @@ class CloudFailureSyncManagerTest {
     }
 
     /**
-     * 构造云端文件响应 JsonObject：content 为 base64(AesCrypto.encrypt(payloadJson))，sha 为文件 sha。
+     * 构造云端文件响应 JsonObject：content 为 base64(payloadJson)，sha 为文件 sha。
      * 加密链路与 Manager.uploadIfHasFailures 完全一致。
      */
     private fun buildCloudResponseJson(
@@ -425,7 +425,7 @@ class CloudFailureSyncManagerTest {
     @Test
     fun checkCloudFailures_解密失败_returnsNull() = runTest {
         every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("user-1", "cookie")
-        // 云端 content 是无效加密数据：AesCrypto.decrypt 返回 null
+        // 云端 content 是无效 JSON 数据，解析应返回 null
         val invalidEncrypted = "this-is-not-valid-encrypted-data"
         val base64Content = Base64.encodeToString(
             invalidEncrypted.toByteArray(Charsets.UTF_8),
