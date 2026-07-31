@@ -12,117 +12,93 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
-/**
- * 反馈与建议 API 服务
- * 注意：baseUrl 由 NetworkModule 提供，应为 FEEDBACK_BASE_URL。
- */
 interface FeedbackApiService {
-
-    /** 上传截图，返回 R2 key（App 端拼完整 URL） */
     @Multipart
     @POST("feedback-api/upload-screenshot")
     suspend fun uploadScreenshot(@Part file: MultipartBody.Part): Response<FeedbackResponse<UploadScreenshotResponse>>
 
-    /** 提交反馈 */
     @POST("feedback-api/submit")
     suspend fun submit(@Body request: SubmitFeedbackRequest): Response<FeedbackResponse<SubmitFeedbackResponse>>
 
-    /** 我的反馈列表 */
     @GET("feedback-api/mine")
     suspend fun getMine(
         @Query("limit") limit: Int = 20,
         @Query("offset") offset: Int = 0
     ): Response<FeedbackResponse<MineResponse>>
 
-    /** 单条反馈详情 */
     @GET("feedback-api/{id}")
     suspend fun getDetail(@Path("id") id: String): Response<FeedbackResponse<FeedbackDetailResponse>>
+
+    @POST("feedback-api/{id}/read")
+    suspend fun markAsRead(@Path("id") id: String): Response<FeedbackResponse<Unit>>
+
+    @POST("feedback-api/read-all")
+    suspend fun markAllRead(): Response<FeedbackResponse<Unit>>
+
+    @GET("feedback-api/unread-count")
+    suspend fun getUnreadCount(): Response<FeedbackResponse<UnreadCountResponse>>
+
+    @GET("feedback-api/messages")
+    suspend fun getMessages(
+        @Query("limit") limit: Int = 50,
+        @Query("offset") offset: Int = 0
+    ): Response<FeedbackResponse<MessagesResponse>>
+
+    @POST("feedback-api/{id}/reply")
+    suspend fun reply(
+        @Path("id") id: String,
+        @Body request: ReplyRequest
+    ): Response<FeedbackResponse<ReplyResponse>>
 }
 
 @Serializable
-data class FeedbackResponse<T>(
-    val code: String,
-    val message: String,
-    val requestId: String = "",
-    val data: T? = null
-)
+data class FeedbackResponse<T>(val code: String, val message: String, val requestId: String = "", val data: T? = null)
 
 @Serializable
 data class UploadScreenshotResponse(val key: String)
 
 @Serializable
-data class SubmitFeedbackRequest(
-    val type: String,
-    val content: String,
-    val contact: String? = null,
-    val screenshots: List<String> = emptyList(),
-    val friendNickname: String,
-    val traktUsername: String? = null,
-    val doubanUsername: String? = null,
-    val appVersion: String,
-    val osVersion: String,
-    val deviceModel: String
-)
+data class SubmitFeedbackRequest(val type: String, val content: String, val contact: String? = null, val screenshots: List<String> = emptyList(), val friendNickname: String, val traktUsername: String? = null, val doubanUsername: String? = null, val appVersion: String, val osVersion: String, val deviceModel: String)
 
 @Serializable
-data class SubmitFeedbackResponse(val id: String, val createdAt: Long)
+data class SubmitFeedbackResponse(val id: String, val createdAt: Long, val displayId: String = "")
 
 @Serializable
-data class MineResponse(
-    val feedbacks: List<FeedbackListItem>,
-    val limit: Int,
-    val offset: Int,
-    val total: Int,
-    val hasMore: Boolean
-)
+data class MineResponse(val feedbacks: List<FeedbackListItem>, val limit: Int, val offset: Int, val total: Int, val hasMore: Boolean)
 
 @Serializable
-data class FeedbackListItem(
-    val id: String,
-    val type: String,
-    val content: String,
-    val screenshots: String? = null,    // JSON 数组字符串
-    val status: String,
-    val created_at: Long
-)
+data class FeedbackListItem(val id: String, val type: String, val content: String, val screenshots: String? = null, val status: String, val created_at: Long, val display_id: String = "")
 
 @Serializable
-data class FeedbackDetailResponse(
-    val feedback: FeedbackDetail,
-    val replies: List<FeedbackReply>
-)
+data class FeedbackDetailResponse(val feedback: FeedbackDetail, val replies: List<FeedbackReply>)
 
 @Serializable
-data class FeedbackDetail(
-    val id: String,
-    val friend_id: String,
-    val friend_nickname: String,
-    val device_id: String? = null,
-    val trakt_username: String? = null,
-    val douban_username: String? = null,
-    val type: String,
-    val content: String,
-    val contact: String? = null,
-    val screenshots: String? = null,
-    val app_version: String,
-    val os_version: String,
-    val device_model: String,
-    val status: String,
-    val created_at: Long
-)
+data class FeedbackDetail(val id: String, val friend_id: String, val friend_nickname: String, val device_id: String? = null, val trakt_username: String? = null, val douban_username: String? = null, val type: String, val content: String, val contact: String? = null, val screenshots: String? = null, val app_version: String, val os_version: String, val device_model: String, val status: String, val created_at: Long, val display_id: String = "", val last_read_at: Long = 0)
 
 @Serializable
-data class FeedbackReply(
-    val id: String,
-    val content: String,
-    val created_at: Long
-)
+data class FeedbackReply(val id: String, val content: String, val created_at: Long, val author_role: String = "developer", val screenshots: String? = null)
 
-/**
- * 截图 URL 拼接 helper。
- * feedback-worker 暴露 GET /feedback-api/screenshot/{key} 从 R2 读取，
- * App 端把 key 拼成完整 URL 供 Coil 加载。
- */
+@Serializable
+data class UnreadCountResponse(val count: Int, val items: List<UnreadItem> = emptyList())
+
+@Serializable
+data class UnreadItem(val feedback_id: String, val display_id: String, val type: String, val last_reply: UnreadLastReply)
+
+@Serializable
+data class UnreadLastReply(val id: String, val content: String, val created_at: Long, val has_screenshot: Boolean)
+
+@Serializable
+data class MessagesResponse(val messages: List<MessageItem>, val limit: Int, val offset: Int, val total: Int, val hasMore: Boolean)
+
+@Serializable
+data class MessageItem(val id: String, val feedback_id: String, val display_id: String, val type: String, val author_role: String, val content: String, val screenshots: String? = null, val created_at: Long, val is_unread: Boolean)
+
+@Serializable
+data class ReplyRequest(val content: String, val screenshots: List<String> = emptyList())
+
+@Serializable
+data class ReplyResponse(val reply: FeedbackReply, val status: String)
+
 fun screenshotUrl(key: String): String {
     return BuildConfig.FEEDBACK_BASE_URL.trimEnd('/') + "/feedback-api/screenshot/" + key
 }

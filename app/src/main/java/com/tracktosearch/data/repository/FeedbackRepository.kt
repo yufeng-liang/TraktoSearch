@@ -1,26 +1,25 @@
 package com.tracktosearch.data.repository
 
 import com.tracktosearch.data.remote.feedback.FeedbackApiService
+import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
+import com.tracktosearch.data.remote.feedback.MessagesResponse
+import com.tracktosearch.data.remote.feedback.MineResponse
+import com.tracktosearch.data.remote.feedback.ReplyRequest
+import com.tracktosearch.data.remote.feedback.ReplyResponse
 import com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest
 import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
-import com.tracktosearch.data.remote.feedback.MineResponse
-import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
+import com.tracktosearch.data.remote.feedback.UnreadCountResponse
 import kotlinx.coroutines.CancellationException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import javax.inject.Inject
-import javax.inject.Singleton
-
-/**
- * 反馈与建议 Repository
- * - 提交反馈、上传截图、查询我的反馈、查询详情
- */
-@Singleton
-class FeedbackRepository @Inject constructor(
-    private val api: FeedbackApiService
+class FeedbackRepository(
+    private val api: FeedbackApiService,
+    private val cacheStore: FeedbackCacheStore
 ) {
-    /** 上传截图，返回 R2 key */
+    suspend fun loadCacheFromDisk() = cacheStore.loadFromDisk()
+    fun getCachedList(): MineResponse? = cacheStore.getCachedList()
+
     suspend fun uploadScreenshot(bytes: ByteArray, mimeType: String, fileName: String = "screenshot.jpg"): Result<String> {
         return try {
             val body = bytes.toRequestBody(mimeType.toMediaType())
@@ -28,80 +27,58 @@ class FeedbackRepository @Inject constructor(
             val response = api.uploadScreenshot(part)
             if (response.isSuccessful) {
                 val key = response.body()?.data?.key
-                if (key != null) Result.success(key)
-                else Result.failure(IllegalStateException("Empty response"))
-            } else {
-                Result.failure(IllegalStateException("HTTP ${response.code()}"))
-            }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+                if (key != null) Result.success(key) else Result.failure(IllegalStateException("Empty response"))
+            } else Result.failure(IllegalStateException("HTTP ${response.code()}"))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
-    /** 提交反馈 */
-    suspend fun submit(
-        type: String,
-        content: String,
-        contact: String?,
-        screenshots: List<String>,
-        friendNickname: String,
-        traktUsername: String?,
-        doubanUsername: String?,
-        appVersion: String,
-        osVersion: String,
-        deviceModel: String
-    ): Result<SubmitFeedbackResponse> {
+    suspend fun submit(type: String, content: String, contact: String?, screenshots: List<String>, friendNickname: String, traktUsername: String?, doubanUsername: String?, appVersion: String, osVersion: String, deviceModel: String): Result<SubmitFeedbackResponse> {
         return try {
-            val request = SubmitFeedbackRequest(
-                type = type,
-                content = content,
-                contact = contact,
-                screenshots = screenshots,
-                friendNickname = friendNickname,
-                traktUsername = traktUsername,
-                doubanUsername = doubanUsername,
-                appVersion = appVersion,
-                osVersion = osVersion,
-                deviceModel = deviceModel
-            )
+            val request = SubmitFeedbackRequest(type = type, content = content, contact = contact, screenshots = screenshots, friendNickname = friendNickname, traktUsername = traktUsername, doubanUsername = doubanUsername, appVersion = appVersion, osVersion = osVersion, deviceModel = deviceModel)
             val response = api.submit(request)
             val data = response.body()?.data
-            if (response.isSuccessful && data != null) Result.success(data)
-            else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+            if (response.isSuccessful && data != null) Result.success(data) else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 
-    /** 我的反馈列表 */
     suspend fun getMine(limit: Int = 20, offset: Int = 0): Result<MineResponse> {
         return try {
             val response = api.getMine(limit, offset)
             val data = response.body()?.data
-            if (response.isSuccessful && data != null) Result.success(data)
-            else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+            if (response.isSuccessful && data != null) { cacheStore.saveList(data); Result.success(data) } else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { val cached = cacheStore.getCachedList(); if (cached != null) Result.success(cached) else Result.failure(e) }
     }
 
-    /** 单条详情 */
     suspend fun getDetail(id: String): Result<FeedbackDetailResponse> {
         return try {
             val response = api.getDetail(id)
             val data = response.body()?.data
-            if (response.isSuccessful && data != null) Result.success(data)
-            else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+            if (response.isSuccessful && data != null) { val merged = cacheStore.mergeDetail(id, data); Result.success(merged) } else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}"))
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { val cached = cacheStore.getCachedDetail(id); if (cached != null) Result.success(cached) else Result.failure(e) }
+    }
+
+    suspend fun markAsRead(id: String): Result<Unit> {
+        return try { val response = api.markAsRead(id); if (response.isSuccessful) Result.success(Unit) else Result.failure(IllegalStateException("HTTP ${response.code()}")) }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun markAllRead(): Result<Unit> {
+        return try { val response = api.markAllRead(); if (response.isSuccessful) Result.success(Unit) else Result.failure(IllegalStateException("HTTP ${response.code()}")) }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getUnreadCount(): Result<UnreadCountResponse> {
+        return try { val response = api.getUnreadCount(); val data = response.body()?.data; if (response.isSuccessful && data != null) Result.success(data) else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}")) }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun getMessages(limit: Int = 50, offset: Int = 0): Result<MessagesResponse> {
+        return try { val response = api.getMessages(limit, offset); val data = response.body()?.data; if (response.isSuccessful && data != null) Result.success(data) else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}")) }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
+    }
+
+    suspend fun reply(id: String, content: String, screenshots: List<String>): Result<ReplyResponse> {
+        return try { val request = ReplyRequest(content = content, screenshots = screenshots); val response = api.reply(id, request); val data = response.body()?.data; if (response.isSuccessful && data != null) Result.success(data) else Result.failure(IllegalStateException(response.body()?.message ?: "HTTP ${response.code()}")) }
+        catch (e: CancellationException) { throw e } catch (e: Exception) { Result.failure(e) }
     }
 }
