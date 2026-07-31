@@ -137,7 +137,8 @@ fun MarkRecordItemRow(
                                 )
                                 .build()
                         },
-                        contentDescription = item.displayTitle.ifBlank { item.title },
+                        contentDescription = item.displayTitle.ifBlank { item.title }
+                            .ifBlank { stringResource(R.string.mark_records_unknown_title) },
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -174,7 +175,7 @@ fun MarkRecordItemRow(
                     // 标题
                     Text(
                         text = item.displayTitle.ifBlank { item.title }
-                            .ifBlank { stringResource(R.string.mark_records_empty_all) },
+                            .ifBlank { stringResource(R.string.mark_records_unknown_title) },
                         style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp),
                         fontWeight = FontWeight.Medium,
                         color = onColor,

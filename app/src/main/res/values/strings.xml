@@ -1469,6 +1469,7 @@ Config:
     <string name="mark_records_time_hours_ago">%1$d hours ago</string>
     <string name="mark_records_time_days_ago">%1$d days ago</string>
     <string name="mark_records_empty_all">No records</string>
+    <string name="mark_records_unknown_title">Unknown title</string>
     <string name="mark_records_filter_media_type">Media Type</string>
     <string name="mark_records_filter_date_range">Date Range</string>
     <string name="mark_records_filter_sort">Sort</string>

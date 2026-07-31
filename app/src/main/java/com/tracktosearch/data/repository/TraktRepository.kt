@@ -895,6 +895,16 @@ class TraktRepository @Inject constructor(
      * 未命中才发 TMDB 网络请求并写回持久化缓存（TmdbRepository.enrichMovie/enrichTv 已实现）。
      * @param page 页码，从 1 开始
      */
+
+    /**
+     * 获取已看历史的总页数（从缓存读）。
+     * 调用 [fetchWatchHistory] 并 collect 完成后缓存会填充 totalPages。ALL Tab 分页用。
+     * @return 总页数；缓存未命中返回 0
+     */
+    suspend fun getWatchHistoryTotalPages(): Int {
+        return watchHistoryCache.get("watch_history_page_1")?.totalPages ?: 0
+    }
+
     fun fetchWatchHistory(page: Int): Flow<WatchHistoryEmit> = flow {
         val cacheKey = "watch_history_page_$page"
         watchHistoryCache.get(cacheKey)?.let {
@@ -1287,6 +1297,51 @@ class TraktRepository @Inject constructor(
         }
         // 缓存加载失败时降级返回 false
         return traktIds.associateWith { Pair(false, false) }
+    }
+
+    /**
+     * 直接使用调用方提供的快照字段写入一条标记操作流水，不走 TMDB enrich。
+     *
+     * 用于豆瓣独立模式批量移除：MediaUiItem 已从 douban_synced_items 表带出完整快照
+     * （title/displayTitle/posterUrl/year/imdbId），无需再调 TMDB API。
+     * 超过 MAX_MARK_RECORDS 上限时自动删最旧的。失败仅记录日志，不影响主操作。
+     */
+    suspend fun insertMarkRecordWithSnapshot(
+        traktId: Int,
+        tmdbId: Int,
+        imdbId: String,
+        mediaType: MediaType,
+        title: String,
+        displayTitle: String,
+        posterUrl: String?,
+        year: Int?,
+        actionType: MarkActionType,
+        episodeInfo: String? = null
+    ) {
+        try {
+            val mediaTypeStr = if (mediaType == MediaType.MOVIE) "movie" else "show"
+            markActionRecordDao.insert(
+                MarkActionRecordEntity(
+                    traktId = traktId,
+                    tmdbId = tmdbId,
+                    imdbId = imdbId,
+                    mediaType = mediaTypeStr,
+                    title = title,
+                    displayTitle = displayTitle,
+                    posterUrl = posterUrl,
+                    year = year,
+                    actionType = actionType.value,
+                    actedAt = System.currentTimeMillis(),
+                    episodeInfo = episodeInfo
+                )
+            )
+            val count = markActionRecordDao.count()
+            if (count > MAX_MARK_RECORDS) {
+                markActionRecordDao.deleteOldest(count - MAX_MARK_RECORDS)
+            }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+            Log.w("TraktRepository", "insertMarkRecordWithSnapshot failed: ${e.message}")
+        }
     }
 
     /**

@@ -81,6 +81,10 @@ class MarkRecordViewModel @Inject constructor(
 
     private val pageSize = 50
 
+    /** Trakt 已看历史总页数（首次拉取后从缓存记录，用于 ALL Tab 分页判断）。
+     *  refresh 时重置为 0，重新拉取。 */
+    private var traktHistoryTotalPages = 0
+
     init {
         loadFirstPage()
     }
@@ -154,6 +158,8 @@ class MarkRecordViewModel @Inject constructor(
             )
         }
         traktRepository.clearWatchHistoryCache()
+        // 清缓存后 totalPages 失效，重置以便重新拉取
+        traktHistoryTotalPages = 0
         loadFirstPage()
     }
 
@@ -197,6 +203,8 @@ class MarkRecordViewModel @Inject constructor(
     private suspend fun loadPage(page: Int) {
         val state = _uiState.value
         try {
+            // ALL Tab 需要同时拉本地流水和 Trakt 已看历史,记录本地条目数用于 hasMore 判断
+            var allTabLocalItemCount = 0
             val newItems: List<MarkRecordItem> = when (state.currentTab) {
             MarkRecordTab.WATCHED -> {
                 loadFromTraktHistory(
@@ -209,36 +217,38 @@ class MarkRecordViewModel @Inject constructor(
             }
             MarkRecordTab.ALL -> {
                 val localItems = loadFromDao(page, state)
-                // ALL Tab 合并 local 自建表 + Trakt 已看历史；Trakt 失败不影响 local 展示
-                val traktItems = if (page == 1) {
+                allTabLocalItemCount = localItems.size
+                // Trakt 已看历史分页:首次(page=1)必拉以获取 totalPages,后续页按 totalPages 判断
+                val shouldFetchTrakt = page == 1 ||
+                    (traktHistoryTotalPages > 0 && page <= traktHistoryTotalPages)
+                val traktItems = if (shouldFetchTrakt) {
                     try {
-                        loadFromTraktHistory(
-                            page = 1,
-                            mediaTypesFilter = state.filterMediaTypes,
-                            onFirstBatch = { firstBatch ->
-                                val stateForUi = _uiState.value
-                                val localItemsForUi = loadFromDao(1, stateForUi)
-                                _uiState.update {
-                                    it.copy(
-                                        items = (localItemsForUi + firstBatch)
-                                            .distinctBy { itemKey(it) }
-                                            .sortedByDescending { mr -> mr.actedAt }.take(pageSize),
-                                        isLoading = false
-                                    )
-                                }
-                            }
-                        )
+                        loadFromTraktHistoryAll(page, state.filterMediaTypes)
                     } catch (e: CancellationException) { throw e } catch (_: Exception) { emptyList() }
                 } else emptyList()
+                // 首次拉取后记录 Trakt 总页数,供后续页判断是否继续拉取
+                if (page == 1 && traktHistoryTotalPages == 0) {
+                    traktHistoryTotalPages = traktRepository.getWatchHistoryTotalPages()
+                }
+                // 合并本地流水 + Trakt 已看历史,去重排序(不 take(pageSize),本页全部保留)
                 (localItems + traktItems)
                     .distinctBy { itemKey(it) }
-                    .sortedByDescending { it.actedAt }.take(pageSize)
+                    .sortedByDescending { it.actedAt }
             }
             else -> loadFromDao(page, state)
         }
             val allItems = if (page == 1) newItems else _uiState.value.items + newItems
-            // ALL Tab 是合并视图，不做分页（hasMore 恒为 false）
-            val hasMore = newItems.size == pageSize && state.currentTab != MarkRecordTab.ALL
+            // hasMore 按 Tab 分别计算:
+            // - ALL: 本地这页满 pageSize 说明本地可能还有更多;Trakt 当前页 < totalPages 说明 Trakt 还有更多
+            // - 其他: 本页满 pageSize 说明可能还有更多
+            val hasMore = when (state.currentTab) {
+                MarkRecordTab.ALL -> {
+                    val localHasMore = allTabLocalItemCount >= pageSize
+                    val traktHasMore = traktHistoryTotalPages > 0 && page < traktHistoryTotalPages
+                    localHasMore || traktHasMore
+                }
+                else -> newItems.size == pageSize
+            }
             _uiState.update {
                 it.copy(
                     items = allItems,
@@ -323,6 +333,29 @@ class MarkRecordViewModel @Inject constructor(
             }
         }
         return completed ?: emptyList()
+    }
+
+    /**
+     * ALL Tab 用的 Trakt 已看历史拉取：不带流式更新，collect 到最终结果返回。
+     *
+     * 与 [loadFromTraktHistory] 区别：ALL Tab 是合并视图，等本地流水 + Trakt 都拿到再合并更简单，
+     * 不需要 onFirstBatch 渐进式更新。
+     */
+    private suspend fun loadFromTraktHistoryAll(
+        page: Int,
+        mediaTypesFilter: Set<String>
+    ): List<MarkRecordItem> {
+        var result: List<MarkRecordItem> = emptyList()
+        traktRepository.fetchWatchHistory(page).collect { emit ->
+            if (emit.error != null) throw Exception(emit.error)
+            val filtered = if (mediaTypesFilter.isNotEmpty()) {
+                emit.items.filter { it.mediaType in mediaTypesFilter }
+            } else {
+                emit.items
+            }
+            result = filtered.map { it.toMarkRecordItem() }
+        }
+        return result
     }
 
     private fun computeTimeRange(state: MarkRecordUiState): Pair<Long, Long> {

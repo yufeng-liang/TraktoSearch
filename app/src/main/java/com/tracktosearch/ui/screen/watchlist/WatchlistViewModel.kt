@@ -9,6 +9,7 @@ import com.tracktosearch.data.local.DoubanAuthStorage
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.db.DoubanSyncedItem
 import com.tracktosearch.data.local.db.DoubanSyncedItemDao
+import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
 import com.tracktosearch.data.repository.BatchRemovalItem
@@ -814,9 +815,11 @@ class WatchlistViewModel @Inject constructor(
             return false
         }
         val traktIds = items.map { it.traktId }
+        // 传 tmdbId 给 removeFromWatchlist,以便内部 insertMarkRecord 能走 enrich 填充快照字段
+        //(否则 tmdbId=0 时流水记录标题/海报/年份全空,标记记录页显示空白卡片)
         val results = coroutineScope {
-            traktIds.map { id ->
-                async { traktRepository.removeFromWatchlist(id, type) }
+            items.map { item ->
+                async { traktRepository.removeFromWatchlist(item.traktId, type, item.tmdbId) }
             }.awaitAll()
         }
         val successCount = results.count { it.isSuccess }
@@ -855,9 +858,10 @@ class WatchlistViewModel @Inject constructor(
             return false
         }
         val traktIds = items.map { it.traktId }
+        // 传 tmdbId 给 removeWatched,以便内部 insertMarkRecord 能走 enrich 填充快照字段
         val results = coroutineScope {
-            traktIds.map { id ->
-                async { traktRepository.removeWatched(id, type) }
+            items.map { item ->
+                async { traktRepository.removeWatched(item.traktId, type, item.tmdbId) }
             }.awaitAll()
         }
         val successCount = results.count { it.isSuccess }
@@ -892,14 +896,19 @@ class WatchlistViewModel @Inject constructor(
      * - 本地表删除立即生效（UI 立即更新），无需等待网络请求
      * - 豆瓣 API 移除在 Application scope 后台运行，失败仅记录日志
      * - UI 按 selectionKey 过滤（豆瓣模式无 traktId 条目也需正确移除）
+     * - 同步写入 mark_action_record 流水（用 MediaUiItem 已有快照字段,不走 TMDB enrich），
+     *   使豆瓣模式批量移除也出现在标记记录页 REMOVED Tab
      */
     private suspend fun batchRemoveFromDouban(items: List<MediaUiItem>, isMovie: Boolean, isWatchlist: Boolean) {
         if (items.isEmpty()) return
         val selectionKeys = items.map { it.selectionKey }.toSet()
+        val mediaType = if (isMovie) MediaType.MOVIE else MediaType.SHOW
+        val actionType = if (isWatchlist) MarkActionType.REMOVE_WATCHLIST else MarkActionType.UNMARK_WATCHED
         // 1. 立即从本地表删除
         //    - 有 doubanId 的条目：直接按 doubanId 删除
         //    - 无 doubanId 的条目：通过 imdbId 查同步表反查 doubanId 后删除（fallback）
         //      覆盖"豆瓣模式无 imdb 条目直接存储"场景,避免本地表残留无法清理
+        //    同步写入 mark_action_record 流水（用 MediaUiItem 已有快照字段,不走 TMDB enrich）
         items.forEach { item ->
             val doubanId = item.doubanId
                 ?: item.imdbId.takeIf { it.isNotBlank() }?.let { imdbId ->
@@ -908,6 +917,18 @@ class WatchlistViewModel @Inject constructor(
             if (doubanId != null) {
                 doubanSyncedItemDao.deleteByDoubanId(doubanId)
             }
+            // 写入标记操作流水（豆瓣模式也记录,使移除操作出现在标记记录页 REMOVED Tab）
+            traktRepository.insertMarkRecordWithSnapshot(
+                traktId = item.traktId,
+                tmdbId = item.tmdbId,
+                imdbId = item.imdbId,
+                mediaType = mediaType,
+                title = item.title,
+                displayTitle = item.displayTitle,
+                posterUrl = item.posterUrl,
+                year = item.year,
+                actionType = actionType
+            )
         }
         // 2. 立即更新 UI（按 selectionKey 过滤,避免无 traktId 条目残留）
         _uiState.value = if (isWatchlist) {

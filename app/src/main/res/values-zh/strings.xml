@@ -1468,6 +1468,7 @@
     <string name="mark_records_time_hours_ago">%1$d 小时前</string>
     <string name="mark_records_time_days_ago">%1$d 天前</string>
     <string name="mark_records_empty_all">暂无记录</string>
+    <string name="mark_records_unknown_title">未知影视</string>
     <string name="mark_records_filter_media_type">媒体类型</string>
     <string name="mark_records_filter_date_range">日期范围</string>
     <string name="mark_records_filter_sort">排序</string>

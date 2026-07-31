@@ -1479,6 +1479,7 @@
     <string name="mark_records_filter_start_date">開始日</string>
     <string name="mark_records_filter_end_date">終了日</string>
     <string name="mark_records_empty_all">マーク記録がありません</string>
+    <string name="mark_records_unknown_title">不明なタイトル</string>
     <string name="mark_records_empty_watchlist">ウォッチリスト操作記録がありません</string>
     <string name="mark_records_empty_watched">視聴記録がありません</string>
     <string name="mark_records_empty_removed">削除操作記録がありません</string>

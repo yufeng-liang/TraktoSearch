@@ -1479,6 +1479,7 @@
     <string name="mark_records_filter_start_date">시작일</string>
     <string name="mark_records_filter_end_date">종료일</string>
     <string name="mark_records_empty_all">표시 기록이 없습니다</string>
+    <string name="mark_records_unknown_title">알 수 없는 제목</string>
     <string name="mark_records_empty_watchlist">관심목록 작업 기록이 없습니다</string>
     <string name="mark_records_empty_watched">시청 기록이 없습니다</string>
     <string name="mark_records_empty_removed">제거 작업 기록이 없습니다</string>
