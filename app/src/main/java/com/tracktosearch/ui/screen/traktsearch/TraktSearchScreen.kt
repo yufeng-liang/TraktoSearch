@@ -544,17 +544,6 @@ fun TraktSearchScreen(
                                                 modifier = Modifier.size(18.dp)
                                             )
                                         }
-                                    } else {
-                                        IconButton(
-                                            onClick = { viewModel.search(searchQuery) },
-                                            modifier = Modifier.size(28.dp)
-                                        ) {
-                                            Icon(
-                                                Icons.Rounded.Search,
-                                                contentDescription = stringResource(R.string.watchlist_search),
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -794,7 +783,7 @@ private fun DiskSearchContent(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.background)
+                                .background(Color.Transparent)
                         ) {
                             // 搜索源筛选
                             Row(
@@ -879,6 +868,7 @@ private fun DiskSearchContent(
                     itemsIndexed(filteredResources, key = { _, it -> it.url }, contentType = { _, _ -> "resource" }) { index, item ->
                         ResourceItemCard(
                             item = item,
+                            sourceName = diskState.customSourceNames[item.source],
                             isViewed = false,
                             index = index,
                             onClick = { onItemClick(item) },

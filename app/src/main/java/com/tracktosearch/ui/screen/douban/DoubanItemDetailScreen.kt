@@ -1151,6 +1151,7 @@ fun DoubanItemDetailScreen(
                                     ) { index, item ->
                                         ResourceItemCard(
                                             item = item,
+                                            sourceName = uiState.customSourceNames[item.source],
                                             isViewed = false,
                                             onClick = {
                                                 view.performHaptic(HapticType.CLICK)

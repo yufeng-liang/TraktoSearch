@@ -42,6 +42,55 @@ data class DiskStyle(
     @DrawableRes val iconRes: Int = 0
 )
 
+internal data class SourceTagColors(
+    val background: Color,
+    val content: Color
+)
+
+private val lightCustomSourceTagColors = listOf(
+    SourceTagColors(Color(0xFFD8C7A3), Color(0xFF5A4B2E)),
+    SourceTagColors(Color(0xFFD2C4D0), Color(0xFF534352)),
+    SourceTagColors(Color(0xFFB9D0CF), Color(0xFF2F4D4C)),
+    SourceTagColors(Color(0xFFD8BFC5), Color(0xFF5A3942))
+)
+
+private val darkCustomSourceTagColors = listOf(
+    SourceTagColors(Color(0xFF695A3D), Color(0xFFF0E2C1)),
+    SourceTagColors(Color(0xFF604B5F), Color(0xFFEBDCE9)),
+    SourceTagColors(Color(0xFF3F605F), Color(0xFFD9ECEB)),
+    SourceTagColors(Color(0xFF6E4650), Color(0xFFF1D9DF))
+)
+
+internal fun sourceTagColors(source: String, isDark: Boolean): SourceTagColors {
+    return when (source) {
+        "pansou" -> SourceTagColors(
+            background = if (isDark) Color(0xFF6F453A) else Color(0xFFE8C8B8),
+            content = if (isDark) Color(0xFFFFE5D9) else Color(0xFF5D4036)
+        )
+        "panhub" -> SourceTagColors(
+            background = if (isDark) Color(0xFF405747) else Color(0xFFC9D4C5),
+            content = if (isDark) Color(0xFFDEEDDF) else Color(0xFF314738)
+        )
+        "zreso" -> SourceTagColors(
+            background = if (isDark) Color(0xFF43566B) else Color(0xFFC7D2DF),
+            content = if (isDark) Color(0xFFDDE8F4) else Color(0xFF33465A)
+        )
+        else -> {
+            val paletteIndex = Math.floorMod(source.hashCode(), lightCustomSourceTagColors.size)
+            if (isDark) darkCustomSourceTagColors[paletteIndex] else lightCustomSourceTagColors[paletteIndex]
+        }
+    }
+}
+
+internal fun sourceTagLabel(source: String, customName: String?): String {
+    return when (source) {
+        "pansou" -> "PanSou"
+        "panhub" -> "PanHub"
+        "zreso" -> "Zreso"
+        else -> customName ?: source
+    }
+}
+
 fun diskStyleOf(type: DiskType): DiskStyle = when (type) {
     DiskType.QUARK -> DiskStyle(R.string.disk_quark, QuarkBlue, R.drawable.ic_disk_quark)
     DiskType.BAIDU -> DiskStyle(R.string.disk_baidu, BaiduBlue, R.drawable.ic_disk_baidu)
@@ -68,6 +117,7 @@ private fun formatFileDate(raw: String): String {
 @Composable
 fun ResourceItemCard(
     item: ResourceItem,
+    sourceName: String? = null,
     isViewed: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -77,6 +127,7 @@ fun ResourceItemCard(
     val style = diskStyleOf(item.diskType)
     val contentAlpha = if (isViewed) 0.5f else 1f
     val isLight = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    val sourceColors = sourceTagColors(item.source, isDark = !isLight)
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -180,24 +231,12 @@ fun ResourceItemCard(
                     // 来源标签
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = when (item.source) {
-                            "pansou" -> MaterialTheme.colorScheme.primaryContainer
-                            "panhub" -> MaterialTheme.colorScheme.tertiaryContainer
-                            else -> MaterialTheme.colorScheme.secondaryContainer
-                        }
+                        color = sourceColors.background
                     ) {
                         Text(
-                            text = when (item.source) {
-                                "pansou" -> "PanSou"
-                                "panhub" -> "PanHub"
-                                else -> "Zreso"
-                            },
+                            text = sourceTagLabel(item.source, sourceName),
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                            color = when (item.source) {
-                                "pansou" -> MaterialTheme.colorScheme.onPrimaryContainer
-                                "panhub" -> MaterialTheme.colorScheme.onTertiaryContainer
-                                else -> MaterialTheme.colorScheme.onSecondaryContainer
-                            },
+                            color = sourceColors.content,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }

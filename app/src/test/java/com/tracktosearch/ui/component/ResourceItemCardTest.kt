@@ -13,6 +13,7 @@ import com.tracktosearch.data.remote.dto.ResourceItem
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.graphics.Color
 
 @RunWith(AndroidJUnit4::class)
 class ResourceItemCardTest {
@@ -37,6 +38,39 @@ class ResourceItemCardTest {
             url = "https://example.com",
             source = source
         )
+    }
+
+    @Test
+    fun `source tag colors use fixed light and dark palettes`() {
+        assertThat(sourceTagColors("pansou", isDark = false).background)
+            .isEqualTo(Color(0xFFE8C8B8))
+        assertThat(sourceTagColors("pansou", isDark = true).background)
+            .isEqualTo(Color(0xFF6F453A))
+        assertThat(sourceTagColors("panhub", isDark = false).background)
+            .isEqualTo(Color(0xFFC9D4C5))
+        assertThat(sourceTagColors("panhub", isDark = true).background)
+            .isEqualTo(Color(0xFF405747))
+        assertThat(sourceTagColors("zreso", isDark = false).background)
+            .isEqualTo(Color(0xFFC7D2DF))
+        assertThat(sourceTagColors("zreso", isDark = true).background)
+            .isEqualTo(Color(0xFF43566B))
+    }
+
+    @Test
+    fun `custom source color is stable by source id and changes with theme`() {
+        val light = sourceTagColors("custom-source-a", isDark = false)
+        val dark = sourceTagColors("custom-source-a", isDark = true)
+
+        assertThat(sourceTagColors("custom-source-a", isDark = false)).isEqualTo(light)
+        assertThat(dark.background).isNotEqualTo(light.background)
+        assertThat(dark.content).isNotEqualTo(light.content)
+    }
+
+    @Test
+    fun `source tag label uses custom name only for custom source`() {
+        assertThat(sourceTagLabel("pansou", "自定义名称")).isEqualTo("PanSou")
+        assertThat(sourceTagLabel("custom-source-a", "自定义名称")).isEqualTo("自定义名称")
+        assertThat(sourceTagLabel("custom-source-a", null)).isEqualTo("custom-source-a")
     }
 
     @Test

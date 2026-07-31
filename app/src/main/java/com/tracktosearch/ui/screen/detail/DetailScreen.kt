@@ -484,6 +484,7 @@ fun DetailScreen(
                             itemsIndexed(items.take(displayedCount), key = { _, item -> item.url }, contentType = { _, _ -> "resource" }) { index, item ->
                                 ResourceItemCard(
                                     item = item,
+                                    sourceName = uiState.customSourceNames[item.source],
                                     isViewed = item.url in uiState.viewedUrls,
                                     onClick = {
                                         viewModel.markResourceViewed(item.url)
