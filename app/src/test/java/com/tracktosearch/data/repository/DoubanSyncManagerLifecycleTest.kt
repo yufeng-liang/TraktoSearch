@@ -54,7 +54,7 @@ import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
  * 构造参数顺序(共15个)与 DoubanSyncManagerCancelTest 保持一致。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncManagerLifecycleTest {
 
     // init 块依赖:必须返回有效 StateFlow,否则构造时 collect 会 NPE

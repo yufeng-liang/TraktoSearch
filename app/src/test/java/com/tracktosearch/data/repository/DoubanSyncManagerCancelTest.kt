@@ -46,7 +46,7 @@ import org.robolectric.annotation.Config
  * doubanSyncMetaStorage, doubanDetailCache, tokenStorage, statusConsistencyChecker, appContext
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncManagerCancelTest {
 
     // init 块依赖:必须返回有效 StateFlow,否则构造时 collect 会 NPE

@@ -57,7 +57,7 @@ import retrofit2.Response
  * 在测试间互不污染。测试「成功/失败后立即重复调用被节流」是可稳定验证的（间隔远小于窗口）。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class CloudPersonalSyncManagerTest {
 
     private val giteeContentsApi = mockk<GiteeContentsApi>(relaxed = true)

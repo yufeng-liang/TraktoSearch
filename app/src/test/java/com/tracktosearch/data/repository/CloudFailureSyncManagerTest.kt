@@ -50,7 +50,7 @@ import retrofit2.Response
  * 加密方式与 Manager 一致：AesCrypto.encrypt(payloadJson) → base64(encrypted.toByteArray(UTF-8))。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class CloudFailureSyncManagerTest {
 
     private val giteeApi = mockk<GiteeContentsApi>(relaxed = true)

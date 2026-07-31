@@ -62,7 +62,7 @@ import org.robolectric.annotation.Config
  * MutableStateFlow，否则 init 块 collect 会 NPE。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncManagerTest {
 
     // init 块依赖：必须返回有效 StateFlow，否则构造时 collect 会 NPE

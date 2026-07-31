@@ -36,7 +36,7 @@ import retrofit2.Response
  * 使用 Robolectric：AesCrypto 依赖 android.util.Base64。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class CloudDetailsPoolManagerTest {
 
     private val giteeApi = mockk<GiteeContentsApi>(relaxed = true)

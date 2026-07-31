@@ -34,7 +34,7 @@ import java.util.Locale
  * translateComments 用 withContext(Dispatchers.IO) + async/awaitAll，用 runBlocking 避免虚拟时间问题。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class CommentTranslatorTest {
 
     private val translateApi = io.mockk.mockk<TranslateApiService>(relaxed = true)

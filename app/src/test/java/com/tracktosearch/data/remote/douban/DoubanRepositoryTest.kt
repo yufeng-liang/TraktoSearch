@@ -48,7 +48,7 @@ import java.util.concurrent.TimeUnit
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanRepositoryTest {
 
     @get:Rule
@@ -884,7 +884,7 @@ class DoubanRepositoryTest {
             // 应抛异常，不应执行到这里
             assertThat(false).isTrue()
         } catch (e: DoubanCookieExpiredException) {
-            assertThat(e.message).contains("豆瓣登录已过期")
+            assertThat(e.message).contains("Douban cookie expired")
         }
     }
 

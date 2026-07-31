@@ -54,7 +54,7 @@ import org.robolectric.annotation.Config
  * 测试通过轮询 checkProgress.value.isComplete 等待协程完成。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanTraktStatusConsistencyCheckerTest {
 
     // init 块依赖：必须返回有效 StateFlow，否则构造时 collect 会 NPE

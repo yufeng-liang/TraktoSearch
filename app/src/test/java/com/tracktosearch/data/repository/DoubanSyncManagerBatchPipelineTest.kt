@@ -60,7 +60,7 @@ import kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED
  * 流水线在调用线程快速完成,反射调用同步返回结果。
  */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DoubanSyncManagerBatchPipelineTest {
 
     // init 块依赖:必须返回有效 StateFlow,否则构造时 collect 会 NPE
