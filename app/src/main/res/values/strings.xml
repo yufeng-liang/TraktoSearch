@@ -1505,4 +1505,25 @@ Config:
     <string name="settings_section_cache">Cache</string>
     <string name="settings_section_data">Import &amp; Export</string>
     <string name="settings_section_about">About</string>
+
+    <!-- Feedback Messages -->
+    <string name="feedback_messages">Messages</string>
+    <string name="feedback_messages_title">Messages</string>
+    <string name="feedback_messages_empty">No messages yet</string>
+    <string name="feedback_messages_all_read">Mark all as read</string>
+    <string name="feedback_filter_all">All</string>
+    <string name="feedback_filter_unread">Unread</string>
+    <string name="feedback_filter_developer">Developer</string>
+    <string name="feedback_filter_mine">Mine</string>
+    <string name="feedback_role_developer">Developer</string>
+    <string name="feedback_role_me">Me</string>
+    <string name="feedback_conversation">Conversation</string>
+    <string name="feedback_reply_placeholder">Add more details…</string>
+    <string name="feedback_reply_send">Send</string>
+    <string name="feedback_reply_uploading">Uploading screenshots (%1$d/%2$d)</string>
+    <string name="feedback_reply_failed">Reply failed, please retry</string>
+    <string name="feedback_closed_hint">This feedback is closed</string>
+    <string name="feedback_load_more">Load more</string>
+    <string name="feedback_unread_count_format">Unread %1$d</string>
+    <string name="feedback_id_format">#%1$s</string>
 </resources>

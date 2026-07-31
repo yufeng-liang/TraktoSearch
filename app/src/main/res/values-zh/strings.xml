@@ -1504,4 +1504,25 @@
     <string name="settings_section_cache">缓存管理</string>
     <string name="settings_section_data">导入与导出</string>
     <string name="settings_section_about">关于</string>
+
+    <!-- 反馈消息 -->
+    <string name="feedback_messages">消息</string>
+    <string name="feedback_messages_title">消息</string>
+    <string name="feedback_messages_empty">暂无消息</string>
+    <string name="feedback_messages_all_read">全部已读</string>
+    <string name="feedback_filter_all">全部</string>
+    <string name="feedback_filter_unread">未读</string>
+    <string name="feedback_filter_developer">开发者</string>
+    <string name="feedback_filter_mine">我的</string>
+    <string name="feedback_role_developer">开发者</string>
+    <string name="feedback_role_me">我</string>
+    <string name="feedback_conversation">对话</string>
+    <string name="feedback_reply_placeholder">补充更多细节…</string>
+    <string name="feedback_reply_send">发送</string>
+    <string name="feedback_reply_uploading">上传截图 (%1$d/%2$d)</string>
+    <string name="feedback_reply_failed">回复失败，请重试</string>
+    <string name="feedback_closed_hint">该反馈已关闭</string>
+    <string name="feedback_load_more">加载更多</string>
+    <string name="feedback_unread_count_format">未读 %1$d</string>
+    <string name="feedback_id_format">#%1$s</string>
 </resources>

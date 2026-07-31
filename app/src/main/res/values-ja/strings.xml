@@ -1518,4 +1518,25 @@
     <string name="settings_section_cache">キャッシュ管理</string>
     <string name="settings_section_data">インポートとエクスポート</string>
     <string name="settings_section_about">について</string>
+
+    <!-- フィードバックメッセージ -->
+    <string name="feedback_messages">メッセージ</string>
+    <string name="feedback_messages_title">メッセージ</string>
+    <string name="feedback_messages_empty">メッセージはありません</string>
+    <string name="feedback_messages_all_read">すべて既読にする</string>
+    <string name="feedback_filter_all">すべて</string>
+    <string name="feedback_filter_unread">未読</string>
+    <string name="feedback_filter_developer">開発者</string>
+    <string name="feedback_filter_mine">自分</string>
+    <string name="feedback_role_developer">開発者</string>
+    <string name="feedback_role_me">自分</string>
+    <string name="feedback_conversation">会話</string>
+    <string name="feedback_reply_placeholder">詳細を追加…</string>
+    <string name="feedback_reply_send">送信</string>
+    <string name="feedback_reply_uploading">スクリーンショットをアップロード中 (%1$d/%2$d)</string>
+    <string name="feedback_reply_failed">返信に失敗しました。再試行してください</string>
+    <string name="feedback_closed_hint">このフィードバックは閉じられました</string>
+    <string name="feedback_load_more">もっと読み込む</string>
+    <string name="feedback_unread_count_format">未読 %1$d</string>
+    <string name="feedback_id_format">#%1$s</string>
 </resources>

@@ -1518,4 +1518,25 @@
     <string name="settings_section_cache">캐시 관리</string>
     <string name="settings_section_data">가져오기 및 내보내기</string>
     <string name="settings_section_about">정보</string>
+
+    <!-- 피드백 메시지 -->
+    <string name="feedback_messages">메시지</string>
+    <string name="feedback_messages_title">메시지</string>
+    <string name="feedback_messages_empty">메시지가 없습니다</string>
+    <string name="feedback_messages_all_read">모두 읽음으로 표시</string>
+    <string name="feedback_filter_all">전체</string>
+    <string name="feedback_filter_unread">읽지 않음</string>
+    <string name="feedback_filter_developer">개발자</string>
+    <string name="feedback_filter_mine">내 것</string>
+    <string name="feedback_role_developer">개발자</string>
+    <string name="feedback_role_me">나</string>
+    <string name="feedback_conversation">대화</string>
+    <string name="feedback_reply_placeholder">더 많은 세부정보 추가…</string>
+    <string name="feedback_reply_send">보내기</string>
+    <string name="feedback_reply_uploading">스크린샷 업로드 중 (%1$d/%2$d)</string>
+    <string name="feedback_reply_failed">답장 실패, 다시 시도하세요</string>
+    <string name="feedback_closed_hint">이 피드백은 닫혔습니다</string>
+    <string name="feedback_load_more">더 불러오기</string>
+    <string name="feedback_unread_count_format">읽지 않음 %1$d</string>
+    <string name="feedback_id_format">#%1$s</string>
 </resources>
