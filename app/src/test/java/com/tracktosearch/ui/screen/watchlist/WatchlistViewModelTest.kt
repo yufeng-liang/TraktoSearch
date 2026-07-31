@@ -305,7 +305,7 @@ class WatchlistViewModelTest {
             Result.success(TraktSyncResponse())
         every { doubanBatchRemovalManager.startRemoval(any(), any()) } returns true
 
-        viewModel.batchRemoveFromWatchlist(listOf(1), MediaType.MOVIE)
+        viewModel.batchRemoveFromWatchlist(listOf(viewModel.uiState.value.movies.first()), MediaType.MOVIE)
 
         assertThat(viewModel.uiState.value.movies).hasSize(1)
         verify { doubanBatchRemovalManager.startRemoval(any(), true) }
@@ -326,7 +326,7 @@ class WatchlistViewModelTest {
             Result.success(TraktSyncResponse())
         every { doubanBatchRemovalManager.startRemoval(any(), any()) } returns true
 
-        viewModel.batchRemoveFromHistory(listOf(1), MediaType.MOVIE)
+        viewModel.batchRemoveFromHistory(listOf(viewModel.uiState.value.historyMovies.first()), MediaType.MOVIE)
 
         assertThat(viewModel.uiState.value.historyMovies).hasSize(1)
     }

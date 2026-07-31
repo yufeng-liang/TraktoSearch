@@ -767,7 +767,7 @@ class DoubanRepositoryTest {
     fun markInterest_成功返回r0(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"r":0}"""))
 
-        val result = repository.markInterest("wish", "123", "testcookie", "ck123")
+        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
 
         assertThat(result.success).isTrue()
         assertThat(result.statusCode).isEqualTo(200)
@@ -778,7 +778,7 @@ class DoubanRepositoryTest {
     fun markInterest_非r0返回失败(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setBody("""{"r":1,"msg":"已标记"}"""))
 
-        val result = repository.markInterest("wish", "123", "testcookie", "ck123")
+        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
 
         assertThat(result.success).isFalse()
         assertThat(result.statusCode).isEqualTo(200)
@@ -788,7 +788,7 @@ class DoubanRepositoryTest {
     fun markInterest_500返回失败(): Unit = runBlocking {
         mockWebServer.enqueue(MockResponse().setResponseCode(500).setBody("error"))
 
-        val result = repository.markInterest("wish", "123", "testcookie", "ck123")
+        val result = repository.markInterestByCk("wish", "123", "testcookie", "ck123")
 
         assertThat(result.success).isFalse()
         assertThat(result.statusCode).isEqualTo(500)

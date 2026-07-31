@@ -84,6 +84,8 @@ class DoubanSyncManagerTest {
     private val doubanDetailCache = mockk<PersistentTtlCache<DoubanDetailCacheEntry>>(relaxed = true)
     private val tokenStorage = mockk<TokenStorage>(relaxed = true)
     private val statusConsistencyChecker = mockk<DoubanTraktStatusConsistencyChecker>(relaxed = true)
+    private val sessionModeManager = mockk<com.tracktosearch.data.session.SessionModeManager>(relaxed = true)
+    private val tmdbRepository = mockk<TmdbRepository>(relaxed = true)
     private val appContext: Context = RuntimeEnvironment.getApplication()
 
     private lateinit var manager: DoubanSyncManager
@@ -105,7 +107,9 @@ class DoubanSyncManagerTest {
             doubanSyncMetaStorage,
             doubanDetailCache,
             tokenStorage,
-            statusConsistencyChecker
+            statusConsistencyChecker,
+            sessionModeManager,
+            tmdbRepository
         )
         // 重新 stub delayEvent（init 块已 collect 过，但保持 stub 一致避免后续访问 NPE）
         every { doubanRepository.delayEvent } returns delayEventFlow
@@ -125,6 +129,8 @@ class DoubanSyncManagerTest {
             doubanDetailCache,
             tokenStorage,
             statusConsistencyChecker,
+            sessionModeManager,
+            tmdbRepository,
             appContext
         )
     }

@@ -225,9 +225,8 @@ class CloudPersonalSyncManagerTest {
      * 加密链路与 Manager.uploadEncrypted 完全一致。
      */
     private fun buildCloudResponseJson(payloadJson: String, sha: String): JsonObject {
-        val encrypted = AesCrypto.encrypt(payloadJson)
         val base64Content = Base64.encodeToString(
-            encrypted.toByteArray(Charsets.UTF_8),
+            payloadJson.toByteArray(Charsets.UTF_8),
             Base64.NO_WRAP
         )
         return buildJsonObject {
@@ -245,11 +244,10 @@ class CloudPersonalSyncManagerTest {
 
     /** 从上传请求体解密还原 payload JSON（解密链路与 Manager 下载逻辑一致） */
     private fun decryptRequestContent(request: GiteeContentRequest): String {
-        val encrypted = String(
+        return String(
             Base64.decode(request.content, Base64.NO_WRAP),
             Charsets.UTF_8
         )
-        return AesCrypto.decrypt(encrypted)!!
     }
 
     // ============================================================

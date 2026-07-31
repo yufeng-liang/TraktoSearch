@@ -3,6 +3,7 @@ package com.tracktosearch.data.util
 import android.util.LruCache
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.remote.trakt.dto.TraktComment
+import com.tracktosearch.data.remote.translate.TranslateApiService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.spyk
@@ -36,13 +37,14 @@ import java.util.Locale
 @Config(sdk = [33])
 class CommentTranslatorTest {
 
+    private val translateApi = io.mockk.mockk<TranslateApiService>(relaxed = true)
     private lateinit var translator: CommentTranslator
     private var originalLocale: Locale? = null
 
     @Before
     fun setup() {
         originalLocale = Locale.getDefault()
-        translator = spyk(CommentTranslator(), recordPrivateCalls = true)
+        translator = spyk(CommentTranslator(translateApi), recordPrivateCalls = true)
     }
 
     @After

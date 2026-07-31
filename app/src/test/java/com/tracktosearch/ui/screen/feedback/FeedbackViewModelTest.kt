@@ -9,6 +9,7 @@ import com.tracktosearch.data.remote.feedback.FeedbackDetailResponse
 import com.tracktosearch.data.remote.feedback.FeedbackListItem
 import com.tracktosearch.data.remote.feedback.MineResponse
 import com.tracktosearch.data.remote.feedback.SubmitFeedbackResponse
+import com.tracktosearch.data.repository.FeedbackCacheStore
 import com.tracktosearch.data.repository.FeedbackRepository
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
@@ -28,6 +29,7 @@ class FeedbackViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val feedbackRepository = mockk<FeedbackRepository>()
+    private val cacheStore = mockk<FeedbackCacheStore>(relaxed = true)
     private val authManager = mockk<AuthManager>()
     private val userProfileStorage = mockk<UserProfileStorage>()
     private val doubanAuthStorage = mockk<DoubanAuthStorage>()
@@ -36,7 +38,7 @@ class FeedbackViewModelTest {
         every { authManager.nickname } returns MutableStateFlow(null)
         coEvery { userProfileStorage.getProfile() } returns null
         every { doubanAuthStorage.doubanProfile } returns MutableStateFlow(null)
-        return FeedbackViewModel(feedbackRepository, authManager, userProfileStorage, doubanAuthStorage)
+        return FeedbackViewModel(feedbackRepository, cacheStore, authManager, userProfileStorage, doubanAuthStorage)
     }
 
     @Test

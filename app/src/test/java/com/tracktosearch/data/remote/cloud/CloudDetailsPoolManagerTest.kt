@@ -64,9 +64,8 @@ class CloudDetailsPoolManagerTest {
         sha: String
     ): JsonObject {
         val payloadJson = buildShardJson(entries)
-        val encrypted = AesCrypto.encrypt(payloadJson)
         val base64Content = android.util.Base64.encodeToString(
-            encrypted.toByteArray(Charsets.UTF_8),
+            payloadJson.toByteArray(Charsets.UTF_8),
             android.util.Base64.NO_WRAP
         )
         return buildJsonObject {
@@ -77,11 +76,10 @@ class CloudDetailsPoolManagerTest {
 
     // 辅助：从上传的 GiteeContentRequest 解密 content 还原 payload JSON
     private fun decryptRequestContent(request: GiteeContentRequest): String {
-        val encrypted = String(
+        return String(
             android.util.Base64.decode(request.content, android.util.Base64.NO_WRAP),
             Charsets.UTF_8
         )
-        return AesCrypto.decrypt(encrypted)!!
     }
 
     // 辅助：从 payload JSON 提取某 doubanId 对应的 entry

@@ -15,11 +15,21 @@ import retrofit2.Response
 
 class FeedbackRepositoryTest {
 
+    private abstract class TestFeedbackApi : FeedbackApiService {
+        override suspend fun markAsRead(id: String) = error("not used")
+        override suspend fun markAllRead() = error("not used")
+        override suspend fun getUnreadCount() = error("not used")
+        override suspend fun getMessages(limit: Int, offset: Int) = error("not used")
+        override suspend fun reply(id: String, request: com.tracktosearch.data.remote.feedback.ReplyRequest) = error("not used")
+    }
+
+    private val cacheStore = io.mockk.mockk<FeedbackCacheStore>(relaxed = true)
+
     private val friendNickname = "测试朋友"
 
     @Test
     fun `submit success returns id`() = runTest {
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.success(
                 FeedbackResponse("SUCCESS", "OK", "r1", com.tracktosearch.data.remote.feedback.UploadScreenshotResponse("k1"))
             )
@@ -36,7 +46,7 @@ class FeedbackRepositoryTest {
                 ))
             )
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.submit(
             type = "BUG",
             content = "test content",
@@ -55,20 +65,20 @@ class FeedbackRepositoryTest {
 
     @Test
     fun `submit network error returns failure`() = runTest {
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
             override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("network")
             override suspend fun getMine(limit: Int, offset: Int) = error("not used")
             override suspend fun getDetail(id: String) = error("not used")
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.submit("BUG", "test", null, emptyList(), friendNickname, null, null, "1.0", "14", "Pixel")
         assertTrue(result.isFailure)
     }
 
     @Test
     fun `uploadScreenshot success returns key`() = runTest {
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.success(
                 FeedbackResponse("SUCCESS", "OK", "r1", com.tracktosearch.data.remote.feedback.UploadScreenshotResponse("r2key-abc"))
             )
@@ -76,7 +86,7 @@ class FeedbackRepositoryTest {
             override suspend fun getMine(limit: Int, offset: Int) = error("not used")
             override suspend fun getDetail(id: String) = error("not used")
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.uploadScreenshot(byteArrayOf(1, 2, 3), "image/jpeg")
         assertTrue(result.isSuccess)
         assertEquals("r2key-abc", result.getOrNull())
@@ -84,7 +94,7 @@ class FeedbackRepositoryTest {
 
     @Test
     fun `uploadScreenshot http failure returns failure`() = runTest {
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = Response.error<FeedbackResponse<com.tracktosearch.data.remote.feedback.UploadScreenshotResponse>>(
                 413,
                 okhttp3.ResponseBody.Companion.create(null, "")
@@ -93,7 +103,7 @@ class FeedbackRepositoryTest {
             override suspend fun getMine(limit: Int, offset: Int) = error("not used")
             override suspend fun getDetail(id: String) = error("not used")
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.uploadScreenshot(byteArrayOf(1, 2, 3), "image/jpeg")
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is IllegalStateException)
@@ -106,7 +116,7 @@ class FeedbackRepositoryTest {
             com.tracktosearch.data.remote.feedback.FeedbackListItem("fb1", "BUG", "content1", null, "PENDING", 1700000000L),
             com.tracktosearch.data.remote.feedback.FeedbackListItem("fb2", "SUGGESTION", "content2", """["key1"]""", "REPLIED", 1700000001L)
         )
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
             override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
             override suspend fun getMine(limit: Int, offset: Int) = Response.success(
@@ -114,7 +124,7 @@ class FeedbackRepositoryTest {
             )
             override suspend fun getDetail(id: String) = error("not used")
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.getMine()
         assertTrue(result.isSuccess)
         assertEquals(2, result.getOrNull()?.feedbacks?.size)
@@ -124,7 +134,7 @@ class FeedbackRepositoryTest {
 
     @Test
     fun `getDetail http failure returns failure`() = runTest {
-        val api = object : FeedbackApiService {
+        val api = object : TestFeedbackApi() {
             override suspend fun uploadScreenshot(file: MultipartBody.Part) = error("not used")
             override suspend fun submit(request: com.tracktosearch.data.remote.feedback.SubmitFeedbackRequest) = error("not used")
             override suspend fun getMine(limit: Int, offset: Int) = error("not used")
@@ -133,7 +143,7 @@ class FeedbackRepositoryTest {
                 okhttp3.ResponseBody.Companion.create(null, "")
             )
         }
-        val repo = FeedbackRepository(api)
+        val repo = FeedbackRepository(api, cacheStore)
         val result = repo.getDetail("not-exist")
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()?.message?.contains("404") == true)

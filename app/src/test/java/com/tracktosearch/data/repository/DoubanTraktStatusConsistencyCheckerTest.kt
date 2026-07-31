@@ -130,7 +130,7 @@ class DoubanTraktStatusConsistencyCheckerTest {
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "csrf-token"
         coEvery {
             doubanRepository.markInterest(any(), any(), any(), any())
-        } returns MarkWriteResult(success = true, statusCode = 200, message = "ok")
+        } returns true
     }
 
     /** 轮询等待 checkProgress.isComplete == true 且 !isRunning()，带超时保护避免死锁 */

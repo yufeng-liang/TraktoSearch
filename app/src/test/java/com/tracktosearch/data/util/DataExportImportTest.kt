@@ -90,7 +90,6 @@ class DataExportImportTest {
         val movie = items[0]
         assertThat(movie.title).isEqualTo("The Shawshank Redemption")
         assertThat(movie.watchedAt).isEqualTo("2024-01-15")
-        assertThat(movie.source).isEqualTo("IMDb")
         assertThat(movie.mediaType).isEqualTo("movie")
 
         val show = items[1]

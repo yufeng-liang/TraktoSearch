@@ -3,6 +3,7 @@ package com.tracktosearch.data.repository
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.DoubanSyncFailureEntity
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanDetailInfo
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
@@ -48,18 +49,20 @@ class DoubanRetryManagerTest {
     }
     private val doubanSyncFailureDao = mockk<DoubanSyncFailureDao>(relaxed = true)
     private val cloudDetailsPoolManager = mockk<CloudDetailsPoolManager>(relaxed = true)
+    private val doubanSyncedItemDao = mockk<DoubanSyncedItemDao>(relaxed = true)
 
     private val manager = DoubanRetryManager(
         doubanSyncFailureDao,
         doubanSyncManager,
-        cloudDetailsPoolManager
+        cloudDetailsPoolManager,
+        doubanSyncedItemDao
     )
 
     @Before
     fun setUp() {
         // 清除前序测试的 stub 和调用记录，确保 coVerify(exactly = 0) 不受干扰
         // 注意：clearMocks 会清除 progress 的 stub，但 init 块已执行过（持有 syncProgress 引用），不受影响
-        clearMocks(doubanSyncFailureDao, doubanSyncManager, cloudDetailsPoolManager)
+        clearMocks(doubanSyncFailureDao, doubanSyncManager, cloudDetailsPoolManager, doubanSyncedItemDao)
         // 重新 stub progress（虽然 init 块不再访问，但保持 mock 状态一致）
         every { doubanSyncManager.progress } returns syncProgress
     }

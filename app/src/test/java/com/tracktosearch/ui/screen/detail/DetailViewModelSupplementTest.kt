@@ -655,7 +655,7 @@ class DetailViewModelSupplementTest {
         every { doubanAuthStorage.getCredentials() } returns cred
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "fake_ck"
         coEvery { doubanRepository.markInterest(any(), any(), any(), any()) } returns
-            MarkWriteResult(success = true, statusCode = 0, message = "")
+            true
 
         viewModel.retryDoubanSync()
         advanceUntilIdle()
@@ -679,7 +679,7 @@ class DetailViewModelSupplementTest {
         every { doubanAuthStorage.getCredentials() } returns cred
         coEvery { doubanRepository.fetchCsrfToken(any(), any()) } returns "fake_ck"
         coEvery { doubanRepository.markInterest(any(), any(), any(), any()) } returns
-            MarkWriteResult(success = false, statusCode = 500, message = "fail")
+            false
 
         viewModel.retryDoubanSync()
         advanceUntilIdle()

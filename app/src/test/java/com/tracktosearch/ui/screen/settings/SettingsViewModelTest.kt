@@ -3,6 +3,7 @@ package com.tracktosearch.ui.screen.settings
 import android.content.Context
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.CustomSearchSourceStorage
+import com.tracktosearch.data.local.CrashLogStorage
 import com.tracktosearch.data.local.DefaultTabStorage
 import com.tracktosearch.data.local.DetailSectionStorage
 import com.tracktosearch.data.local.DiscoverSectionStorage
@@ -16,6 +17,7 @@ import com.tracktosearch.data.local.SearchSourceStorage
 import com.tracktosearch.data.local.SharedTransitionStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.local.db.OfflineCacheManager
+import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.notification.NotificationScheduler
 import com.tracktosearch.data.remote.custom.CustomSearchService
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
@@ -25,12 +27,14 @@ import com.tracktosearch.data.remote.panhub.PanHubConfig
 import com.tracktosearch.data.repository.CloudPersonalSyncManager
 import com.tracktosearch.data.repository.ConsistencyCheckResult
 import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.data.repository.DoubanBatchRemovalManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanTraktStatusConsistencyChecker
 import com.tracktosearch.data.repository.TmdbRepository
 import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.repository.UpdateRepository
 import com.tracktosearch.data.util.PersistentTtlCache
+import com.tracktosearch.data.session.SessionModeManager
 import com.tracktosearch.test.MainDispatcherRule
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -71,6 +75,7 @@ class SettingsViewModelTest {
     private lateinit var searchSourceStorage: SearchSourceStorage
     private lateinit var notificationStorage: NotificationStorage
     private lateinit var notificationScheduler: NotificationScheduler
+    private lateinit var crashLogStorage: CrashLogStorage
     private lateinit var languageStorage: LanguageStorage
     private lateinit var traktRepository: TraktRepository
     private lateinit var tmdbRepository: TmdbRepository
@@ -92,7 +97,10 @@ class SettingsViewModelTest {
     private lateinit var lastConsistencyCheckStorage: LastConsistencyCheckStorage
     private lateinit var statusConsistencyChecker: DoubanTraktStatusConsistencyChecker
     private lateinit var doubanSyncManager: DoubanSyncManager
+    private lateinit var doubanBatchRemovalManager: DoubanBatchRemovalManager
     private lateinit var sharedTransitionStorage: SharedTransitionStorage
+    private lateinit var doubanSyncedItemDao: DoubanSyncedItemDao
+    private lateinit var sessionModeManager: SessionModeManager
     private lateinit var context: Context
 
     private lateinit var viewModel: SettingsViewModel
@@ -104,6 +112,7 @@ class SettingsViewModelTest {
         searchSourceStorage = mockk(relaxed = true)
         notificationStorage = mockk(relaxed = true)
         notificationScheduler = mockk(relaxed = true)
+        crashLogStorage = mockk(relaxed = true)
         languageStorage = mockk(relaxed = true)
         traktRepository = mockk(relaxed = true)
         tmdbRepository = mockk(relaxed = true)
@@ -125,7 +134,10 @@ class SettingsViewModelTest {
         lastConsistencyCheckStorage = mockk(relaxed = true)
         statusConsistencyChecker = mockk(relaxed = true)
         doubanSyncManager = mockk(relaxed = true)
+        doubanBatchRemovalManager = mockk(relaxed = true)
         sharedTransitionStorage = mockk(relaxed = true)
+        doubanSyncedItemDao = mockk(relaxed = true)
+        sessionModeManager = mockk(relaxed = true)
         context = RuntimeEnvironment.getApplication()
 
         // 构造时直接赋值的 StateFlow 属性必须在 ViewModel 构造前 stub
@@ -158,14 +170,37 @@ class SettingsViewModelTest {
         coEvery { doubanHotCache.getSizeBytes() } returns 0L
 
         viewModel = SettingsViewModel(
-            themeStorage, searchSourceStorage, notificationStorage, notificationScheduler,
-            languageStorage, traktRepository, tmdbRepository, updateRepository,
-            offlineCacheManager, doubanHotCache, doubanDetailCache,
-            discoverSectionStorage, detailSectionStorage, customSearchSourceStorage,
-            customSearchService, panHubConfigStorage, defaultTabStorage,
-            doubanAuthStorage, doubanRepository, cloudPersonalSyncManager,
-            doubanSyncMetaStorage, cloudFailureSyncMetaStorage, lastConsistencyCheckStorage,
-            statusConsistencyChecker, doubanSyncManager, sharedTransitionStorage, context
+            themeStorage = themeStorage,
+            searchSourceStorage = searchSourceStorage,
+            notificationStorage = notificationStorage,
+            notificationScheduler = notificationScheduler,
+            crashLogStorage = crashLogStorage,
+            languageStorage = languageStorage,
+            traktRepository = traktRepository,
+            tmdbRepository = tmdbRepository,
+            updateRepository = updateRepository,
+            offlineCacheManager = offlineCacheManager,
+            doubanHotCache = doubanHotCache,
+            doubanDetailCache = doubanDetailCache,
+            discoverSectionStorage = discoverSectionStorage,
+            detailSectionStorage = detailSectionStorage,
+            customSearchSourceStorage = customSearchSourceStorage,
+            customSearchService = customSearchService,
+            panHubConfigStorage = panHubConfigStorage,
+            defaultTabStorage = defaultTabStorage,
+            doubanAuthStorage = doubanAuthStorage,
+            doubanRepository = doubanRepository,
+            cloudPersonalSyncManager = cloudPersonalSyncManager,
+            doubanSyncMetaStorage = doubanSyncMetaStorage,
+            cloudFailureSyncMetaStorage = cloudFailureSyncMetaStorage,
+            lastConsistencyCheckStorage = lastConsistencyCheckStorage,
+            statusConsistencyChecker = statusConsistencyChecker,
+            doubanSyncManager = doubanSyncManager,
+            doubanBatchRemovalManager = doubanBatchRemovalManager,
+            sharedTransitionStorage = sharedTransitionStorage,
+            doubanSyncedItemDao = doubanSyncedItemDao,
+            sessionModeManager = sessionModeManager,
+            context = context
         )
     }
 
