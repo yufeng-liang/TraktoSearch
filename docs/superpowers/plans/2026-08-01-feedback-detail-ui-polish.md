@@ -13,15 +13,15 @@
 - 不修改反馈 API、DTO 或 Repository 数据协议。
 - 新建反馈页从 `Routes.MAIN` 获取共享 ViewModel，使用同一实例刷新反馈列表。
 
-## 任务 1：先补充列表刷新回归测试
+## 任务 1：锁定列表刷新契约
 
 **文件：**
 
 - 修改：`app/src/test/java/com/tracktosearch/ui/screen/feedback/FeedbackViewModelTest.kt:45-65`
 
-### 步骤 1：编写失败测试
+### 步骤 1：补充刷新契约测试
 
-在现有 `loadList success updates listState to Success` 测试之后新增测试，先返回旧列表，再返回包含新反馈的刷新列表，验证 `loadList(refresh = true)` 会替换旧列表。
+在现有 `loadList success updates listState to Success` 测试之后新增测试，先返回旧列表，再返回包含新反馈的刷新列表，验证 `loadList(refresh = true)` 会替换旧列表。该测试锁定现有 ViewModel 契约，实际修复点在任务 3 的共享 ViewModel 导航和刷新触发。
 
 ```kotlin
 @Test
@@ -44,7 +44,7 @@ fun `loadList refresh replaces previous items`() = runTest {
 }
 ```
 
-### 步骤 2：运行测试确认行为边界
+### 步骤 2：运行测试确认刷新契约
 
 运行：
 
