@@ -310,6 +310,41 @@ const API = {
     post(path, body) { return this.request('POST', path, body); },
     patch(path, body) { return this.request('PATCH', path, body); },
 
+    // 上传截图（multipart/form-data，不走通用 request）
+    async uploadScreenshot(path, file) {
+        const token = this.getToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const controller = new AbortController();
+        activeRequestControllers.add(controller);
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await fetch(`${API_BASE}${path}`, {
+                method: 'POST',
+                headers,
+                body: formData,
+                signal: controller.signal,
+            });
+            if (response.status === 401) {
+                localStorage.removeItem('tts-access-token');
+                window.location.href = this.getAccessLoginUrl();
+                throw new Error('UNAUTHORIZED');
+            }
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data?.message || `Upload failed (${response.status})`);
+            }
+            return data.data;  // { key: 'admin/xxx.jpg' }
+        } finally {
+            clearTimeout(timeoutId);
+            activeRequestControllers.delete(controller);
+        }
+    },
+
     // Access 登录 URL（替换为实际 team domain）
     getAccessLoginUrl() {
         const teamDomain = localStorage.getItem('tts-access-team') || 'douban-movie-api-peak';
@@ -1986,7 +2021,9 @@ function renderFeedback(container, renderToken) {
                     const statusColor = statusColors[f.status] || '#9ca3af';
                     const screenshotBadge = f.screenshots ? '📷' : '';
                     const contentPreview = escapeHtml((f.content || '').slice(0, 50)) + (f.content && f.content.length > 50 ? '...' : '');
+                    const displayId = escapeHtml(f.displayId || f.display_id || '');
                     return `<tr data-id="${escapeHtml(f.id)}" class="fb-row" style="cursor:pointer">
+                        <td><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span></td>
                         <td><span class="badge" style="background:${typeColor};color:white">${typeLabel}</span></td>
                         <td>${escapeHtml(f.friend_nickname || '—')}</td>
                         <td>${contentPreview}</td>
@@ -1997,7 +2034,7 @@ function renderFeedback(container, renderToken) {
                 }).join('');
                 tableWrap.innerHTML = `
                     <div class="table-scroll"><table>
-                        <thead><tr><th>类型</th><th>朋友</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
+                        <thead><tr><th>ID</th><th>类型</th><th>朋友</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table></div>
                 `;
@@ -2034,8 +2071,11 @@ function showFeedbackDetail(id, container, renderToken) {
         const f = data.feedback || {};
         const replies = data.replies || [];
         const typeLabels = { FEATURE: '功能建议', BUG: 'Bug 报告', UX: '体验问题', OTHER: '其他' };
+        const typeColors = { FEATURE: '#34d399', BUG: '#fb7185', UX: '#fbbf24', OTHER: '#9ca3af' };
         const statusLabels = { PENDING: '待处理', REPLIED: '已回复', CLOSED: '已关闭' };
         const statusColors = { PENDING: '#fb923c', REPLIED: '#10b981', CLOSED: '#9ca3af' };
+        const typeColor = typeColors[f.type] || '#9ca3af';
+        const displayId = escapeHtml(f.displayId || f.display_id || '');
 
         let screenshotsHtml = '';
         if (f.screenshots) {
@@ -2047,16 +2087,30 @@ function showFeedbackDetail(id, container, renderToken) {
             } catch { /* screenshots 不是合法 JSON，忽略 */ }
         }
 
-        const repliesHtml = replies.map(r => `
-            <div class="reply-item" style="padding:12px;border-radius:8px;background:var(--surface-2);margin-bottom:8px">
-                <div>${escapeHtml(r.content || '')}</div>
-                <div style="color:var(--text-dim);font-size:12px;margin-top:4px">${formatTime(r.created_at)}</div>
-            </div>
-        `).join('');
+        const repliesHtml = replies.map(r => {
+            const role = r.authorRole || r.author_role || 'developer';
+            const screenshotsArr = Array.isArray(r.screenshots) ? r.screenshots : [];
+            const roleLabel = role === 'developer' ? '开发者' : '用户';
+            const screenshotsInner = screenshotsArr.length > 0
+                ? `<div class="fb-bubble-screenshots">${screenshotsArr.map(k => {
+                    const src = `${FEEDBACK_SCREENSHOT_BASE_URL}/${encodeURIComponent(k)}`;
+                    return `<img src="${escapeHtml(src)}" alt="截图" class="fb-screenshot-img" data-key="${escapeHtml(src)}">`;
+                  }).join('')}</div>`
+                : '';
+            return `
+                <div class="fb-bubble-row ${role}">
+                    <div class="fb-bubble-avatar ${role}">${role === 'developer' ? 'D' : '我'}</div>
+                    <div class="fb-bubble-content">
+                        <div class="fb-bubble-meta">${roleLabel} · ${formatTime(r.createdAt || r.created_at)}</div>
+                        <div class="fb-bubble ${role}">${escapeHtml(r.content || '')}${screenshotsInner}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
         container.innerHTML = `
             <div class="detail-heading">
-                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle">${escapeHtml(typeLabels[f.type] || f.type || '')} · ${escapeHtml(f.friend_nickname || '')}</p></div>
+                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span> ${escapeHtml(typeLabels[f.type] || f.type || '')} · ${escapeHtml(f.friend_nickname || '')}</p></div>
                 <div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="fb-back">返回列表</button></div>
             </div>
             <div class="detail-grid">
@@ -2074,10 +2128,18 @@ function showFeedbackDetail(id, container, renderToken) {
                     ${screenshotsHtml}
                 </div>
                 <div class="card">
-                    <div class="card-header"><span class="card-title">回复（${replies.length}）</span></div>
-                    <div id="replies-list" style="margin-bottom:16px">${repliesHtml || '<div class="empty-state" style="text-align:center;padding:16px;color:var(--text-dim)">暂无回复</div>'}</div>
+                    <div class="card-header"><span class="card-title">对话（${replies.length}）</span></div>
+                    <div id="replies-list" class="fb-conversation" style="margin-bottom:16px">${repliesHtml || '<div class="empty-state" style="text-align:center;padding:16px;color:var(--text-dim)">暂无对话</div>'}</div>
                     ${f.status !== 'CLOSED' ? `
-                        <textarea class="form-input" id="reply-content" placeholder="输入回复..." rows="4" style="width:100%;margin-bottom:8px;resize:vertical"></textarea>
+                        <div class="fb-upload-area">
+                            <div id="fb-upload-thumbs" class="fb-upload-thumbs"></div>
+                            <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                                <input type="file" id="fb-file-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none">
+                                <button class="btn btn-ghost btn-sm" id="fb-add-screenshot">+ 添加截图</button>
+                                <span style="color:var(--text-dim);font-size:11px">最多 5 张，每张 ≤ 5MB</span>
+                            </div>
+                        </div>
+                        <textarea class="form-input" id="reply-content" placeholder="输入回复..." rows="4" style="width:100%;margin-top:8px;margin-bottom:8px;resize:vertical"></textarea>
                         <div style="display:flex;gap:8px">
                             <button class="btn btn-primary btn-sm" id="fb-reply">回复</button>
                             <button class="btn btn-ghost btn-sm" id="fb-close">关闭反馈</button>
@@ -2095,13 +2157,62 @@ function showFeedbackDetail(id, container, renderToken) {
             </div>
         `;
         document.getElementById('fb-back').addEventListener('click', () => { location.hash = '#/feedback'; });
+
+        // 截图上传逻辑
+        const pendingScreenshots = [];
+        const fileInput = document.getElementById('fb-file-input');
+        const addScreenshotBtn = document.getElementById('fb-add-screenshot');
+        if (addScreenshotBtn) {
+            addScreenshotBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', async () => {
+                const files = Array.from(fileInput.files || []);
+                if (files.length === 0) return;
+                if (pendingScreenshots.length + files.length > 5) {
+                    showToast('最多 5 张截图', 'error');
+                    return;
+                }
+                addScreenshotBtn.disabled = true;
+                addScreenshotBtn.textContent = '上传中...';
+                try {
+                    for (const file of files) {
+                        if (file.size > 5 * 1024 * 1024) {
+                            showToast(`${file.name} 超过 5MB`, 'error');
+                            continue;
+                        }
+                        const result = await API.uploadScreenshot('/fb/admin/upload-screenshot', file);
+                        pendingScreenshots.push(result.key);
+                        const thumb = document.createElement('div');
+                        thumb.className = 'fb-upload-thumb';
+                        thumb.dataset.key = result.key;
+                        thumb.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="待上传"><button class="fb-upload-thumb-remove" type="button">×</button>`;
+                        thumb.querySelector('.fb-upload-thumb-remove').addEventListener('click', () => {
+                            const idx = pendingScreenshots.indexOf(result.key);
+                            if (idx >= 0) pendingScreenshots.splice(idx, 1);
+                            thumb.remove();
+                        });
+                        document.getElementById('fb-upload-thumbs').appendChild(thumb);
+                    }
+                } catch (err) {
+                    showToast('截图上传失败：' + (err.message || ''), 'error');
+                } finally {
+                    addScreenshotBtn.disabled = false;
+                    addScreenshotBtn.textContent = '+ 添加截图';
+                    fileInput.value = '';
+                }
+            });
+        }
+
         document.getElementById('fb-reply')?.addEventListener('click', () => {
             const content = document.getElementById('reply-content').value.trim();
             if (!content) return;
             const btn = document.getElementById('fb-reply');
             btn.disabled = true;
             btn.textContent = '回复中...';
-            API.post('/fb/admin/reply', { feedbackId: id, content }).then(() => {
+            API.post('/fb/admin/reply', {
+                feedbackId: id,
+                content,
+                screenshots: pendingScreenshots.slice(0, 5),
+            }).then(() => {
                 showToast('回复成功');
                 showFeedbackDetail(id, container, renderToken);
             }).catch(err => {
