@@ -84,7 +84,6 @@ import com.tracktosearch.ui.component.OnboardingOverlay
 import com.tracktosearch.ui.component.PageBackground
 import com.tracktosearch.ui.component.isAppDarkTheme
 import com.tracktosearch.ui.screen.discover.DiscoverScreen
-import com.tracktosearch.ui.screen.douban.DoubanSyncModePickerDialog
 import com.tracktosearch.ui.screen.search.CloudThemeProvider
 import com.tracktosearch.ui.screen.search.SearchScreen
 import com.tracktosearch.ui.screen.search.SearchSourceType
@@ -125,13 +124,6 @@ interface ThemeStorageEntryPoint {
 @InstallIn(SingletonComponent::class)
 interface DoubanAuthStorageEntryPoint {
     fun doubanAuthStorage(): com.tracktosearch.data.local.DoubanAuthStorage
-}
-
-/** EntryPoint 用于在 MainScreen 启动豆瓣同步(激活页登录后弹窗选择模式) */
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface DoubanSyncManagerEntryPoint {
-    fun doubanSyncManager(): com.tracktosearch.data.repository.DoubanSyncManager
 }
 
 @Composable
@@ -209,12 +201,6 @@ fun MainScreen(
         EntryPointAccessors.fromApplication(context.applicationContext, DoubanAuthStorageEntryPoint::class.java).doubanAuthStorage()
     }
     val doubanProfile by doubanAuthStorage.doubanProfile.collectAsState()
-    // 豆瓣登录态: 用于激活页登录成功后(新手引导结束时)自动弹出导入标记弹窗
-    val doubanLoggedIn by doubanAuthStorage.isLoggedIn.collectAsState(initial = false)
-    // 豆瓣导入标记弹窗(激活页登录成功 + 新手引导完成后触发)
-    var showDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
-    // 标记是否已弹过导入弹窗,避免重复弹出
-    var hasShownDoubanImportDialog by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(isLoggedIn, isDoubanMode) {
         if (isLoggedIn) {
             if (isDoubanMode) {
@@ -254,18 +240,6 @@ fun MainScreen(
             // 仍需触发主题选择对话框,否则用户再也看不到入口
             showAccentOnboarding = true
             showOnboarding = false
-        }
-    }
-
-    // 激活页豆瓣登录成功后,等新手引导完全结束(含主题选择)再弹出导入标记弹窗
-    // 触发条件: doubanLoggedIn=true && onboardingCompleted=true && themeSelectionCompleted=true && 未弹过
-    // 增加 themeSelectionCompleted 条件避免新用户首次进入时 onboardingCompleted 初值 true 导致与新手引导遮罩同时弹出
-    // 场景1: 首次使用,登录后新手引导显示 → 用户完成主题选择+引导 → 弹出导入弹窗
-    // 场景2: 非首次使用(已完成新手引导),登录后直接弹出导入弹窗
-    LaunchedEffect(doubanLoggedIn, onboardingCompleted, themeSelectionCompleted) {
-        if (doubanLoggedIn && onboardingCompleted == true && themeSelectionCompleted == true && !hasShownDoubanImportDialog) {
-            hasShownDoubanImportDialog = true
-            showDoubanImportDialog = true
         }
     }
 
@@ -643,28 +617,6 @@ fun MainScreen(
                 )
             }
 
-            // 激活页豆瓣登录成功 + 新手引导完成后: 弹出导入标记弹窗
-            // 用户可选择增量/全量同步,或跳过
-            if (showDoubanImportDialog) {
-                DoubanSyncModePickerDialog(
-                    syncedCount = 0,
-                    cooldownStatus = null,
-                    onDismiss = { showDoubanImportDialog = false },
-                    onModeSelected = { mode ->
-                        showDoubanImportDialog = false
-                        val doubanSyncManager = EntryPointAccessors.fromApplication(
-                            context.applicationContext, DoubanSyncManagerEntryPoint::class.java
-                        ).doubanSyncManager()
-                        scope.launch {
-                            doubanSyncManager.startSync(mode)
-                            // 切换到 Watchlist tab 显示同步横幅
-                            com.tracktosearch.service.DoubanSyncService.start(context)
-                            pagerState.scrollToPage(2)
-                            selectedTab = 2
-                        }
-                    }
-                )
-            }
         }
     }
 }
