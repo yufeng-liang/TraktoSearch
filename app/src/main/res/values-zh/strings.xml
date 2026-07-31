@@ -594,7 +594,7 @@
     <string name="help_import_src_imdb_effect">通过标题搜索匹配并同步到 Trakt 想看列表</string>
     <string name="help_data_douban_title">豆瓣标记同步</string>
     <string name="help_data_douban_b1">在登录页点击「或从豆瓣导入标记」，通过 WebView 登录豆瓣账号，App 会自动爬取您的想看和看过标记并同步到 Trakt</string>
-    <string name="help_data_douban_b2">在设置 → 数据管理点击「重新同步豆瓣」可重新同步豆瓣标记</string>
+    <string name="help_data_douban_b2">在设置 → 数据管理点击「同步豆瓣」可同步豆瓣标记</string>
     <string name="help_data_douban_b3">冲突策略：豆瓣「看过」覆盖 Trakt「想看」；豆瓣「想看」不覆盖 Trakt「看过」；评分以豆瓣为准（5 星制转 10 分制）</string>
     <string name="help_data_douban_b4">同步失败的条目会保存在本地。在设置 → 数据管理点击「查看同步失败项」可查看失败项,支持手动标注电影/电视剧类型、编辑子标题、搜索资源、重试同步或删除</string>
     <string name="help_data_douban_b5">跨设备查看:在设置 → 数据管理通过「重试失败项」弹窗或「失败查看页」选择「从 JSON 导入失败项」,可导入从其他设备导出的失败项 JSON 文件,在本地查看</string>
@@ -805,6 +805,7 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">选择重新同步模式</string>
+    <string name="douban_sync_mode_picker_title_first">选择同步模式</string>
     <string name="douban_sync_mode_b_title">增量同步</string>
     <string name="douban_sync_mode_b_desc">同步豆瓣新增的想看/看过标记,并检测已同步条目的状态变化。同步完成后自动进行状态一致性检查,确保豆瓣与 Trakt 数据一致。</string>
     <string name="douban_sync_mode_b_example">例如:某电影已同步为想看,你在豆瓣改成了看过,此模式会更新 Trakt 为已看。同步后还会自动检查并修复任何状态不一致。</string>
@@ -1430,7 +1431,7 @@
     <string name="douban_logout_confirm_message">退出后将清除本地 %1$d 条豆瓣标记，是否继续？</string>
     <string name="douban_logout_sync_in_progress_warning">同步正在进行中，退出将中断同步并清除本地数据。</string>
     <string name="settings_douban_login_hint">登录后可同步豆瓣想看/已看标记到 Trakt</string>
-    <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分及豆瓣同步功能</string>
+    <string name="settings_guest_login_hint">登录 Trakt 后可使用想看、已看、评分等功能</string>
     <string name="statistics_info_wordcloud">Q：短评词云是什么？\nA：提取你豆瓣短评中的高频词汇，按出现频率生成词云，词越大表示出现越多，帮你快速回顾观影感受。</string>
     <string name="cloud_sync_dialog_no_time">无</string>
     <string name="cloud_sync_dialog_title_overwrite">云端数据较新</string>

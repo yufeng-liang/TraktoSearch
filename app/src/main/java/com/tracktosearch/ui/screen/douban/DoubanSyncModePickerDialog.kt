@@ -45,11 +45,13 @@ import com.tracktosearch.data.repository.SyncMode
  * 每个选项附说明 + 示例,帮助用户理解后选择。
  *
  * @param cooldownStatus 冷却期状态,非 null 且 isCoolingDown 时在增量同步选项标题右侧显示剩余天数
+ * @param neverSynced 从未同步过时标题使用「选择同步模式」,否则「选择重新同步模式」
  */
 @Composable
 fun DoubanSyncModePickerDialog(
     syncedCount: Int,
     cooldownStatus: CooldownStatus? = null,
+    neverSynced: Boolean = false,
     onDismiss: () -> Unit,
     onModeSelected: (SyncMode) -> Unit
 ) {
@@ -83,7 +85,7 @@ fun DoubanSyncModePickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        title = { Text(stringResource(R.string.douban_sync_mode_picker_title)) },
+        title = { Text(stringResource(if (neverSynced) R.string.douban_sync_mode_picker_title_first else R.string.douban_sync_mode_picker_title)) },
         text = {
             Column {
                 ModeOptionItem(

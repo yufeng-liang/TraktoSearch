@@ -656,6 +656,7 @@ fun SettingsScreen(
                                 icon = Icons.Rounded.Sync,
                                 title = stringResource(
                                     if (isDoubanSyncRunning) R.string.settings_douban_resync_running
+                                    else if (cooldownStatus?.neverSynced == true) R.string.settings_douban_sync
                                     else R.string.settings_douban_resync
                                 ),
                                 subtitle = stringResource(
@@ -1169,6 +1170,7 @@ fun SettingsScreen(
         DoubanSyncModePickerDialog(
             syncedCount = syncedCount,
             cooldownStatus = cooldownStatus,
+            neverSynced = cooldownStatus?.neverSynced == true,
             onDismiss = { showSyncModePicker = false },
             onModeSelected = { mode ->
                 showSyncModePicker = false

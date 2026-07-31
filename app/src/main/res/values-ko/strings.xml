@@ -662,6 +662,7 @@
     <string name="settings_export_marks_data">마크 내보내기</string>
     <string name="settings_view_statistics">시청 통계</string>
     <string name="settings_douban_resync">더우반 재동기화</string>
+    <string name="settings_douban_sync">더우반 동기화</string>
     <string name="settings_douban_resync_desc">동기화 모드를 선택하고 더우반 상태 변화 처리</string>
     <string name="settings_douban_resync_running">동기화 중…</string>
     <string name="settings_douban_resync_running_desc">더우반 데이터 동기화 중, 클릭하여 진행 상황 보기</string>
@@ -683,12 +684,13 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">재동기화 모드 선택</string>
+    <string name="douban_sync_mode_picker_title_first">동기화 모드 선택</string>
     <string name="douban_sync_mode_b_title">증분 동기화</string>
     <string name="douban_sync_mode_b_desc">더우반의 새 관심/시청 표시를 동기화하고 동기화된 항목의 상태 변화를 감지합니다. 동기화 완료 후 자동으로 상태 일관성 검사를 실행하여 더우반과 Trakt 데이터 일치를 보장합니다.</string>
     <string name="douban_sync_mode_b_example">예: 어떤 영화가 관심으로 동기화됨, 더우반에서 시청으로 변경함, 이 모드는 Trakt를 시청으로 업데이트합니다. 동기화 후 상태 불일치가 있으면 자동으로 수정합니다.</string>
     <string name="douban_sync_mode_c_title">완전 재작성</string>
-    <string name="douban_sync_mode_c_desc">모든 동기화 기록을 지우고 모든 더우반 표시를 처음부터 재동기화합니다. 이 앱이 Trakt에 추가한 표시는 제거되고 다시 작성됩니다.</string>
-    <string name="douban_sync_mode_c_example">예: 이전에 %1$d개 항목 동기화됨, 모두 지워지고 재동기화됩니다. 데이터가 심하게 불일치할 때만 사용하세요.</string>
+    <string name="douban_sync_mode_c_desc">모든 동기화 기록을 지우고 모든 더우반 표시를 처음부터 동기화합니다. 이 앱이 Trakt에 추가한 표시는 제거되고 다시 작성됩니다.</string>
+    <string name="douban_sync_mode_c_example">예: 이전에 %1$d개 항목 동기화됨, 모두 지워지고 동기화됩니다. 데이터가 심하게 불일치할 때만 사용하세요.</string>
     <string name="douban_sync_mode_confirm">확인</string>
     <string name="douban_sync_mode_warning_c">완전 재작성은 모든 동기화 기록을 지우고 더우반 리스트를 다시 크롤링합니다.\n\n더우반에는 엄격한 안티 크롤링 메커니즘이 있어, 잦은 반복 크롤링 시 IP 주소가 블랙리스트에 등록될 수 있습니다. 본인 책임하에 진행하세요.\n\n정말 계속하시겠습니까?</string>
 
@@ -1271,7 +1273,7 @@
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">더우반 마크 동기화</string>
     <string name="help_data_douban_b1">로그인 페이지에서 \"또는 더우반에서 가져오기\"를 탭하고 WebView로 더우반에 로그인하면, 더우반의 보고싶다/봤어요 마크를 자동으로 크롤링하여 Trakt에 동기화합니다.</string>
-    <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 다시 동기화\"를 탭하여 재동기화할 수 있습니다.</string>
+    <string name="help_data_douban_b2">설정 → 데이터 관리에서 \"더우반 동기화\"를 탭하여 동기화할 수 있습니다.</string>
     <string name="help_data_douban_b3">동기화 전략: 더우반 \"봤어요\"는 Trakt \"보고싶다\"를 덮어씀; 더우반 \"보고싶다\"는 Trakt \"봤어요\"를 덮어쓰지 않음; 평점은 더우반 기준 (5스타 → 10점 변환).</string>
     <string name="help_data_douban_b4">동기화 실패한 항목은 로컬에 저장됩니다. 설정 → 데이터 관리에서 \"동기화 실패 항목 보기\"를 탭하여 확인할 수 있습니다. 미디어 타입 표시, 부제목 편집, 리소스 검색, 재동기화, 삭제를 지원합니다.</string>
     <string name="help_data_douban_b5">크로스 디바이스: 설정 → 데이터 관리의 \"실패 항목 다시 시도\" 대화상자 또는 \"동기화 실패 항목 보기\" 페이지에서 \"JSON에서 실패 항목 가져오기\"를 선택하여 다른 기기에서 내보낸 실패 항목 JSON 파일을 가져와 로컬에서 볼 수 있습니다.</string>
@@ -1426,7 +1428,7 @@
     <string name="douban_logout_confirm_message">로그아웃하면 로컬의 %1$d개 Douban 마크가 삭제됩니다. 계속하시겠습니까?</string>
     <string name="douban_logout_sync_in_progress_warning">동기화가 진행 중입니다. 로그아웃하면 동기화가 중단되고 로컬 데이터가 삭제됩니다.</string>
     <string name="settings_douban_login_hint">로그인하여豆瓣 마크를 Trakt에 동기화</string>
-    <string name="settings_guest_login_hint">Trakt에 로그인하여 관심목록, 시청완료, 평가 및豆瓣 동기화 기능 사용</string>
+    <string name="settings_guest_login_hint">Trakt에 로그인하여 관심목록, 시청완료, 평가 등의 기능 사용</string>
     <!-- 豆瓣 스파이더 테스트（마크 되돌리기） -->
     <string name="douban_spider_test_mark_section">마크 되돌리기 테스트</string>
     <string name="douban_spider_test_mark_douban_id">豆瓣 ID</string>

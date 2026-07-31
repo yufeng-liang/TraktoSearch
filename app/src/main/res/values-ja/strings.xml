@@ -662,6 +662,7 @@
     <string name="settings_export_marks_data">マークをエクスポート</string>
     <string name="settings_view_statistics">視聴統計</string>
     <string name="settings_douban_resync">豆瓣を再同期</string>
+    <string name="settings_douban_sync">豆瓣を同期</string>
     <string name="settings_douban_resync_desc">同期モードを選択し、豆瓣の状態変化を処理</string>
     <string name="settings_douban_resync_running">同期中…</string>
     <string name="settings_douban_resync_running_desc">豆瓣データを同期中、クリックして進捗を表示</string>
@@ -683,12 +684,13 @@
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">再同期モードを選択</string>
+    <string name="douban_sync_mode_picker_title_first">同期モードを選択</string>
     <string name="douban_sync_mode_b_title">増分同期</string>
     <string name="douban_sync_mode_b_desc">豆瓣の新規ウォッチ/視聴済みマークを同期し、同期済み項目の状態変化を検出。同期完了後に自動で状態一致性チェックを行い、豆瓣とTraktのデータ一致を確保します。</string>
     <string name="douban_sync_mode_b_example">例:ある映画がウォッチリストとして同期済み、豆瓣で視聴済みに変更した場合、このモードはTraktを視聴済みに更新します。同期後に状態不一致があれば自動修復します。</string>
     <string name="douban_sync_mode_c_title">完全上書き</string>
-    <string name="douban_sync_mode_c_desc">全ての同期記録をクリアし、すべての豆瓣マークをゼロから再同期します。このアプリがTraktに追加したマークは削除され、再書き込みされます。</string>
-    <string name="douban_sync_mode_c_example">例:以前に%1$d項目を同期済み、全てクリアされ再同期されます。データが著しく不整合な場合のみ使用してください。</string>
+    <string name="douban_sync_mode_c_desc">全ての同期記録をクリアし、すべての豆瓣マークをゼロから同期します。このアプリがTraktに追加したマークは削除され、再書き込みされます。</string>
+    <string name="douban_sync_mode_c_example">例:以前に%1$d項目を同期済み、全てクリアされ同期されます。データが著しく不整合な場合のみ使用してください。</string>
     <string name="douban_sync_mode_confirm">確認</string>
     <string name="douban_sync_mode_warning_c">完全上書きは全ての同期記録をクリアし、豆瓣リストを再クロールします。\n\n豆瓣には厳格なアンチクロール機構があり、頻繁なクロールでIPアドレスがブラックリストに登録される可能性があります。自己責任で続行してください。\n\n本当に続行しますか?</string>
 
@@ -1271,7 +1273,7 @@
     <!-- Douban Sync Help -->
     <string name="help_data_douban_title">豆瓣マーク同期</string>
     <string name="help_data_douban_b1">ログインページで「または豆瓣からインポート」をタップし、WebViewで豆瓣にログインすると、豆瓣の「見たい」「見た」マークを自動的にクロールしてTraktに同期します。</string>
-    <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を再同期」をタップすると再同期できます。</string>
+    <string name="help_data_douban_b2">設定 → データ管理で「豆瓣を同期」をタップすると同期できます。</string>
     <string name="help_data_douban_b3">同期戦略：豆瓣「見た」はTrakt「見たい」を上書き；豆瓣「見たい」はTrakt「見た」を上書きしない；評価は豆瓣に従う（5スター→10点制に変換）。</string>
     <string name="help_data_douban_b4">同期失敗したアイテムはローカルに保存されます。設定 → データ管理で「同期失敗項目を表示」をタップして確認できます。メディアタイプの标注、サブタイトル編集、リソース検索、再同期、削除に対応しています。</string>
     <string name="help_data_douban_b5">クロスデバイス:設定 → データ管理の「失敗項目を再試行」ダイアログまたは「同期失敗項目を表示」ページから「JSONから失敗項目をインポート」を選び、他のデバイスからエクスポートした失敗項目JSONファイルをインポートしてローカルで表示できます。</string>
@@ -1426,7 +1428,7 @@
     <string name="douban_logout_confirm_message">ログアウトするとローカルの %1$d 件の Douban マークが削除されます。続行しますか？</string>
     <string name="douban_logout_sync_in_progress_warning">同期が進行中です。ログアウトすると同期が中断され、ローカルデータが削除されます。</string>
     <string name="settings_douban_login_hint">ログインして豆瓣のマークを Trakt に同期</string>
-    <string name="settings_guest_login_hint">Trakt にログインしてウォッチリスト、視聴済み、評価、豆瓣同期機能を利用</string>
+    <string name="settings_guest_login_hint">Trakt にログインしてウォッチリスト、視聴済み、評価などの機能を利用</string>
     <!-- 豆瓣スパイダーテスト（マーク書き戻し） -->
     <string name="douban_spider_test_mark_section">マーク書き戻しテスト</string>
     <string name="douban_spider_test_mark_douban_id">豆瓣 ID</string>

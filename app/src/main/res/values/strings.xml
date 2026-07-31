@@ -784,11 +784,12 @@ Config:
     <string name="mark_records_settings_entry">Mark Records</string>
     <string name="mark_records_settings_entry_desc">View your watchlist/watched/removed action history</string>
     <string name="settings_douban_resync">Re-sync from Douban</string>
+    <string name="settings_douban_sync">Sync from Douban</string>
     <string name="settings_douban_resync_desc">Choose sync mode to handle Douban status changes</string>
     <string name="settings_douban_resync_running">Syncing…</string>
     <string name="settings_douban_resync_running_desc">Syncing Douban data, click to view progress</string>
     <string name="settings_douban_not_logged_in_title">Not logged in to Douban</string>
-    <string name="settings_douban_not_logged_in_message">Re-syncing from Douban requires you to be logged in. Go to the login page now?</string>
+    <string name="settings_douban_not_logged_in_message">Syncing from Douban requires you to be logged in. Go to the login page now?</string>
     <string name="settings_douban_not_logged_in_login">Go to login</string>
     <!-- Incremental sync cooldown (7-day) -->
     <string name="cooldown_remaining_days">Cooldown · %1$dd left</string>
@@ -805,12 +806,13 @@ Config:
 
     <!-- Douban sync mode picker -->
     <string name="douban_sync_mode_picker_title">Choose Re-sync Mode</string>
+    <string name="douban_sync_mode_picker_title_first">Choose Sync Mode</string>
     <string name="douban_sync_mode_b_title">Incremental sync</string>
     <string name="douban_sync_mode_b_desc">Sync new Douban wish/collect marks and detect status changes of synced items. A status consistency check runs automatically after sync to ensure Douban and Trakt are aligned.</string>
     <string name="douban_sync_mode_b_example">Example: a movie synced as wish, you changed it to watched on Douban, this mode will update Trakt to watched. A consistency check runs after sync to fix any mismatches.</string>
     <string name="douban_sync_mode_c_title">Full rewrite</string>
-    <string name="douban_sync_mode_c_desc">Clear all synced records, re-sync all Douban marks from scratch. Existing Trakt marks added by this app will be removed and rewritten.</string>
-    <string name="douban_sync_mode_c_example">Example: %1$d items previously synced, all will be cleared and re-synced. Use this only when data is severely inconsistent.</string>
+    <string name="douban_sync_mode_c_desc">Clear all synced records, sync all Douban marks from scratch. Existing Trakt marks added by this app will be removed and rewritten.</string>
+    <string name="douban_sync_mode_c_example">Example: %1$d items previously synced, all will be cleared and synced. Use this only when data is severely inconsistent.</string>
     <string name="douban_sync_mode_confirm">Confirm</string>
     <string name="douban_sync_mode_warning_c">Full rewrite will clear all sync records and re-crawl the Douban list.\n\nDouban has strict anti-crawl measures. Frequent repeated crawls may get your IP blacklisted. Proceed at your own risk.\n\nAre you sure you want to continue?</string>
 
@@ -1444,7 +1446,7 @@ Config:
     <string name="douban_logout_confirm_message">Logging out will clear %1$d local Douban marks. Continue?</string>
     <string name="douban_logout_sync_in_progress_warning">Sync is in progress. Logging out will interrupt it and clear local data.</string>
     <string name="settings_douban_login_hint">Login to sync Douban wish/watched marks to Trakt</string>
-    <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and Douban sync</string>
+    <string name="settings_guest_login_hint">Login to Trakt to use watchlist, watched, ratings and more</string>
     <string name="statistics_info_wordcloud">Q: What is the review word cloud?\nA: It extracts high-frequency words from your Douban short reviews and renders them as a word cloud. Larger words appear more often, helping you quickly recall your viewing impressions.</string>
 
     <!-- Mark Records (temporary, task 9 will complete 4 languages) -->

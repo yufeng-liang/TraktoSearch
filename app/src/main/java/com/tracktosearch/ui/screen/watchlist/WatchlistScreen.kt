@@ -1339,6 +1339,7 @@ fun WatchlistScreen(
                 DoubanSyncModePickerDialog(
                     syncedCount = 0,
                     cooldownStatus = null,
+                    neverSynced = true,
                     onDismiss = { showSyncModePicker = false },
                     onModeSelected = { mode ->
                         showSyncModePicker = false
