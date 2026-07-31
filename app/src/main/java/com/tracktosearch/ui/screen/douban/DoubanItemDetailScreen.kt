@@ -751,7 +751,7 @@ class DoubanItemDetailViewModel @Inject constructor(
                 val ck = doubanRepository.fetchCsrfToken(failure.doubanId, credentials.cookie)
                     ?: return@runCatching if (doubanRepository.fetchDetailPageHtml(failure.doubanId, credentials.cookie) == null)
                         MarkWriteOutcome.CookieExpired else MarkWriteOutcome.CkFailed
-                val res = doubanRepository.markInterest(status.path, failure.doubanId, credentials.cookie, ck)
+                val res = doubanRepository.markInterestByCk(status.path, failure.doubanId, credentials.cookie, ck)
                 if (res.success) {
                     doubanRetryManager.updateStatus(failure.doubanId, status)
                     val refreshed = doubanRetryManager.getFailure(failure.doubanId)

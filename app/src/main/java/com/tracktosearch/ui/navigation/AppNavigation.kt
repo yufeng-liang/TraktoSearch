@@ -208,9 +208,16 @@ fun AppNavigation(
     val sharedTransitionEnabled by sharedTransitionStorage.enabledState.collectAsStateWithLifecycle()
     // 使用初始 tab（已由 MainActivity 根据登录状态和用户设置决定）
     var mainInitialTab by remember { mutableIntStateOf(initialTab) }
+    // 标记登录成功后设置的 tab，避免被 storedDefaultTab 的异步加载覆盖
+    // 场景: onLoginSuccess 设置 mainInitialTab=2(老用户进我的页) 后,
+    // storedDefaultTab 从默认值 0 加载为磁盘真实值(如 1=发现页),LaunchedEffect 会覆盖登录意图
+    var loginTabOverride by remember { mutableStateOf(false) }
     // 监听默认启动页设置变化
     LaunchedEffect(storedDefaultTab) {
-        mainInitialTab = storedDefaultTab
+        // 登录后设置的 tab 仅生效一次，不被 storedDefaultTab 覆盖
+        if (!loginTabOverride) {
+            mainInitialTab = storedDefaultTab
+        }
     }
     val scope = rememberCoroutineScope()
     val currentAuthState by authStateHolder.authState.collectAsStateWithLifecycle()
@@ -286,6 +293,7 @@ fun AppNavigation(
                                 scope.launch {
                                     val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
                                     mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
                                     currentStartDest = Routes.MAIN
                                     navController.navigate(Routes.MAIN) {
                                         popUpTo(0) { inclusive = true }
@@ -723,6 +731,7 @@ fun AppNavigation(
                                     guestModeStorage.setGuestMode(false)
                                     val onboardingCompleted = OnboardingStorage(context).isCompleted.first()
                                     mainInitialTab = if (onboardingCompleted) 2 else 0
+                                    loginTabOverride = true  // 阻止 storedDefaultTab 覆盖登录意图
                                     currentStartDest = Routes.MAIN
                                     navController.navigate(Routes.MAIN) {
                                         popUpTo(0) { inclusive = true }

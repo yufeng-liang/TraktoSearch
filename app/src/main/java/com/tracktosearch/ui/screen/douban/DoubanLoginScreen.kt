@@ -175,9 +175,9 @@ fun DoubanLoginScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> /* 无论授权与否都不阻塞，用户可选不授权（只是没通知栏进度） */ }
 
-    // 进入页面时请求通知权限（Android 13+）
-    LaunchedEffect(Unit) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    // 登录成功后再请求通知权限（Android 13+），避免未登录就打扰用户
+    LaunchedEffect(loginSuccess) {
+        if (loginSuccess && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED

@@ -138,6 +138,8 @@ fun ActivationLoginScreen(
 
     LaunchedEffect(loginState) {
         if (loginState == LoginState.SUCCESS) {
+            // 触发后立即 reset，避免 SUCCESS 状态残留导致极端情况下（如导航失败）重复触发
+            loginViewModel.reset()
             onLoginSuccess()
         }
     }

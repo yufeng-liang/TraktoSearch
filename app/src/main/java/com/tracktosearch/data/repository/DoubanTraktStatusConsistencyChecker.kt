@@ -726,7 +726,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                                 Log.w(TAG, "获取 ck 失败: ${update.doubanId}")
                                 return@runCatching false
                             }
-                            val result = doubanRepository.markInterest(
+                            val result = doubanRepository.markInterestByCk(
                                 update.action, update.doubanId, cred.cookie, ck
                             )
                             if (result.success) {
@@ -772,7 +772,7 @@ class DoubanTraktStatusConsistencyChecker @Inject constructor(
                                 Log.w(TAG, "获取 ck 失败: ${update.doubanId}")
                                 return@runCatching false
                             }
-                            val result = doubanRepository.markInterest(
+                            val result = doubanRepository.markInterestByCk(
                                 update.action, update.doubanId, cred.cookie, ck
                             )
                             if (result.success) {

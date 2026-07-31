@@ -971,7 +971,20 @@ fun SettingsScreen(
             onDismissRequest = { showDoubanLogoutDialog = false },
             containerColor = MaterialTheme.colorScheme.surfaceVariant,
             title = { Text(stringResource(R.string.douban_logout_confirm_title)) },
-            text = { Text(stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.douban_logout_confirm_message, doubanLogoutCount))
+                    // 同步进行中时追加警告：退出会中断同步（clearDoubanCredentials 会取消进行中的任务）
+                    if (isDoubanSyncRunning) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.douban_logout_sync_in_progress_warning),
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
             confirmButton = {
                     val doubanLogoutDone = stringResource(R.string.settings_douban_logout_done)
                     val doubanSyncRelogin = stringResource(R.string.douban_sync_relogin)

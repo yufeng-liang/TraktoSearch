@@ -2199,8 +2199,8 @@ class DetailViewModel @Inject constructor(
         // 先获取 csrf token(ck)
         val ck = doubanRepository.fetchCsrfToken(doubanId, cookie) ?: return false
         return when (action) {
-            DoubanSyncAction.WISH -> doubanRepository.markInterest("wish", doubanId, cookie, ck).success
-            DoubanSyncAction.COLLECT -> doubanRepository.markInterest("collect", doubanId, cookie, ck).success
+            DoubanSyncAction.WISH -> doubanRepository.markInterestByCk("wish", doubanId, cookie, ck).success
+            DoubanSyncAction.COLLECT -> doubanRepository.markInterestByCk("collect", doubanId, cookie, ck).success
             DoubanSyncAction.REMOVE_WISH,
             DoubanSyncAction.REMOVE_COLLECT -> doubanRepository.removeMark(doubanId, cookie, ck).success
         }

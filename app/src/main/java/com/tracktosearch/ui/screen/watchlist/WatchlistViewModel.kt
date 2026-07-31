@@ -896,10 +896,16 @@ class WatchlistViewModel @Inject constructor(
     private suspend fun batchRemoveFromDouban(items: List<MediaUiItem>, isMovie: Boolean, isWatchlist: Boolean) {
         if (items.isEmpty()) return
         val selectionKeys = items.map { it.selectionKey }.toSet()
-        // 1. 立即从本地表删除（按 doubanId,豆瓣模式条目必有 doubanId）
-        val doubanIds = items.mapNotNull { it.doubanId }
-        if (doubanIds.isNotEmpty()) {
-            doubanIds.forEach { doubanId ->
+        // 1. 立即从本地表删除
+        //    - 有 doubanId 的条目：直接按 doubanId 删除
+        //    - 无 doubanId 的条目：通过 imdbId 查同步表反查 doubanId 后删除（fallback）
+        //      覆盖"豆瓣模式无 imdb 条目直接存储"场景,避免本地表残留无法清理
+        items.forEach { item ->
+            val doubanId = item.doubanId
+                ?: item.imdbId.takeIf { it.isNotBlank() }?.let { imdbId ->
+                    runCatching { doubanSyncedItemDao.getByImdbId(imdbId) }.getOrNull()?.doubanId
+                }
+            if (doubanId != null) {
                 doubanSyncedItemDao.deleteByDoubanId(doubanId)
             }
         }
@@ -918,13 +924,13 @@ class WatchlistViewModel @Inject constructor(
             }
         }
         // 3. 后台调用豆瓣 API 移除标记（Application scope,不阻塞 UI）
-        if (doubanIds.isNotEmpty()) {
-            val removalItems = items.mapNotNull { item ->
-                item.doubanId?.let { BatchRemovalItem(item.traktId, item.imdbId, item.displayTitle, it) }
-            }
-            if (removalItems.isNotEmpty()) {
-                doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
-            }
+        //    所有条目都传给 Manager,Manager 内部 fallback 链路处理无 doubanId 的条目:
+        //    item.doubanId → getByImdbId → findDoubanId 网络搜索
+        val removalItems = items.map { item ->
+            BatchRemovalItem(item.traktId, item.imdbId, item.displayTitle, item.doubanId)
+        }
+        if (removalItems.isNotEmpty()) {
+            doubanBatchRemovalManager.startRemoval(removalItems, isMovie)
         }
     }
 }

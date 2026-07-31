@@ -249,6 +249,11 @@ fun MainScreen(
                 pagerState.scrollToPage(0)
                 selectedTab = 0
             }
+        } else if (onboardingCompleted == true && themeSelectionCompleted == false) {
+            // 半完成状态卡死修复: onboarding 已完成但主题选择未完成(如进程被杀打断)
+            // 仍需触发主题选择对话框,否则用户再也看不到入口
+            showAccentOnboarding = true
+            showOnboarding = false
         }
     }
 

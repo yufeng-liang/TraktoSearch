@@ -899,10 +899,13 @@ class DoubanRepository(
      *   + foldcollect=F + tags/comment/private,成功判据 HTTP 200 且响应体含 {"r":0}。
      * 注意:标记走 /interest 接口;取消删除走独立的 /subject/{id}/remove(见 [removeMark])。
      *
+     * 与 [markInterest] 的区别:本方法需外部预先获取 ck(常用于重试/批量场景),
+     * 且返回 [MarkWriteResult] 提供状态码与失败信息;[markInterest] 内部提取 ck 并返回 Boolean。
+     *
      * @param action "wish" 或 "collect"
      * @return [MarkWriteResult] 含是否成功 / 状态码 / 信息
      */
-    suspend fun markInterest(
+    suspend fun markInterestByCk(
         action: String,
         doubanId: String,
         cookie: String,
