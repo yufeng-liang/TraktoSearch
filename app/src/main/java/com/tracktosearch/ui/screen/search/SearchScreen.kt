@@ -38,6 +38,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
@@ -112,6 +113,8 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -592,17 +595,16 @@ private fun SearchBarTop(
                     onFocusChanged(focusState.isFocused)
                 },
             placeholder = {
-                Text(
-                    text = stringResource(
-                        when (searchSourceType) {
-                            SearchSourceType.MOVIE -> R.string.search_placeholder_movie
-                            SearchSourceType.SHOW -> R.string.search_placeholder_show
-                            SearchSourceType.PERSON -> R.string.search_placeholder_person
-                            SearchSourceType.DISK -> R.string.search_placeholder
-                        }
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Visible,
+                val placeholderText = stringResource(
+                    when (searchSourceType) {
+                        SearchSourceType.MOVIE -> R.string.search_placeholder_movie
+                        SearchSourceType.SHOW -> R.string.search_placeholder_show
+                        SearchSourceType.PERSON -> R.string.search_placeholder_person
+                        SearchSourceType.DISK -> R.string.search_placeholder
+                    }
+                )
+                AdaptivePlaceholderText(
+                    text = placeholderText,
                     color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
                 )
             },
@@ -918,17 +920,16 @@ private fun SearchBarTopNew(
                     onFocusChanged(focusState.isFocused)
                 },
             placeholder = {
-                Text(
-                    text = stringResource(
-                        when (searchSourceType) {
-                            SearchSourceType.MOVIE -> R.string.search_placeholder_movie
-                            SearchSourceType.SHOW -> R.string.search_placeholder_show
-                            SearchSourceType.PERSON -> R.string.search_placeholder_person
-                            SearchSourceType.DISK -> R.string.search_placeholder
-                        }
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Visible,
+                val placeholderText = stringResource(
+                    when (searchSourceType) {
+                        SearchSourceType.MOVIE -> R.string.search_placeholder_movie
+                        SearchSourceType.SHOW -> R.string.search_placeholder_show
+                        SearchSourceType.PERSON -> R.string.search_placeholder_person
+                        SearchSourceType.DISK -> R.string.search_placeholder
+                    }
+                )
+                AdaptivePlaceholderText(
+                    text = placeholderText,
                     color = if (isDark) Color.White.copy(alpha = 0.4f) else Color(0xFF90A4AE)
                 )
             },
@@ -1893,5 +1894,71 @@ private fun CloudIconWithAnimation(
                     )
             )
         }
+    }
+}
+
+/**
+ * 自适应字号的单行文字。
+ *
+ * 用于搜索框 placeholder：不同搜索类型对应不同长度的文案，
+ * 长文案（如 "Enter show title to search TV shows"）在窄屏上会溢出搜索框被截断。
+ * 用 [rememberTextMeasurer] 在可用宽度内二分查找最大可放下的字号，
+ * 保证文字完整显示。短文案使用默认字号不受影响。
+ *
+ * @param text 待显示文字
+ * @param color 文字颜色
+ * @param maxFontSize 最大字号（默认 16sp，与搜索框文字一致）
+ * @param minFontSize 最小字号（低于此字号会不可读，默认 10sp）
+ */
+@Composable
+private fun AdaptivePlaceholderText(
+    text: String,
+    color: Color,
+    maxFontSize: androidx.compose.ui.unit.TextUnit = 16.sp,
+    minFontSize: androidx.compose.ui.unit.TextUnit = 10.sp
+) {
+    val textMeasurer = rememberTextMeasurer()
+    BoxWithConstraints {
+        val maxWidthPx = constraints.maxWidth.toFloat()
+        // 宽度未确定（=0）时直接用最大字号，避免初始帧误判
+        if (maxWidthPx <= 0f) {
+            Text(
+                text = text,
+                color = color,
+                fontSize = maxFontSize,
+                maxLines = 1,
+                overflow = TextOverflow.Visible
+            )
+            return@BoxWithConstraints
+        }
+        // 二分查找：找到文字在 maxWidthPx 内能完整显示的最大字号
+        var lo = minFontSize.value
+        var hi = maxFontSize.value
+        var best = lo
+        // 0.5sp 步长足够细
+        while (lo <= hi) {
+            val mid = (lo + hi) / 2f
+            val style = TextStyle(fontSize = mid.sp, color = color)
+            val result = textMeasurer.measure(
+                text = text,
+                style = style,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Visible
+            )
+            if (result.size.width <= maxWidthPx) {
+                best = mid
+                lo = mid + 0.5f
+            } else {
+                hi = mid - 0.5f
+            }
+        }
+        Text(
+            text = text,
+            color = color,
+            fontSize = best.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Visible
+        )
     }
 }
