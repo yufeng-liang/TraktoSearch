@@ -10,17 +10,20 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,6 +34,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -40,7 +45,6 @@ import coil.request.ImageRequest
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
-import kotlinx.coroutines.launch
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 
@@ -59,7 +63,6 @@ fun FeedbackDetailScreen(
     val replyState by viewModel.replyState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val listState = rememberLazyListState()
-    val scope = rememberCoroutineScope()
 
     var fullscreenUrls by remember { mutableStateOf<List<String>>(emptyList()) }
     var fullscreenIndex by remember { mutableStateOf<Int?>(null) }
@@ -118,7 +121,22 @@ fun FeedbackDetailScreen(
                         Text(stringResource(R.string.feedback_title), fontWeight = FontWeight.ExtraBold)
                     }
                 },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = null) } },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                            contentDescription = stringResource(R.string.content_desc_back)
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNewFeedback) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.feedback_new)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         },
@@ -142,17 +160,40 @@ fun FeedbackDetailScreen(
                 val isReplying = replyState is FeedbackViewModel.ReplyState.Uploading || replyState is FeedbackViewModel.ReplyState.Sending
 
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-                    LazyColumn(state = listState, modifier = Modifier.weight(1f), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         item(key = "original") { OriginalFeedbackCard(feedback = feedback, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
                         if (replies.isNotEmpty()) {
-                            item(key = "conv_title") { Text(text = stringResource(R.string.feedback_conversation), fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp)) }
+                            item(key = "conv_title") {
+                                Text(
+                                    text = stringResource(R.string.feedback_conversation),
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
                         }
                         items(replies, key = { it.id }) { reply -> ConversationBubble(reply = reply, highlight = highlightReplyId == reply.id, onHighlightDone = { if (highlightReplyId == reply.id) highlightReplyId = null }, onScreenshotClick = { urls, index -> fullscreenUrls = urls; fullscreenIndex = index }) }
-                        item(key = "new_feedback") { Button(onClick = onNewFeedback, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.feedback_new)) } }
                     }
                     if (isClosed) {
-                        Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant) {
-                            Text(text = stringResource(R.string.feedback_closed_hint), modifier = Modifier.padding(16.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .navigationBarsPadding(),
+                            color = MaterialTheme.colorScheme.surfaceVariant
+                        ) {
+                            Text(
+                                text = stringResource(R.string.feedback_closed_hint),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 14.sp
+                            )
                         }
                     } else {
                         ReplyBar(text = replyText, onTextChange = { if (it.length <= 2000) replyText = it }, screenshots = replyScreenshots, enabled = !isReplying, onAddScreenshot = { pickImageLauncher.launch("image/*") }, onRemoveScreenshot = { idx -> replyScreenshots = replyScreenshots.toMutableList().apply { removeAt(idx) } }, onScreenshotClick = { idx -> replyFullscreenIndex = idx }, onSend = { if (replyText.isNotBlank()) { viewModel.reply(feedbackId = feedbackId, content = replyText, screenshotBytes = replyScreenshots.map { it.first }, screenshotMimeTypes = replyScreenshots.map { it.second }) } }, isSending = isReplying, replyState = replyState)
@@ -169,16 +210,127 @@ fun FeedbackDetailScreen(
 @Composable
 private fun OriginalFeedbackCard(feedback: com.tracktosearch.data.remote.feedback.FeedbackDetail, onScreenshotClick: (urls: List<String>, index: Int) -> Unit) {
     val context = LocalContext.current
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { Text(feedbackTypeLabel(feedback.type), fontSize = 12.sp, color = feedbackTypeColor(feedback.type), fontWeight = FontWeight.SemiBold); Spacer(Modifier.weight(1f)); Text(feedbackStatusLabel(feedback.status), fontSize = 12.sp, color = feedbackStatusColor(feedback.status)) }
-            Text(text = feedback.content, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-            val screenshots = parseScreenshots(feedback.screenshots)
-            if (screenshots.isNotEmpty()) { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(screenshots) { key -> val url = screenshotUrl(key); Box(Modifier.size(120.dp).background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)).clickable { onScreenshotClick(screenshots.map { screenshotUrl(it) }, screenshots.indexOf(key)) }, contentAlignment = Alignment.Center) { AsyncImage(model = remember(url) { ImageRequest.Builder(context).data(url).crossfade(true).build() }, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(120.dp).clip(RoundedCornerShape(8.dp))) } } } }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) { Text("App ${feedback.app_version}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(feedback.device_model, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            feedback.trakt_username?.let { if (it.isNotBlank()) Text("Trakt: $it", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            feedback.douban_username?.let { if (it.isNotBlank()) Text("${stringResource(R.string.detail_info_douban_rating)}: $it", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            feedback.contact?.let { if (it.isNotBlank()) Text("${stringResource(R.string.feedback_contact)}: $it", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    val screenshots = parseScreenshots(feedback.screenshots)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = feedbackTypeLabel(feedback.type),
+                    fontSize = 13.sp,
+                    color = feedbackTypeColor(feedback.type),
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.weight(1f))
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = feedbackStatusColor(feedback.status).copy(alpha = 0.14f)
+                ) {
+                    Text(
+                        text = feedbackStatusLabel(feedback.status),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        fontSize = 12.sp,
+                        color = feedbackStatusColor(feedback.status),
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Text(
+                text = feedback.content,
+                fontSize = 17.sp,
+                lineHeight = 24.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (screenshots.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(screenshots, key = { it }) { key ->
+                        val index = screenshots.indexOf(key)
+                        val url = screenshotUrl(key)
+                        Box(
+                            modifier = Modifier
+                                .width(112.dp)
+                                .height(160.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .clickable {
+                                    onScreenshotClick(screenshots.map(::screenshotUrl), index)
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AsyncImage(
+                                model = remember(url) {
+                                    ImageRequest.Builder(context).data(url).crossfade(true).build()
+                                },
+                                contentDescription = stringResource(R.string.feedback_screenshots),
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.feedback_app_info),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.feedback_app_version, feedback.app_version),
+                    modifier = Modifier.weight(0.8f),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stringResource(R.string.feedback_device_model, feedback.device_model),
+                    modifier = Modifier.weight(1.2f),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            feedback.trakt_username?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = stringResource(R.string.feedback_trakt_username, it),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            feedback.douban_username?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = stringResource(R.string.feedback_douban_username, it),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            feedback.contact?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = stringResource(R.string.feedback_contact_value, it),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -199,44 +351,193 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
     val finalBubbleColor = if (isDeveloper) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = animatedAlpha) else MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha)
 
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = arrangement, verticalAlignment = Alignment.Top) {
-        if (isDeveloper) { Box(Modifier.size(28.dp).clip(RoundedCornerShape(14.dp)).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(8.dp)) }
-        Column(modifier = Modifier.widthIn(max = 280.dp), horizontalAlignment = if (isDeveloper) Alignment.Start else Alignment.End) {
+        if (isDeveloper) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(avatarColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(8.dp))
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.8f)
+                .widthIn(max = 320.dp),
+            horizontalAlignment = if (isDeveloper) Alignment.Start else Alignment.End
+        ) {
             Text(text = if (isDeveloper) stringResource(R.string.feedback_role_developer) else stringResource(R.string.feedback_role_me), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(2.dp))
-            Surface(shape = borderRadius, color = finalBubbleColor) {
+            Surface(shape = borderRadius, color = finalBubbleColor, tonalElevation = if (isDeveloper) 1.dp else 0.dp) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text = reply.content, fontSize = 14.sp, color = bubbleContentColor)
                     val screenshots = reply.screenshots
-                    if (screenshots.isNotEmpty()) { LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { items(screenshots) { key -> val url = screenshotUrl(key); AsyncImage(model = remember(url) { ImageRequest.Builder(context).data(url).crossfade(true).build() }, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).clickable { onScreenshotClick(screenshots.map { screenshotUrl(it) }, screenshots.indexOf(key)) }) } } }
+                    if (screenshots.isNotEmpty()) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            items(screenshots, key = { it }) { key ->
+                                val url = screenshotUrl(key)
+                                AsyncImage(
+                                    model = remember(url) {
+                                        ImageRequest.Builder(context).data(url).crossfade(true).build()
+                                    },
+                                    contentDescription = stringResource(R.string.feedback_screenshots),
+                                    contentScale = ContentScale.Fit,
+                                    modifier = Modifier
+                                        .size(64.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
+                                        .clickable {
+                                            onScreenshotClick(screenshots.map(::screenshotUrl), screenshots.indexOf(key))
+                                        }
+                                )
+                            }
+                        }
+                    }
                 }
             }
             Text(text = formatTime(reply.created_at), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (!isDeveloper) { Spacer(Modifier.width(8.dp)); Box(Modifier.size(28.dp).clip(RoundedCornerShape(14.dp)).background(avatarColor), contentAlignment = Alignment.Center) { Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold) } }
+        if (!isDeveloper) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(avatarColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(avatarLabel, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
 @Composable
 private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: List<Pair<ByteArray, String>>, enabled: Boolean, onAddScreenshot: () -> Unit, onRemoveScreenshot: (Int) -> Unit, onScreenshotClick: (Int) -> Unit, onSend: () -> Unit, isSending: Boolean, replyState: FeedbackViewModel.ReplyState) {
     val context = LocalContext.current
-    Surface(modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (screenshots.isNotEmpty()) { LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) -> Box(Modifier.size(60.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) { AsyncImage(model = remember(bytes) { ImageRequest.Builder(context).data(bytes).crossfade(true).build() }, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(60.dp).clickable { onScreenshotClick(index) }); if (enabled) { Box(Modifier.align(Alignment.TopEnd).padding(2.dp).size(18.dp).background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(9.dp)).clickable { onRemoveScreenshot(index) }, contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp)) } } } } } }
-            (replyState as? FeedbackViewModel.ReplyState.Error)?.let { Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
-            val progressText = when (replyState) { is FeedbackViewModel.ReplyState.Uploading -> stringResource(R.string.feedback_reply_uploading, replyState.current + 1, replyState.total); is FeedbackViewModel.ReplyState.Sending -> stringResource(R.string.feedback_submitting); else -> null }
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (enabled && screenshots.size < MAX_REPLY_SCREENSHOTS) { IconButton(onClick = onAddScreenshot, modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.Add, contentDescription = null) } }
-                OutlinedTextField(value = text, onValueChange = onTextChange, modifier = Modifier.weight(1f), placeholder = { Text(stringResource(R.string.feedback_reply_placeholder), fontSize = 13.sp) }, enabled = enabled, maxLines = 4, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp))
-                Button(onClick = onSend, enabled = enabled && text.isNotBlank(), modifier = Modifier.size(40.dp), contentPadding = PaddingValues(0.dp)) { if (isSending) { CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) } else { Icon(Icons.Rounded.Send, contentDescription = null) } }
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .imePadding()
+            .navigationBarsPadding(),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (screenshots.isNotEmpty()) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    itemsIndexed(screenshots, key = { _, pair -> pair.first }) { index, (bytes, _) ->
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable { onScreenshotClick(index) }
+                        ) {
+                            AsyncImage(
+                                model = remember(bytes) {
+                                    ImageRequest.Builder(context).data(bytes).crossfade(true).build()
+                                },
+                                contentDescription = stringResource(R.string.feedback_screenshots),
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            if (enabled) {
+                                IconButton(
+                                    onClick = { onRemoveScreenshot(index) },
+                                    modifier = Modifier.align(Alignment.TopEnd)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = stringResource(R.string.cd_delete),
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .size(18.dp)
+                                            .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                                            .padding(2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            progressText?.let { Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            (replyState as? FeedbackViewModel.ReplyState.Error)?.let {
+                Text(it.message, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            }
+            val progressText = when (replyState) {
+                is FeedbackViewModel.ReplyState.Uploading -> stringResource(
+                    R.string.feedback_reply_uploading,
+                    replyState.current + 1,
+                    replyState.total
+                )
+                is FeedbackViewModel.ReplyState.Sending -> stringResource(R.string.feedback_submitting)
+                else -> null
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (enabled && screenshots.size < MAX_REPLY_SCREENSHOTS) {
+                    IconButton(onClick = onAddScreenshot) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = stringResource(R.string.feedback_screenshots)
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = onTextChange,
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 56.dp),
+                    placeholder = {
+                        Text(stringResource(R.string.feedback_reply_placeholder), fontSize = 13.sp)
+                    },
+                    enabled = enabled,
+                    maxLines = 4,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                )
+                FilledIconButton(
+                    onClick = onSend,
+                    enabled = enabled && text.isNotBlank(),
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    if (isSending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Rounded.Send,
+                            contentDescription = stringResource(R.string.feedback_reply_send)
+                        )
+                    }
+                }
+            }
+            progressText?.let {
+                Text(it, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
-private fun parseScreenshots(json: String?): List<String> {
+internal fun parseScreenshots(json: String?): List<String> {
     if (json.isNullOrBlank()) return emptyList()
-    return try { val trimmed = json.trim().removeSurrounding("[", "]").split(",").map { it.trim().trim('"') }.filter { it.isNotEmpty() }; trimmed } catch (_: Exception) { emptyList() }
+    return try {
+        kotlinx.serialization.json.Json.decodeFromString<List<String>>(json)
+    } catch (_: Exception) {
+        emptyList()
+    }
 }
 
 private fun formatTime(timestamp: Long): String { val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()); return sdf.format(java.util.Date(timestamp * 1000)) }

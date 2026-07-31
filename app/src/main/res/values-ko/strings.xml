@@ -623,6 +623,11 @@
     <string name="feedback_status_closed">종료됨</string>
     <string name="feedback_dev_reply">개발자 답변</string>
     <string name="feedback_app_info">앱 정보</string>
+    <string name="feedback_app_version">앱 %1$s</string>
+    <string name="feedback_device_model">기기 %1$s</string>
+    <string name="feedback_trakt_username">Trakt: %1$s</string>
+    <string name="feedback_douban_username">Douban: %1$s</string>
+    <string name="feedback_contact_value">연락처: %1$s</string>
     <string name="feedback_screenshot_expired">스크린샷 만료</string>
     <string name="feedback_retry">재시도</string>
     <string name="feedback_time_just_now">방금</string>

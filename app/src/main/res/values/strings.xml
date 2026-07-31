@@ -543,6 +543,11 @@
     <string name="feedback_status_closed">Closed</string>
     <string name="feedback_dev_reply">Developer Reply</string>
     <string name="feedback_app_info">App Info</string>
+    <string name="feedback_app_version">App %1$s</string>
+    <string name="feedback_device_model">Device %1$s</string>
+    <string name="feedback_trakt_username">Trakt: %1$s</string>
+    <string name="feedback_douban_username">Douban: %1$s</string>
+    <string name="feedback_contact_value">Contact: %1$s</string>
     <string name="feedback_screenshot_expired">Screenshot expired</string>
     <string name="feedback_retry">Retry</string>
     <string name="feedback_time_just_now">Just now</string>

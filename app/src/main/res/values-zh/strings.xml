@@ -543,6 +543,11 @@
     <string name="feedback_status_closed">已关闭</string>
     <string name="feedback_dev_reply">开发者回复</string>
     <string name="feedback_app_info">应用信息</string>
+    <string name="feedback_app_version">应用 %1$s</string>
+    <string name="feedback_device_model">设备 %1$s</string>
+    <string name="feedback_trakt_username">Trakt：%1$s</string>
+    <string name="feedback_douban_username">豆瓣：%1$s</string>
+    <string name="feedback_contact_value">联系方式：%1$s</string>
     <string name="feedback_screenshot_expired">截图已过期</string>
     <string name="feedback_retry">重试</string>
     <string name="feedback_time_just_now">刚刚</string>
