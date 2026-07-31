@@ -5,7 +5,12 @@ import {
     normalizeInviteRequest,
     issueInvitation,
     releaseExpiredPublicInvitations,
+    PUBLIC_INVITE_RESERVATION_TTL_SECONDS,
 } from '../src/invitations.ts';
+
+test('keeps the public invitation reservation window at 72 hours', () => {
+    assert.equal(PUBLIC_INVITE_RESERVATION_TTL_SECONDS, 72 * 60 * 60);
+});
 
 test('normalizes a public invitation request without changing the user name', () => {
     assert.deepEqual(

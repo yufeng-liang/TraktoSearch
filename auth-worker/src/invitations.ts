@@ -5,7 +5,7 @@ import { generateId, generateInviteCode, generateSecureToken, sha256 } from './u
 
 export const PUBLIC_INVITE_LIMIT = 200;
 export const VERIFICATION_TTL_SECONDS = 30 * 60;
-const INVITE_TTL_SECONDS = 7 * 24 * 60 * 60;
+export const PUBLIC_INVITE_RESERVATION_TTL_SECONDS = 72 * 60 * 60;
 const PUBLIC_REQUEST_RATE_LIMIT = 3;
 
 export interface PublicInviteEnv {
@@ -266,7 +266,7 @@ export async function issueInvitation(
     const inviteCode = generateInviteCode();
     const codeHash = await sha256(inviteCode);
     const codeMask = `${inviteCode.slice(0, 4)}****${inviteCode.slice(-4)}`;
-    const expiresAt = currentTime + INVITE_TTL_SECONDS;
+    const expiresAt = currentTime + PUBLIC_INVITE_RESERVATION_TTL_SECONDS;
 
     const statements = [
         env.DB.prepare(`
