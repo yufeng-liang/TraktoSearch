@@ -44,6 +44,8 @@ import kotlinx.coroutines.launch
 
 private const val MAX_REPLY_SCREENSHOTS = 5
 
+internal fun conversationReplyListItemIndex(replyIndex: Int): Int = replyIndex + 2
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackDetailScreen(
@@ -90,7 +92,7 @@ fun FeedbackDetailScreen(
             val replies = (detailState as FeedbackViewModel.DetailState.Success).data.replies
             val targetIndex = replies.indexOfFirst { it.id == replyId }
             if (targetIndex >= 0) {
-                listState.scrollToItem(targetIndex + 1)
+                listState.scrollToItem(conversationReplyListItemIndex(targetIndex))
                 highlightReplyId = replyId
             }
         }
@@ -204,7 +206,7 @@ private fun ConversationBubble(reply: FeedbackReply, highlight: Boolean, onHighl
             Surface(shape = borderRadius, color = finalBubbleColor) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text = reply.content, fontSize = 14.sp, color = bubbleContentColor)
-                    val screenshots = parseScreenshots(reply.screenshots)
+                    val screenshots = reply.screenshots
                     if (screenshots.isNotEmpty()) { LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) { items(screenshots) { key -> val url = screenshotUrl(key); AsyncImage(model = remember(url) { ImageRequest.Builder(context).data(url).crossfade(true).build() }, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).clickable { onScreenshotClick(screenshots.map { screenshotUrl(it) }, screenshots.indexOf(key)) }) } } }
                 }
             }

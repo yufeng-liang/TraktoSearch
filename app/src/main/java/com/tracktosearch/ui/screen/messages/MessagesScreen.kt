@@ -98,7 +98,7 @@ private fun MessageItemRow(item: MessageItem, onClick: () -> Unit) {
     val avatarColor = if (isDeveloper) Color(0xFF34D399) else MaterialTheme.colorScheme.primary
     val avatarLabel = if (isDeveloper) "D" else "我"
     val typeColor = when (item.type) { "FEATURE" -> Color(0xFF34D399); "BUG" -> Color(0xFFFB7185); "UX" -> Color(0xFFFBBF24); else -> Color(0xFF9CA3AF) }
-    val hasScreenshot = !item.screenshots.isNullOrBlank()
+    val hasScreenshot = item.screenshots.isNotEmpty()
 
     Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (item.is_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f) else Color.Transparent).clickable { onClick() }.padding(12.dp).alpha(if (item.is_unread) 1f else 0.6f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Box(Modifier.size(8.dp)) { if (item.is_unread) { Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFFFB7185))) } }

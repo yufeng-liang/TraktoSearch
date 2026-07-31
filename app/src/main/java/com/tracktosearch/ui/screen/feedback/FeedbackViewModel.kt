@@ -86,6 +86,9 @@ class FeedbackViewModel @Inject constructor(
     private val _messagesFilter = MutableStateFlow(MessageFilter.ALL)
     val messagesFilter: StateFlow<MessageFilter> = _messagesFilter.asStateFlow()
 
+    // 保留未筛选全集，筛选只影响展示列表，避免切换回“全部”时丢失其他消息。
+    private var allMessages: List<MessageItem> = emptyList()
+
     private val _replyState = MutableStateFlow<ReplyState>(ReplyState.Idle)
     val replyState: StateFlow<ReplyState> = _replyState.asStateFlow()
 
@@ -217,12 +220,17 @@ class FeedbackViewModel @Inject constructor(
     fun markAsRead(feedbackId: String) {
         viewModelScope.launch {
             try {
-                feedbackRepository.markAsRead(feedbackId)
-                val removed = _unreadItems.value.filter { it.feedback_id != feedbackId }
-                val reduced = _unreadItems.value.size - removed.size
-                if (reduced > 0) {
-                    _unreadItems.value = removed
-                    _unreadCount.value = (_unreadCount.value - reduced).coerceAtLeast(0)
+                feedbackRepository.markAsRead(feedbackId).onSuccess {
+                    val removed = _unreadItems.value.filter { it.feedback_id != feedbackId }
+                    val reduced = _unreadItems.value.size - removed.size
+                    if (reduced > 0) {
+                        _unreadItems.value = removed
+                        _unreadCount.value = (_unreadCount.value - reduced).coerceAtLeast(0)
+                    }
+                    allMessages = allMessages.map { item ->
+                        if (item.feedback_id == feedbackId) item.copy(is_unread = false) else item
+                    }
+                    updateMessagesStateFromAll()
                 }
             } catch (e: CancellationException) { throw e } catch (_: Exception) {}
         }
@@ -231,12 +239,11 @@ class FeedbackViewModel @Inject constructor(
     fun markAllRead() {
         viewModelScope.launch {
             try {
-                feedbackRepository.markAllRead()
-                _unreadCount.value = 0
-                _unreadItems.value = emptyList()
-                val current = (_messagesState.value as? MessagesState.Success)
-                if (current != null) {
-                    _messagesState.value = MessagesState.Success(items = current.items.map { it.copy(is_unread = false) }, hasMore = current.hasMore, offset = current.offset)
+                feedbackRepository.markAllRead().onSuccess {
+                    _unreadCount.value = 0
+                    _unreadItems.value = emptyList()
+                    allMessages = allMessages.map { it.copy(is_unread = false) }
+                    updateMessagesStateFromAll()
                 }
             } catch (e: CancellationException) { throw e } catch (_: Exception) {}
         }
@@ -246,15 +253,16 @@ class FeedbackViewModel @Inject constructor(
         if (filter != null) _messagesFilter.value = filter
         val currentOffset = (_messagesState.value as? MessagesState.Success)?.offset ?: 0
         val offset = if (refresh) 0 else currentOffset
-        if (refresh) _messagesState.value = MessagesState.Loading
+        if (refresh) {
+            allMessages = emptyList()
+            _messagesState.value = MessagesState.Loading
+        }
         viewModelScope.launch {
             try {
                 val result = feedbackRepository.getMessages(limit = 50, offset = offset)
                 result.onSuccess { response ->
-                    val prev = (_messagesState.value as? MessagesState.Success)?.items ?: emptyList()
-                    val items = if (refresh) response.messages else prev + response.messages
-                    val filtered = applyFilter(items, _messagesFilter.value)
-                    _messagesState.value = MessagesState.Success(filtered, response.hasMore, offset + response.messages.size)
+                    allMessages = if (refresh) response.messages else allMessages + response.messages
+                    _messagesState.value = MessagesState.Success(applyFilter(allMessages, _messagesFilter.value), response.hasMore, offset + response.messages.size)
                 }.onFailure { e ->
                     _messagesState.value = MessagesState.Error(e.message ?: "LOAD_FAILED")
                 }
@@ -266,10 +274,12 @@ class FeedbackViewModel @Inject constructor(
 
     fun setMessagesFilter(filter: MessageFilter) {
         _messagesFilter.value = filter
-        val current = (_messagesState.value as? MessagesState.Success)
-        if (current != null) {
-            _messagesState.value = MessagesState.Success(items = applyFilter(current.items, filter), hasMore = current.hasMore, offset = current.offset)
-        }
+        updateMessagesStateFromAll()
+    }
+
+    private fun updateMessagesStateFromAll() {
+        val current = _messagesState.value as? MessagesState.Success ?: return
+        _messagesState.value = current.copy(items = applyFilter(allMessages, _messagesFilter.value))
     }
 
     private fun applyFilter(items: List<MessageItem>, filter: MessageFilter): List<MessageItem> {
@@ -297,7 +307,7 @@ class FeedbackViewModel @Inject constructor(
                 }
                 _replyState.value = ReplyState.Sending
                 val result = feedbackRepository.reply(feedbackId, content.trim(), keys)
-                result.onSuccess { _replyState.value = ReplyState.Success(it.reply.id) }.onFailure { _replyState.value = ReplyState.Error(it.message ?: "REPLY_FAILED") }
+                result.onSuccess { _replyState.value = ReplyState.Success(it.reply_id) }.onFailure { _replyState.value = ReplyState.Error(it.message ?: "REPLY_FAILED") }
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 _replyState.value = ReplyState.Error(e.message ?: "REPLY_FAILED")
             }
