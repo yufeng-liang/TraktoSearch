@@ -139,6 +139,7 @@ import com.tracktosearch.ui.animation.fadeSlideIn
 import com.tracktosearch.ui.component.CloudEasterEgg
 import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
+import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.GlassHighlight
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
@@ -1668,10 +1669,8 @@ fun DoubanHotAllSheet(
     onLoadMore: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant
+    DiscoverModalBottomSheet(
+        onDismissRequest = onDismiss
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
