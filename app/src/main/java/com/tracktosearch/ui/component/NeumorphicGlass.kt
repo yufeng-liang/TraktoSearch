@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.draw.innerShadow
@@ -317,6 +318,7 @@ fun NeumorphicIconButton(
     size: Dp = 42.dp,
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
+    enabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val shape = CircleShape
@@ -331,6 +333,7 @@ fun NeumorphicIconButton(
     }
     Box(
         modifier = modifier
+            .alpha(if (enabled) 1f else 0.55f)
             .size(size)
             .neumorphicOuterShadow(
                 shape = shape,
@@ -359,6 +362,7 @@ fun NeumorphicIconButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center

@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
@@ -51,11 +52,20 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -510,7 +520,7 @@ internal fun DetailHeaderContent(
             if (uiState.overview.isNotEmpty()) {
                 Column(modifier = Modifier.padding(bottom = 8.dp)) {
                     Text(
-                        text = "${stringResource(R.string.detail_overview_label)}：",
+                        text = stringResource(R.string.detail_overview_label),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -576,31 +586,136 @@ internal fun DetailHeaderContent(
 
 // ==================== 折叠展开文本 ====================
 
+internal data class OverviewDisplayText(
+    val content: String,
+    val actionLabel: String?
+)
+
+internal fun buildOverviewDisplayText(
+    text: String,
+    expanded: Boolean,
+    collapsedContent: String?,
+    showAllLabel: String,
+    collapseLabel: String
+): OverviewDisplayText {
+    return when {
+        expanded -> OverviewDisplayText(content = text, actionLabel = collapseLabel)
+        collapsedContent != null -> OverviewDisplayText(
+            content = collapsedContent,
+            actionLabel = showAllLabel
+        )
+        else -> OverviewDisplayText(content = text, actionLabel = null)
+    }
+}
+
 @Composable
 internal fun ExpandableText(text: String, maxLines: Int = 3) {
-    var expanded by remember { mutableStateOf(false) }
-    var isOverflowing by remember { mutableStateOf(false) }
+    val effectiveMaxLines = maxLines.coerceAtLeast(1)
+    val showAllLabel = stringResource(R.string.detail_overview_show_all)
+    val collapseLabel = stringResource(R.string.detail_overview_collapse)
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val bodyStyle = MaterialTheme.typography.bodyMedium
+    val textMeasurer = rememberTextMeasurer()
+    var expanded by rememberSaveable(text, effectiveMaxLines) { mutableStateOf(false) }
 
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        maxLines = if (expanded) Int.MAX_VALUE else maxLines,
-        overflow = TextOverflow.Ellipsis,
-        onTextLayout = { result ->
-            if (!expanded) {
-                isOverflowing = result.hasVisualOverflow || result.lineCount > maxLines
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val maxWidthPx = with(LocalDensity.current) { (maxWidth.value * density).toInt() }
+        val collapsedPrefixLength = remember(
+            text,
+            effectiveMaxLines,
+            showAllLabel,
+            maxWidthPx
+        ) {
+            findCollapsedPrefixLength(
+                text = text,
+                showAllLabel = showAllLabel,
+                style = bodyStyle,
+                textMeasurer = textMeasurer,
+                maxWidthPx = maxWidthPx,
+                maxLines = effectiveMaxLines
+            )
+        }
+        val isOverflowing = collapsedPrefixLength != null
+        val display = buildOverviewDisplayText(
+            text = text,
+            expanded = expanded,
+            collapsedContent = collapsedPrefixLength?.let { text.take(it).trimEnd() },
+            showAllLabel = showAllLabel,
+            collapseLabel = collapseLabel
+        )
+        val displayText = buildAnnotatedString {
+            append(display.content)
+            if (display.actionLabel != null) {
+                append(if (expanded) "  " else "... ")
+                withStyle(SpanStyle(color = primaryColor)) {
+                    append(display.actionLabel)
+                }
             }
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                if (isOverflowing || expanded) expanded = !expanded
-            }
+        }
+
+        Text(
+            text = displayText,
+            style = bodyStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = if (expanded) Int.MAX_VALUE else effectiveMaxLines,
+            overflow = TextOverflow.Clip,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    enabled = isOverflowing || expanded
+                ) {
+                    expanded = !expanded
+                }
+        )
+    }
+}
+
+internal fun findCollapsedPrefixLength(
+    text: String,
+    showAllLabel: String,
+    style: TextStyle,
+    textMeasurer: TextMeasurer,
+    maxWidthPx: Int,
+    maxLines: Int
+): Int? {
+    if (maxWidthPx <= 0) return null
+
+    val constraints = Constraints(maxWidth = maxWidthPx)
+    val fullLayout = textMeasurer.measure(
+        text = AnnotatedString(text),
+        style = style,
+        maxLines = Int.MAX_VALUE,
+        overflow = TextOverflow.Clip,
+        constraints = constraints
     )
+    if (fullLayout.lineCount <= maxLines) {
+        return null
+    }
+
+    val suffix = "... $showAllLabel"
+    var low = 0
+    var high = text.length
+    var bestLength = 0
+    while (low <= high) {
+        val candidateLength = (low + high) / 2
+        val candidate = text.take(candidateLength).trimEnd() + suffix
+        val candidateLayout = textMeasurer.measure(
+            text = AnnotatedString(candidate),
+            style = style,
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
+            constraints = constraints
+        )
+        if (candidateLayout.lineCount <= maxLines) {
+            bestLength = candidateLength
+            low = candidateLength + 1
+        } else {
+            high = candidateLength - 1
+        }
+    }
+    return bestLength
 }
 
 // ==================== 状态绑带 ====================

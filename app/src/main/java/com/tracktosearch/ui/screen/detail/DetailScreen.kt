@@ -5,9 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,7 +26,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -97,11 +94,8 @@ import com.tracktosearch.ui.util.ToastEffect
 import com.tracktosearch.ui.util.copyResourceLink
 import com.tracktosearch.ui.util.openResourceLink
 import com.tracktosearch.ui.util.performHaptic
-import dev.chrisbanes.haze.HazeInputScale
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.blur.blurEffect
 import dev.chrisbanes.haze.blur.materials.HazeMaterials
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -239,7 +233,6 @@ fun DetailScreen(
 
     // Haze 毛玻璃状态
     val detailHazeState = remember { HazeState() }
-    val detailHazeStyle = HazeMaterials.thin()
     val detailIsDark = isAppDarkTheme()
 
     // 点击 token,确保只有被点击的卡片参与转场(避免同 tmdbId 海报跨栏目飘错)
@@ -780,34 +773,16 @@ fun DetailScreen(
                 // 豆瓣同步重试按钮（仅在 doubanSyncRetryable=true 时显示）
                 if (uiState.doubanSyncRetryable) {
                     val view = LocalView.current
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .hazeEffect(state = detailHazeState) {
-                                inputScale = HazeInputScale.Auto
-                                blurEffect { style = detailHazeStyle }
-                            }
-                            // alpha 0.50:无 Haze 时提高对比度保证可见性
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.50f),
-                                shape = CircleShape
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                                shape = CircleShape
-                            )
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                enabled = !uiState.isDoubanSyncing,
-                                onClick = {
-                                    view.performHaptic(HapticType.CLICK)
-                                    viewModel.retryDoubanSync()
-                                }
-                            ),
-                        contentAlignment = Alignment.Center
+                    NeumorphicIconButton(
+                        onClick = {
+                            view.performHaptic(HapticType.CLICK)
+                            viewModel.retryDoubanSync()
+                        },
+                        isDark = detailIsDark,
+                        enabled = !uiState.isDoubanSyncing,
+                        hazeState = detailHazeState,
+                        hazeStyle = HazeMaterials.ultraThin(),
+                        size = 40.dp
                     ) {
                         if (uiState.isDoubanSyncing) {
                             CircularProgressIndicator(

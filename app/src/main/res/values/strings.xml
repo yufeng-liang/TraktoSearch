@@ -169,6 +169,8 @@
     <string name="detail_login_go">Log In</string>
     <string name="detail_no_overview">No overview available</string>
     <string name="detail_overview_label">Overview</string>
+    <string name="detail_overview_show_all">View all</string>
+    <string name="detail_overview_collapse">Collapse</string>
     <string name="detail_filter_sources">Sources</string>
     <string name="detail_filter_disk_types">Disk Types</string>
     <string name="detail_filter_relevance">Relevance</string>

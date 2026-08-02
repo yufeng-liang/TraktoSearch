@@ -58,6 +58,8 @@ import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.data.remote.tmdb.dto.TmdbCollectionResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktEpisode
 import com.tracktosearch.data.remote.trakt.dto.TraktSeason
+import com.tracktosearch.ui.component.isAppDarkTheme
+import com.tracktosearch.ui.component.neumorphicOuterShadow
 import com.tracktosearch.ui.util.HapticType
 import com.tracktosearch.ui.util.performHaptic
 
@@ -115,6 +117,7 @@ internal fun SeasonsSection(
     onToggleEpisodeWatched: (seasonNumber: Int, episodeNumber: Int, episodeTraktId: Int) -> Unit
 ) {
     val view = LocalView.current
+    val isDark = isAppDarkTheme()
     // 过滤掉第0季（特别篇），单独展示为"特别篇"
     val regularSeasons = seasons.filter { it.number > 0 }
     val specialSeasons = seasons.filter { it.number == 0 }
@@ -178,18 +181,35 @@ internal fun SeasonsSection(
             val isExpanded = season.number in expandedSeasons
             val watchedCount = (watchedEpisodeNumbers[season.number]?.size ?: 0)
             val totalCount = season.episode_count
+            val seasonShape = RoundedCornerShape(12.dp)
 
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .neumorphicOuterShadow(
+                        shape = seasonShape,
+                        isDark = isDark,
+                        elevation = 4.dp,
+                        darkAlpha = if (isDark) 0.36f else 0.16f,
+                        blurRadius = 9.dp,
+                        shadowOffset = 2.dp
+                    )
+                    .clip(seasonShape)
                     .clickable { view.performHaptic(HapticType.CLICK); onToggleSeason(season.number) },
-                shape = RoundedCornerShape(12.dp),
+                shape = seasonShape,
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (isDark) {
+                        Color.White.copy(alpha = 0.16f)
+                    } else {
+                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)
+                    }
+                )
             ) {
                 Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                     // 季标题行

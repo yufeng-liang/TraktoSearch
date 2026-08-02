@@ -169,6 +169,8 @@
     <string name="detail_login_go">去登录</string>
     <string name="detail_no_overview">暂无简介</string>
     <string name="detail_overview_label">简介</string>
+    <string name="detail_overview_show_all">查看全部</string>
+    <string name="detail_overview_collapse">收起</string>
     <string name="detail_filter_sources">搜索源</string>
     <string name="detail_filter_disk_types">网盘类型</string>
     <string name="detail_filter_relevance">相关度</string>

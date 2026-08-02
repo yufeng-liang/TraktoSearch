@@ -124,6 +124,8 @@
     <string name="detail_loading_episodes">에피소드 로딩 중…</string>
     <string name="detail_no_overview">줄거리 없음</string>
     <string name="detail_overview_label">줄거리</string>
+    <string name="detail_overview_show_all">모두 보기</string>
+    <string name="detail_overview_collapse">접기</string>
     <string name="detail_retry">재시도</string>
 
     <!-- Login Screen -->

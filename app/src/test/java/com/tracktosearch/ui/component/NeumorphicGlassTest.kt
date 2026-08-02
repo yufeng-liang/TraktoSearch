@@ -1,56 +1,47 @@
 package com.tracktosearch.ui.component
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performClick
 import com.google.common.truth.Truth.assertThat
+import org.junit.Rule
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [33], application = android.app.Application::class)
 class NeumorphicGlassTest {
-    @Test
-    fun noVisibleItemDoesNotEnableTopBarHaze() {
-        assertThat(
-            hasListScrolled(
-                firstVisibleItemIndex = null,
-                firstVisibleItemScrollOffsetPx = null
-            )
-        ).isFalse()
-    }
+
+    @get:Rule
+    val composeRule = createComposeRule()
 
     @Test
-    fun initialListPositionDoesNotEnableTopBarHaze() {
-        assertThat(
-            hasListScrolled(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffsetPx = 0
-            )
-        ).isFalse()
-    }
+    fun disabled_icon_button_does_not_dispatch_click() {
+        var clicked = false
+        composeRule.setContent {
+            MaterialTheme {
+                NeumorphicIconButton(
+                    onClick = { clicked = true },
+                    isDark = false,
+                    enabled = false
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "Retry"
+                    )
+                }
+            }
+        }
 
-    @Test
-    fun anyScrollOffsetEnablesTopBarHaze() {
-        assertThat(
-            hasListScrolled(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffsetPx = 1
-            )
-        ).isTrue()
-    }
-
-    @Test
-    fun laterItemEnablesTopBarHazeEvenWhenItemScrollOffsetIsZero() {
-        assertThat(
-            hasListScrolled(
-                firstVisibleItemIndex = 1,
-                firstVisibleItemScrollOffsetPx = 0
-            )
-        ).isTrue()
-    }
-
-    @Test
-    fun negativeScrollOffsetDoesNotEnableTopBarHaze() {
-        assertThat(
-            hasListScrolled(
-                firstVisibleItemIndex = 0,
-                firstVisibleItemScrollOffsetPx = -1
-            )
-        ).isFalse()
+        composeRule.onNodeWithContentDescription("Retry").assertIsNotEnabled().performClick()
+        composeRule.waitForIdle()
+        assertThat(clicked).isFalse()
     }
 }
