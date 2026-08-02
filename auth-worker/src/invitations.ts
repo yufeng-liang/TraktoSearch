@@ -11,6 +11,7 @@ const PUBLIC_REQUEST_RATE_LIMIT = 3;
 export interface PublicInviteEnv {
     DB: D1Database;
     EMAIL?: SendEmail;
+    BREVO_API_KEY?: string;
     EMAIL_FROM?: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
@@ -412,10 +413,41 @@ async function enforcePublicRateLimit(env: PublicInviteEnv, request: Request): P
     await env.KV.put(key, String(current + 1), { expirationTtl: 3600 });
 }
 
-async function sendEmail(
+export async function sendEmail(
     env: PublicInviteEnv,
     input: { to: string; subject: string; html: string; text: string },
 ): Promise<void> {
+    if (env.BREVO_API_KEY) {
+        if (!env.EMAIL_FROM) {
+            throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
+        }
+
+        const replyTo = env.EMAIL_REPLY_TO ? parseEmailAddress(env.EMAIL_REPLY_TO) : undefined;
+        const payload = {
+            sender: parseEmailAddress(env.EMAIL_FROM),
+            to: [{ email: input.to }],
+            subject: input.subject,
+            htmlContent: input.html,
+            textContent: input.text,
+            ...(replyTo ? { replyTo } : {}),
+        };
+        const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+            method: 'POST',
+            headers: {
+                accept: 'application/json',
+                'api-key': env.BREVO_API_KEY,
+                'content-type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const detail = (await response.text()).slice(0, 500);
+            console.error('Brevo transactional email failed', response.status, detail);
+            throw new AppError('EMAIL_SEND_FAILED', 'Unable to send email through Brevo', 503);
+        }
+        return;
+    }
+
     if (!env.EMAIL || !env.EMAIL_FROM) {
         throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
     }
@@ -427,6 +459,14 @@ async function sendEmail(
         html: input.html,
         text: input.text,
     });
+}
+
+function parseEmailAddress(value: string): { email: string; name?: string } {
+    const displayAddress = value.match(/^\s*(.*?)\s*<([^<>\s]+@[^<>\s]+)>\s*$/);
+    if (displayAddress) {
+        return { name: displayAddress[1].trim(), email: displayAddress[2].trim() };
+    }
+    return { email: value.trim() };
 }
 
 function buildVerificationUrl(env: PublicInviteEnv, token: string): string {

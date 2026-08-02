@@ -6,6 +6,7 @@ import {
     issueInvitation,
     releaseExpiredPublicInvitations,
     PUBLIC_INVITE_RESERVATION_TTL_SECONDS,
+    sendEmail,
 } from '../src/invitations.ts';
 
 test('keeps the public invitation reservation window at 72 hours', () => {
@@ -24,6 +25,42 @@ test('rejects invalid public invitation input', () => {
         () => normalizeInviteRequest({ nickname: '', email: 'not-an-email' }),
         error => error?.code === 'INVALID_REQUEST',
     );
+});
+
+test('sends transactional email through Brevo with the verified sender', async () => {
+    const originalFetch = globalThis.fetch;
+    let call;
+    globalThis.fetch = async (url, init) => {
+        call = { url, init };
+        return new Response(JSON.stringify({ messageId: '<brevo-message-id>' }), {
+            status: 201,
+            headers: { 'content-type': 'application/json' },
+        });
+    };
+
+    try {
+        await sendEmail({
+            BREVO_API_KEY: 'brevo-test-key',
+            EMAIL_FROM: 'TraktoSearch <Yu-Fengliang@outlook.com>',
+            EMAIL_REPLY_TO: '1577865546@qq.com',
+        }, {
+            to: 'user@example.com',
+            subject: '测试邮件',
+            html: '<p>HTML</p>',
+            text: 'TEXT',
+        });
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+
+    assert.equal(call.url, 'https://api.brevo.com/v3/smtp/email');
+    assert.equal(call.init.headers['api-key'], 'brevo-test-key');
+    const body = JSON.parse(call.init.body);
+    assert.deepEqual(body.sender, { name: 'TraktoSearch', email: 'Yu-Fengliang@outlook.com' });
+    assert.deepEqual(body.to, [{ email: 'user@example.com' }]);
+    assert.deepEqual(body.replyTo, { email: '1577865546@qq.com' });
+    assert.equal(body.htmlContent, '<p>HTML</p>');
+    assert.equal(body.textContent, 'TEXT');
 });
 
 test('issueInvitation uses an atomic quota guard before creating the friend and invite', async () => {

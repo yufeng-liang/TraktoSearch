@@ -66,7 +66,8 @@ export interface Env {
     CONFIG_BASE_URL: string;
     // 云端同步数据服务端加密（原客户端 AesCrypto 硬编码密钥）
     CLOUD_SYNC_AES_KEY: string;
-    EMAIL: SendEmail;
+    EMAIL?: SendEmail;
+    BREVO_API_KEY?: string;
     EMAIL_FROM: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
