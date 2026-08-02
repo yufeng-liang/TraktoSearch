@@ -36,7 +36,7 @@ import { handleGithubProxy } from './proxy/github';
 import { handleTranslateProxy } from './proxy/translate';
 import { handleCrashLogProxy } from './proxy/crash-logs';
 import { handleConfigProxy } from './proxy/config';
-import { handleInviteRequest, handleInviteVerification } from './invitations';
+import { handleInviteRequest, handleInviteResend, handleInviteVerification } from './invitations';
 
 export interface Env {
     DB: D1Database;
@@ -161,6 +161,9 @@ async function handleAuthApi(
     // 公开端点（无需 JWT）
     if (path === '/api/invite-requests' && request.method === 'POST') {
         return handleInviteRequest(request, env, requestId);
+    }
+    if (path === '/api/invite-requests/resend' && request.method === 'POST') {
+        return handleInviteResend(request, env, requestId);
     }
     if (path === '/api/invite-requests/verify' && request.method === 'GET') {
         return handleInviteVerification(request, env, requestId);

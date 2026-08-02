@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildInvitationEmail,
+    handleInviteRequest,
     normalizeInviteRequest,
     issueInvitation,
     releaseExpiredPublicInvitations,
+    resendInvitation,
     PUBLIC_INVITE_RESERVATION_TTL_SECONDS,
     sendEmail,
 } from '../src/invitations.ts';
@@ -26,6 +28,190 @@ test('rejects invalid public invitation input', () => {
         error => error?.code === 'INVALID_REQUEST',
     );
 });
+
+test('direct public request issues an invitation without email verification', async () => {
+    let emailBody;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        emailBody = { url, init };
+        return new Response(JSON.stringify({ messageId: '<brevo-message-id>' }), { status: 201 });
+    };
+
+    const db = {
+        prepare() {
+            return {
+                bind() {
+                    return {
+                        async all() { return { results: [] }; },
+                        async first() { return null; },
+                        async run() { return { meta: { changes: 1 } }; },
+                    };
+                },
+            };
+        },
+        async batch(statements) {
+            return statements.map(() => ({ meta: { changes: 1 } }));
+        },
+    };
+
+    try {
+        const response = await handleInviteRequest(
+            new Request('https://example.com/api/invite-requests', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ nickname: 'test-user', email: 'user@example.com' }),
+            }),
+            dbEnv(db),
+            'request-id',
+        );
+
+        assert.equal(response.status, 200);
+        const payload = await response.json();
+        assert.equal(payload.data.status, 'INVITE_SENT');
+        assert.equal(payload.data.inviteCode, undefined);
+        const body = JSON.parse(emailBody.init.body);
+        assert.match(body.subject, /邀请码已送达/);
+        assert.match(body.htmlContent, /INVITATION CODE/);
+        assert.doesNotMatch(body.htmlContent, /invite\/verify/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('public resend enforces a 60 second cooldown', async () => {
+    const db = {
+        prepare(sql) {
+            return {
+                bind() {
+                    return {
+                        sql,
+                        async first() {
+                            return sql.includes('FROM friends')
+                                ? {
+                                    friend_id: 'friend-1',
+                                    nickname: 'test-user',
+                                    email: 'user@example.com',
+                                    request_id: 'request-1',
+                                    invite_id: 'invite-1',
+                                    email_sent_at: 1_700_000_000,
+                                    invite_expires_at: 1_700_100_000,
+                                }
+                                : null;
+                        },
+                    };
+                },
+            };
+        },
+    };
+
+    await assert.rejects(
+        () => resendInvitation(dbEnv(db), { email: 'user@example.com' }, 'request-id', 1_700_000_030),
+        error => error?.code === 'RESEND_COOLDOWN' && /30/.test(error.message),
+    );
+});
+
+test('public resend atomically revokes the old code and creates a new code', async () => {
+    const batches = [];
+    let emailBody;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => {
+        emailBody = { url, init };
+        return new Response(JSON.stringify({ messageId: '<brevo-message-id>' }), { status: 201 });
+    };
+    const db = {
+        prepare(sql) {
+            return {
+                bind() {
+                    return {
+                        sql,
+                        async first() {
+                            return sql.includes('FROM friends')
+                                ? {
+                                    friend_id: 'friend-1',
+                                    nickname: 'test-user',
+                                    email: 'user@example.com',
+                                    request_id: 'request-1',
+                                    invite_id: 'invite-1',
+                                    email_sent_at: 1_700_000_000,
+                                    invite_expires_at: 1_700_100_000,
+                                }
+                                : null;
+                        },
+                        async run() { return { meta: { changes: 1 } }; },
+                    };
+                },
+            };
+        },
+        async batch(statements) {
+            batches.push(statements);
+            return statements.map(() => ({ meta: { changes: 1 } }));
+        },
+    };
+
+    try {
+        const result = await resendInvitation(
+            dbEnv(db),
+            { email: 'user@example.com' },
+            'request-id',
+            1_700_000_100,
+        );
+
+        assert.equal(result.inviteCode.length, 12);
+        assert.equal(batches.length, 1);
+        assert.match(batches[0][0].sql, /UPDATE invites\s+SET revoked_at/);
+        assert.match(batches[0][1].sql, /INSERT INTO invites/);
+        assert.match(batches[0][2].sql, /UPDATE invite_requests/);
+        assert.match(batches[0][3].sql, /PUBLIC_INVITE_RESEND/);
+        const body = JSON.parse(emailBody.init.body);
+        assert.equal(body.to[0].email, 'user@example.com');
+        assert.match(body.htmlContent, /INVITATION CODE/);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
+});
+
+test('public resend rejects a concurrent rotation based on a stale code', async () => {
+    const db = {
+        prepare(sql) {
+            return {
+                bind() {
+                    return {
+                        async first() {
+                            return sql.includes('FROM friends')
+                                ? {
+                                    friend_id: 'friend-1',
+                                    nickname: 'test-user',
+                                    email: 'user@example.com',
+                                    request_id: 'request-1',
+                                    invite_id: 'invite-1',
+                                    email_sent_at: 1_700_000_000,
+                                    invite_expires_at: 1_700_100_000,
+                                }
+                                : null;
+                        },
+                    };
+                },
+            };
+        },
+        async batch(statements) {
+            return statements.map(() => ({ meta: { changes: 0 } }));
+        },
+    };
+
+    await assert.rejects(
+        () => resendInvitation(dbEnv(db), { email: 'user@example.com' }, 'request-id', 1_700_000_100),
+        error => error?.code === 'RESEND_CONFLICT',
+    );
+});
+
+function dbEnv(db) {
+    return {
+        DB: db,
+        BREVO_API_KEY: 'brevo-test-key',
+        EMAIL_FROM: 'TraktoSearch <noreply@example.com>',
+        PUBLIC_SITE_ORIGIN: 'https://tracktosearch.pages.dev',
+    };
+}
 
 test('sends transactional email through Brevo with the verified sender', async () => {
     const originalFetch = globalThis.fetch;
@@ -156,16 +342,18 @@ test('releases expired unused public invitations without deleting the request au
     assert.match(batches[0][2].sql, /DELETE FROM friends/);
 });
 
-test('invitation email contains both a verification link and the one-time code', () => {
+test('invitation email centers the code and includes the Chiikawa image', () => {
     const email = buildInvitationEmail({
         nickname: '小明',
         inviteCode: 'ABCD2345EFGH',
-        verificationUrl: 'https://tracktosearch.pages.dev/invite/verify/?token=token',
+        siteUrl: 'https://tracktosearch.pages.dev',
         expiresAt: 1_700_000_000,
     });
 
     assert.match(email.html, /ABCD2345EFGH/);
-    assert.match(email.html, /href="https:\/\/tracktosearch\.pages\.dev\/invite\/verify\/\?token=token"/);
+    assert.match(email.html, /text-align:center/);
+    assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-chiikawa-love\.png/);
+    assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
 });

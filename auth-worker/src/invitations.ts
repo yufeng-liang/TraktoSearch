@@ -1,4 +1,4 @@
-// 公开邀请码申请：邮箱验证后原子分配名额，并通过 Cloudflare Email Service 发信。
+// 公开邀请码申请：直接原子分配名额，并通过事务邮件发信。
 
 import { AppError, errorResponse, now, successResponse } from './util/errors.ts';
 import { generateId, generateInviteCode, generateSecureToken, sha256 } from './util/crypto.ts';
@@ -6,6 +6,7 @@ import { generateId, generateInviteCode, generateSecureToken, sha256 } from './u
 export const PUBLIC_INVITE_LIMIT = 200;
 export const VERIFICATION_TTL_SECONDS = 30 * 60;
 export const PUBLIC_INVITE_RESERVATION_TTL_SECONDS = 72 * 60 * 60;
+export const PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS = 60;
 const PUBLIC_REQUEST_RATE_LIMIT = 3;
 
 export interface PublicInviteEnv {
@@ -50,6 +51,15 @@ export function normalizeInviteRequest(input: unknown): InviteRequestInput {
     return { nickname, email };
 }
 
+function normalizeInviteEmail(input: unknown): string {
+    const body = input && typeof input === 'object' ? input as Partial<InviteRequestInput> : {};
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
+    if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new AppError('INVALID_REQUEST', 'email is invalid', 400);
+    }
+    return email;
+}
+
 export async function handleInviteRequest(
     request: Request,
     env: PublicInviteEnv,
@@ -70,13 +80,12 @@ export async function handleInviteRequest(
         SELECT id FROM friends WHERE LOWER(email) = ? LIMIT 1
     `).bind(input.email).first<{ id: string }>();
     if (existing) {
-        return successResponse({ status: 'VERIFICATION_SENT' }, requestId);
+        return successResponse({ status: 'INVITE_SENT' }, requestId);
     }
 
     const currentTime = now();
     const requestIdValue = generateId();
-    const verificationToken = generateSecureToken(32);
-    const verificationTokenHash = await sha256(verificationToken);
+    const verificationTokenHash = await sha256(generateSecureToken(32));
     const expiresAt = currentTime + VERIFICATION_TTL_SECONDS;
 
     await env.DB.prepare(`
@@ -102,27 +111,42 @@ export async function handleInviteRequest(
     ).run();
 
     try {
-        await sendEmail(env, {
-            to: input.email,
-            subject: '请验证邮箱，领取 TraktoSearch 邀请码',
-            ...buildVerificationEmail({
-                nickname: input.nickname,
-                verificationUrl: buildVerificationUrl(env, verificationToken),
-                expiresAt,
-            }),
-        });
-        await env.DB.prepare(`
-            UPDATE invite_requests SET email_sent_at = ?, updated_at = ? WHERE id = ?
-        `).bind(currentTime, currentTime, requestIdValue).run();
+        await issueInvitation(env, {
+            id: requestIdValue,
+            nickname: input.nickname,
+            email: input.email,
+            verificationTokenHash,
+        }, requestId, currentTime);
     } catch (error) {
-        await env.DB.prepare(`
-            UPDATE invite_requests SET status = 'EMAIL_FAILED', updated_at = ? WHERE id = ?
-        `).bind(now(), requestIdValue).run();
-        console.error('Public invite verification email failed', error);
-        throw new AppError('EMAIL_SEND_FAILED', 'Unable to send verification email', 503);
+        if (error instanceof AppError && error.code === 'PUBLIC_INVITE_LIMIT_REACHED') {
+            await env.DB.prepare(`
+                UPDATE invite_requests SET status = 'EXPIRED', updated_at = ?
+                WHERE id = ? AND status = 'VERIFICATION_SENT'
+            `).bind(now(), requestIdValue).run();
+        }
+        throw error;
     }
 
-    return successResponse({ status: 'VERIFICATION_SENT' }, requestId);
+    return successResponse({ status: 'INVITE_SENT' }, requestId);
+}
+
+export async function handleInviteResend(
+    request: Request,
+    env: PublicInviteEnv,
+    requestId: string,
+): Promise<Response> {
+    let body: unknown;
+    try {
+        body = await request.json();
+    } catch {
+        throw new AppError('INVALID_REQUEST', 'Invalid JSON body', 400);
+    }
+
+    const email = normalizeInviteEmail(body);
+    await enforcePublicRateLimit(env, request);
+    await releaseExpiredPublicInvitations(env);
+    await resendInvitation(env, { email }, requestId);
+    return successResponse({ status: 'INVITE_RESENT', cooldownSeconds: PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS }, requestId);
 }
 
 export async function handleInviteVerification(
@@ -331,7 +355,7 @@ export async function issueInvitation(
             ...buildInvitationEmail({
                 nickname: request.nickname,
                 inviteCode,
-                verificationUrl: buildVerificationUrl(env, request.verificationToken || ''),
+                siteUrl: env.PUBLIC_SITE_ORIGIN,
                 expiresAt,
             }),
         });
@@ -353,6 +377,125 @@ export async function issueInvitation(
     }
 
     return { friendId, inviteId, inviteCode, expiresAt };
+}
+
+export async function resendInvitation(
+    env: PublicInviteEnv,
+    input: { email: string },
+    requestId: string,
+    currentTime: number = now(),
+): Promise<{ inviteId: string; inviteCode: string; expiresAt: number }> {
+    if ((!env.BREVO_API_KEY && !env.EMAIL) || !env.EMAIL_FROM) {
+        throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
+    }
+
+    const current = await env.DB.prepare(`
+        SELECT f.id AS friend_id,
+               f.nickname,
+               f.email,
+               r.id AS request_id,
+               r.invite_id,
+               r.email_sent_at,
+               i.expires_at AS invite_expires_at
+        FROM friends f
+        JOIN invite_requests r
+          ON r.id = f.signup_request_id
+         AND r.status = 'ISSUED'
+        JOIN invites i
+          ON i.id = r.invite_id
+         AND i.friend_id = f.id
+        WHERE LOWER(f.email) = ?
+          AND f.status = 'ACTIVE'
+          AND i.kind = 'ACTIVATION'
+          AND i.used_at IS NULL
+          AND i.revoked_at IS NULL
+        ORDER BY r.updated_at DESC
+        LIMIT 1
+    `).bind(input.email).first<{
+        friend_id: string;
+        nickname: string;
+        email: string;
+        request_id: string;
+        invite_id: string;
+        email_sent_at: number | null;
+        invite_expires_at: number;
+    }>();
+
+    if (!current) {
+        throw new AppError('INVITE_NOT_FOUND', 'No public invitation is available for this email', 404);
+    }
+
+    const lastSentAt = Number(current.email_sent_at || 0);
+    const elapsed = Math.max(0, currentTime - lastSentAt);
+    const remaining = PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS - elapsed;
+    if (remaining > 0) {
+        throw new AppError('RESEND_COOLDOWN', `Please wait ${remaining} seconds before resending`, 429);
+    }
+
+    const inviteId = generateId();
+    const inviteCode = generateInviteCode();
+    const codeHash = await sha256(inviteCode);
+    const codeMask = `${inviteCode.slice(0, 4)}****${inviteCode.slice(-4)}`;
+    const expiresAt = currentTime + PUBLIC_INVITE_RESERVATION_TTL_SECONDS;
+
+    const results = await env.DB.batch([
+        env.DB.prepare(`
+            UPDATE invites
+            SET revoked_at = ?
+            WHERE id = ?
+              AND friend_id = ?
+              AND used_at IS NULL
+              AND revoked_at IS NULL
+              AND expires_at >= ?
+        `).bind(currentTime, current.invite_id, current.friend_id, currentTime),
+        env.DB.prepare(`
+            INSERT INTO invites (
+                id, friend_id, kind, code_hash, code_mask, device_id,
+                expires_at, created_at
+            )
+            SELECT ?, ?, 'ACTIVATION', ?, ?, NULL, ?, ?
+            WHERE EXISTS (
+                SELECT 1 FROM invite_requests
+                WHERE id = ?
+                  AND friend_id = ?
+                  AND invite_id = ?
+                  AND status = 'ISSUED'
+            )
+        `).bind(inviteId, current.friend_id, codeHash, codeMask, expiresAt, currentTime, current.request_id, current.friend_id, current.invite_id),
+        env.DB.prepare(`
+            UPDATE invite_requests
+            SET invite_id = ?, email_sent_at = ?, updated_at = ?
+            WHERE id = ?
+              AND status = 'ISSUED'
+              AND invite_id = ?
+        `).bind(inviteId, currentTime, currentTime, current.request_id, current.invite_id),
+        env.DB.prepare(`
+            INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
+            VALUES ('PUBLIC_INVITE_RESEND', ?, ?, 'SUCCESS', ?, ?)
+        `).bind(current.friend_id, requestId, `invite_id:${inviteId};previous_invite_id:${current.invite_id};invite_mask:${codeMask}`, currentTime),
+    ]);
+
+    if (results.length < 4 || results.some(result => Number(result?.meta?.changes || 0) !== 1)) {
+        throw new AppError('RESEND_CONFLICT', 'Invitation changed while resending', 409);
+    }
+
+    try {
+        await sendEmail(env, {
+            to: current.email,
+            subject: '欢迎加入 TraktoSearch，你的邀请码已送达',
+            ...buildInvitationEmail({
+                nickname: current.nickname,
+                inviteCode,
+                siteUrl: env.PUBLIC_SITE_ORIGIN,
+                expiresAt,
+            }),
+        });
+    } catch (error) {
+        console.error('Public invitation resend failed', error);
+        throw new AppError('EMAIL_SEND_FAILED', 'Unable to send invitation email', 503);
+    }
+
+    return { inviteId, inviteCode, expiresAt };
 }
 
 export function buildVerificationEmail(input: {
@@ -378,12 +521,14 @@ export function buildVerificationEmail(input: {
 export function buildInvitationEmail(input: {
     nickname: string;
     inviteCode: string;
-    verificationUrl: string;
+    siteUrl: string;
     expiresAt: number;
 }): { html: string; text: string } {
     const name = escapeHtml(input.nickname);
     const code = escapeHtml(input.inviteCode);
-    const url = escapeHtml(input.verificationUrl);
+    const siteUrl = input.siteUrl.replace(/\/$/, '');
+    const url = escapeHtml(siteUrl);
+    const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-chiikawa-love.png`);
     const expiry = formatDate(input.expiresAt);
     return {
         html: emailLayout(`
@@ -394,11 +539,14 @@ export function buildInvitationEmail(input: {
                 <div style="margin-bottom:8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-transform:uppercase;">INVITATION CODE</div>
                 <div style="font:700 24px/1.2 'Courier New',monospace;letter-spacing:.12em;color:#1D1C19;">${code}</div>
             </div>
+            <div style="margin:0 0 24px;text-align:center;">
+                <img src="${imageUrl}" alt="吉伊" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0;">
+            </div>
             <p style="margin:0 0 12px;color:#6D685F;line-height:1.7;">邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。</p>
             <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TrackToSearch" style="color:#D95532;">GitHub 仓库</a>，这会直接帮助我们改进后续版本。</p>
             <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明和下载入口。</p>
         `),
-        text: `你好，${input.nickname}：\n\n欢迎来到 TraktoSearch，感谢你下载并体验。你的初期体验邀请码是：\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TrackToSearch\n\n官网：${input.verificationUrl}`,
+        text: `你好，${input.nickname}：\n\n欢迎来到 TraktoSearch，感谢你下载并体验。你的初期体验邀请码是：\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TrackToSearch\n\n官网：${siteUrl}`,
     };
 }
 
@@ -502,7 +650,7 @@ function verificationResponse(
 }
 
 function emailLayout(content: string): string {
-    return `<!doctype html><html lang="zh-CN"><body style="margin:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;"><div style="max-width:620px;margin:0 auto;padding:36px 20px;"><div style="border-top:4px solid #D95532;background:#F6F2E9;padding:26px 0 0;"><div style="color:#D95532;font:600 12px/1.2 'Courier New',monospace;letter-spacing:.2em;text-transform:uppercase;">TraktoSearch</div><div style="height:1px;background:#D8D0C1;margin:20px 0 28px;"></div>${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从观影清单到网盘资源</p></div></div></body></html>`;
+    return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#F6F2E9;"><tr><td align="center" style="padding:24px 16px;"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background:#F6F2E9;"><tr><td style="border-top:4px solid #D95532;padding:26px 20px 0;"><div style="color:#D95532;font:600 12px/1.2 'Courier New',monospace;letter-spacing:.2em;text-transform:uppercase;">TraktoSearch</div><div style="height:1px;background:#D8D0C1;margin:20px 0 28px;"></div>${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从观影清单到网盘资源</p></td></tr></table></td></tr></table></body></html>`;
 }
 
 function formatDate(timestamp: number): string {
