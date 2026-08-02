@@ -578,13 +578,23 @@ async function scrapeTop250(page: number): Promise<{ code: number; data: Top250I
     };
 }
 
+export function normalizeTop250Title(rawTitle: string): string {
+    return rawTitle
+        .replace(/(?:&nbsp;|&#160;|&#xA0;|\u00a0)/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function pushTop250Item(
     items: Top250Item[],
     item: Partial<Top250Item>,
     buffers: { title: string; rating: string; count: string; director: string; quote: string; info: string },
 ): void {
     // 标题可能有多个（中文/英文），取第一个
-    const titles = buffers.title.split(/\/\s*/).map(s => s.trim()).filter(Boolean);
+    const titles = normalizeTop250Title(buffers.title)
+        .split(/\s*\/\s*/)
+        .map(s => s.trim())
+        .filter(Boolean);
     const title = titles[0] || '';
     const otherTitle = titles.slice(1).join(' / ');
 
