@@ -4,7 +4,13 @@
 // HTMLRewriter 是 Workers 运行时内置的 C++ 流式 HTML 解析器，CPU 开销远低于 JS regex，
 // 可在 10ms 内完成解析。缓存命中时直接返回，不触发抓取。
 
+import type { Env } from '../index.ts';
 import { AppError } from '../util/errors.ts';
+import {
+    applyCachedDoubanMappings,
+    enrichDoubanItems,
+    type DoubanEnrichableItem,
+} from './douban-id-enrichment.ts';
 
 const DOUBAN_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -19,6 +25,7 @@ const CACHE_TTL: Record<string, number> = {
     weekly: 12 * 60 * 60,
     top250: 24 * 60 * 60,      // 1 天
 };
+const SCRAPE_CACHE_VERSION = 3;
 
 interface ChartItem {
     rank: number;
@@ -29,6 +36,10 @@ interface ChartItem {
     poster: string;
     rating: string;
     ratingCount: string;
+    tmdbId: number;
+    traktId: number;
+    imdbId: string;
+    mediaType: 'movie';
 }
 
 interface WeeklyItem {
@@ -37,6 +48,10 @@ interface WeeklyItem {
     id: string;
     url: string;
     poster: string;
+    tmdbId: number;
+    traktId: number;
+    imdbId: string;
+    mediaType: 'movie';
 }
 
 interface NowPlayingItem {
@@ -51,6 +66,10 @@ interface NowPlayingItem {
     region: string;
     director: string;
     actors: string;
+    tmdbId: number;
+    traktId: number;
+    imdbId: string;
+    mediaType: 'movie';
 }
 
 interface Top250Item {
@@ -66,12 +85,18 @@ interface Top250Item {
     year: string;
     region: string;
     quote: string;
+    tmdbId: number;
+    traktId: number;
+    imdbId: string;
+    mediaType: 'movie';
 }
 
 /** 根据豆瓣代理子路径直接抓取豆瓣网页并返回 JSON。 */
 export async function scrapeDouban(
     doubanPath: string,
     searchParams: URLSearchParams,
+    env: Env,
+    ctx?: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<Response> {
     const cacheKey = buildCacheKey(doubanPath, searchParams);
 
@@ -88,7 +113,13 @@ export async function scrapeDouban(
         const cached = await caches.default.match(cacheKey);
         if (cached) {
             const data: Record<string, unknown> = await cached.json();
+            const cachedItems = (data.data || []) as DoubanEnrichableItem[];
+            const mapped = await applyCachedDoubanMappings(cachedItems, env.KV);
+            data.data = mapped.items;
             data.cached = true;
+            if (mapped.pending.length > 0 && ctx) {
+                ctx.waitUntil(enrichAndRefreshCachedResult(cacheKey, doubanPath, data, mapped.pending, env));
+            }
             return json(data);
         }
     }
@@ -107,6 +138,10 @@ export async function scrapeDouban(
         throw new AppError('NOT_FOUND', `Unknown douban endpoint: ${doubanPath}`, 404);
     }
 
+    const rawItems = (result.data || []) as DoubanEnrichableItem[];
+    const mapped = await applyCachedDoubanMappings(rawItems, env.KV);
+    result.data = mapped.items;
+
     // 写入缓存（异步不阻塞响应）
     const ttl = CACHE_TTL[doubanPath.replace('api/', '')] || CACHE_TTL.chart;
     const cacheResponse = new Response(JSON.stringify(result), {
@@ -123,12 +158,74 @@ export async function scrapeDouban(
         // 缓存写入失败不影响响应
     }
 
+    if (mapped.pending.length > 0 && ctx) {
+        ctx.waitUntil(enrichAndRefreshCachedResult(cacheKey, doubanPath, result, mapped.pending, env));
+    }
+
     return json(result);
+}
+
+/**
+ * 定时预热公开榜单首屏。缓存必须先失效再抓取，否则定时任务只会读到旧缓存。
+ * Top250 后续页面按需抓取，避免每轮定时任务重复请求全部 250 条目。
+ */
+export async function refreshPublicDoubanLists(
+    env: Env,
+    ctx?: Pick<ExecutionContext, 'waitUntil'>,
+): Promise<void> {
+    const paths = ['api/chart', 'api/weekly', 'api/nowplaying', 'api/top250'];
+    const results = await Promise.allSettled(paths.map((path) => scrapeDouban(
+        path,
+        new URLSearchParams([['purge', '1'], ...(path === 'api/top250' ? [['page', '1']] : [])]),
+        env,
+        ctx,
+    )));
+
+    results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+            console.warn(JSON.stringify({
+                event: 'douban_public_list_refresh_failed',
+                path: paths[index],
+                error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+            }));
+        }
+    });
+}
+
+async function enrichAndRefreshCachedResult(
+    cacheKey: string,
+    doubanPath: string,
+    data: Record<string, unknown>,
+    pending: DoubanEnrichableItem[],
+    env: Env,
+): Promise<void> {
+    try {
+        const enriched = await enrichDoubanItems(pending, env);
+        const enrichedById = new Map(enriched.map((item) => [item.id, item]));
+        const currentItems = (data.data || []) as DoubanEnrichableItem[];
+        data.data = currentItems.map((item) => enrichedById.get(item.id) || item);
+
+        const ttl = CACHE_TTL[doubanPath.replace('api/', '')] || CACHE_TTL.chart;
+        await caches.default.put(cacheKey, new Response(JSON.stringify(data), {
+            headers: {
+                'Content-Type': 'application/json',
+                'Cache-Control': `public, max-age=${ttl}`,
+            },
+        }));
+    } catch (error) {
+        console.warn(JSON.stringify({
+            event: 'douban_id_cache_refresh_failed',
+            path: doubanPath,
+            error: error instanceof Error ? error.message : String(error),
+        }));
+    }
 }
 
 function buildCacheKey(doubanPath: string, searchParams: URLSearchParams): string {
     const page = searchParams.get('page');
-    const pageSuffix = page ? `?page=${page}` : '';
+    const pageSuffix = page
+        ? `?page=${encodeURIComponent(page)}&v=${SCRAPE_CACHE_VERSION}`
+        : `?v=${SCRAPE_CACHE_VERSION}`;
     return `https://douban-scrape.internal/${doubanPath}${pageSuffix}`;
 }
 
@@ -226,6 +323,10 @@ function finalizeChartItem(item: Partial<ChartItem>): ChartItem {
         poster: item.poster || '',
         rating: item.rating || '暂无评分',
         ratingCount: item.ratingCount || '',
+        tmdbId: item.tmdbId || 0,
+        traktId: item.traktId || 0,
+        imdbId: item.imdbId || '',
+        mediaType: 'movie',
     };
 }
 
@@ -344,6 +445,10 @@ function finalizeWeeklyItem(item: Partial<WeeklyItem>): WeeklyItem {
         id: item.id || '',
         url: item.url || '',
         poster: item.poster || '',
+        tmdbId: item.tmdbId || 0,
+        traktId: item.traktId || 0,
+        imdbId: item.imdbId || '',
+        mediaType: 'movie',
     };
 }
 
@@ -443,6 +548,10 @@ function finalizeNowPlayingItem(item: Partial<NowPlayingItem>): NowPlayingItem {
         region: item.region || '',
         director: item.director || '',
         actors: item.actors || '',
+        tmdbId: item.tmdbId || 0,
+        traktId: item.traktId || 0,
+        imdbId: item.imdbId || '',
+        mediaType: 'movie',
     };
 }
 
@@ -624,5 +733,9 @@ function pushTop250Item(
         year,
         region,
         quote: buffers.quote.trim(),
+        tmdbId: item.tmdbId || 0,
+        traktId: item.traktId || 0,
+        imdbId: item.imdbId || '',
+        mediaType: 'movie',
     });
 }

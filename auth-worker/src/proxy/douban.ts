@@ -14,7 +14,8 @@ const DIRECT_SCRAPE_PATHS = new Set(['api/chart', 'api/weekly', 'api/nowplaying'
 export async function handleDoubanProxy(
     request: Request,
     env: Env,
-    path: string
+    path: string,
+    ctx?: Pick<ExecutionContext, 'waitUntil'>,
 ): Promise<Response> {
     // 保留原热榜服务的 `api/chart`、`api/weekly` 等路径。
     const doubanPath = path.replace(DOUBAN_PREFIX, '');
@@ -22,7 +23,7 @@ export async function handleDoubanProxy(
 
     // 热榜单点：直接抓取豆瓣网页，HTMLRewriter 解析
     if (request.method === 'GET' && DIRECT_SCRAPE_PATHS.has(doubanPath)) {
-        return scrapeDouban(doubanPath, clientUrl.searchParams);
+        return scrapeDouban(doubanPath, clientUrl.searchParams, env, ctx);
     }
 
     // 其他豆瓣端点：通过 Service Binding 调用 douban-movie-api，避免公网二次计费请求
