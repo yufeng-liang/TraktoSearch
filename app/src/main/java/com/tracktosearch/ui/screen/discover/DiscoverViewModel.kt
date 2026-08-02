@@ -366,8 +366,8 @@ class DiscoverViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
             // 共享缓存 + 飞行中去重：与搜索页共享同一请求
-            // 缓存 key 带版本号 v2：豆瓣 API 修复口碑榜海报+tmdbId / 正在热映海报后，让旧缓存自动失效
-            val cacheKey = "${categoryId}_1_10_v2"
+            // 缓存 key 带版本号 v3：服务端新增完整 ID 映射后，让旧缓存自动失效
+            val cacheKey = "${categoryId}_1_10_v3"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     when (categoryId) {
@@ -382,7 +382,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = response.total
@@ -400,7 +404,10 @@ class DiscoverViewModel @Inject constructor(
                                         desc = item.ratingCount,
                                         rating = item.rating,
                                         url = item.url,
-                                        tmdbId = item.tmdbId
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = response.total
@@ -417,7 +424,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = response.total
@@ -434,7 +445,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = response.total
@@ -485,8 +500,8 @@ class DiscoverViewModel @Inject constructor(
                 }
             }
             // 1 小时内用缓存（仅首页）
-            // 缓存 key 带版本号 v2：与 loadDoubanCategory 保持一致，让旧缓存自动失效
-            val cacheKey = "${categoryId}_${page}_${limit}_v2"
+            // 缓存 key 带版本号 v3：与 loadDoubanCategory 保持一致，让旧缓存自动失效
+            val cacheKey = "${categoryId}_${page}_${limit}_v3"
             if (page == 1) {
                 sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -519,7 +534,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = chartResponse.total,
@@ -543,7 +562,10 @@ class DiscoverViewModel @Inject constructor(
                                         desc = item.ratingCount,
                                         rating = item.rating,
                                         url = item.url,
-                                        tmdbId = item.tmdbId
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = weeklyResponse.total,
@@ -566,7 +588,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = top250Response.total,
@@ -589,7 +615,11 @@ class DiscoverViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = nowPlayingResponse.total,
@@ -1096,6 +1126,14 @@ class DiscoverViewModel @Inject constructor(
 
         // 同步检查缓存 → ID 转换缓存，命中则秒进不转圈
         // 优先用 item.tmdbId（口碑榜等已带 tmdbId），否则查豆瓣标题缓存
+        // CF 已完成豆瓣 subject -> TMDB -> Trakt 转换时，直接进入详情页，不再发起搜索请求。
+        if (item.tmdbId > 0 && item.traktId > 0) {
+            val inWl = _watchlistWatchedIds.value?.isInWatchlist(item.traktId, item.tmdbId, MediaType.MOVIE) == true
+            val isW = _watchlistWatchedIds.value?.isWatched(item.traktId, item.tmdbId, MediaType.MOVIE) == true
+            onNavigate(item.traktId, item.tmdbId, cleanTitle, item.imdbId, 0.0, inWl, isW)
+            return
+        }
+
         val cachedTmdb = if (item.tmdbId > 0) {
             TmdbSearchResult(id = item.tmdbId, title = cleanTitle)
         } else {

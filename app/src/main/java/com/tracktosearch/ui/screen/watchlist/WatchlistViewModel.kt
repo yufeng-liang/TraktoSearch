@@ -362,11 +362,16 @@ class WatchlistViewModel @Inject constructor(
         doubanBatchRemovalManager.cancel()
     }
 
-    fun loadMovies(forceReload: Boolean = false, silent: Boolean = false) {
+    fun loadMovies(
+        forceReload: Boolean = false,
+        silent: Boolean = false,
+        loadAllPages: Boolean = false
+    ) {
         if (!forceReload && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
+        val page = _uiState.value.moviePage
         loadMoviesJob = viewModelScope.launch {
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
@@ -377,21 +382,24 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingMovies = !silent,
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = _uiState.value.moviePage, limit = 200, forceRefresh = forceReload) }
+            val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
                 // 过滤掉本地已标记已看但不在想看缓存中的电影（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
                 val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.movie.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
-                if (forceReload) {
+                if (forceReload && page == 1) {
                     val newIds = items.map { it.movie.ids.trakt }.toSet()
                     val oldIds = _uiState.value.movies.map { it.traktId }.toSet()
                     if (newIds == oldIds && items.size == _uiState.value.movies.size) {
                         _uiState.value = _uiState.value.copy(
                             isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                             hasMoreMovies = _uiState.value.moviePage < totalPages,
-                            moviePage = _uiState.value.moviePage + 1
+                            moviePage = page + 1
                         )
+                        if (loadAllPages && page < totalPages) {
+                            loadMovies(forceReload = true, silent = true, loadAllPages = true)
+                        }
                         return@launch
                     }
                     // 静默刷新时保留旧列表避免闪烁；非静默时清空旧列表避免新旧数据混合
@@ -419,17 +427,25 @@ class WatchlistViewModel @Inject constructor(
                 }
                 val uiItems = deferredItems.awaitAll()
                 // 写入离线缓存（仅首页）：在 moviePage 递增前判断，确保首页加载必缓存
-                if (_uiState.value.moviePage == 1) {
+                if (page == 1) {
                     val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_MOVIE) }
                     offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE, entities)
                 }
+                val mergedMovies = if (page == 1) {
+                    uiItems
+                } else {
+                    (_uiState.value.movies + uiItems).distinctBy { it.selectionKey }
+                }
                 _uiState.value = _uiState.value.copy(
-                    movies = uiItems,
+                    movies = mergedMovies,
                     isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
                     moviesLoaded = true,
-                    hasMoreMovies = _uiState.value.moviePage < totalPages,
-                    moviePage = _uiState.value.moviePage + 1
+                    hasMoreMovies = page < totalPages,
+                    moviePage = page + 1
                 )
+                if (loadAllPages && page < totalPages) {
+                    loadMovies(forceReload = true, silent = true, loadAllPages = true)
+                }
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
@@ -443,11 +459,16 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
-    fun loadShows(forceReload: Boolean = false, silent: Boolean = false) {
+    fun loadShows(
+        forceReload: Boolean = false,
+        silent: Boolean = false,
+        loadAllPages: Boolean = false
+    ) {
         if (!forceReload && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
+        val page = _uiState.value.showPage
         loadShowsJob = viewModelScope.launch {
             // 豆瓣独立模式：直接读本地 douban_synced_items 表，跳过 trakt API
             if (sessionModeManager.sessionMode.first() == SessionMode.DOUBAN) {
@@ -458,21 +479,24 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingShows = !silent,
                 showsError = if (silent) _uiState.value.showsError else null
             )
-            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = _uiState.value.showPage, limit = 200, forceRefresh = forceReload) }
+            val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
                 // 过滤掉本地已标记已看但不在想看缓存中的剧集（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)
                 val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.show.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
-                if (forceReload) {
+                if (forceReload && page == 1) {
                     val newIds = items.map { it.show.ids.trakt }.toSet()
                     val oldIds = _uiState.value.shows.map { it.traktId }.toSet()
                     if (newIds == oldIds && items.size == _uiState.value.shows.size) {
                         _uiState.value = _uiState.value.copy(
                             isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                             hasMoreShows = _uiState.value.showPage < totalPages,
-                            showPage = _uiState.value.showPage + 1
+                            showPage = page + 1
                         )
+                        if (loadAllPages && page < totalPages) {
+                            loadShows(forceReload = true, silent = true, loadAllPages = true)
+                        }
                         return@launch
                     }
                     // 静默刷新时保留旧列表避免闪烁；非静默时清空旧列表避免新旧数据混合
@@ -501,17 +525,25 @@ class WatchlistViewModel @Inject constructor(
                 }
                 val uiItems = deferredItems.awaitAll()
                 // 写入离线缓存（仅首页）：在 showPage 递增前判断，确保首页加载必缓存
-                if (_uiState.value.showPage == 1) {
+                if (page == 1) {
                     val entities = uiItems.map { it.toMediaItemEntity(OfflineCacheManager.TYPE_WATCHLIST_SHOW) }
                     offlineCacheManager.saveMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW, entities)
                 }
+                val mergedShows = if (page == 1) {
+                    uiItems
+                } else {
+                    (_uiState.value.shows + uiItems).distinctBy { it.selectionKey }
+                }
                 _uiState.value = _uiState.value.copy(
-                    shows = uiItems,
+                    shows = mergedShows,
                     isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
                     showsLoaded = true,
-                    hasMoreShows = _uiState.value.showPage < totalPages,
-                    showPage = _uiState.value.showPage + 1
+                    hasMoreShows = page < totalPages,
+                    showPage = page + 1
                 )
+                if (loadAllPages && page < totalPages) {
+                    loadShows(forceReload = true, silent = true, loadAllPages = true)
+                }
             }.onFailure { e ->
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
@@ -813,8 +845,15 @@ class WatchlistViewModel @Inject constructor(
                 hasMoreMovies = true,
                 hasMoreShows = true
             )
-            loadMovies(forceReload = true, silent = true)
-            loadShows(forceReload = true, silent = true)
+            loadMovies(forceReload = true, silent = true, loadAllPages = true)
+            loadShows(forceReload = true, silent = true, loadAllPages = true)
+        }
+    }
+
+    /** Watchlist Tab 从其他页面重新可见时刷新已加载的想看列表。 */
+    fun onWatchlistTabVisible() {
+        if (_uiState.value.moviesLoaded || _uiState.value.showsLoaded) {
+            refreshWatchlist()
         }
     }
 

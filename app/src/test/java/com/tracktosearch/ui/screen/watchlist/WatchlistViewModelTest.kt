@@ -278,6 +278,53 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `WatchlistTab重新可见_刷新并显示新标记电影`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Old Movie")) to 1)
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
+
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(
+                listOf(
+                    makeWatchlistMovie(2, title = "New Movie"),
+                    makeWatchlistMovie(1, title = "Old Movie")
+                ) to 1
+            )
+
+        viewModel.onWatchlistTabVisible()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(2, 1)
+            .inOrder()
+    }
+
+    @Test
+    fun `refreshWatchlist_跨页刷新后合并新增电影`() = runTest {
+        val pageOne = listOf(makeWatchlistMovie(1, title = "Old Movie"))
+        val pageTwo = listOf(makeWatchlistMovie(2, title = "New Movie"))
+        coEvery { traktRepository.getMovieWatchlist(1, 200, any()) } returns
+            Result.success(pageOne to 2)
+        coEvery { traktRepository.getMovieWatchlist(2, 200, any()) } returns
+            Result.success(pageTwo to 2)
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
+
+        viewModel.refreshWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(1, 2)
+            .inOrder()
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(2, 200, true) }
+    }
+
+    @Test
     fun `refreshIfLoaded_已加载时静默刷新`() = runTest {
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(makeWatchlistMovie(1)) to 1)

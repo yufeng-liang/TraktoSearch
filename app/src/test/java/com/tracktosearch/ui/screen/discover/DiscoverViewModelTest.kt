@@ -11,6 +11,7 @@ import com.tracktosearch.data.local.ViewedItemStorage
 import com.tracktosearch.data.remote.douban.DoubanHotApiService
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.remote.douban.dto.DoubanHotData
+import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
 import com.tracktosearch.data.remote.douban.dto.DoubanRecommendItem
 import com.tracktosearch.data.remote.tmdb.dto.TmdbSearchResult
 import com.tracktosearch.data.remote.trakt.dto.TraktAnticipatedMovieResponse
@@ -397,5 +398,27 @@ class DiscoverViewModelTest {
 
         coVerify { tmdbRepository.getTrendingMovies(any<String>()) }
         coVerify { tmdbRepository.getUpcomingMovies() }
+    }
+
+    @Test
+    fun `榜单项已有完整ID时直接导航且不搜索`() = runTest {
+        var navigated: List<Any>? = null
+
+        viewModel.resolveAndNavigate(
+            DoubanHotItem(
+                id = 42,
+                title = "【9.0】测试电影",
+                tmdbId = 597,
+                traktId = 10,
+                imdbId = "tt0120338"
+            )
+        ) { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
+            navigated = listOf(traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched)
+        }
+        advanceUntilIdle()
+
+        assertThat(navigated).containsExactly(10, 597, "测试电影", "tt0120338", 0.0, false, false).inOrder()
+        coVerify(exactly = 0) { tmdbRepository.searchMovie(any()) }
+        coVerify(exactly = 0) { traktRepository.searchByTmdb(any(), any()) }
     }
 }

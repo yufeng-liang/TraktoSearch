@@ -30,6 +30,7 @@ import { handleTmdbProxy } from './proxy/tmdb';
 import { handleTraktProxy, handleTraktOAuth, handleTraktPublicProxy } from './proxy/trakt';
 import { isTraktPublicPath } from './proxy/trakt-token';
 import { handleDoubanProxy } from './proxy/douban';
+import { refreshPublicDoubanLists } from './proxy/douban-scrape';
 import { handleOmdbProxy } from './proxy/omdb';
 import { handleGiteeProxy } from './proxy/gitee';
 import { handleGithubProxy } from './proxy/github';
@@ -74,7 +75,7 @@ export interface Env {
 }
 
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
         const requestId = generateRequestId();
 
         try {
@@ -91,7 +92,7 @@ export default {
 
             // App API（需 JWT）
             if (path.startsWith('/api/')) {
-                response = await handleAuthApi(request, env, requestId, path);
+                response = await handleAuthApi(request, env, requestId, path, ctx);
             }
             // Admin API（需 Access JWT）
             else if (path.startsWith('/admin/')) {
@@ -130,6 +131,10 @@ export default {
             )));
         }
     },
+
+    async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+        await refreshPublicDoubanLists(env, ctx);
+    },
 };
 
 // CORS 处理
@@ -156,7 +161,8 @@ async function handleAuthApi(
     request: Request,
     env: Env,
     requestId: string,
-    path: string
+    path: string,
+    ctx: ExecutionContext,
 ): Promise<Response> {
     // 公开端点（无需 JWT）
     if (path === '/api/invite-requests' && request.method === 'POST') {
@@ -194,7 +200,7 @@ async function handleAuthApi(
     // worker 仍注入上游 API Key，安全层从「用户鉴权」下沉到「网关密钥代理」
     // 豆瓣热榜（chart/weekly/nowplaying/top250）——纯公开榜单数据
     if (path.startsWith('/api/douban/api/') && request.method === 'GET') {
-        return handleDoubanProxy(request, env, path);
+        return handleDoubanProxy(request, env, path, ctx);
     }
     // TMDB —— 电影/剧集元数据、搜索、海报等全为公开数据
     if (path.startsWith('/api/tmdb/') && request.method === 'GET') {
@@ -240,7 +246,7 @@ async function handleAuthApi(
         return handleTraktProxy(request, env, path, payload.sub);
     }
     if (path.startsWith('/api/douban/')) {
-        return handleDoubanProxy(request, env, path);
+        return handleDoubanProxy(request, env, path, ctx);
     }
     if (path.startsWith('/api/omdb/')) {
         return handleOmdbProxy(request, env, path);

@@ -55,3 +55,7 @@ PUBLIC_SITE_ORIGIN = "https://tracktosearch.pages.dev"
 # Brevo 已验证的 Sender 地址
 EMAIL_FROM = "TraktoSearch <Yu-Fengliang@outlook.com>"
 EMAIL_REPLY_TO = "1577865546@qq.com"
+
+[triggers]
+# 每 6 小时刷新一次公开豆瓣榜单首屏并预热 ID 映射
+crons = ["0 */6 * * *"]
