@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TrackToSearch · 页面背景风格预览</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #243047;
+      --muted: #66728a;
+      --quiet: #8c96a9;
+      --line: rgba(103, 122, 154, .17);
+      --panel: rgba(255, 255, 255, .68);
+      --panel-strong: rgba(255, 255, 255, .78);
+      --glass-line: rgba(255, 255, 255, .72);
+      --accent: #5d6ccc;
+      --accent-soft: rgba(93, 108, 204, .14);
+      --shadow-dark: rgba(67, 79, 113, .22);
+      --shadow-light: rgba(255, 255, 255, .92);
+      --page-width: 430px;
+      --phone-height: min(800px, calc(100vh - 168px));
+      --font-ui: "Avenir Next", "SF Pro Display", "Noto Sans CJK SC", "PingFang SC", sans-serif;
+      --font-mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #eef1f7;
+      font-family: var(--font-ui);
+      -webkit-font-smoothing: antialiased;
+    }
+    button { font: inherit; }
+    button:focus-visible { outline: 3px solid rgba(93, 108, 204, .42); outline-offset: 3px; }
+
+    .workspace {
+      width: min(1340px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 30px 0 34px;
+    }
+    .workspace-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(25px, 3vw, 38px); letter-spacing: -.03em; line-height: 1.05; }
+    .header-copy { max-width: 610px; }
+    .header-copy p { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--quiet);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      white-space: nowrap;
+    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #5bbd96; box-shadow: 0 0 0 4px rgba(91, 189, 150, .14); }
+
+    .control-bar {
+      display: grid;
+      grid-template-columns: 1.25fr 1fr auto;
+      gap: 18px;
+      padding: 14px;
+      border: 1px solid rgba(255, 255, 255, .78);
+      border-radius: 18px;
+      background: rgba(255, 255, 255, .52);
+      box-shadow: 0 14px 38px rgba(102, 117, 145, .11), inset 0 1px 0 rgba(255, 255, 255, .8);
+      backdrop-filter: blur(18px);
+    }
+    .control-group { min-width: 0; }
+    .control-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 0 4px 8px;
+      color: var(--quiet);
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .control-label strong { color: var(--ink); font-family: var(--font-ui); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+    .segmented { display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: rgba(102, 117, 145, .08); }
+    .segmented button {
+      min-height: 34px;
+      flex: 1;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 9px;
+      color: var(--muted);
+      background: transparent;
+      cursor: pointer;
+      font-size: 12px;
+      transition: .2s ease;
+    }
+    .segmented button:hover { color: var(--ink); }
+    .segmented button[aria-pressed="true"] { color: var(--ink); background: rgba(255, 255, 255, .86); box-shadow: 0 4px 12px rgba(65, 78, 116, .12); }
+    .mode-switch { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 10px; color: var(--muted); font-size: 12px; }
+    .switch {
+      position: relative;
+      width: 40px;
+      height: 23px;
+      padding: 0;
+      border: 0;
+      border-radius: 99px;
+      background: #ccd3df;
+      cursor: pointer;
+      transition: .2s ease;
+    }
+    .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 17px; height: 17px; border-radius: 50%; background: #fff; box-shadow: 0 2px 5px rgba(47, 59, 88, .2); transition: .2s ease; }
+    .switch[aria-checked="true"] { background: #616fc8; }
+    .switch[aria-checked="true"]::after { transform: translateX(17px); }
+
+    .stage {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) minmax(360px, 450px) minmax(210px, 1fr);
+      align-items: center;
+      gap: clamp(24px, 5vw, 86px);
+      min-height: 820px;
+      padding: 34px 20px 8px;
+    }
+    .side-note { align-self: center; max-width: 250px; color: var(--muted); }
+    .side-note.right { justify-self: end; }
+    .side-note .note-index { display: block; margin-bottom: 16px; color: var(--accent); font-family: var(--font-mono); font-size: 10px; letter-spacing: .16em; }
+    .side-note h2 { margin-bottom: 10px; font-size: 19px; letter-spacing: -.02em; line-height: 1.25; }
+    .side-note p { font-size: 12px; line-height: 1.75; }
+    .swatch-row { display: flex; gap: 7px; margin-top: 18px; }
+    .swatch { width: 30px; height: 30px; border: 1px solid rgba(255, 255, 255, .8); border-radius: 50%; box-shadow: 0 3px 8px rgba(71, 82, 112, .16); }
+    .legend { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; line-height: 1.7; }
+    .legend b { display: block; margin-bottom: 4px; color: var(--ink); font-size: 12px; }
+
+    .phone {
+      position: relative;
+      width: min(100%, var(--page-width));
+      height: var(--phone-height);
+      min-height: 680px;
+      justify-self: center;
+      overflow: hidden;
+      border: 9px solid rgba(25, 33, 54, .94);
+      border-radius: 42px;
+      background: #f2f4f9;
+      box-shadow: 0 32px 70px rgba(50, 64, 100, .27), 0 12px 24px rgba(50, 64, 100, .12), inset 0 0 0 1px rgba(255, 255, 255, .72);
+      isolation: isolate;
+    }
+    .phone::before { content: ""; position: absolute; z-index: 10; top: 0; left: 50%; width: 126px; height: 25px; border-radius: 0 0 17px 17px; background: rgba(25, 33, 54, .94); transform: translateX(-50%); }
+    .app {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+      color: var(--ink);
+      background: var(--base-bg);
+    }
+    .ambient { position: absolute; inset: 0; z-index: -1; overflow: hidden; background: var(--base-bg); }
+    .ambient::before, .ambient::after { content: ""; position: absolute; pointer-events: none; }
+    .ambient::before { inset: -16%; background: var(--ambient-a); filter: blur(22px); }
+    .ambient::after { inset: -24%; background: var(--ambient-b); filter: blur(32px); }
+
+    .app[data-style="current"] { --base-bg: linear-gradient(135deg, #f0f4ff 0%, #e8f0ff 42%, #f5e8ff 100%); --ambient-a: radial-gradient(circle at 28% 28%, rgba(128, 203, 196, .52), transparent 25%), radial-gradient(circle at 86% 12%, rgba(121, 134, 203, .58), transparent 30%); --ambient-b: radial-gradient(circle at 12% 78%, rgba(244, 143, 177, .48), transparent 25%), radial-gradient(circle at 86% 75%, rgba(255, 224, 178, .48), transparent 25%), radial-gradient(circle at 66% 45%, rgba(206, 147, 216, .35), transparent 28%); }
+    .app[data-style="diffuse"] { --base-bg: #f5f7fb; --ambient-a: radial-gradient(circle at 74% 14%, rgba(135, 190, 228, .78), transparent 31%); --ambient-b: radial-gradient(circle at 15% 74%, rgba(237, 192, 168, .48), transparent 31%), radial-gradient(circle at 84% 70%, rgba(183, 217, 191, .42), transparent 22%); }
+    .app[data-style="mesh"] { --base-bg: #f0f3f8; --ambient-a: radial-gradient(circle at 12% 18%, rgba(135, 159, 232, .54), transparent 34%), radial-gradient(circle at 84% 15%, rgba(239, 166, 193, .5), transparent 32%), radial-gradient(circle at 72% 83%, rgba(244, 207, 141, .5), transparent 35%); --ambient-b: radial-gradient(circle at 35% 72%, rgba(132, 205, 195, .48), transparent 34%), radial-gradient(circle at 90% 55%, rgba(187, 156, 220, .4), transparent 30%); }
+    .app[data-style="aurora"] { --base-bg: linear-gradient(145deg, #e6eef8, #f7eef7 46%, #edf7f3); --ambient-a: linear-gradient(118deg, transparent 24%, rgba(103, 170, 221, .52) 37%, transparent 50%), linear-gradient(72deg, transparent 41%, rgba(231, 158, 193, .46) 54%, transparent 68%); --ambient-b: radial-gradient(ellipse at 22% 74%, rgba(133, 195, 187, .46), transparent 33%), radial-gradient(ellipse at 84% 24%, rgba(244, 203, 143, .42), transparent 32%); }
+
+    .app.is-dark { color: #f4f4fb; --ink: #f4f4fb; --muted: #b6bad0; --quiet: #969bb3; --line: rgba(255, 255, 255, .13); --panel: rgba(30, 30, 58, .7); --panel-strong: rgba(35, 35, 67, .78); --glass-line: rgba(255, 255, 255, .16); --accent: #abb6ff; --accent-soft: rgba(126, 141, 246, .2); --shadow-dark: rgba(3, 6, 22, .52); --shadow-light: rgba(255, 255, 255, .07); }
+    .app.is-dark[data-style="current"] { --base-bg: linear-gradient(135deg, #13132a 0%, #181835 44%, #1a1530 100%); --ambient-a: radial-gradient(circle at 30% 28%, rgba(38, 166, 154, .4), transparent 27%), radial-gradient(circle at 82% 12%, rgba(92, 107, 192, .48), transparent 32%); --ambient-b: radial-gradient(circle at 12% 78%, rgba(236, 64, 122, .38), transparent 26%), radial-gradient(circle at 86% 76%, rgba(255, 183, 77, .3), transparent 25%), radial-gradient(circle at 65% 45%, rgba(186, 104, 200, .34), transparent 30%); }
+    .app.is-dark[data-style="diffuse"] { --base-bg: #171a2a; --ambient-a: radial-gradient(circle at 74% 14%, rgba(89, 155, 205, .64), transparent 32%); --ambient-b: radial-gradient(circle at 18% 76%, rgba(198, 116, 132, .34), transparent 30%), radial-gradient(circle at 85% 70%, rgba(91, 169, 149, .28), transparent 24%); }
+    .app.is-dark[data-style="mesh"] { --base-bg: #171929; --ambient-a: radial-gradient(circle at 12% 18%, rgba(111, 127, 222, .48), transparent 35%), radial-gradient(circle at 84% 15%, rgba(194, 85, 130, .43), transparent 34%), radial-gradient(circle at 72% 83%, rgba(209, 145, 63, .34), transparent 35%); --ambient-b: radial-gradient(circle at 35% 72%, rgba(39, 145, 140, .4), transparent 33%), radial-gradient(circle at 90% 55%, rgba(142, 92, 188, .34), transparent 30%); }
+    .app.is-dark[data-style="aurora"] { --base-bg: linear-gradient(145deg, #151b2d, #241a2c 46%, #142622); --ambient-a: linear-gradient(118deg, transparent 24%, rgba(59, 139, 198, .4) 37%, transparent 50%), linear-gradient(72deg, transparent 41%, rgba(195, 72, 126, .36) 54%, transparent 68%); --ambient-b: radial-gradient(ellipse at 22% 74%, rgba(51, 151, 143, .32), transparent 33%), radial-gradient(ellipse at 84% 24%, rgba(211, 143, 57, .28), transparent 32%); }
+
+    .app-status { display: flex; justify-content: space-between; padding: 15px 20px 6px; color: currentColor; font-size: 10px; font-weight: 650; letter-spacing: .02em; }
+    .app-status .icons { display: flex; gap: 6px; align-items: center; opacity: .74; }
+    .signal { display: inline-flex; gap: 2px; align-items: flex-end; height: 10px; }
+    .signal i { display: block; width: 2px; border-radius: 1px; background: currentColor; }
+    .signal i:nth-child(1) { height: 4px; opacity: .55; } .signal i:nth-child(2) { height: 6px; opacity: .7; } .signal i:nth-child(3) { height: 8px; } .signal i:nth-child(4) { height: 10px; }
+    .app-content { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 9px 17px 92px; scrollbar-width: none; }
+    .app-content::-webkit-scrollbar { display: none; }
+    .app-title-row { display: flex; justify-content: space-between; align-items: center; margin: 4px 3px 17px; }
+    .app-title { font-size: 25px; font-weight: 750; letter-spacing: -.05em; }
+    .app-kicker { color: currentColor; opacity: .6; font-family: var(--font-mono); font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }
+    .icon-button { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--glass-line); border-radius: 50%; color: currentColor; background: rgba(255, 255, 255, .16); box-shadow: 4px 4px 10px var(--shadow-dark), -3px -3px 8px var(--shadow-light), inset 0 1px 0 rgba(255, 255, 255, .4); }
+    .icon-button svg { width: 16px; height: 16px; }
+    .glass { position: relative; overflow: hidden; border: 1px solid var(--glass-line); background: var(--panel); box-shadow: 9px 11px 20px var(--shadow-dark), -8px -8px 18px var(--shadow-light), inset 0 1px 0 rgba(255, 255, 255, .42); backdrop-filter: blur(24px) saturate(125%); }
+    .glass::before { content: ""; position: absolute; inset: 0 0 auto; height: 38%; pointer-events: none; background: linear-gradient(180deg, rgba(255, 255, 255, .32), transparent); opacity: .75; }
+    .round-24 { border-radius: 24px; }
+    .round-18 { border-radius: 18px; }
+    .search-bar { display: flex; align-items: center; gap: 9px; height: 45px; padding: 0 14px; border-radius: 16px; color: var(--muted); font-size: 12px; }
+    .search-bar svg { width: 16px; height: 16px; opacity: .8; }
+    .search-bar span { opacity: .72; }
+    .chips { display: flex; gap: 8px; margin: 14px 1px 22px; overflow: hidden; }
+    .chip { flex: 0 0 auto; padding: 7px 11px; border: 1px solid var(--glass-line); border-radius: 99px; color: var(--muted); background: rgba(255, 255, 255, .2); font-size: 10px; }
+    .chip.active { color: var(--accent); border-color: rgba(93, 108, 204, .3); background: var(--accent-soft); }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; margin: 0 3px 11px; }
+    .section-heading h3 { font-size: 13px; letter-spacing: -.01em; }
+    .section-heading span { color: var(--muted); font-size: 10px; }
+    .poster-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px; }
+    .poster { min-width: 0; padding: 7px; border-radius: 18px; }
+    .poster-art { position: relative; height: 137px; overflow: hidden; border-radius: 13px; background: linear-gradient(145deg, #394467, #d89a8e 58%, #f1d1a6); }
+    .poster-art::after { content: ""; position: absolute; inset: 50% -20% -22%; background: rgba(14, 19, 39, .34); filter: blur(10px); transform: rotate(-8deg); }
+    .poster:nth-child(2) .poster-art { background: linear-gradient(145deg, #9a7bb2, #273e75 53%, #1b243f); }
+    .poster-title { position: relative; z-index: 1; margin: 8px 3px 2px; font-size: 11px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .poster-meta { margin: 0 3px; color: var(--muted); font-size: 9px; }
+    .poster-mark { position: absolute; z-index: 1; top: 8px; left: 9px; color: rgba(255, 255, 255, .82); font-family: Georgia, serif; font-size: 20px; }
+    .discover-hero { min-height: 190px; padding: 20px; border-radius: 24px; color: #fff; background: linear-gradient(135deg, rgba(32, 42, 76, .86), rgba(100, 63, 104, .57)), radial-gradient(circle at 78% 23%, rgba(255, 205, 148, .9), transparent 28%), linear-gradient(125deg, #556ba7, #e0959c); box-shadow: 10px 12px 22px var(--shadow-dark), inset 0 1px 0 rgba(255, 255, 255, .38); }
+    .discover-hero small { color: rgba(255, 255, 255, .7); font-family: var(--font-mono); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; }
+    .discover-hero h3 { max-width: 190px; margin-top: 35px; font-size: 23px; letter-spacing: -.04em; line-height: 1.06; }
+    .discover-hero p { margin-top: 8px; color: rgba(255, 255, 255, .72); font-size: 10px; }
+    .filter-row { display: flex; gap: 8px; margin: 0 0 18px; }
+    .filter { display: flex; align-items: center; gap: 5px; padding: 8px 10px; border-radius: 12px; color: var(--muted); font-size: 10px; }
+    .filter svg { width: 13px; height: 13px; }
+    .list-row { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border-radius: 18px; }
+    .mini-art { flex: 0 0 43px; height: 54px; border-radius: 10px; background: linear-gradient(145deg, #a7c7d4, #536986); }
+    .list-row:nth-child(2) .mini-art { background: linear-gradient(145deg, #dfb08e, #855271); }
+    .row-copy { min-width: 0; flex: 1; }
+    .row-copy strong { display: block; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row-copy span { display: block; margin-top: 5px; color: var(--muted); font-size: 9px; }
+    .row-score { color: var(--accent); font-family: var(--font-mono); font-size: 10px; }
+    .profile { display: flex; align-items: center; gap: 13px; padding: 15px; border-radius: 24px; }
+    .avatar { display: grid; place-items: center; width: 54px; height: 54px; border: 1px solid rgba(255, 255, 255, .7); border-radius: 19px; color: #fff; background: linear-gradient(135deg, #6a75c9, #d494ab); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .45); font-family: Georgia, serif; font-size: 23px; }
+    .profile-copy { min-width: 0; flex: 1; }
+    .profile-copy strong { display: block; font-size: 15px; }
+    .profile-copy span { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 15px 0 22px; }
+    .stat { padding: 12px 8px; border-radius: 16px; text-align: center; }
+    .stat strong { display: block; font-family: var(--font-mono); font-size: 16px; }
+    .stat span { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .settings-account { display: flex; align-items: center; gap: 11px; padding: 14px; border-radius: 20px; }
+    .account-symbol { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 13px; color: var(--accent); background: var(--accent-soft); }
+    .account-symbol svg { width: 18px; height: 18px; }
+    .settings-account strong { display: block; font-size: 12px; }
+    .settings-account span { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
+    .settings-group { margin-top: 20px; }
+    .settings-label { margin: 0 4px 8px; color: var(--muted); font-family: var(--font-mono); font-size: 9px; letter-spacing: .13em; text-transform: uppercase; }
+    .settings-list { overflow: hidden; border-radius: 20px; }
+    .setting-row { display: flex; align-items: center; gap: 11px; min-height: 49px; padding: 0 13px; }
+    .setting-row + .setting-row { border-top: 1px solid var(--line); }
+    .setting-icon { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 9px; color: var(--accent); background: var(--accent-soft); }
+    .setting-icon svg { width: 14px; height: 14px; }
+    .setting-row span { flex: 1; font-size: 11px; }
+    .setting-row em { color: var(--muted); font-size: 9px; font-style: normal; }
+    .mini-switch { position: relative; width: 31px; height: 18px; border-radius: 99px; background: var(--accent); }
+    .mini-switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 12px; height: 12px; border-radius: 50%; background: #fff; }
+    .bottom-nav { position: absolute; z-index: 6; right: 10px; bottom: 9px; left: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 7px; border-radius: 24px; }
+    .nav-item { display: grid; place-items: center; gap: 3px; min-height: 47px; border: 0; border-radius: 17px; color: var(--muted); background: transparent; cursor: pointer; font-size: 8px; }
+    .nav-item svg { width: 16px; height: 16px; }
+    .nav-item.active { color: var(--accent); background: var(--accent-soft); box-shadow: inset 2px 2px 5px rgba(63, 77, 126, .12), inset -2px -2px 5px rgba(255, 255, 255, .5); }
+
+    .footnote { margin: -1px auto 0; color: var(--quiet); font-family: var(--font-mono); font-size: 10px; text-align: center; }
+
+    body.dark-shell { color-scheme: dark; background: #10131e; --ink: #f4f4fb; --muted: #aeb4c8; --quiet: #8991aa; --line: rgba(255, 255, 255, .12); }
+    body.dark-shell .control-bar { background: rgba(33, 37, 55, .72); border-color: rgba(255, 255, 255, .12); box-shadow: 0 18px 42px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .08); }
+    body.dark-shell .segmented { background: rgba(0, 0, 0, .18); }
+    body.dark-shell .segmented button[aria-pressed="true"] { color: #fff; background: rgba(89, 99, 151, .54); }
+
+    @media (max-width: 1050px) {
+      .stage { grid-template-columns: 1fr minmax(360px, 430px) 1fr; gap: 24px; padding-inline: 0; }
+      .side-note { max-width: 180px; }
+    }
+    @media (max-width: 790px) {
+      .workspace { width: min(100% - 28px, 520px); padding-top: 22px; }
+      .workspace-header { align-items: flex-start; flex-direction: column; gap: 12px; }
+      .header-meta { align-self: flex-start; }
+      .control-bar { grid-template-columns: 1fr; gap: 13px; }
+      .mode-switch { justify-content: space-between; }
+      .stage { display: block; min-height: auto; padding: 28px 0 8px; }
+      .side-note { display: none; }
+      .phone { --phone-height: min(780px, calc(100vh - 330px)); min-height: 650px; }
+      .footnote { margin-top: 15px; line-height: 1.5; }
+    }
+    @media (max-width: 450px) {
+      .workspace { width: calc(100% - 20px); }
+      .phone { width: min(100%, 410px); border-width: 7px; border-radius: 34px; }
+      .phone::before { width: 105px; height: 21px; }
+      .control-bar { padding: 12px; border-radius: 15px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="workspace">
+    <header class="workspace-header">
+      <div class="header-copy">
+        <p class="eyebrow">TrackToSearch / visual study 01</p>
+        <h1>哪一种背景，最能托住你的玻璃卡片？</h1>
+        <p>保持前景拟态玻璃不变，只替换页面底层氛围。用四个真实页面骨架观察背景是否抢戏、是否发灰，以及卡片层次是否仍然清楚。</p>
+      </div>
+      <div class="header-meta"><span class="live-dot"></span>STATIC PREVIEW · 2026.08</div>
+    </header>
+
+    <section class="control-bar" aria-label="预览控制">
+      <div class="control-group">
+        <div class="control-label"><span>Background direction</span><strong id="style-name">当前彩色弥散</strong></div>
+        <div class="segmented" id="style-controls" role="group" aria-label="背景风格">
+          <button type="button" data-style="current" aria-pressed="true">当前弥散</button>
+          <button type="button" data-style="diffuse" aria-pressed="false">Soft Glow</button>
+          <button type="button" data-style="mesh" aria-pressed="false">Mesh</button>
+          <button type="button" data-style="aurora" aria-pressed="false">Aurora</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>App surface</span><strong id="page-name">搜索</strong></div>
+        <div class="segmented" id="page-controls" role="group" aria-label="App 页面">
+          <button type="button" data-page="search" aria-pressed="true">搜索</button>
+          <button type="button" data-page="discover" aria-pressed="false">发现</button>
+          <button type="button" data-page="mine" aria-pressed="false">我的</button>
+          <button type="button" data-page="settings" aria-pressed="false">设置</button>
+        </div>
+      </div>
+      <div class="control-group">
+        <div class="control-label"><span>Theme</span><strong id="theme-name">Light</strong></div>
+        <div class="mode-switch"><span>切换深色材质</span><button class="switch" id="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="切换深色模式"></button></div>
+      </div>
+    </section>
+
+    <section class="stage">
+      <aside class="side-note">
+        <span class="note-index">01 / MATERIAL</span>
+        <h2>先看卡片和底色的距离</h2>
+        <p>玻璃卡片需要后方有明确但不刺眼的色彩变化。颜色太平，Haze 没有意义；颜色太满，信息会被氛围吞掉。</p>
+        <div class="swatch-row" aria-label="当前配色样本"><i class="swatch" style="background:#8c9dda"></i><i class="swatch" style="background:#e6a5b3"></i><i class="swatch" style="background:#91c8bb"></i><i class="swatch" style="background:#f2d09a"></i></div>
+      </aside>
+
+      <div class="phone" aria-label="TrackToSearch 手机预览">
+        <div class="app" id="app" data-style="current" data-page="search">
+          <div class="ambient" aria-hidden="true"></div>
+          <div class="app-status"><span>9:41</span><span class="icons"><span>●</span><span class="signal"><i></i><i></i><i></i><i></i></span><span>▰</span></span></div>
+          <div class="app-content" id="app-content"></div>
+          <nav class="bottom-nav glass" aria-label="主导航">
+            <button class="nav-item active" data-nav="search" type="button" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.3 4.3"></path></svg><span>搜索</span></button>
+            <button class="nav-item" data-nav="discover" type="button" aria-label="发现"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3 2.1 6.9L21 12l-6.9 2.1L12 21l-2.1-6.9L3 12l6.9-2.1L12 3Z"></path></svg><span>发现</span></button>
+            <button class="nav-item" data-nav="mine" type="button" aria-label="我的"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.3"></circle><path d="M5.2 20c.6-3.6 2.8-5.4 6.8-5.4s6.2 1.8 6.8 5.4"></path></svg><span>我的</span></button>
+            <button class="nav-item" data-nav="settings" type="button" aria-label="设置"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"></path><path d="m19.4 15 .1.1-1.6 2.7-.2-.1a2.2 2.2 0 0 0-3 .8l-.1.2h-3.1l-.1-.2a2.2 2.2 0 0 0-3-.8l-.2.1-1.6-2.7.1-.1a2.2 2.2 0 0 0 0-3.5l-.1-.1 1.6-2.7.2.1a2.2 2.2 0 0 0 3-.8l.1-.2h3.1l.1.2a2.2 2.2 0 0 0 3 .8l.2-.1 1.6 2.7-.1.1a2.2 2.2 0 0 0 0 3.5Z"></path></svg><span>设置</span></button>
+          </nav>
+        </div>
+      </div>
+
+      <aside class="side-note right">
+        <span class="note-index">02 / READING</span>
+        <h2>再看文字和留白是否安静</h2>
+        <p>好的背景不是主角。切到设置页和我的页，观察小字号、分组线和开关是否仍有足够对比度。</p>
+        <div class="legend"><b id="legend-title">当前彩色弥散</b><span id="legend-copy">沿用 App 现有的跨 Tab 彩色光晕，变化多，氛围最强。</span></div>
+      </aside>
+    </section>
+    <p class="footnote">可切换背景 / 页面 / 明暗模式 · 预览仅用于比较氛围，不代表最终 Compose 实现</p>
+  </main>
+
+  <script>
+    const app = document.querySelector('#app');
+    const content = document.querySelector('#app-content');
+    const styleName = document.querySelector('#style-name');
+    const pageName = document.querySelector('#page-name');
+    const themeName = document.querySelector('#theme-name');
+    const legendTitle = document.querySelector('#legend-title');
+    const legendCopy = document.querySelector('#legend-copy');
+    const themeToggle = document.querySelector('#theme-toggle');
+
+    const styles = {
+      current: { name: '当前彩色弥散', copy: '沿用 App 现有的跨 Tab 彩色光晕，变化多，氛围最强。' },
+      diffuse: { name: '单块 Soft Glow', copy: '一到两块大面积柔光，最接近图片参考，信息层级最稳。' },
+      mesh: { name: 'Mesh Gradient', copy: '多个色块互相融合，色彩更丰富，视觉变化也更密集。' },
+      aurora: { name: 'Aurora 极光', copy: '用大面积彩色带制造流动感，个性强，但最需要控制饱和度。' }
+    };
+    const pages = { search: '搜索', discover: '发现', mine: '我的', settings: '设置' };
+
+    const icon = (path) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">${path}</svg>`;
+    const searchIcon = icon('<circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4.3 4.3"></path>');
+    const slidersIcon = icon('<path d="M4 6h16M4 12h16M4 18h16"></path><circle cx="9" cy="6" r="2"></circle><circle cx="15" cy="12" r="2"></circle><circle cx="8" cy="18" r="2"></circle>');
+    const userIcon = icon('<circle cx="12" cy="8" r="3.3"></circle><path d="M5.2 20c.6-3.6 2.8-5.4 6.8-5.4s6.2 1.8 6.8 5.4"></path>');
+    const bellIcon = icon('<path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 16 18 16 18 9Z"></path><path d="M10 21h4"></path>');
+    const paletteIcon = icon('<circle cx="12" cy="12" r="8.5"></circle><circle cx="8.2" cy="10" r=".8" fill="currentColor"></circle><circle cx="12" cy="7.8" r=".8" fill="currentColor"></circle><circle cx="15.8" cy="10" r=".8" fill="currentColor"></circle><path d="M12 20.5c0-2 1.2-3 2.7-3 1.6 0 2.4-1.1 2.4-2.5 0-1.1-.7-2-1.8-2H12a5 5 0 0 1-5-5"></path>');
+
+    const pageMarkup = {
+      search: () => `
+        <div class="app-title-row"><div><div class="app-kicker">find something to keep</div><h2 class="app-title">搜索</h2></div><button class="icon-button" aria-label="通知">${bellIcon}</button></div>
+        <div class="search-bar glass round-18">${searchIcon}<span>搜索电影、剧集或人物</span></div>
+        <div class="chips"><span class="chip active">电影</span><span class="chip">剧集</span><span class="chip">人物</span><span class="chip">Trakt</span></div>
+        <div class="section-heading"><h3>最近浏览</h3><span>查看全部</span></div>
+        <div class="poster-grid"><article class="poster glass"><div class="poster-art"><span class="poster-mark">M</span></div><strong class="poster-title">The Holdovers</strong><span class="poster-meta">2023 · 8.1</span></article><article class="poster glass"><div class="poster-art"><span class="poster-mark">D</span></div><strong class="poster-title">Dune: Part Two</strong><span class="poster-meta">2024 · 8.7</span></article></div>
+        <div class="section-heading" style="margin-top:23px"><h3>推荐给你</h3><span>基于收藏</span></div>
+        <div class="list-row glass"><div class="mini-art"></div><div class="row-copy"><strong>Past Lives</strong><span>爱情 · 剧情 · 2023</span></div><span class="row-score">8.0</span></div>
+        <div class="list-row glass" style="margin-top:9px"><div class="mini-art"></div><div class="row-copy"><strong>Perfect Days</strong><span>剧情 · 2023</span></div><span class="row-score">7.9</span></div>`,
+      discover: () => `
+        <div class="app-title-row"><div><div class="app-kicker">curated for tonight</div><h2 class="app-title">发现</h2></div><button class="icon-button" aria-label="筛选">${slidersIcon}</button></div>
+        <div class="filter-row"><span class="filter glass">${slidersIcon} 类型</span><span class="filter glass">年份 <span>2024</span></span><span class="filter glass">评分</span></div>
+        <div class="discover-hero"><small>本周精选 · 01</small><h3>让今晚的选择少一点犹豫。</h3><p>12 部高评分电影，已为你排好。</p></div>
+        <div class="section-heading" style="margin-top:23px"><h3>正在流行</h3><span>更多</span></div>
+        <div class="list-row glass"><div class="mini-art"></div><div class="row-copy"><strong>Challengers</strong><span>剧情 · 运动 · 2024</span></div><span class="row-score">7.8</span></div>
+        <div class="list-row glass" style="margin-top:9px"><div class="mini-art"></div><div class="row-copy"><strong>Shōgun</strong><span>剧情 · 历史 · 2024</span></div><span class="row-score">8.6</span></div>`,
+      mine: () => `
+        <div class="app-title-row"><div><div class="app-kicker">your film diary</div><h2 class="app-title">我的</h2></div><button class="icon-button" aria-label="编辑资料">${userIcon}</button></div>
+        <div class="profile glass"><div class="avatar">T</div><div class="profile-copy"><strong>TrackToSearch</strong><span>记录看过的每一部电影</span></div><span class="row-score">编辑</span></div>
+        <div class="stats"><div class="stat glass"><strong>128</strong><span>看过</span></div><div class="stat glass"><strong>34</strong><span>想看</span></div><div class="stat glass"><strong>8.2</strong><span>平均评分</span></div></div>
+        <div class="section-heading"><h3>最近标记</h3><span>全部记录</span></div>
+        <div class="list-row glass"><div class="mini-art"></div><div class="row-copy"><strong>All of Us Strangers</strong><span>已看 · 昨天</span></div><span class="row-score">9.0</span></div>
+        <div class="list-row glass" style="margin-top:9px"><div class="mini-art"></div><div class="row-copy"><strong>The Bear · S03</strong><span>想看 · 2 天前</span></div><span class="row-score">待看</span></div>
+        <div class="section-heading" style="margin-top:23px"><h3>年度轨迹</h3><span>2024</span></div>
+        <div class="glass round-24" style="height:70px;padding:14px"><div style="height:100%;border-bottom:1px solid rgba(93,108,204,.23);background:linear-gradient(164deg,transparent 45%,rgba(93,108,204,.28) 46%,transparent 48%),linear-gradient(176deg,transparent 56%,rgba(236,144,170,.26) 57%,transparent 59%)"></div></div>`,
+      settings: () => `
+        <div class="app-title-row"><div><div class="app-kicker">make it yours</div><h2 class="app-title">设置</h2></div><button class="icon-button" aria-label="账户">${userIcon}</button></div>
+        <div class="settings-account glass"> <div class="account-symbol">${userIcon}</div><div><strong>Trakt 已连接</strong><span>同步收藏、观看记录与评分</span></div><span class="row-score">已连接</span></div>
+        <div class="settings-group"><div class="settings-label">外观</div><div class="settings-list glass"><div class="setting-row"><div class="setting-icon">${paletteIcon}</div><span>主题风格</span><em>系统</em></div><div class="setting-row"><div class="setting-icon">${bellIcon}</div><span>通知提醒</span><i class="mini-switch" aria-hidden="true"></i></div></div></div>
+        <div class="settings-group"><div class="settings-label">数据与同步</div><div class="settings-list glass"><div class="setting-row"><div class="setting-icon">${slidersIcon}</div><span>同步设置</span><em>自动</em></div><div class="setting-row"><div class="setting-icon">${userIcon}</div><span>豆瓣账号</span><em>未连接</em></div></div></div>
+        <div class="settings-group"><div class="settings-label">关于</div><div class="settings-list glass"><div class="setting-row"><div class="setting-icon">${bellIcon}</div><span>帮助与说明</span><em>›</em></div></div></div>`
+    };
+
+    function renderPage(page) {
+      app.dataset.page = page;
+      content.innerHTML = pageMarkup[page]();
+      pageName.textContent = pages[page];
+      document.querySelectorAll('[data-page]').forEach((button) => button.setAttribute('aria-pressed', button.dataset.page === page));
+      document.querySelectorAll('[data-nav]').forEach((button) => button.classList.toggle('active', button.dataset.nav === page));
+      content.scrollTop = 0;
+    }
+    function setStyle(style) {
+      app.dataset.style = style;
+      styleName.textContent = styles[style].name;
+      legendTitle.textContent = styles[style].name;
+      legendCopy.textContent = styles[style].copy;
+      document.querySelectorAll('[data-style]').forEach((button) => button.setAttribute('aria-pressed', button.dataset.style === style));
+    }
+    function setTheme(dark) {
+      app.classList.toggle('is-dark', dark);
+      document.body.classList.toggle('dark-shell', dark);
+      themeToggle.setAttribute('aria-checked', String(dark));
+      themeName.textContent = dark ? 'Dark' : 'Light';
+    }
+
+    document.querySelector('#style-controls').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-style]');
+      if (button) setStyle(button.dataset.style);
+    });
+    document.querySelector('#page-controls').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-page]');
+      if (button) renderPage(button.dataset.page);
+    });
+    document.querySelectorAll('[data-nav]').forEach((button) => button.addEventListener('click', () => renderPage(button.dataset.nav)));
+    themeToggle.addEventListener('click', () => setTheme(themeToggle.getAttribute('aria-checked') !== 'true'));
+    renderPage('search');
+  </script>
+</body>
+</html>
