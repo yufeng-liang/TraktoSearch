@@ -1,6 +1,7 @@
 package com.tracktosearch.ui.screen.feedback
 
 import com.google.common.truth.Truth.assertThat
+import androidx.compose.ui.unit.Density
 import org.junit.Test
 
 class FeedbackDetailScreenTest {
@@ -17,5 +18,11 @@ class FeedbackDetailScreenTest {
         assertThat(parseScreenshots("[\"one\",\"two\"]")).containsExactly("one", "two").inOrder()
         assertThat(parseScreenshots("[\"https://example.test/a,b\"]"))
             .containsExactly("https://example.test/a,b")
+    }
+
+    @Test
+    fun detailScaffoldLeavesImeInsetsForReplyBar() {
+        assertThat(feedbackDetailScaffoldContentWindowInsets().getBottom(Density(1f)))
+            .isEqualTo(0)
     }
 }

@@ -10,7 +10,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -47,6 +46,9 @@ import com.tracktosearch.data.remote.feedback.FeedbackReply
 import com.tracktosearch.data.remote.feedback.screenshotUrl
 
 private const val MAX_REPLY_SCREENSHOTS = 5
+
+// 详情页由系统 adjustResize 避让键盘，Scaffold 不应再次预消费底部 IME inset。
+internal fun feedbackDetailScaffoldContentWindowInsets(): WindowInsets = WindowInsets(0, 0, 0, 0)
 
 internal fun conversationReplyListItemIndex(replyIndex: Int): Int = replyIndex + 2
 
@@ -111,6 +113,7 @@ fun FeedbackDetailScreen(
     }
 
     Scaffold(
+        contentWindowInsets = feedbackDetailScaffoldContentWindowInsets(),
         topBar = {
             TopAppBar(
                 title = {
@@ -421,7 +424,6 @@ private fun ReplyBar(text: String, onTextChange: (String) -> Unit, screenshots: 
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .imePadding()
             .navigationBarsPadding(),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp
