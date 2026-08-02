@@ -528,7 +528,7 @@ export function buildInvitationEmail(input: {
     const code = escapeHtml(input.inviteCode);
     const siteUrl = input.siteUrl.replace(/\/$/, '');
     const url = escapeHtml(siteUrl);
-    const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-chiikawa-love.png`);
+    const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-three-watching.png`);
     const expiry = formatDate(input.expiresAt);
     return {
         html: emailLayout(`

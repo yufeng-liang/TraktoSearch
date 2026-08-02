@@ -352,7 +352,7 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
 
     assert.match(email.html, /ABCD2345EFGH/);
     assert.match(email.html, /text-align:center/);
-    assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-chiikawa-love\.png/);
+    assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching\.png/);
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
