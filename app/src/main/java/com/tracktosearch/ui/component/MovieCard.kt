@@ -285,12 +285,13 @@ fun MovieCard(
                 }
             }
             Column {
-                Text(
+                AdaptiveTwoLineTitle(
                     text = title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxFontSize = 14.sp,
+                    minFontSize = 12.sp,
                     modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 0.dp)
                 )
                 if (genres.isNotEmpty()) {

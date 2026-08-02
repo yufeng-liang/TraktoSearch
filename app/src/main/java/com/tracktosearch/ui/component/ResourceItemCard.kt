@@ -296,15 +296,15 @@ fun ResourceItemCard(
                 }
 
                 // 资源名称
-                Text(
+                AdaptiveTwoLineTitle(
                     text = item.name,
                     style = MaterialTheme.typography.bodyLarge.copy(
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 15.sp
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    maxFontSize = 15.sp,
+                    minFontSize = 13.sp,
                     modifier = Modifier.padding(top = 8.dp)
                 )
 

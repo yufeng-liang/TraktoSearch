@@ -63,6 +63,7 @@ import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
 import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.DoubanRatingBadge
 import com.tracktosearch.ui.component.RatingBadge
 import com.tracktosearch.ui.component.YearBadge
@@ -277,12 +278,14 @@ internal fun MovieCard(
             }
         }
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
-            Text(
+            AdaptiveTwoLineTitle(
                 text = title,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                maxFontSize = 12.sp,
+                minFontSize = 12.sp
             )
             if (subtitle != null) {
                 Text(

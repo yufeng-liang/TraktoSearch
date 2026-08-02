@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 
 @Composable
 internal fun CreditCard(
@@ -119,11 +120,11 @@ internal fun CreditCard(
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        AdaptiveTwoLineTitle(
             text = title,
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxFontSize = 11.sp,
+            minFontSize = 11.sp,
             modifier = Modifier.fillMaxWidth()
         )
         if (subtitle.isNotEmpty()) {

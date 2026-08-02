@@ -151,6 +151,7 @@ import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.NeumorphicIconButton
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.PosterColorExtractorProvider
 import com.tracktosearch.ui.component.ScrollToTopButton
@@ -849,7 +850,8 @@ fun WatchlistScreen(
                                                         Icon(
                                                             Icons.Rounded.Close,
                                                             contentDescription = stringResource(R.string.content_desc_clear),
-                                                            modifier = Modifier.size(18.dp)
+                                                            modifier = Modifier.size(18.dp),
+                                                            tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
                                                         )
                                                     }
                                                 }
@@ -1579,12 +1581,13 @@ private fun WatchlistPosterCard(
             }
         }
         // 标题（与之前 MovieCard 字号一致，最多两行）
-        Text(
+        AdaptiveTwoLineTitle(
             text = item.displayTitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            maxFontSize = 14.sp,
+            minFontSize = 12.sp,
             modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 6.dp, bottom = 1.dp)
         )
         if (item.genres.isNotEmpty()) {

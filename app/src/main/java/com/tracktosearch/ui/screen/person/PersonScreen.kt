@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.tmdb.TmdbImageUrls
 import com.tracktosearch.ui.component.PosterCard
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.SectionHeader
 import com.tracktosearch.ui.util.ToastEffect
@@ -526,11 +527,11 @@ private fun CreditPosterCard(
             }
         }
         Spacer(modifier = Modifier.height(4.dp))
-        Text(
+        AdaptiveTwoLineTitle(
             text = title,
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, textAlign = TextAlign.Center),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            maxFontSize = 11.sp,
+            minFontSize = 11.sp,
             modifier = Modifier.fillMaxWidth()
         )
         if (subtitle.isNotEmpty()) {

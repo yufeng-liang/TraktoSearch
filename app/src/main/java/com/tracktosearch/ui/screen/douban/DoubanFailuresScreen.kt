@@ -799,7 +799,8 @@ fun DoubanFailuresScreen(
                                                             Icon(
                                                                 Icons.Rounded.Close,
                                                                 contentDescription = stringResource(R.string.content_desc_clear),
-                                                                modifier = Modifier.size(19.dp)
+                                                                modifier = Modifier.size(19.dp),
+                                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                                                             )
                                                         }
                                                     }

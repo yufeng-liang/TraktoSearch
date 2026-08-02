@@ -541,7 +541,8 @@ fun TraktSearchScreen(
                                             Icon(
                                                 Icons.Rounded.Close,
                                                 contentDescription = stringResource(R.string.content_desc_clear),
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
                                             )
                                         }
                                     }

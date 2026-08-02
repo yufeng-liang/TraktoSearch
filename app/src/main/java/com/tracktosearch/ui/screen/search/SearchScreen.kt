@@ -141,6 +141,7 @@ import com.tracktosearch.ui.component.CloudOverlay
 import com.tracktosearch.ui.component.CloudThemeManager
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
 import com.tracktosearch.ui.component.DoubanRatingBadge
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.GlassHighlight
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.RatingBadge
@@ -708,7 +709,8 @@ private fun SearchBarTop(
                             Icon(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.search_clear_input),
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(18.dp),
+                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
                             )
                         }
                         TextButton(
@@ -1037,7 +1039,7 @@ private fun SearchBarTopNew(
                                 Icons.Rounded.Close,
                                 contentDescription = stringResource(R.string.search_clear_input),
                                 modifier = Modifier.size(18.dp),
-                                tint = if (isDark) Color.White.copy(alpha = 0.6f) else Color(0xFF78909C)
+                                tint = if (isDark) Color.White.copy(alpha = 0.72f) else Color(0xFF546E7A)
                             )
                         }
                         SearchActionButton(
@@ -1649,12 +1651,14 @@ fun DoubanHotCard(
             }
         }
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
-            Text(
+            AdaptiveTwoLineTitle(
                 text = displayTitle,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onBackground
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                maxFontSize = 12.sp,
+                minFontSize = 12.sp
             )
         }
     }
@@ -1807,12 +1811,14 @@ private fun DoubanHotGridItem(
                 }
             }
             Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
-                Text(
+                AdaptiveTwoLineTitle(
                     text = displayTitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    ),
+                    maxFontSize = 12.sp,
+                    minFontSize = 12.sp
                 )
                 if (item.desc.isNotBlank()) {
                     Text(

@@ -429,9 +429,12 @@ internal fun LoginUnlockCard(onLoginClick: () -> Unit) {
     )
     val isDark = isAppDarkTheme()
     val shape = RoundedCornerShape(20.dp)
-    val gradient = Brush.linearGradient(
-        listOf(Color(0xFF3949AB), Color(0xFF7986CB))
-    )
+    val gradient = remember(isDark) {
+        Brush.linearGradient(
+            if (isDark) listOf(Color(0xFF1B255F), Color(0xFF26327A))
+            else listOf(Color(0xFF283593), Color(0xFF3949AB))
+        )
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -534,20 +537,27 @@ internal fun DoubanRecommendSection(
                     label = "douban_recommend_login_scale"
                 )
                 val shape = RoundedCornerShape(20.dp)
-                val gradient = Brush.linearGradient(
-                    colors = listOf(Color(0xFFB8F2A6), Color(0xFF6EDC8C)),
-                    start = Offset(0f, Float.POSITIVE_INFINITY),
-                    end = Offset(Float.POSITIVE_INFINITY, 0f)
-                )
+                val isDark = isAppDarkTheme()
+                val gradient = remember(isDark) {
+                    Brush.linearGradient(
+                        colors = if (isDark) {
+                            listOf(Color(0xFF358E60), Color(0xFF378C9B))
+                        } else {
+                            listOf(Color(0xFF49B879), Color(0xFF42A7B3))
+                        },
+                        start = Offset(0f, Float.POSITIVE_INFINITY),
+                        end = Offset(Float.POSITIVE_INFINITY, 0f)
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .scale(scale)
                         .neumorphicOuterShadow(
                             shape = shape,
-                            isDark = isAppDarkTheme(),
+                            isDark = isDark,
                             elevation = 6.dp,
-                            darkAlpha = if (isAppDarkTheme()) 0.35f else 0.18f,
+                            darkAlpha = if (isDark) 0.35f else 0.18f,
                             blurRadius = 16.dp,
                             shadowOffset = 5.dp
                         )

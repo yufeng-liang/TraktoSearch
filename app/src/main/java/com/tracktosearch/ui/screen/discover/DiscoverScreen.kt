@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -24,8 +25,6 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,6 +48,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -233,38 +233,58 @@ fun DiscoverScreen(
             ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
-                    // 缓存 5 个渐变 Brush，避免每次重组创建新实例（颜色和方向固定）
-                    val popularGradient = remember {
+                    // 缓存主题对应的渐变，保留栏目色相并压低高亮端，确保白字清晰
+                    val popularGradient = remember(isDark) {
                         Brush.linearGradient(
-                            colors = listOf(Color(0xFFF83600), Color(0xFFF9D423)),
+                            colors = if (isDark) {
+                                listOf(Color(0xFFC74624), Color(0xFFB8781F))
+                            } else {
+                                listOf(Color(0xFFE85D2A), Color(0xFFD99A2B))
+                            },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
-                    val upcomingGradient = remember {
+                    val upcomingGradient = remember(isDark) {
                         Brush.linearGradient(
-                            colors = listOf(Color(0xFFD299C2), Color(0xFFFEF9D7)),
+                            colors = if (isDark) {
+                                listOf(Color(0xFFA54F78), Color(0xFF7B55B4))
+                            } else {
+                                listOf(Color(0xFFB85C86), Color(0xFF8B5CC7))
+                            },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
-                    val recommendGradient = remember {
+                    val recommendGradient = remember(isDark) {
                         Brush.linearGradient(
-                            colors = listOf(Color(0xFFA1C4FD), Color(0xFFC2E9FB)),
+                            colors = if (isDark) {
+                                listOf(Color(0xFF3E6FC7), Color(0xFF27869F))
+                            } else {
+                                listOf(Color(0xFF4A78D1), Color(0xFF2E9BB3))
+                            },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
-                    val doubanGradient = remember {
+                    val doubanGradient = remember(isDark) {
                         Brush.linearGradient(
-                            colors = listOf(Color(0xFF84FAB0), Color(0xFF8FD3F4)),
+                            colors = if (isDark) {
+                                listOf(Color(0xFF2D9662), Color(0xFF2F879E))
+                            } else {
+                                listOf(Color(0xFF35A86F), Color(0xFF3B9AB5))
+                            },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
-                    val listsGradient = remember {
+                    val listsGradient = remember(isDark) {
                         Brush.linearGradient(
-                            colors = listOf(Color(0xFFFF9A9E), Color(0xFFFAD0C4)),
+                            colors = if (isDark) {
+                                listOf(Color(0xFFBD4F6D), Color(0xFF9B5A50))
+                            } else {
+                                listOf(Color(0xFFD95F7D), Color(0xFFB96F62))
+                            },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
@@ -315,11 +335,13 @@ fun DiscoverScreen(
                         .filter { it.visible && it.id in heroCategoryDefs }
                         .mapNotNull { heroCategoryDefs[it.id] }
                     if (heroCategories.isNotEmpty()) {
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(9.dp),
-                            contentPadding = PaddingValues(horizontal = 5.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
-                            itemsIndexed(heroCategories, key = { _, category -> category.id }) { index, category ->
+                            heroCategories.forEachIndexed { index, category ->
                                 Box(modifier = Modifier.fadeSlideIn(index)) {
                                     CategoryHeroCard(
                                         title = category.title,
@@ -701,12 +723,18 @@ fun DiscoverScreen(
                         Modifier.fillMaxWidth()
                     }
                     val shape = RoundedCornerShape(20.dp)
-                    // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
-                    val gradient = Brush.linearGradient(
-                        colors = listOf(Color(0xFFFCCB90), Color(0xFFD57EEB)),
-                        start = Offset(0f, Float.POSITIVE_INFINITY),
-                        end = Offset(Float.POSITIVE_INFINITY, 0f)
-                    )
+                    // 中等明度的玫瑰紫渐变，避免白色文字落在近白高亮上
+                    val gradient = remember(isDark) {
+                        Brush.linearGradient(
+                            colors = if (isDark) {
+                                listOf(Color(0xFF83489A), Color(0xFFB04E69))
+                            } else {
+                                listOf(Color(0xFF9B56B0), Color(0xFFD25D76))
+                            },
+                            start = Offset(0f, Float.POSITIVE_INFINITY),
+                            end = Offset(Float.POSITIVE_INFINITY, 0f)
+                        )
+                    }
                     Box(
                         modifier = cardModifier
                             .scale(cardScale)

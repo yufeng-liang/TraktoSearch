@@ -61,6 +61,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
 import com.tracktosearch.ui.component.PosterCard
 import com.tracktosearch.ui.component.DiscoverModalBottomSheet
+import com.tracktosearch.ui.component.AdaptiveTwoLineTitle
 import com.tracktosearch.ui.component.isAppDarkTheme
 
 /** Sheet 内影视卡片：海报 + 下方标题/副标题 */
@@ -82,12 +83,14 @@ private fun SheetMediaCard(
             onClick = null
         )
         Column(modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)) {
-            Text(
+            AdaptiveTwoLineTitle(
                 text = title,
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                maxFontSize = 12.sp,
+                minFontSize = 12.sp
             )
             if (!subtitle.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(2.dp))
