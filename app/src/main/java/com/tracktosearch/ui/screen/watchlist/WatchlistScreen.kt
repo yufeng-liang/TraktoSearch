@@ -147,6 +147,7 @@ import com.tracktosearch.ui.component.LocalActivePosterClickSetter
 import com.tracktosearch.ui.component.LocalActivePosterClickToken
 import com.tracktosearch.ui.component.LocalActivePosterTmdbId
 import com.tracktosearch.ui.component.LocalAnimatedVisibilityScope
+import com.tracktosearch.ui.component.LocalIsCurrentTab
 import com.tracktosearch.ui.component.LocalSharedTransitionEnabled
 import com.tracktosearch.ui.component.LocalSharedTransitionScope
 import com.tracktosearch.ui.component.NeumorphicFrostedSurface
@@ -201,6 +202,8 @@ fun WatchlistScreen(
     val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
     val isTraktConnected by viewModel.isTraktConnected.collectAsStateWithLifecycle()
     val isDoubanLoggedIn by viewModel.isDoubanLoggedInFlow.collectAsStateWithLifecycle()
+    val isCurrentTab = LocalIsCurrentTab.current
+    var hasBeenVisible by remember { mutableStateOf(false) }
     val emptyState = resolveWatchlistEmptyState(
         traktConnected = isTraktConnected,
         doubanLoggedIn = isDoubanLoggedIn,
@@ -221,6 +224,15 @@ fun WatchlistScreen(
     LaunchedEffect(Unit) {
         viewModel.loadMovies()
         viewModel.loadShows()
+    }
+
+    LaunchedEffect(isCurrentTab) {
+        if (isCurrentTab) {
+            if (hasBeenVisible) {
+                viewModel.onWatchlistTabVisible()
+            }
+            hasBeenVisible = true
+        }
     }
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }

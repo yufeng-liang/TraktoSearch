@@ -818,6 +818,13 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /** Watchlist Tab 从其他页面重新可见时刷新已加载的想看列表。 */
+    fun onWatchlistTabVisible() {
+        if (_uiState.value.moviesLoaded || _uiState.value.showsLoaded) {
+            refreshWatchlist()
+        }
+    }
+
     /** 仅刷新已看历史（从详情页标记已看后调用） */
     fun refreshWatched() {
         val state = _uiState.value

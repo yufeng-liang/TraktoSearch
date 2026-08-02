@@ -278,6 +278,31 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `WatchlistTab重新可见_刷新并显示新标记电影`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Old Movie")) to 1)
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
+
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(
+                listOf(
+                    makeWatchlistMovie(2, title = "New Movie"),
+                    makeWatchlistMovie(1, title = "Old Movie")
+                ) to 1
+            )
+
+        viewModel.onWatchlistTabVisible()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(2, 1)
+            .inOrder()
+    }
+
+    @Test
     fun `refreshIfLoaded_已加载时静默刷新`() = runTest {
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(makeWatchlistMovie(1)) to 1)
