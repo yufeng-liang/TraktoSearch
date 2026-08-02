@@ -86,19 +86,26 @@ test('issueInvitation uses an atomic quota guard before creating the friend and 
         },
     };
 
-    const result = await issueInvitation({
-        DB: db,
-        EMAIL: { send: async () => ({ messageId: 'email-1' }) },
-        EMAIL_FROM: 'TraktoSearch <noreply@example.com>',
-        PUBLIC_SITE_ORIGIN: 'https://tracktosearch.pages.dev',
-    }, {
-        id: 'request-1',
-        nickname: '小明',
-        email: 'user@example.com',
-        verificationTokenHash: 'token-hash',
-    },
-    'request-id',
-    1_700_000_000);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ messageId: '<brevo-message-id>' }), { status: 201 });
+    let result;
+    try {
+        result = await issueInvitation({
+            DB: db,
+            BREVO_API_KEY: 'brevo-test-key',
+            EMAIL_FROM: 'TraktoSearch <noreply@example.com>',
+            PUBLIC_SITE_ORIGIN: 'https://tracktosearch.pages.dev',
+        }, {
+            id: 'request-1',
+            nickname: '小明',
+            email: 'user@example.com',
+            verificationTokenHash: 'token-hash',
+        },
+        'request-id',
+        1_700_000_000);
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 
     assert.equal(result.inviteCode.length, 12);
     assert.equal(statements.length, 4);

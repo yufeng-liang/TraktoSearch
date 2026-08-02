@@ -257,7 +257,7 @@ export async function issueInvitation(
     requestId: string,
     currentTime: number = now(),
 ): Promise<{ friendId: string; inviteId: string; inviteCode: string; expiresAt: number }> {
-    if (!env.EMAIL || !env.EMAIL_FROM) {
+    if ((!env.BREVO_API_KEY && !env.EMAIL) || !env.EMAIL_FROM) {
         throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
     }
     await releaseExpiredPublicInvitations(env, currentTime);
