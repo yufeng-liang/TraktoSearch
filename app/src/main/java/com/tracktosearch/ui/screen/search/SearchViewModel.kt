@@ -114,7 +114,7 @@ class SearchViewModel @Inject constructor(
                 return@launch
             }
             // 共享缓存 + 飞行中去重：并发时只发一次网络请求
-            val cacheKey = "douban-movie_1_10_v2"
+            val cacheKey = "douban-movie_1_10_v3"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey) {
                     val response = doubanHotApi.getChart()
@@ -127,7 +127,11 @@ class SearchViewModel @Inject constructor(
                                 cover = item.poster,
                                 desc = item.ratingCount,
                                 rating = item.rating,
-                                url = item.url
+                                url = item.url,
+                                tmdbId = item.tmdbId,
+                                traktId = item.traktId,
+                                imdbId = item.imdbId,
+                                mediaType = item.mediaType
                             )
                         },
                         total = response.total
@@ -141,7 +145,7 @@ class SearchViewModel @Inject constructor(
             } catch (_: Exception) {
                 // 失败兜底：尝试从 v2 缓存取数据(发现页新片榜可能已加载成功)
                 try {
-                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v2")
+                    val cached = sharedDoubanHotCache.get("douban-movie_1_10_v3")
                     if (cached != null) {
                         val titles = cached.items.take(8).map { item ->
                             item.title.replace(Regex("^【[^】]+】"), "").trim()
@@ -174,7 +178,7 @@ class SearchViewModel @Inject constructor(
                 current[index] = current[index].copy(isLoading = true, error = null)
                 _uiState.value = _uiState.value.copy(doubanHotCategories = current)
             }
-            val cacheKey = "${categoryId}_1_10_v2"
+            val cacheKey = "${categoryId}_1_10_v3"
             try {
                 val data = sharedDoubanHotCache.getOrAwait(cacheKey, skipCache = skipCache) {
                     try {
@@ -190,7 +194,11 @@ class SearchViewModel @Inject constructor(
                                             cover = item.poster,
                                             desc = item.ratingCount,
                                             rating = item.rating,
-                                            url = item.url
+                                            url = item.url,
+                                            tmdbId = item.tmdbId,
+                                            traktId = item.traktId,
+                                            imdbId = item.imdbId,
+                                            mediaType = item.mediaType
                                         )
                                     },
                                     total = response.total
@@ -207,7 +215,11 @@ class SearchViewModel @Inject constructor(
                                             cover = item.poster,
                                             desc = item.ratingCount,
                                             rating = item.rating,
-                                            url = item.url
+                                            url = item.url,
+                                            tmdbId = item.tmdbId,
+                                            traktId = item.traktId,
+                                            imdbId = item.imdbId,
+                                            mediaType = item.mediaType
                                         )
                                     },
                                     total = response.total
@@ -224,7 +236,11 @@ class SearchViewModel @Inject constructor(
                                             cover = item.poster,
                                             desc = item.ratingCount,
                                             rating = item.rating,
-                                            url = item.url
+                                            url = item.url,
+                                            tmdbId = item.tmdbId,
+                                            traktId = item.traktId,
+                                            imdbId = item.imdbId,
+                                            mediaType = item.mediaType
                                         )
                                     },
                                     total = response.total
@@ -241,7 +257,11 @@ class SearchViewModel @Inject constructor(
                                             cover = item.poster,
                                             desc = item.ratingCount,
                                             rating = item.rating,
-                                            url = item.url
+                                            url = item.url,
+                                            tmdbId = item.tmdbId,
+                                            traktId = item.traktId,
+                                            imdbId = item.imdbId,
+                                            mediaType = item.mediaType
                                         )
                                     },
                                     total = response.total
@@ -304,7 +324,7 @@ class SearchViewModel @Inject constructor(
                 }
             }
             // 1 小时内用缓存（仅首页）
-            val cacheKey = "${categoryId}_${page}_$limit"
+            val cacheKey = "${categoryId}_${page}_${limit}_v3"
             if (page == 1) {
                 sharedDoubanHotCache.get(cacheKey)?.let { data ->
                     val updated = _uiState.value.doubanHotCategories.toMutableList()
@@ -337,7 +357,11 @@ class SearchViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = chartResponse.total,
@@ -360,7 +384,11 @@ class SearchViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = weeklyResponse.total,
@@ -383,7 +411,11 @@ class SearchViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = top250Response.total,
@@ -406,7 +438,11 @@ class SearchViewModel @Inject constructor(
                                         cover = item.poster,
                                         desc = item.ratingCount,
                                         rating = item.rating,
-                                        url = item.url
+                                        url = item.url,
+                                        tmdbId = item.tmdbId,
+                                        traktId = item.traktId,
+                                        imdbId = item.imdbId,
+                                        mediaType = item.mediaType
                                     )
                                 },
                                 total = nowPlayingResponse.total,
@@ -560,6 +596,12 @@ class SearchViewModel @Inject constructor(
                     .trim()
 
                 // 1. 用 TMDB 搜索
+                // CF 已完成豆瓣 subject -> TMDB -> Trakt 转换时，直接进入详情页。
+                if (item.tmdbId > 0 && item.traktId > 0) {
+                    onNavigate(item.traktId, item.tmdbId, cleanTitle, item.imdbId, 0.0)
+                    return@launch
+                }
+
                 val searchResult = tmdbRepository.searchMovie(cleanTitle)
                 if (searchResult == null || searchResult.id <= 0) {
                     _uiState.value = _uiState.value.copy(resolvingItemId = null)

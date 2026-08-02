@@ -328,7 +328,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 预热发现页新片榜/口碑榜的共享缓存，进入页面后由 DiscoverViewModel 直接复用。 */
     private suspend fun prefetchDoubanHotCategory(categoryId: String) {
-        val cacheKey = "${categoryId}_1_10_v2"
+        val cacheKey = "${categoryId}_1_10_v3"
         sharedDoubanHotCache.awaitLoaded()
         sharedDoubanHotCache.getOrAwait(cacheKey) {
             val response = when (categoryId) {
@@ -350,7 +350,10 @@ class MainActivity : AppCompatActivity() {
                         desc = item.ratingCount,
                         rating = item.rating,
                         url = item.url,
-                        tmdbId = item.tmdbId
+                        tmdbId = item.tmdbId,
+                        traktId = item.traktId,
+                        imdbId = item.imdbId,
+                        mediaType = item.mediaType
                     )
                 },
                 total = response.total

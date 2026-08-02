@@ -435,4 +435,27 @@ class SearchViewModelTest {
 
         coVerify(exactly = 1) { viewedItemStorage.markViewed("https://example.com/resource") }
     }
+
+    @Test
+    fun `resolveAndNavigate_榜单项已有完整ID时直接导航且不搜索`() = runTest {
+        viewModel = createViewModel()
+        var navigated: List<Any>? = null
+
+        viewModel.resolveAndNavigate(
+            DoubanHotItem(
+                id = 42,
+                title = "【9.0】测试电影",
+                tmdbId = 597,
+                traktId = 10,
+                imdbId = "tt0120338"
+            )
+        ) { traktId, tmdbId, title, imdbId, traktRating ->
+            navigated = listOf(traktId, tmdbId, title, imdbId, traktRating)
+        }
+        advanceUntilIdle()
+
+        assertThat(navigated).containsExactly(10, 597, "测试电影", "tt0120338", 0.0).inOrder()
+        coVerify(exactly = 0) { tmdbRepository.searchMovie(any()) }
+        coVerify(exactly = 0) { traktRepository.searchByTmdb(any(), any()) }
+    }
 }
