@@ -2,7 +2,7 @@
     <string name="auth_migration_invite_hint">自動復元を完了できませんでした。移行用の招待コードを入力して続行してください。</string>
     <string name="auth_offline_mode">オフラインモード: キャッシュデータを使用しています。</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">発見 · 追跡 · 検索</string>
+    <string name="splash_slogan">観たいから、見つけて、観たへ</string>
     <string name="auth_title">アクセスを有効化</string>
     <string name="auth_subtitle">管理者から提供された招待コードを入力してください。</string>
     <string name="auth_expired_message">ネットワークに接続して、アクセスを再度有効化してください。</string>
@@ -474,7 +474,7 @@
     <string name="disk_other">その他</string>
 
     <!-- Login Screen (追加) -->
-    <string name="login_subtitle">ウォッチリストからリソースへ、すぐに</string>
+    <string name="login_subtitle">観たいから、見つけて、観たへ</string>
     <string name="login_connecting">Traktに接続中…</string>
     <string name="login_connecting_hint">お待ちください。アカウント情報を取得中です</string>
     <string name="login_denied">認証が拒否されました</string>

@@ -2,7 +2,7 @@
     <string name="auth_migration_invite_hint">Silent recovery was not completed. Enter a migration invitation code to continue.</string>
     <string name="auth_offline_mode">Offline mode: using cached data.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">Discover · Track · Search</string>
+    <string name="splash_slogan">From Wanting to Watch, to Finding It, to Having Watched It</string>
     <string name="auth_title">Activate access</string>
     <string name="auth_subtitle">Enter the invitation code provided by the administrator.</string>
     <string name="auth_expired_message">Connect to the internet and activate access again.</string>
@@ -217,7 +217,7 @@
 
     <!-- Login Screen -->
     <string name="login_title">TraktoSearch</string>
-    <string name="login_subtitle">From watchlist to cloud resources</string>
+    <string name="login_subtitle">From Wanting to Watch, to Finding It, to Having Watched It</string>
     <string name="login_button">Sign in with Trakt</string>
     <string name="login_connecting">Connecting to Trakt…</string>
     <string name="login_connecting_hint">Please wait, fetching your account info</string>

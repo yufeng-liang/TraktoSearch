@@ -2,7 +2,7 @@
     <string name="auth_migration_invite_hint">자동 복구를 완료하지 못했습니다. 마이그레이션 초대 코드를 입력하여 계속하세요.</string>
     <string name="auth_offline_mode">오프라인 모드: 캐시된 데이터를 사용합니다.</string>
     <string name="app_name">TraktoSearch</string>
-    <string name="splash_slogan">발견 · 추적 · 검색</string>
+    <string name="splash_slogan">보고 싶은 것에서 찾고, 본 기록까지</string>
     <string name="auth_title">접근 권한 활성화</string>
     <string name="auth_subtitle">관리자가 제공한 초대 코드를 입력하세요.</string>
     <string name="auth_expired_message">네트워크에 연결한 후 접근 권한을 다시 활성화하세요.</string>
@@ -474,7 +474,7 @@
     <string name="disk_other">기타</string>
 
     <!-- Login Screen (추가) -->
-    <string name="login_subtitle">관심목록에서 리소스까지, 한 번에</string>
+    <string name="login_subtitle">보고 싶은 것에서 찾고, 본 기록까지</string>
     <string name="login_connecting">Trakt에 연결 중…</string>
     <string name="login_connecting_hint">잠시만 기다려주세요. 계정 정보를 가져오는 중입니다</string>
     <string name="login_denied">인증이 거부되었습니다</string>
