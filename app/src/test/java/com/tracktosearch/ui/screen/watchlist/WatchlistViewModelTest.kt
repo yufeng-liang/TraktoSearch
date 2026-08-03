@@ -263,6 +263,38 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `loadHistoryMovies_跨页加载并合并全部记录`() = runTest {
+        coEvery { traktRepository.getMovieHistory(1, 200, "full") } returns
+            Result.success(listOf(makeWatchlistMovie(1, "Old Movie")) to 2)
+        coEvery { traktRepository.getMovieHistory(2, 200, "full") } returns
+            Result.success(listOf(makeWatchlistMovie(2, "New Movie")) to 2)
+
+        viewModel.loadHistoryMovies()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.historyMovies.map { it.traktId })
+            .containsExactly(1, 2)
+            .inOrder()
+        coVerify(exactly = 1) { traktRepository.getMovieHistory(2, 200, "full") }
+    }
+
+    @Test
+    fun `loadHistoryShows_跨页加载并合并全部记录`() = runTest {
+        coEvery { traktRepository.getShowHistory(1, 200, "full") } returns
+            Result.success(listOf(makeWatchlistShow(1, "Old Show")) to 2)
+        coEvery { traktRepository.getShowHistory(2, 200, "full") } returns
+            Result.success(listOf(makeWatchlistShow(2, "New Show")) to 2)
+
+        viewModel.loadHistoryShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.historyShows.map { it.traktId })
+            .containsExactly(1, 2)
+            .inOrder()
+        coVerify(exactly = 1) { traktRepository.getShowHistory(2, 200, "full") }
+    }
+
+    @Test
     fun `refresh_重置状态并重新加载`() = runTest {
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(makeWatchlistMovie(1)) to 1)

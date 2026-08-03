@@ -13,6 +13,8 @@ import com.tracktosearch.data.local.db.DoubanSyncFailureDao
 import com.tracktosearch.data.local.db.MarkActionType
 import com.tracktosearch.data.local.db.MediaItemEntity
 import com.tracktosearch.data.local.db.OfflineCacheManager
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import com.tracktosearch.data.repository.BatchRemovalItem
 import com.tracktosearch.data.repository.BatchRemovalProgress
 import com.tracktosearch.data.repository.ConsistencyCheckResult
@@ -557,6 +559,24 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    private suspend fun <T> fetchAllHistoryPages(
+        fetchPage: suspend (page: Int) -> Result<Pair<List<T>, Int>>
+    ): Result<List<T>> {
+        val allItems = mutableListOf<T>()
+        var page = 1
+        var totalPages = 1
+        while (page <= totalPages) {
+            val result = retryIO(maxRetries) { fetchPage(page) }
+            val (items, pageCount) = result.getOrElse { error ->
+                return Result.failure(error)
+            }
+            allItems += items
+            totalPages = pageCount
+            page++
+        }
+        return Result.success(allItems)
+    }
+
     fun loadHistoryMovies(forceReload: Boolean = false) {
         if (!forceReload && _uiState.value.historyMoviesLoaded && _uiState.value.historyMovies.isNotEmpty()) {
             return
@@ -572,8 +592,10 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingHistoryMovies = true,
                 historyMoviesError = null
             )
-            val result = retryIO(maxRetries) { traktRepository.getMovieHistory() }
-            result.onSuccess { (items, _) ->
+            val result = fetchAllHistoryPages<TraktWatchlistMovieItem> { page ->
+                traktRepository.getMovieHistory(page = page, limit = 200)
+            }
+            result.onSuccess { items ->
                 if (forceReload) {
                     _uiState.value = _uiState.value.copy(historyMovies = emptyList())
                 }
@@ -629,8 +651,10 @@ class WatchlistViewModel @Inject constructor(
                 isLoadingHistoryShows = true,
                 historyShowsError = null
             )
-            val result = retryIO(maxRetries) { traktRepository.getShowHistory() }
-            result.onSuccess { (items, _) ->
+            val result = fetchAllHistoryPages<TraktWatchlistShowItem> { page ->
+                traktRepository.getShowHistory(page = page, limit = 200)
+            }
+            result.onSuccess { items ->
                 if (forceReload) {
                     _uiState.value = _uiState.value.copy(historyShows = emptyList())
                 }
