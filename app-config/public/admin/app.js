@@ -624,7 +624,7 @@ function statusBadge(status) {
         AVAILABLE: 'badge-active', USED: 'badge-success', EXPIRED: 'badge-disabled',
         SUCCESS: 'badge-success', FAILURE: 'badge-failure',
     };
-    const label = { ACTIVE: '活跃', DISABLED: '已禁用', REVOKED: '已撤销', AVAILABLE: '可用', USED: '已使用', EXPIRED: '已过期', SUCCESS: '成功', FAILURE: '失败' };
+    const label = { ACTIVE: '有效', DISABLED: '已禁用', REVOKED: '已撤销', AVAILABLE: '可用', USED: '已使用', EXPIRED: '已过期', SUCCESS: '成功', FAILURE: '失败' };
     return `<span class="badge ${map[status] || ''}"><span class="badge-dot"></span>${escapeHtml(label[status] || status)}</span>`;
 }
 
@@ -1079,7 +1079,7 @@ function renderFriends(container, renderToken) {
         <div class="toolbar-filters">
             <select class="form-select" id="statusFilter" aria-label="用户状态筛选" style="width:auto">
                 <option value="">全部状态</option>
-                <option value="ACTIVE">活跃</option>
+                <option value="ACTIVE">有效</option>
                 <option value="DISABLED">已禁用</option>
             </select>
             <button class="btn btn-primary" id="createFriendBtn">
@@ -2013,7 +2013,7 @@ function renderFeedback(container, renderToken) {
     container.appendChild(header);
 
     const tableWrap = document.createElement('div');
-    tableWrap.className = 'table-wrap';
+    tableWrap.className = 'table-wrap feedback-table-wrap';
     tableWrap.innerHTML = '<div class="loading-skeleton" style="height:200px;margin:16px"></div>';
     container.appendChild(tableWrap);
 
@@ -2121,7 +2121,7 @@ function showFeedbackDetail(id, container, renderToken) {
         const repliesHtml = replies.map(r => {
             const role = r.authorRole || r.author_role || 'developer';
             const screenshotsArr = Array.isArray(r.screenshots) ? r.screenshots : [];
-            const roleLabel = role === 'developer' ? '开发者' : '用户';
+            const roleLabel = role === 'developer' ? '自己' : '用户';
             const screenshotsInner = screenshotsArr.length > 0
                 ? `<div class="fb-bubble-screenshots">${screenshotsArr.map(k => {
                     const src = `${FEEDBACK_SCREENSHOT_BASE_URL}/${encodeURIComponent(k)}`;
@@ -2130,7 +2130,7 @@ function showFeedbackDetail(id, container, renderToken) {
                 : '';
             return `
                 <div class="fb-bubble-row ${role}">
-                    <div class="fb-bubble-avatar ${role}">${role === 'developer' ? 'D' : '我'}</div>
+                    <div class="fb-bubble-avatar ${role}">${role === 'developer' ? '我' : 'U'}</div>
                     <div class="fb-bubble-content">
                         <div class="fb-bubble-meta">${roleLabel} · ${formatTime(r.createdAt || r.created_at)}</div>
                         <div class="fb-bubble ${role}">${escapeHtml(r.content || '')}${screenshotsInner}</div>

@@ -198,12 +198,31 @@ test('反馈详情标题只展示反馈 ID 和用户，内容区隐藏类型行'
     assert.match(stylesSource, /\.feedback-detail-subtitle \.fb-id-badge \{[\s\S]*?font-size: 16px;/);
 });
 
-test('反馈详情可以返回列表，开发者气泡尖角位于左下角', () => {
+test('反馈对话将开发者显示为自己并右对齐，用户左对齐且尖角位于底部', () => {
     const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
     assert.match(appSource, /document\.getElementById\('fb-back'\)\.addEventListener\('click', \(\) => navigate\('feedback'\)\)/);
     assert.doesNotMatch(appSource, /document\.getElementById\('fb-back'\)[\s\S]*?location\.hash = '#\/feedback'/);
-    assert.match(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-bottom-left-radius: 4px;/);
-    assert.doesNotMatch(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-top-left-radius: 4px;/);
+    assert.match(appSource, /const roleLabel = role === 'developer' \? '自己' : '用户';/);
+    assert.match(appSource, /role === 'developer' \? '我' : 'U'/);
+    assert.match(stylesSource, /\.fb-bubble-row\.developer \{\s*flex-direction: row-reverse;/);
+    assert.match(stylesSource, /\.fb-bubble-row\.user \{\s*flex-direction: row;/);
+    assert.match(stylesSource, /\.fb-bubble-row\.developer \.fb-bubble-meta \{\s*text-align: right;/);
+    assert.match(stylesSource, /\.fb-bubble-row\.user \.fb-bubble-meta \{\s*text-align: left;/);
+    assert.match(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-bottom-right-radius: 4px;/);
+    assert.match(stylesSource, /\.fb-bubble\.user \{[\s\S]*?border-bottom-left-radius: 4px;/);
+    assert.doesNotMatch(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-top-(left|right)-radius: 4px;/);
+    assert.doesNotMatch(stylesSource, /\.fb-bubble\.user \{[\s\S]*?border-top-(left|right)-radius: 4px;/);
+});
+
+test('反馈列表与筛选区保留标准列表上边距', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(appSource, /tableWrap\.className = 'table-wrap feedback-table-wrap'/);
+    assert.match(stylesSource, /\.feedback-table-wrap \{\s*margin-top: 20px;/);
+});
+
+test('用户状态使用有效文案', () => {
+    assert.match(appSource, /ACTIVE: '有效'/);
+    assert.match(appSource, /<option value="ACTIVE">有效<\/option>/);
 });
 
 test('navigation renders once through hashchange for a changed route', () => {
