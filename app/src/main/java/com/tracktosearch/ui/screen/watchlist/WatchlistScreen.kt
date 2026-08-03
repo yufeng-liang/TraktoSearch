@@ -175,6 +175,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -201,6 +202,7 @@ fun WatchlistScreen(
     val hasActiveFilters by viewModel.hasActiveFilters.collectAsStateWithLifecycle()
     val availableGenres by viewModel.availableGenres.collectAsStateWithLifecycle()
     val isTraktConnected by viewModel.isTraktConnected.collectAsStateWithLifecycle()
+    val isDoubanMode by viewModel.isDoubanMode.collectAsStateWithLifecycle()
     val isDoubanLoggedIn by viewModel.isDoubanLoggedInFlow.collectAsStateWithLifecycle()
     val isCurrentTab = LocalIsCurrentTab.current
     var hasBeenVisible by remember { mutableStateOf(false) }
@@ -433,6 +435,19 @@ fun WatchlistScreen(
         selectedMode == 0 && selectedTab == 1 -> uiState.isLoadingShows
         selectedMode == 1 && selectedTab == 0 -> uiState.isLoadingHistoryMovies
         else -> uiState.isLoadingHistoryShows
+    }
+
+    // 接近列表末尾时加载下一页，避免 watchlist 超过 200 条后停在第一页
+    LaunchedEffect(selectedMode, selectedTab, currentGridState) {
+        if (selectedMode != 0) return@LaunchedEffect
+        snapshotFlow {
+            val layoutInfo = currentGridState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            layoutInfo.totalItemsCount > 0 && lastVisibleIndex >= layoutInfo.totalItemsCount - 6
+        }.collect { nearEnd ->
+            if (!nearEnd) return@collect
+            if (selectedTab == 0) viewModel.loadMoreMovies() else viewModel.loadMoreShows()
+        }
     }
 
     // 下拉刷新：数据返回后触发 EMPHASIS 弹性入场动画
@@ -874,8 +889,17 @@ fun WatchlistScreen(
                             }
     
                             // 分类 Tab（下划线样式）
-                            val movieCount = if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
-                            val showCount = if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                            val hasLocalFilter = searchQuery.isNotBlank() || hasActiveFilters
+                            val movieCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                                if (selectedMode == 1) filteredHistoryMovies.size else filteredMovies.size
+                            } else {
+                                uiState.movieTotalCount ?: if (uiState.moviesLoaded) filteredMovies.size else 0
+                            }
+                            val showCount = if (selectedMode == 1 || isDoubanMode || hasLocalFilter) {
+                                if (selectedMode == 1) filteredHistoryShows.size else filteredShows.size
+                            } else {
+                                uiState.showTotalCount ?: if (uiState.showsLoaded) filteredShows.size else 0
+                            }
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()

@@ -39,7 +39,7 @@ import retrofit2.Response
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class TraktRepositoryMarkOperationsTest {
 
     private lateinit var traktApiService: TraktApiService

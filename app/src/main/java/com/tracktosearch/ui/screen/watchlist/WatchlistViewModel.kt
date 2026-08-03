@@ -39,11 +39,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.Instant
 import javax.inject.Inject
 
 @Immutable
@@ -91,6 +93,8 @@ data class WatchlistUiState(
     val isLoadingShows: Boolean = false,
     val movies: List<MediaUiItem> = emptyList(),
     val shows: List<MediaUiItem> = emptyList(),
+    val movieTotalCount: Int? = null,
+    val showTotalCount: Int? = null,
     val moviesError: String? = null,
     val showsError: String? = null,
     val moviesLoaded: Boolean = false,
@@ -165,6 +169,7 @@ class WatchlistViewModel @Inject constructor(
     private var loadShowsJob: Job? = null
     private var loadHistoryMoviesJob: Job? = null
     private var loadHistoryShowsJob: Job? = null
+    private val pendingWatchlistMutations = mutableListOf<TraktRepository.WatchlistMutation>()
 
     /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
     private val _syncCompleteEvent = MutableSharedFlow<Unit>()
@@ -291,6 +296,13 @@ class WatchlistViewModel @Inject constructor(
         // 检查首次同步引导
         checkFirstSyncNeeded()
         refreshDoubanEmptyState()
+        // 详情页可能在 Watchlist 首次加载完成前就标记，先暂存单条变更，待对应列表加载后应用。
+        viewModelScope.launch {
+            traktRepository.watchlistMutations.collect { mutation ->
+                pendingWatchlistMutations += mutation
+                applyPendingWatchlistMutations()
+            }
+        }
         // 监听豆瓣同步进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
         viewModelScope.launch {
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
@@ -365,9 +377,11 @@ class WatchlistViewModel @Inject constructor(
     fun loadMovies(
         forceReload: Boolean = false,
         silent: Boolean = false,
-        loadAllPages: Boolean = false
+        loadAllPages: Boolean = false,
+        loadMore: Boolean = false
     ) {
-        if (!forceReload && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
+        if (loadMore && (!_uiState.value.moviesLoaded || !_uiState.value.hasMoreMovies)) return
+        if (!forceReload && !loadMore && _uiState.value.moviesLoaded && _uiState.value.movies.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingMovies) return  // 防止并发重复请求
@@ -379,21 +393,23 @@ class WatchlistViewModel @Inject constructor(
                 return@launch
             }
             _uiState.value = _uiState.value.copy(
-                isLoadingMovies = !silent,
+                isLoadingMovies = if (loadMore || !silent) true else _uiState.value.isLoadingMovies,
                 moviesError = if (silent) _uiState.value.moviesError else null
             )
             val result = retryIO(maxRetries) { traktRepository.getMovieWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
+                val totalCount = traktRepository.getMovieWatchlistTotalCount(page, 200) ?: rawItems.size
                 // 过滤掉本地已标记已看但不在想看缓存中的电影（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.MOVIE)
                 val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.movie.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload && page == 1) {
-                    val newIds = items.map { it.movie.ids.trakt }.toSet()
-                    val oldIds = _uiState.value.movies.map { it.traktId }.toSet()
-                    if (newIds == oldIds && items.size == _uiState.value.movies.size) {
+                    val newSignature = items.map { it.movie.ids.trakt to it.listed_at }
+                    val oldSignature = _uiState.value.movies.map { it.traktId to it.listedAt }
+                    if (newSignature == oldSignature) {
                         _uiState.value = _uiState.value.copy(
-                            isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
+                            movieTotalCount = totalCount,
+                            isLoadingMovies = false,
                             hasMoreMovies = _uiState.value.moviePage < totalPages,
                             moviePage = page + 1
                         )
@@ -435,14 +451,16 @@ class WatchlistViewModel @Inject constructor(
                     uiItems
                 } else {
                     (_uiState.value.movies + uiItems).distinctBy { it.selectionKey }
-                }
+                }.sortedByDescending { it.listedAt }
                 _uiState.value = _uiState.value.copy(
                     movies = mergedMovies,
-                    isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
+                    movieTotalCount = totalCount,
+                    isLoadingMovies = false,
                     moviesLoaded = true,
                     hasMoreMovies = page < totalPages,
                     moviePage = page + 1
                 )
+                applyPendingWatchlistMutations(MediaType.MOVIE)
                 if (loadAllPages && page < totalPages) {
                     loadMovies(forceReload = true, silent = true, loadAllPages = true)
                 }
@@ -450,9 +468,10 @@ class WatchlistViewModel @Inject constructor(
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_MOVIE)
                 _uiState.value = _uiState.value.copy(
-                    isLoadingMovies = if (silent) _uiState.value.isLoadingMovies else false,
+                    isLoadingMovies = false,
                     moviesLoaded = true,
                     movies = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.movies,
+                    movieTotalCount = _uiState.value.movieTotalCount ?: cached.size.takeIf { it > 0 },
                     moviesError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
@@ -462,9 +481,11 @@ class WatchlistViewModel @Inject constructor(
     fun loadShows(
         forceReload: Boolean = false,
         silent: Boolean = false,
-        loadAllPages: Boolean = false
+        loadAllPages: Boolean = false,
+        loadMore: Boolean = false
     ) {
-        if (!forceReload && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
+        if (loadMore && (!_uiState.value.showsLoaded || !_uiState.value.hasMoreShows)) return
+        if (!forceReload && !loadMore && _uiState.value.showsLoaded && _uiState.value.shows.isNotEmpty()) {
             return
         }
         if (_uiState.value.isLoadingShows) return  // 防止并发重复请求
@@ -476,21 +497,23 @@ class WatchlistViewModel @Inject constructor(
                 return@launch
             }
             _uiState.value = _uiState.value.copy(
-                isLoadingShows = !silent,
+                isLoadingShows = if (loadMore || !silent) true else _uiState.value.isLoadingShows,
                 showsError = if (silent) _uiState.value.showsError else null
             )
             val result = retryIO(maxRetries) { traktRepository.getShowWatchlist(page = page, limit = 200, forceRefresh = forceReload) }
             result.onSuccess { (rawItems, totalPages) ->
+                val totalCount = traktRepository.getShowWatchlistTotalCount(page, 200) ?: rawItems.size
                 // 过滤掉本地已标记已看但不在想看缓存中的剧集（处理标记已看后 Trakt API 最终一致性延迟）
                 val locallyWatchedIds = traktRepository.getLocallyWatchedOnlyTraktIds(MediaType.SHOW)
                 val items = if (locallyWatchedIds.isNotEmpty()) rawItems.filter { it.show.ids.trakt !in locallyWatchedIds } else rawItems
                 // 如果 forceReload 且数据与现有列表完全相同，跳过 TMDB 富化和 UI 更新
                 if (forceReload && page == 1) {
-                    val newIds = items.map { it.show.ids.trakt }.toSet()
-                    val oldIds = _uiState.value.shows.map { it.traktId }.toSet()
-                    if (newIds == oldIds && items.size == _uiState.value.shows.size) {
+                    val newSignature = items.map { it.show.ids.trakt to it.listed_at }
+                    val oldSignature = _uiState.value.shows.map { it.traktId to it.listedAt }
+                    if (newSignature == oldSignature) {
                         _uiState.value = _uiState.value.copy(
-                            isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
+                            showTotalCount = totalCount,
+                            isLoadingShows = false,
                             hasMoreShows = _uiState.value.showPage < totalPages,
                             showPage = page + 1
                         )
@@ -533,14 +556,16 @@ class WatchlistViewModel @Inject constructor(
                     uiItems
                 } else {
                     (_uiState.value.shows + uiItems).distinctBy { it.selectionKey }
-                }
+                }.sortedByDescending { it.listedAt }
                 _uiState.value = _uiState.value.copy(
                     shows = mergedShows,
-                    isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
+                    showTotalCount = totalCount,
+                    isLoadingShows = false,
                     showsLoaded = true,
                     hasMoreShows = page < totalPages,
                     showPage = page + 1
                 )
+                applyPendingWatchlistMutations(MediaType.SHOW)
                 if (loadAllPages && page < totalPages) {
                     loadShows(forceReload = true, silent = true, loadAllPages = true)
                 }
@@ -548,9 +573,10 @@ class WatchlistViewModel @Inject constructor(
                 // 从离线缓存读取
                 val cached = offlineCacheManager.getMediaItems(OfflineCacheManager.TYPE_WATCHLIST_SHOW)
                 _uiState.value = _uiState.value.copy(
-                    isLoadingShows = if (silent) _uiState.value.isLoadingShows else false,
+                    isLoadingShows = false,
                     showsLoaded = true,
                     shows = if (cached.isNotEmpty()) cached.map { it.toMediaUiItem() } else _uiState.value.shows,
+                    showTotalCount = _uiState.value.showTotalCount ?: cached.size.takeIf { it > 0 },
                     showsError = if (cached.isNotEmpty()) null else (e.message ?: context.getString(R.string.error_load_failed))
                 )
             }
@@ -850,11 +876,92 @@ class WatchlistViewModel @Inject constructor(
         }
     }
 
+    /** 列表滚动接近末尾时加载下一页，支持超过 Trakt 单页上限的 watchlist。 */
+    fun loadMoreMovies() {
+        loadMovies(silent = true, loadMore = true)
+    }
+
+    /** 列表滚动接近末尾时加载下一页，支持超过 Trakt 单页上限的电视剧 watchlist。 */
+    fun loadMoreShows() {
+        loadShows(silent = true, loadMore = true)
+    }
+
     /** Watchlist Tab 从其他页面重新可见时刷新已加载的想看列表。 */
     fun onWatchlistTabVisible() {
-        if (_uiState.value.moviesLoaded || _uiState.value.showsLoaded) {
-            refreshWatchlist()
+        applyPendingWatchlistMutations()
+    }
+
+    /** 应用详情页产生的单条变更，避免返回 Watchlist 时重新请求完整 Trakt 列表。 */
+    private fun applyPendingWatchlistMutations(type: MediaType? = null) {
+        if (pendingWatchlistMutations.isEmpty()) return
+        val remaining = mutableListOf<TraktRepository.WatchlistMutation>()
+        pendingWatchlistMutations.forEach { mutation ->
+            if (type != null && mutation.mediaType != type) {
+                remaining += mutation
+            } else if (!applyWatchlistMutation(mutation)) {
+                remaining += mutation
+            }
         }
+        pendingWatchlistMutations.clear()
+        pendingWatchlistMutations += remaining
+    }
+
+    private fun applyWatchlistMutation(mutation: TraktRepository.WatchlistMutation): Boolean {
+        val state = _uiState.value
+        val isMovie = mutation.mediaType == MediaType.MOVIE
+        val loaded = if (isMovie) state.moviesLoaded else state.showsLoaded
+        if (!loaded) return false
+
+        val currentItems = if (isMovie) state.movies else state.shows
+        val existing = currentItems.any { it.traktId == mutation.traktId }
+        val updatedItems = when (mutation.action) {
+            TraktRepository.WatchlistMutationAction.ADD -> {
+                (currentItems.filter { it.traktId != mutation.traktId } + mutation.toMediaUiItem())
+                    .sortedByDescending { it.listedAt }
+            }
+            TraktRepository.WatchlistMutationAction.REMOVE -> {
+                currentItems.filter { it.traktId != mutation.traktId }
+            }
+        }
+        val updatedState = if (isMovie) {
+            state.copy(
+                movies = updatedItems,
+                movieTotalCount = when (mutation.action) {
+                    TraktRepository.WatchlistMutationAction.ADD ->
+                        if (existing) state.movieTotalCount else (state.movieTotalCount ?: currentItems.size) + 1
+                    TraktRepository.WatchlistMutationAction.REMOVE ->
+                        (state.movieTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
+                }
+            )
+        } else {
+            state.copy(
+                shows = updatedItems,
+                showTotalCount = when (mutation.action) {
+                    TraktRepository.WatchlistMutationAction.ADD ->
+                        if (existing) state.showTotalCount else (state.showTotalCount ?: currentItems.size) + 1
+                    TraktRepository.WatchlistMutationAction.REMOVE ->
+                        (state.showTotalCount ?: currentItems.size).minus(if (existing) 1 else 0).coerceAtLeast(0)
+                }
+            )
+        }
+        _uiState.value = updatedState
+        return true
+    }
+
+    private fun TraktRepository.WatchlistMutation.toMediaUiItem(): MediaUiItem {
+        val listedAt = Instant.ofEpochMilli(actedAt).toString()
+        return MediaUiItem(
+            traktId = traktId,
+            tmdbId = tmdbId,
+            title = title,
+            displayTitle = displayTitle.ifBlank { title },
+            year = year,
+            genres = genres,
+            posterUrl = posterUrl,
+            imdbId = imdbId,
+            traktRating = traktRating,
+            listedAt = listedAt
+        )
     }
 
     /** 仅刷新已看历史（从详情页标记已看后调用） */

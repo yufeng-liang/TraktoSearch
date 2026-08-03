@@ -1728,6 +1728,7 @@ class DetailViewModel @Inject constructor(
                             isMarkedWatchlist = true,
                             isMarkingWatched = false
                         )
+                        publishWatchlistMutation(TraktRepository.WatchlistMutationAction.ADD)
                         saveToCache()
                         // 豆瓣双向同步:取消已看→豆瓣标记想看(加回 wish)
                         syncDoubanMark(DoubanSyncAction.REMOVE_COLLECT)
@@ -1763,6 +1764,7 @@ class DetailViewModel @Inject constructor(
                         // 延迟豆瓣同步:等打分弹窗确认后一次性传看过+评分+短评
                         pendingDoubanAction = DoubanSyncAction.COLLECT
                     )
+                    publishWatchlistMutation(TraktRepository.WatchlistMutationAction.REMOVE)
                     saveToCache()
                 }
                 .onFailure {
@@ -1846,7 +1848,8 @@ class DetailViewModel @Inject constructor(
         _uiState.value = current.copy(
             isMarkingWatchlist = true,
             isMarkingWatched = willChangeWatched,
-            watchlistChanged = targetState || current.watchlistChanged,
+            // 添加和移除都必须通知上级详情页和 Watchlist 页刷新
+            watchlistChanged = true,
             watchedChanged = willChangeWatched || current.watchedChanged
         )
 
@@ -1863,6 +1866,10 @@ class DetailViewModel @Inject constructor(
                     isMarkedWatched = if (willChangeWatched) false else _uiState.value.isMarkedWatched,
                     isMarkingWatchlist = false,
                     isMarkingWatched = false
+                )
+                publishWatchlistMutation(
+                    if (targetState) TraktRepository.WatchlistMutationAction.ADD
+                    else TraktRepository.WatchlistMutationAction.REMOVE
                 )
                 saveToCache()
                 // 豆瓣双向同步:标记想看→豆瓣 wish,取消想看→豆瓣 remove
@@ -2313,6 +2320,26 @@ class DetailViewModel @Inject constructor(
                 ep.copy(title = localTitle)
             } else ep
         }
+    }
+
+    /** 将详情页已经成功的标记操作发布给 Watchlist，列表页只更新这一条。 */
+    private fun publishWatchlistMutation(action: TraktRepository.WatchlistMutationAction) {
+        val state = _uiState.value
+        traktRepository.publishWatchlistMutation(
+            TraktRepository.WatchlistMutation(
+                action = action,
+                traktId = currentTraktId,
+                tmdbId = currentTmdbId,
+                mediaType = currentMediaType,
+                title = currentTitle,
+                displayTitle = state.displayTitle,
+                year = state.year,
+                genres = state.genres,
+                posterUrl = state.posterUrl,
+                imdbId = currentImdbId,
+                traktRating = currentTraktRating
+            )
+        )
     }
 
     private fun saveToCache() {

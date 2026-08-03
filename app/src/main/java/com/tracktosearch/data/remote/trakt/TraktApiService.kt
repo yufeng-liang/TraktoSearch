@@ -5,17 +5,17 @@ import retrofit2.Response
 import retrofit2.http.*
 
 interface TraktApiService {
-    @GET("sync/watchlist")
+    @GET("sync/watchlist/{type}/added/desc")
     suspend fun getWatchlist(
-        @Query("type") type: String,
+        @Path("type") type: String,
         @Query("extended") extended: String = "full",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
     ): Response<List<TraktWatchlistMovieItem>>
 
-    @GET("sync/watchlist")
+    @GET("sync/watchlist/{type}/added/desc")
     suspend fun getShowWatchlist(
-        @Query("type") type: String = "shows",
+        @Path("type") type: String = "shows",
         @Query("extended") extended: String = "full",
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 50
