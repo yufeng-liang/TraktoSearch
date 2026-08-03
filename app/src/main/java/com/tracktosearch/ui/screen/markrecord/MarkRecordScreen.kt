@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
+import com.tracktosearch.ui.component.NeumorphicIconButton
 import com.tracktosearch.ui.component.ScrollToTopButton
 import com.tracktosearch.ui.component.hazeTopBar
 import com.tracktosearch.ui.component.isAppDarkTheme
@@ -262,8 +263,16 @@ fun MarkRecordScreen(
                                 imeAction = ImeAction.Search
                             )
                         )
-                        IconButton(onClick = { showFilterSheet = true }) {
-                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        NeumorphicIconButton(
+                            onClick = { showFilterSheet = true },
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
+                        ) {
+                            Icon(
+                                Icons.Rounded.FilterList,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     } else {
                         IconButton(onClick = onBack) {
@@ -281,11 +290,27 @@ fun MarkRecordScreen(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                         )
-                        IconButton(onClick = { searchExpanded = true }) {
-                            Icon(Icons.Rounded.Search, contentDescription = null)
+                        NeumorphicIconButton(
+                            onClick = { searchExpanded = true },
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
+                        ) {
+                            Icon(
+                                Icons.Rounded.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        IconButton(onClick = { showFilterSheet = true }) {
-                            Icon(Icons.Rounded.FilterList, contentDescription = null)
+                        NeumorphicIconButton(
+                            onClick = { showFilterSheet = true },
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
+                        ) {
+                            Icon(
+                                Icons.Rounded.FilterList,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }

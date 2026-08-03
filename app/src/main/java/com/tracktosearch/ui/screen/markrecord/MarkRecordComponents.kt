@@ -219,10 +219,10 @@ fun MarkRecordItemRow(
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(Modifier.height(4.dp))
-                    // 操作胶囊（右对齐）
+                    // 操作胶囊（左对齐）
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.Start
                     ) {
                         ActionTypeChip(item.actionType)
                     }
