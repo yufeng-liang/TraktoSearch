@@ -54,7 +54,7 @@ import org.robolectric.annotation.Config
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class DetailViewModelTest {
 
     @get:Rule
@@ -314,6 +314,7 @@ class DetailViewModelTest {
 
         assertThat(viewModel.uiState.value.isMarkedWatchlist).isFalse()
         assertThat(viewModel.uiState.value.isMarkingWatchlist).isFalse()
+        assertThat(viewModel.uiState.value.watchlistChanged).isTrue()
     }
 
     /**

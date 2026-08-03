@@ -24,7 +24,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -109,6 +112,38 @@ class TraktRepository @Inject constructor(
             val movieConflicts = movieWatchlistTraktIds intersect movieWatchedTraktIds
             val showConflicts = showWatchlistTraktIds intersect showWatchedTraktIds
             return movieConflicts to showConflicts
+        }
+    }
+
+    enum class WatchlistMutationAction { ADD, REMOVE }
+
+    /** 详情页标记成功后的单条想看变更，供 Watchlist 在跨页面返回时立即应用。 */
+    data class WatchlistMutation(
+        val action: WatchlistMutationAction,
+        val traktId: Int,
+        val tmdbId: Int,
+        val mediaType: MediaType,
+        val title: String,
+        val displayTitle: String,
+        val year: Int?,
+        val genres: String,
+        val posterUrl: String?,
+        val imdbId: String,
+        val traktRating: Double,
+        val actedAt: Long = System.currentTimeMillis()
+    )
+
+    private val _watchlistMutations = MutableSharedFlow<WatchlistMutation>(
+        replay = 32,
+        extraBufferCapacity = 32,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val watchlistMutations = _watchlistMutations.asSharedFlow()
+
+    /** 发布一次已成功落到 Trakt 的单条想看变更，不触发全量 watchlist 请求。 */
+    fun publishWatchlistMutation(mutation: WatchlistMutation) {
+        if (mutation.traktId > 0 && mutation.mediaType in setOf(MediaType.MOVIE, MediaType.SHOW)) {
+            _watchlistMutations.tryEmit(mutation)
         }
     }
 
@@ -222,6 +257,8 @@ class TraktRepository @Inject constructor(
         userStatsCache.clear()
         movieWatchlistCache.clear()
         showWatchlistCache.clear()
+        movieWatchlistTotalCountCache.clear()
+        showWatchlistTotalCountCache.clear()
         watchHistoryCache.clear()
         // 清除负缓存，避免下一用户继承上一用户的"未找到"标记
         notFoundTmdbIds.clear()
@@ -462,6 +499,9 @@ class TraktRepository @Inject constructor(
     // Watchlist 首页缓存：splash 预取的结果供 MainScreen 复用，避免重复请求
     private val movieWatchlistCache = TtlCache<Pair<List<TraktWatchlistMovieItem>, Int>>(TTL_STATS, maxSize = 5)
     private val showWatchlistCache = TtlCache<Pair<List<TraktWatchlistShowItem>, Int>>(TTL_STATS, maxSize = 5)
+    // 与页缓存绑定的服务端总条数，不能用当前页 items.size 代替
+    private val movieWatchlistTotalCountCache = TtlCache<Int>(TTL_STATS, maxSize = 5)
+    private val showWatchlistTotalCountCache = TtlCache<Int>(TTL_STATS, maxSize = 5)
     // 已看历史分页缓存（fetchWatchHistory 用，1 小时 TTL）
     private val watchHistoryCache = TtlCache<WatchHistoryPage>(TTL_WATCH_HISTORY, maxSize = 10)
 
@@ -590,6 +630,8 @@ class TraktRepository @Inject constructor(
                 if (response.isSuccessful) {
                     val items = response.body() ?: emptyList()
                     val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                    val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
+                    movieWatchlistTotalCountCache.put(cacheKey, totalCount)
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch movie watchlist: ${response.code()}")
@@ -611,6 +653,8 @@ class TraktRepository @Inject constructor(
                 if (response.isSuccessful) {
                     val items = response.body() ?: emptyList()
                     val totalPages = response.headers()["X-Pagination-Page-Count"]?.toIntOrNull() ?: 1
+                    val totalCount = response.headers()["X-Pagination-Item-Count"]?.toIntOrNull() ?: items.size
+                    showWatchlistTotalCountCache.put(cacheKey, totalCount)
                     Pair(items, totalPages)
                 } else {
                     throw Exception("Failed to fetch show watchlist: ${response.code()}")
@@ -618,6 +662,14 @@ class TraktRepository @Inject constructor(
             }
         }
     }
+
+    /** 返回最近一次成功获取的电影 watchlist 服务端总条数。 */
+    fun getMovieWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
+        movieWatchlistTotalCountCache.get("p${page}_$limit")
+
+    /** 返回最近一次成功获取的电视剧 watchlist 服务端总条数。 */
+    fun getShowWatchlistTotalCount(page: Int = 1, limit: Int = 50): Int? =
+        showWatchlistTotalCountCache.get("p${page}_$limit")
 
     suspend fun getMovieHistory(page: Int = 1, limit: Int = 200, extended: String = "full"): Result<Pair<List<TraktWatchlistMovieItem>, Int>> {
         return try {
@@ -877,6 +929,7 @@ class TraktRepository @Inject constructor(
                 if (showTraktId > 0) {
                     addToWatchedCache(showTraktId, showTmdbId, MediaType.SHOW)
                     showWatchlistCache.clear()
+                    showWatchlistTotalCountCache.clear()
                 }
                 Result.success(Unit)
             } else {
@@ -1154,6 +1207,8 @@ class TraktRepository @Inject constructor(
                 // 失效想看列表缓存，确保下次刷新获取最新数据（副操作 removeFromWatchlist 已改变服务端数据）
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                movieWatchlistTotalCountCache.clear()
+                showWatchlistTotalCountCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("Failed to mark as watched: ${response.code()}"))
@@ -1190,6 +1245,8 @@ class TraktRepository @Inject constructor(
                 showHistoryCache.clear()
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                movieWatchlistTotalCountCache.clear()
+                showWatchlistTotalCountCache.clear()
                 // 写入标记操作流水（取消已看）
                 insertMarkRecord(traktId, tmdbId, type, MarkActionType.UNMARK_WATCHED)
                 Result.success(response.body() ?: TraktSyncResponse())
@@ -1436,6 +1493,8 @@ class TraktRepository @Inject constructor(
                 // 失效想看列表和已看历史缓存，确保下次刷新获取最新数据
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                movieWatchlistTotalCountCache.clear()
+                showWatchlistTotalCountCache.clear()
                 movieHistoryCache.clear()
                 showHistoryCache.clear()
                 // 写入标记操作流水（异步，失败不影响主操作）
@@ -1466,6 +1525,8 @@ class TraktRepository @Inject constructor(
                 // 失效想看列表缓存，确保下次刷新获取最新数据
                 movieWatchlistCache.clear()
                 showWatchlistCache.clear()
+                movieWatchlistTotalCountCache.clear()
+                showWatchlistTotalCountCache.clear()
                 // 写入标记操作流水
                 insertMarkRecord(traktId, tmdbId, type, MarkActionType.REMOVE_WATCHLIST)
                 Result.success(response.body() ?: TraktSyncResponse())
@@ -1530,6 +1591,13 @@ class TraktRepository @Inject constructor(
             if (response.isSuccessful) {
                 movieTraktIds.forEach { cacheUpdate(it, 0, MediaType.MOVIE) }
                 showTraktIds.forEach { cacheUpdate(it, 0, MediaType.SHOW) }
+                // 批量状态变更可能同时影响 watchlist 和 history，统一失效页缓存与总数
+                movieWatchlistCache.clear()
+                showWatchlistCache.clear()
+                movieWatchlistTotalCountCache.clear()
+                showWatchlistTotalCountCache.clear()
+                movieHistoryCache.clear()
+                showHistoryCache.clear()
                 Result.success(response.body() ?: TraktSyncResponse())
             } else {
                 Result.failure(Exception("$errorLabel failed: ${response.code()}"))

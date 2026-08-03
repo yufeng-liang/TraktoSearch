@@ -36,6 +36,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -92,6 +93,7 @@ class WatchlistViewModelTest {
     private val syncProgressFlow = MutableStateFlow(DoubanSyncProgress())
     private val consistencyProgressFlow = MutableStateFlow(ConsistencyCheckResult())
     private val batchRemovalProgressFlow = MutableStateFlow(BatchRemovalProgress())
+    private val watchlistMutationFlow = MutableSharedFlow<TraktRepository.WatchlistMutation>(extraBufferCapacity = 8)
 
     @Before
     fun setup() {
@@ -118,6 +120,7 @@ class WatchlistViewModelTest {
         every { sessionModeManager.sessionMode } returns MutableStateFlow(SessionMode.GUEST)
         every { doubanAuthStorage.isLoggedIn } returns MutableStateFlow(false)
         every { doubanAuthStorage.getCredentials() } returns null
+        every { traktRepository.watchlistMutations } returns watchlistMutationFlow
         coEvery { doubanSyncMetaStorage.getCooldownStatus(any()) } returns CooldownStatus(neverSynced = false)
         coEvery { doubanSyncFailureDao.count() } returns 0
 
@@ -171,6 +174,51 @@ class WatchlistViewModelTest {
     )
 
     @Test
+    fun `loadWatchlist_uses_server_total_count`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1)) to 2)
+        coEvery { traktRepository.getShowWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistShow(2)) to 1)
+        every { traktRepository.getMovieWatchlistTotalCount(1, 200) } returns 237
+        every { traktRepository.getShowWatchlistTotalCount(1, 200) } returns 19
+
+        viewModel.loadMovies()
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(237)
+        assertThat(viewModel.uiState.value.showTotalCount).isEqualTo(19)
+    }
+
+    @Test
+    fun `loadMoreWatchlist_电影和电视剧跨页并按最新标记在前`() = runTest {
+        val oldMovie = makeWatchlistMovie(1).copy(listed_at = "2024-01-01T00:00:00Z")
+        val newMovie = makeWatchlistMovie(2).copy(listed_at = "2024-02-01T00:00:00Z")
+        val oldShow = makeWatchlistShow(3).copy(listed_at = "2024-01-01T00:00:00Z")
+        val newShow = makeWatchlistShow(4).copy(listed_at = "2024-02-01T00:00:00Z")
+        coEvery { traktRepository.getMovieWatchlist(1, 200, any()) } returns Result.success(listOf(oldMovie) to 2)
+        coEvery { traktRepository.getMovieWatchlist(2, 200, any()) } returns Result.success(listOf(newMovie) to 2)
+        coEvery { traktRepository.getShowWatchlist(1, 200, any()) } returns Result.success(listOf(oldShow) to 2)
+        coEvery { traktRepository.getShowWatchlist(2, 200, any()) } returns Result.success(listOf(newShow) to 2)
+        every { traktRepository.getMovieWatchlistTotalCount(any(), 200) } returns 201
+        every { traktRepository.getShowWatchlistTotalCount(any(), 200) } returns 201
+
+        viewModel.loadMovies()
+        viewModel.loadShows()
+        advanceUntilIdle()
+        viewModel.loadMoreMovies()
+        viewModel.loadMoreShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(2, 1).inOrder()
+        assertThat(viewModel.uiState.value.shows.map { it.traktId }).containsExactly(4, 3).inOrder()
+        assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(201)
+        assertThat(viewModel.uiState.value.showTotalCount).isEqualTo(201)
+        assertThat(viewModel.uiState.value.hasMoreMovies).isFalse()
+        assertThat(viewModel.uiState.value.hasMoreShows).isFalse()
+    }
+
+    @Test
     fun `loadMovies_成功加载电影列表`() = runTest {
         coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
             Result.success(listOf(makeWatchlistMovie(1)) to 1)
@@ -217,6 +265,40 @@ class WatchlistViewModelTest {
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.isLoadingMovies).isFalse()
+    }
+
+    @Test
+    fun `loadMoreMovies_page failure releases loading state`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(1, 200, any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1)) to 2)
+        viewModel.loadMovies()
+        advanceUntilIdle()
+
+        coEvery { traktRepository.getMovieWatchlist(2, 200, any()) } returns
+            Result.failure(IOException("page 2 failed"))
+        viewModel.loadMoreMovies()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isLoadingMovies).isFalse()
+        assertThat(viewModel.uiState.value.movies).hasSize(1)
+        assertThat(viewModel.uiState.value.hasMoreMovies).isTrue()
+    }
+
+    @Test
+    fun `loadMoreShows_page failure releases loading state`() = runTest {
+        coEvery { traktRepository.getShowWatchlist(1, 200, any()) } returns
+            Result.success(listOf(makeWatchlistShow(1)) to 2)
+        viewModel.loadShows()
+        advanceUntilIdle()
+
+        coEvery { traktRepository.getShowWatchlist(2, 200, any()) } returns
+            Result.failure(IOException("page 2 failed"))
+        viewModel.loadMoreShows()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.isLoadingShows).isFalse()
+        assertThat(viewModel.uiState.value.shows).hasSize(1)
+        assertThat(viewModel.uiState.value.hasMoreShows).isTrue()
     }
 
     @Test
@@ -318,20 +400,13 @@ class WatchlistViewModelTest {
         advanceUntilIdle()
         assertThat(viewModel.uiState.value.movies.map { it.traktId }).containsExactly(1)
 
-        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
-            Result.success(
-                listOf(
-                    makeWatchlistMovie(2, title = "New Movie"),
-                    makeWatchlistMovie(1, title = "Old Movie")
-                ) to 1
-            )
-
         viewModel.onWatchlistTabVisible()
         advanceUntilIdle()
 
         assertThat(viewModel.uiState.value.movies.map { it.traktId })
-            .containsExactly(2, 1)
+            .containsExactly(1)
             .inOrder()
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
 
     @Test
@@ -703,5 +778,71 @@ class WatchlistViewModelTest {
         val finalMovies = statesWithEnrichedMovies.single().movies
         assertThat(finalMovies).hasSize(2)
         assertThat(finalMovies.all { it.posterUrl != null }).isTrue()
+    }
+
+    @Test
+    fun `refreshWatchlist_同一批条目加入时间变化时仍重新排序`() = runTest {
+        val firstLoad = listOf(
+            makeWatchlistMovie(1).copy(listed_at = "2024-01-01T00:00:00Z"),
+            makeWatchlistMovie(2).copy(listed_at = "2024-02-01T00:00:00Z")
+        )
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(firstLoad to 1)
+
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(2, 1)
+            .inOrder()
+
+        val refreshed = listOf(
+            firstLoad[0].copy(listed_at = "2024-03-01T00:00:00Z"),
+            firstLoad[1]
+        )
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(refreshed to 1)
+
+        viewModel.refreshWatchlist()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(1, 2)
+            .inOrder()
+    }
+
+    @Test
+    fun `详情页想看变更流会立即更新列表而不重新请求Trakt`() = runTest {
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(listOf(makeWatchlistMovie(1, title = "Old Movie")) to 1)
+
+        every { traktRepository.getMovieWatchlistTotalCount(any(), 200) } returns 1
+        viewModel.loadMovies()
+        advanceUntilIdle()
+        coEvery { traktRepository.getMovieWatchlist(any(), any(), any()) } returns
+            Result.success(emptyList<TraktWatchlistMovieItem>() to 1)
+
+        watchlistMutationFlow.emit(
+            TraktRepository.WatchlistMutation(
+                action = TraktRepository.WatchlistMutationAction.ADD,
+                traktId = 2,
+                tmdbId = 0,
+                mediaType = MediaType.MOVIE,
+                title = "New Movie",
+                displayTitle = "New Movie",
+                year = 2025,
+                genres = "Drama",
+                posterUrl = null,
+                imdbId = "tt2",
+                traktRating = 8.0,
+                actedAt = 1_735_689_600_000
+            )
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.movies.map { it.traktId })
+            .containsExactly(2, 1)
+            .inOrder()
+        assertThat(viewModel.uiState.value.movieTotalCount).isEqualTo(2)
+        coVerify(exactly = 1) { traktRepository.getMovieWatchlist(any(), any(), any()) }
     }
 }

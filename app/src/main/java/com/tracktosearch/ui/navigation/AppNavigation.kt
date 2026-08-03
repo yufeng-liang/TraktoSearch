@@ -27,6 +27,7 @@ import android.widget.Toast
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -167,6 +168,30 @@ object Routes {
         val encodedProfileUrl = java.net.URLEncoder.encode(profileUrl, "UTF-8")
         return "person/$personId/$encodedName/$encodedProfileUrl"
     }
+}
+
+/** 将详情页产生的标记变更沿导航返回链传递给主页。 */
+private fun NavBackStackEntry.propagateMarkChangesTo(
+    target: NavBackStackEntry?,
+    watchlistChanged: Boolean = false,
+    watchedChanged: Boolean = false
+) {
+    val sourceWatchlistChanged = savedStateHandle.get<Boolean>("watchlist_changed") ?: false
+    val sourceWatchedChanged = savedStateHandle.get<Boolean>("watched_changed") ?: false
+    if (target != null) {
+        val targetWatchlistChanged = target.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
+        val targetWatchedChanged = target.savedStateHandle.get<Boolean>("watched_changed") ?: false
+        target.savedStateHandle.set(
+            "watchlist_changed",
+            targetWatchlistChanged || sourceWatchlistChanged || watchlistChanged
+        )
+        target.savedStateHandle.set(
+            "watched_changed",
+            targetWatchedChanged || sourceWatchedChanged || watchedChanged
+        )
+    }
+    savedStateHandle["watchlist_changed"] = false
+    savedStateHandle["watched_changed"] = false
 }
 
 class AuthStateHolder @Inject constructor(
@@ -399,7 +424,8 @@ fun AppNavigation(
                         val watchlistViewModel: WatchlistViewModel = hiltViewModel()
                         LaunchedEffect(watchlistChanged) {
                             if (watchlistChanged) {
-                                watchlistViewModel.refreshWatchlist()
+                                // 详情页的单条标记已由 TraktRepository 变更流同步到列表，返回时不再拉取完整 watchlist。
+                                watchlistViewModel.onWatchlistTabVisible()
                                 savedState.set("watchlist_changed", false)
                             }
                         }
@@ -614,12 +640,7 @@ fun AppNavigation(
                         // 同时检查从子详情页（推荐跳转）传递回来的变更标记
                         val previousEntry = navController.previousBackStackEntry
                         fun goBack(watchlistChanged: Boolean, watchedChanged: Boolean) {
-                            val childWatchlistChanged = backStackEntry.savedStateHandle.get<Boolean>("watchlist_changed") ?: false
-                            val childWatchedChanged = backStackEntry.savedStateHandle.get<Boolean>("watched_changed") ?: false
-                            previousEntry?.savedStateHandle?.set("watchlist_changed", watchlistChanged || childWatchlistChanged)
-                            previousEntry?.savedStateHandle?.set("watched_changed", watchedChanged || childWatchedChanged)
-                            backStackEntry.savedStateHandle["watchlist_changed"] = false
-                            backStackEntry.savedStateHandle["watched_changed"] = false
+                            backStackEntry.propagateMarkChangesTo(previousEntry, watchlistChanged, watchedChanged)
                             navController.popBackStack()
                         }
 
@@ -664,7 +685,10 @@ fun AppNavigation(
                         val keyword = backStackEntry.arguments?.getString("keyword") ?: ""
                         SearchScreen(
                             initialKeyword = keyword,
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
+                                navController.popBackStack()
+                            },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             }
@@ -693,7 +717,10 @@ fun AppNavigation(
                             personName = personName,
                             profileUrl = profileUrl,
                             avatarColor = null,
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
+                                navController.popBackStack()
+                            },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
                             },
@@ -717,7 +744,10 @@ fun AppNavigation(
                             backStackEntry.arguments?.getString("listName") ?: "", "UTF-8"
                         )
                         TraktListDetailScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
+                                navController.popBackStack()
+                            },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating, inWatchlist, isWatched))
                             },
@@ -754,12 +784,12 @@ fun AppNavigation(
                             else -> MediaType.MOVIE
                         }
 
-                        // 从详情页返回时通知想看列表刷新（Trakt搜索页本身不修改想看列表，不需要触发刷新）
-                        val previousEntry = navController.previousBackStackEntry
+                        // 从详情页返回时透传标记变更，继续返回主页时触发列表刷新
                         TraktSearchScreen(
                             initialQuery = query,
                             type = mediaType,
                             onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
                                 navController.popBackStack()
                             },
                             onItemClick = { type, traktId, tmdbId, title, imdbId, traktRating ->
@@ -784,10 +814,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.DISCOVER_FILTER) {
+                composable(Routes.DISCOVER_FILTER) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         DiscoverFilterScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
+                                navController.popBackStack()
+                            },
                             onMovieClick = { tmdbId, title ->
                                 val routeType = "movie"
                                 navController.navigate(Routes.detailRoute(routeType, 0, tmdbId, title))
@@ -869,10 +902,13 @@ fun AppNavigation(
                     }
                 }
 
-                composable(Routes.MARK_RECORDS) {
+                composable(Routes.MARK_RECORDS) { backStackEntry ->
                     CompositionLocalProvider(LocalAnimatedVisibilityScope provides this@composable) {
                         MarkRecordScreen(
-                            onBack = { navController.popBackStack() },
+                            onBack = {
+                                backStackEntry.propagateMarkChangesTo(navController.previousBackStackEntry)
+                                navController.popBackStack()
+                            },
                             onMovieClick = { traktId, tmdbId, title, imdbId, traktRating ->
                                 navController.navigate(Routes.detailRoute("movie", traktId, tmdbId, title, imdbId, traktRating))
                             },

@@ -17,6 +17,7 @@ import com.tracktosearch.data.remote.trakt.dto.TraktAvatar
 import com.tracktosearch.data.remote.trakt.dto.TraktUserImages
 import com.tracktosearch.data.remote.trakt.dto.TraktUserProfileResponse
 import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistMovieItem
+import com.tracktosearch.data.remote.trakt.dto.TraktWatchlistShowItem
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -44,7 +45,7 @@ import java.time.Instant
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33])
+@Config(sdk = [33], application = android.app.Application::class)
 class TraktRepositoryTest {
 
     private lateinit var traktApiService: TraktApiService
@@ -86,6 +87,23 @@ class TraktRepositoryTest {
             "X-Pagination-Page-Count", "1"
         )
         return Response.success(emptyList(), headers)
+    }
+
+    @Test
+    fun `getWatchlist_读取服务端电影和电视剧总条数`() = runTest {
+        coEvery { traktApiService.getWatchlist(any(), any(), any(), any()) } returns Response.success(
+            emptyList<TraktWatchlistMovieItem>(),
+            Headers.headersOf("X-Pagination-Item-Count", "237", "X-Pagination-Page-Count", "2")
+        )
+        coEvery { traktApiService.getShowWatchlist(any(), any(), any(), any()) } returns Response.success(
+            emptyList<TraktWatchlistShowItem>(),
+            Headers.headersOf("X-Pagination-Item-Count", "19", "X-Pagination-Page-Count", "1")
+        )
+
+        assertThat(repository.getMovieWatchlist(1, 200, forceRefresh = true).getOrThrow().second).isEqualTo(2)
+        assertThat(repository.getMovieWatchlistTotalCount(1, 200)).isEqualTo(237)
+        assertThat(repository.getShowWatchlist(1, 200, forceRefresh = true).getOrThrow().second).isEqualTo(1)
+        assertThat(repository.getShowWatchlistTotalCount(1, 200)).isEqualTo(19)
     }
 
     @Test
