@@ -319,6 +319,7 @@ fun NeumorphicIconButton(
     hazeState: HazeState? = null,
     hazeStyle: HazeBlurStyle? = null,
     enabled: Boolean = true,
+    lightBorderAlpha: Float = 0.55f,
     content: @Composable () -> Unit
 ) {
     val shape = CircleShape
@@ -356,7 +357,7 @@ fun NeumorphicIconButton(
             )
             .border(
                 width = 1.dp,
-                color = if (isDark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+                color = if (isDark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outline.copy(alpha = lightBorderAlpha),
                 shape = shape
             )
             .clickable(

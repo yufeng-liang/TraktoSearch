@@ -953,7 +953,8 @@ fun SettingsScreen(
                         Spacer(Modifier.weight(1f))
                         NeumorphicIconButton(
                             onClick = onMessagesClick,
-                            isDark = isDark
+                            isDark = isDark,
+                            lightBorderAlpha = 0.35f
                         ) {
                             BadgedBox(badge = { if (unreadCount > 0) { Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) } } }) {
                                 Icon(imageVector = Icons.Rounded.Email, contentDescription = stringResource(R.string.feedback_messages), modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)

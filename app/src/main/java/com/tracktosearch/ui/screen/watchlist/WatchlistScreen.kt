@@ -874,7 +874,8 @@ fun WatchlistScreen(
                                 // 拟态玻璃筛选按钮
                                 NeumorphicIconButton(
                                     onClick = { showFilterSheet = true },
-                                    isDark = isDark
+                                    isDark = isDark,
+                                    lightBorderAlpha = 0.35f
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Tune,
