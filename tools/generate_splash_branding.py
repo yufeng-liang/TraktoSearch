@@ -176,7 +176,7 @@ def main():
 
     draw_spaced_text(td, (94, 94), "PERSONAL CINEMA ACCESS", font(MONO, 39),
                      CLAY_DARK, 7.8)
-    draw_spaced_text(td, (94, 142), "从观影清单到网盘资源", font(CHINESE, 66, variation="Bold"),
+    draw_spaced_text(td, (94, 142), "从想看到找到，再到看过", font(CHINESE, 66, variation="Bold"),
                      INK, 1.95)
     draw_spaced_text(td, (94, 235), "TRAKT · WATCHLIST · SCREENING PASS", font(MONO, 33),
                      MUTED, 2.7)
