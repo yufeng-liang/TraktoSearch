@@ -4,6 +4,7 @@
     "private": true,
     "scripts": {
         "typecheck": "tsc -p tsconfig.json",
+        "test": "node --experimental-strip-types --test test/translate.test.ts",
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
         "migration:local": "wrangler d1 execute auth-db --local --file",

@@ -259,6 +259,20 @@ class DetailViewModelSupplementTest {
     }
 
     @Test
+    fun translateComments_返回原文时不标记为已翻译() = runTest {
+        val comment = TraktComment(id = 1, comment = "test")
+        setUiState { it.copy(comments = listOf(comment)) }
+        every { commentTranslator.translateCommentsFlow(listOf(comment)) } returns
+            flowOf(0 to comment)
+
+        viewModel.translateComments()
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.translatedComments).isEmpty()
+        assertThat(viewModel.uiState.value.isTranslating).isFalse()
+    }
+
+    @Test
     fun translateComments_异常时isTranslating置false() = runTest {
         setUiState { it.copy(comments = listOf(TraktComment(id = 1, comment = "test"))) }
         // 用 flow {} 构造在 collect 时抛异常的 Flow
@@ -308,6 +322,19 @@ class DetailViewModelSupplementTest {
 
         assertThat(viewModel.uiState.value.translatedComments).hasSize(1)
         assertThat(viewModel.uiState.value.translatedComments[0].comment).isEqualTo("测试")
+        assertThat(viewModel.uiState.value.translatingCommentId).isNull()
+    }
+
+    @Test
+    fun translateSingleComment_返回原文时不标记为已翻译() = runTest {
+        val comment = TraktComment(id = 1, comment = "test")
+        setUiState { it.copy(comments = listOf(comment)) }
+        coEvery { commentTranslator.translateSingleComment(comment) } returns comment
+
+        viewModel.translateSingleComment(1)
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.translatedComments).isEmpty()
         assertThat(viewModel.uiState.value.translatingCommentId).isNull()
     }
 

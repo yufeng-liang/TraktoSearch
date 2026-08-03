@@ -258,7 +258,7 @@ async function handleAuthApi(
         return handleGithubProxy(request, env, path);
     }
     if (path.startsWith('/api/translate/')) {
-        return handleTranslateProxy(request, env, path);
+        return handleTranslateProxy(request, env, path, ctx);
     }
     if (path === '/api/crash-logs' && request.method === 'POST') {
         return handleCrashLogProxy(request, env);

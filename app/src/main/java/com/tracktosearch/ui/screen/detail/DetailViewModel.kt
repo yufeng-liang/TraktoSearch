@@ -716,7 +716,10 @@ class DetailViewModel @Inject constructor(
             var completed = 0
             try {
                 commentTranslator.translateCommentsFlow(comments).collect { (index, translated) ->
-                    results[index] = translated
+                    val original = comments.getOrNull(index)
+                    if (original == null || original.comment != translated.comment) {
+                        results[index] = translated
+                    }
                     completed++
                     // 当前已完成的译文列表（保持原顺序，跳过未完成的 null）
                     val current = results.mapNotNull { it }
@@ -749,9 +752,10 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val translated = commentTranslator.translateSingleComment(comment)
-                val updated = _uiState.value.translatedComments.toMutableList().apply { add(translated) }.toList()
+                val updated = _uiState.value.translatedComments.toMutableList()
+                if (translated.comment != comment.comment) updated.add(translated)
                 _uiState.value = _uiState.value.copy(
-                    translatedComments = updated,
+                    translatedComments = updated.toList(),
                     translatingCommentId = null
                 )
             } catch (e: Exception) {

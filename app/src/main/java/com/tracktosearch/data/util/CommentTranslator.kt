@@ -14,7 +14,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,8 +25,6 @@ import javax.inject.Singleton
 class CommentTranslator @Inject constructor(
     private val translateApi: TranslateApiService,
 ) {
-
-    private val jsonDecoder = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
 
     // 翻译结果缓存（相同评论的翻译不会变，LRU 限制 200 条防内存增长）
     private val translationCache = android.util.LruCache<Int, String>(200)
@@ -157,13 +157,7 @@ class CommentTranslator @Inject constructor(
                 TranslateRequest(q = text, from = "en", to = targetLang, reference = TRANSLATION_CONTEXT)
             )
             val json = response.string()
-            val parsed = jsonDecoder.decodeFromString<BaiduAIResponse>(json)
-            if (parsed.error_code == null) {
-                parsed.trans_result?.joinToString("") { it.dst ?: "" }
-                    ?.takeIf { it.isNotEmpty() }
-            } else {
-                null
-            }
+            extractTranslation(json)
         } catch (e: Exception) {
             Log.w("CommentTranslator", "AI translate failed: ${e.message}")
             null
@@ -180,13 +174,47 @@ class CommentTranslator @Inject constructor(
                 TranslateRequest(q = text, from = "en", to = targetLang)
             )
             val json = response.string()
-            val parsed = jsonDecoder.decodeFromString<BaiduResponse>(json)
-            parsed.trans_result?.joinToString("") { it.dst ?: "" }
-                ?.takeIf { it.isNotEmpty() }
+            extractTranslation(json)
         } catch (e: Exception) {
             Log.w("CommentTranslator", "General translate failed: ${e.message}")
             null
         }
+    }
+
+    /** 兼容百度原始响应和 Worker 标准化响应，避免接口形状变化时静默显示原文。 */
+    private fun extractTranslation(json: String): String? {
+        return try {
+            val root = kotlinx.serialization.json.Json.parseToJsonElement(json) as? JsonObject
+                ?: return null
+            if (hasError(root)) return null
+            extractFromObject(root)
+                ?: listOf("result", "data")
+                    .asSequence()
+                    .mapNotNull { root[it] as? JsonObject }
+                    .filterNot(::hasError)
+                    .mapNotNull(::extractFromObject)
+                    .firstOrNull()
+        } catch (e: Exception) {
+            Log.w("CommentTranslator", "Unable to parse translation response: ${e.message}")
+            null
+        }
+    }
+
+    private fun extractFromObject(value: JsonObject): String? {
+        val direct = (value["translation"] as? JsonPrimitive)?.content
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        if (direct != null) return direct
+
+        val items = value["trans_result"] as? JsonArray ?: return null
+        return items.mapNotNull { item ->
+            ((item as? JsonObject)?.get("dst") as? JsonPrimitive)?.content
+        }.joinToString("").trim().takeIf { it.isNotEmpty() }
+    }
+
+    private fun hasError(value: JsonObject): Boolean {
+        val error = value["error_code"] as? JsonPrimitive ?: return false
+        return error.content.isNotEmpty()
     }
 
     private fun getTargetLangCode(): String {
@@ -209,31 +237,4 @@ class CommentTranslator @Inject constructor(
         }
     }
 
-    @Serializable
-    private data class BaiduAIResponse(
-        val from: String? = null,
-        val to: String? = null,
-        val trans_result: List<BaiduAITransItem>? = null,
-        val error_code: String? = null,
-        val error_msg: String? = null
-    )
-
-    @Serializable
-    private data class BaiduAITransItem(
-        val src: String? = null,
-        val dst: String? = null
-    )
-
-    @Serializable
-    private data class BaiduResponse(
-        val trans_result: List<BaiduTransItem>? = null,
-        val error_code: String? = null,
-        val error_msg: String? = null
-    )
-
-    @Serializable
-    private data class BaiduTransItem(
-        val src: String? = null,
-        val dst: String? = null
-    )
 }
