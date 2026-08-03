@@ -73,6 +73,7 @@ export interface Env {
     EMAIL_FROM: string;
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
+    INVITE_TEST_BYPASS_KEY?: string;
 }
 
 export default {
@@ -145,7 +146,7 @@ function handleCors(): Response {
         headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Invite-Test-Key',
             'Access-Control-Max-Age': '86400',
         },
     });

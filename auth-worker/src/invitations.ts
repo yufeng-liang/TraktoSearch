@@ -17,6 +17,7 @@ export interface PublicInviteEnv {
     EMAIL_REPLY_TO?: string;
     PUBLIC_SITE_ORIGIN: string;
     KV?: KVNamespace;
+    INVITE_TEST_BYPASS_KEY?: string;
 }
 
 export interface InviteRequestInput {
@@ -143,9 +144,10 @@ export async function handleInviteResend(
     }
 
     const email = normalizeInviteEmail(body);
+    const isTestRequest = isInviteTestRequest(env, request);
     await enforcePublicRateLimit(env, request);
     await releaseExpiredPublicInvitations(env);
-    await resendInvitation(env, { email }, requestId);
+    await resendInvitation(env, { email }, requestId, now(), { bypassCooldown: isTestRequest });
     return successResponse({ status: 'INVITE_RESENT', cooldownSeconds: PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS }, requestId);
 }
 
@@ -295,14 +297,6 @@ export async function issueInvitation(
 
     const statements = [
         env.DB.prepare(`
-            UPDATE invite_requests
-            SET status = 'ISSUED', friend_id = ?, invite_id = ?, verified_at = ?, updated_at = ?
-            WHERE id = ?
-              AND status IN ('VERIFICATION_SENT', 'EMAIL_FAILED')
-              AND verification_expires_at >= ?
-              AND (SELECT COUNT(*) FROM invite_requests WHERE status = 'ISSUED') < ?
-        `).bind(friendId, inviteId, currentTime, currentTime, request.id, currentTime, PUBLIC_INVITE_LIMIT),
-        env.DB.prepare(`
             INSERT INTO friends (
                 id, nickname, email, signup_request_id, note, status,
                 max_devices, expires_at, created_at, updated_at
@@ -310,9 +304,26 @@ export async function issueInvitation(
             SELECT ?, ?, ?, ?, NULL, 'ACTIVE', 2, NULL, ?, ?
             WHERE EXISTS (
                 SELECT 1 FROM invite_requests
-                WHERE id = ? AND status = 'ISSUED' AND friend_id = ? AND invite_id = ?
+                WHERE id = ?
+                  AND status IN ('VERIFICATION_SENT', 'EMAIL_FAILED')
+                  AND verification_expires_at >= ?
             )
-        `).bind(friendId, request.nickname, request.email, request.id, currentTime, currentTime, request.id, friendId, inviteId),
+              AND (SELECT COUNT(*) FROM invite_requests WHERE status = 'ISSUED') < ?
+              AND NOT EXISTS (
+                  SELECT 1 FROM friends WHERE signup_request_id = ?
+              )
+        `).bind(
+            friendId,
+            request.nickname,
+            request.email,
+            request.id,
+            currentTime,
+            currentTime,
+            request.id,
+            currentTime,
+            PUBLIC_INVITE_LIMIT,
+            request.id,
+        ),
         env.DB.prepare(`
             INSERT INTO invites (
                 id, friend_id, kind, code_hash, code_mask, device_id,
@@ -320,10 +331,38 @@ export async function issueInvitation(
             )
             SELECT ?, ?, 'ACTIVATION', ?, ?, NULL, ?, ?
             WHERE EXISTS (
-                SELECT 1 FROM invite_requests
-                WHERE id = ? AND status = 'ISSUED' AND friend_id = ? AND invite_id = ?
+                SELECT 1 FROM friends
+                WHERE id = ? AND signup_request_id = ? AND status = 'ACTIVE'
             )
-        `).bind(inviteId, friendId, codeHash, codeMask, expiresAt, currentTime, request.id, friendId, inviteId),
+        `).bind(inviteId, friendId, codeHash, codeMask, expiresAt, currentTime, friendId, request.id),
+        env.DB.prepare(`
+            UPDATE invite_requests
+            SET status = 'ISSUED', friend_id = ?, invite_id = ?, verified_at = ?, updated_at = ?
+            WHERE id = ?
+              AND status IN ('VERIFICATION_SENT', 'EMAIL_FAILED')
+              AND verification_expires_at >= ?
+              AND friend_id IS NULL
+              AND invite_id IS NULL
+              AND EXISTS (
+                  SELECT 1 FROM friends
+                  WHERE id = ? AND signup_request_id = ? AND status = 'ACTIVE'
+              )
+              AND EXISTS (
+                  SELECT 1 FROM invites
+                  WHERE id = ? AND friend_id = ? AND used_at IS NULL AND revoked_at IS NULL
+              )
+        `).bind(
+            friendId,
+            inviteId,
+            currentTime,
+            currentTime,
+            request.id,
+            currentTime,
+            friendId,
+            request.id,
+            inviteId,
+            friendId,
+        ),
         env.DB.prepare(`
             INSERT INTO audit_logs (event_type, friend_id, request_id, result, detail, created_at)
             SELECT 'PUBLIC_INVITE_ISSUE', ?, ?, 'SUCCESS', ?, ?
@@ -342,7 +381,13 @@ export async function issueInvitation(
         if (latest?.status === 'ISSUED') {
             throw new AppError('INVITE_ALREADY_ISSUED', 'Invitation already issued', 409);
         }
-        throw new AppError('PUBLIC_INVITE_LIMIT_REACHED', 'Invitation limit reached', 409);
+        const issuedCount = await env.DB.prepare(`
+            SELECT COUNT(*) AS count FROM invite_requests WHERE status = 'ISSUED'
+        `).first<{ count: number }>();
+        if (Number(issuedCount?.count || 0) >= PUBLIC_INVITE_LIMIT) {
+            throw new AppError('PUBLIC_INVITE_LIMIT_REACHED', 'Invitation limit reached', 409);
+        }
+        throw new AppError('INVITE_ISSUE_INCOMPLETE', 'Invitation could not be reserved', 500);
     }
     if (results.length < 4 || results.slice(1, 4).some(result => Number(result?.meta?.changes || 0) !== 1)) {
         throw new AppError('INVITE_ISSUE_INCOMPLETE', 'Invitation could not be issued', 500);
@@ -384,6 +429,7 @@ export async function resendInvitation(
     input: { email: string },
     requestId: string,
     currentTime: number = now(),
+    options: { bypassCooldown?: boolean } = {},
 ): Promise<{ inviteId: string; inviteCode: string; expiresAt: number }> {
     if ((!env.BREVO_API_KEY && !env.EMAIL) || !env.EMAIL_FROM) {
         throw new AppError('EMAIL_NOT_CONFIGURED', 'Invitation email is not configured', 503);
@@ -428,7 +474,7 @@ export async function resendInvitation(
     const lastSentAt = Number(current.email_sent_at || 0);
     const elapsed = Math.max(0, currentTime - lastSentAt);
     const remaining = PUBLIC_INVITE_RESEND_COOLDOWN_SECONDS - elapsed;
-    if (remaining > 0) {
+    if (remaining > 0 && !options.bypassCooldown) {
         throw new AppError('RESEND_COOLDOWN', `Please wait ${remaining} seconds before resending`, 429);
     }
 
@@ -528,29 +574,32 @@ export function buildInvitationEmail(input: {
     const code = escapeHtml(input.inviteCode);
     const siteUrl = input.siteUrl.replace(/\/$/, '');
     const url = escapeHtml(siteUrl);
-    const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-three-watching.png`);
+    const imageUrl = escapeHtml(`${siteUrl}/assets/chiikawa/ai-three-watching-email.png`);
     const expiry = formatDate(input.expiresAt);
     return {
         html: emailLayout(`
             <p style="margin:0 0 18px;color:#6D685F;">你好，${name}：</p>
-            <h1 style="margin:0 0 16px;font:600 30px/1.15 Georgia,serif;color:#1D1C19;">欢迎来到 TraktoSearch。</h1>
-            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你下载并体验 TraktoSearch。下面是你的初期体验邀请码，请在 App 激活页面输入。</p>
-            <div style="margin:0 0 24px;padding:18px 20px;background:#E9E2D4;border-left:4px solid #D95532;text-align:center;">
-                <div style="margin-bottom:8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-transform:uppercase;">INVITATION CODE</div>
+            <h1 style="margin:0 0 16px;font:600 30px/1.15 Georgia,serif;color:#1D1C19;">欢迎加入 TraktoSearch！</h1>
+            <p style="margin:0 0 22px;color:#6D685F;line-height:1.8;">感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。</p>
+            <div style="margin:0 0 8px;color:#6D685F;font-size:12px;letter-spacing:.16em;text-align:center;text-transform:uppercase;">INVITATION CODE</div>
+            <div style="margin:0 0 12px;padding:18px 20px;background:#E9E2D4;border-left:4px solid #D95532;text-align:center;">
                 <div style="font:700 24px/1.2 'Courier New',monospace;letter-spacing:.12em;color:#1D1C19;">${code}</div>
             </div>
-            <div style="margin:0 0 24px;text-align:center;">
+            <div style="margin:0 0 12px;text-align:center;">
                 <img src="${imageUrl}" alt="吉伊" width="180" style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto;border:0;">
             </div>
             <p style="margin:0 0 12px;color:#6D685F;line-height:1.7;">邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。</p>
-            <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TrackToSearch" style="color:#D95532;">GitHub 仓库</a>，这会直接帮助我们改进后续版本。</p>
+            <p style="margin:0 0 24px;color:#6D685F;line-height:1.7;">如果你愿意，欢迎把使用体验、反馈和建议提交到 <a href="https://github.com/yufeng-liang/TrackToSearch" style="color:#D95532;">GitHub 仓库</a>，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。</p>
             <p style="margin:0;color:#9B9588;font-size:13px;line-height:1.7;">也可以打开 <a href="${url}" style="color:#D95532;">TraktoSearch 官网</a>，查看最新说明和下载入口。</p>
-        `),
-        text: `你好，${input.nickname}：\n\n欢迎来到 TraktoSearch，感谢你下载并体验。你的初期体验邀请码是：\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TrackToSearch\n\n官网：${siteUrl}`,
+        `, false, 'TraktoSearch 激活码已准备好，请打开邮件查看。'),
+        text: `你好，${input.nickname}：\n\n欢迎加入 TraktoSearch！感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。\n\n${input.inviteCode}\n\n邀请码有效期至 ${expiry}，只能使用一次，请不要转发给他人。欢迎把使用体验、反馈和建议提交到 GitHub：https://github.com/yufeng-liang/TrackToSearch，也可以通过 App 内的反馈与建议提交，这会直接帮助我改进后续版本。\n\n官网：${siteUrl}`,
     };
 }
 
-async function enforcePublicRateLimit(env: PublicInviteEnv, request: Request): Promise<void> {
+export async function enforcePublicRateLimit(env: PublicInviteEnv, request: Request): Promise<void> {
+    if (isInviteTestRequest(env, request)) {
+        return;
+    }
     if (!env.KV) return;
     const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Real-IP') || 'unknown';
     const key = `public-invite:ip:${await sha256(ip)}`;
@@ -559,6 +608,11 @@ async function enforcePublicRateLimit(env: PublicInviteEnv, request: Request): P
         throw new AppError('RATE_LIMITED', 'Too many requests', 429);
     }
     await env.KV.put(key, String(current + 1), { expirationTtl: 3600 });
+}
+
+export function isInviteTestRequest(env: PublicInviteEnv, request: Request): boolean {
+    const testKey = request.headers.get('X-Invite-Test-Key');
+    return Boolean(env.INVITE_TEST_BYPASS_KEY && testKey === env.INVITE_TEST_BYPASS_KEY);
 }
 
 export async function sendEmail(
@@ -649,8 +703,15 @@ function verificationResponse(
     return verificationHtmlResponse(title, message, status, inviteCode);
 }
 
-function emailLayout(content: string): string {
-    return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#F6F2E9;"><tr><td align="center" style="padding:24px 16px;"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background:#F6F2E9;"><tr><td style="border-top:4px solid #D95532;padding:26px 20px 0;"><div style="color:#D95532;font:600 12px/1.2 'Courier New',monospace;letter-spacing:.2em;text-transform:uppercase;">TraktoSearch</div><div style="height:1px;background:#D8D0C1;margin:20px 0 28px;"></div>${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从想看到找到，再到看过</p></td></tr></table></td></tr></table></body></html>`;
+function emailLayout(content: string, showBrand = true, preheader = ''): string {
+    const shellStyle = showBrand ? 'border-top:4px solid #D95532;padding:26px 20px 0;' : 'padding:0 20px;';
+    const brand = showBrand
+        ? `<div style="color:#D95532;font:600 12px/1.2 'Courier New',monospace;letter-spacing:.2em;text-transform:uppercase;">TraktoSearch</div><div style="height:1px;background:#D8D0C1;margin:20px 0 28px;"></div>`
+        : '';
+    const hiddenPreheader = preheader
+        ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;font-size:1px;line-height:1px;">${escapeHtml(preheader)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`
+        : '';
+    return `<!doctype html><html lang="zh-CN"><body style="margin:0;padding:0;background:#F6F2E9;color:#1D1C19;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;">${hiddenPreheader}<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#F6F2E9;"><tr><td align="center" style="padding:24px 16px;"><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background:#F6F2E9;"><tr><td style="${shellStyle}">${brand}${content}<div style="height:1px;background:#D8D0C1;margin:30px 0 16px;"></div><p style="margin:16px 0 0;color:#9B9588;font-size:12px;line-height:1.6;">TraktoSearch · 从想看到找到，再到看过</p></td></tr></table></td></tr></table></body></html>`;
 }
 
 function formatDate(timestamp: number): string {

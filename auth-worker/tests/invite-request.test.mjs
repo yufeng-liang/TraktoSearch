@@ -9,6 +9,7 @@ import {
     resendInvitation,
     PUBLIC_INVITE_RESERVATION_TTL_SECONDS,
     sendEmail,
+    enforcePublicRateLimit,
 } from '../src/invitations.ts';
 
 test('keeps the public invitation reservation window at 72 hours', () => {
@@ -108,6 +109,63 @@ test('public resend enforces a 60 second cooldown', async () => {
         () => resendInvitation(dbEnv(db), { email: 'user@example.com' }, 'request-id', 1_700_000_030),
         error => error?.code === 'RESEND_COOLDOWN' && /30/.test(error.message),
     );
+});
+
+test('private invite test key bypasses the public IP rate limit without writing KV', async () => {
+    let putCalled = false;
+    await enforcePublicRateLimit({
+        INVITE_TEST_BYPASS_KEY: 'test-key',
+        KV: {
+            async get() { return '3'; },
+            async put() { putCalled = true; },
+        },
+    }, new Request('https://example.com/api/invite-requests', {
+        headers: { 'X-Invite-Test-Key': 'test-key' },
+    }));
+
+    assert.equal(putCalled, false);
+});
+
+test('private invite test key bypasses the resend cooldown', async () => {
+    const db = {
+        prepare(sql) {
+            return {
+                bind() {
+                    return {
+                        async first() {
+                            return sql.includes('FROM friends')
+                                ? {
+                                    friend_id: 'friend-1',
+                                    nickname: 'test-user',
+                                    email: 'user@example.com',
+                                    request_id: 'request-1',
+                                    invite_id: 'invite-1',
+                                    email_sent_at: 1_700_000_000,
+                                    invite_expires_at: 1_700_100_000,
+                                }
+                                : null;
+                        },
+                    };
+                },
+                async run() { return { meta: { changes: 1 } }; },
+            };
+        },
+        async batch() {
+            return [1, 1, 1, 1].map(() => ({ meta: { changes: 1 } }));
+        },
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => new Response(JSON.stringify({ messageId: 'test-message' }), { status: 201 });
+    try {
+        await resendInvitation({
+            ...dbEnv(db),
+            INVITE_TEST_BYPASS_KEY: 'test-key',
+            BREVO_API_KEY: 'brevo-key',
+            EMAIL_FROM: 'TraktoSearch <sender@example.com>',
+        }, { email: 'user@example.com' }, 'request-id', 1_700_000_030, { bypassCooldown: true });
+    } finally {
+        globalThis.fetch = originalFetch;
+    }
 });
 
 test('public resend atomically revokes the old code and creates a new code', async () => {
@@ -295,14 +353,13 @@ test('issueInvitation uses an atomic quota guard before creating the friend and 
 
     assert.equal(result.inviteCode.length, 12);
     assert.equal(statements.length, 4);
-    assert.match(preparedSql[0], /FROM invite_requests\s+WHERE status = 'ISSUED'/);
-    assert.match(statements[0].sql, /UPDATE invite_requests/);
+    assert.match(statements[0].sql, /INSERT INTO friends/);
     assert.match(statements[0].sql, /COUNT\(\*\) FROM invite_requests/);
     assert.match(statements[0].sql, /< \?/);
-    assert.match(statements[1].sql, /INSERT INTO friends/);
+    assert.match(statements[1].sql, /INSERT INTO invites/);
     assert.match(statements[1].sql, /WHERE EXISTS/);
-    assert.match(statements[2].sql, /INSERT INTO invites/);
-    assert.match(statements[2].sql, /WHERE EXISTS/);
+    assert.match(statements[2].sql, /UPDATE invite_requests/);
+    assert.match(statements[2].sql, /SET status = 'ISSUED'/);
     assert.match(statements[3].sql, /PUBLIC_INVITE_ISSUE/);
     assert.match(statements[3].sql, /WHERE EXISTS/);
 });
@@ -352,7 +409,23 @@ test('invitation email centers the code and includes the Chiikawa image', () => 
 
     assert.match(email.html, /ABCD2345EFGH/);
     assert.match(email.html, /text-align:center/);
-    assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching\.png/);
+    const labelIndex = email.html.indexOf('INVITATION CODE');
+    const cardIndex = email.html.indexOf('background:#E9E2D4');
+    assert.ok(labelIndex >= 0 && labelIndex < cardIndex);
+    assert.match(email.html, /欢迎加入 TraktoSearch！/);
+    assert.doesNotMatch(email.html, /欢迎来到 TraktoSearch/);
+    assert.match(email.html, /直接帮助我改进后续版本/);
+    assert.match(email.html, /App 内的反馈与建议提交/);
+    assert.match(email.text, /App 内的反馈与建议提交/);
+    assert.doesNotMatch(email.html, /复制邀请码|onclick=|navigator\.clipboard/);
+    assert.doesNotMatch(email.html, /letter-spacing:\.2em;text-transform:uppercase;">TraktoSearch/);
+    assert.match(email.html, /background:#E9E2D4;border-left:4px solid #D95532;text-align:center/);
+    assert.match(email.html, /margin:0 0 12px;text-align:center/);
+    assert.match(email.html, /https:\/\/tracktosearch\.pages\.dev\/assets\/chiikawa\/ai-three-watching-email\.png/);
+    assert.doesNotMatch(email.html, /app-icon-email/);
+    assert.match(email.html, /TraktoSearch 激活码已准备好，请打开邮件查看。/);
+    assert.match(email.html, /感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。/);
+    assert.match(email.text, /感谢你下载并体验 TraktoSearch，请在 App 激活页面输入下列激活码。/);
     assert.doesNotMatch(email.html, /invite\/verify/);
     assert.match(email.text, /ABCD2345EFGH/);
     assert.match(email.text, /官网/);
