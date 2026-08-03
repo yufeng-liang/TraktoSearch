@@ -166,6 +166,8 @@
     <string name="douban_sync_login_trakt">Trakt 로그인</string>
     <string name="douban_sync_login_douban">Douban 로그인</string>
     <string name="douban_sync_cookie_expired_banner">더우반 로그인 만료, 탭하여 재로그인</string>
+    <string name="douban_sync_douban_login_required_banner">더우반 로그인이 필요합니다. 탭하여 로그인</string>
+    <string name="douban_sync_trakt_login_required_banner">Trakt 로그인이 필요합니다. 탭하여 로그인</string>
     <string name="douban_sync_complete_banner">동기화 완료, %1$d건 추가</string>
     <string name="douban_sync_failed_banner">동기화 실패, %1$d건 실패</string>
     <string name="douban_sync_cancelled_banner">동기화 취소됨</string>

@@ -140,6 +140,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.BatchRemovalPhase
+import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.MediaType
 import com.tracktosearch.data.repository.labelRes
@@ -1017,6 +1018,16 @@ fun WatchlistScreen(
                                             Text(
                                                 text = if (syncProgress.cookieExpired) {
                                                     stringResource(R.string.douban_sync_cookie_expired_banner)
+                                                } else if (
+                                                    syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
+                                                    syncProgress.loginTarget == DoubanSyncLoginTarget.DOUBAN
+                                                ) {
+                                                    stringResource(R.string.douban_sync_douban_login_required_banner)
+                                                } else if (
+                                                    syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.LOGIN_REQUIRED &&
+                                                    syncProgress.loginTarget == DoubanSyncLoginTarget.TRAKT
+                                                ) {
+                                                    stringResource(R.string.douban_sync_trakt_login_required_banner)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
                                                     stringResource(R.string.douban_sync_failed_banner, syncProgress.failedCount)
                                                 } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {

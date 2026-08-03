@@ -166,6 +166,8 @@
     <string name="douban_sync_login_trakt">Trakt にログイン</string>
     <string name="douban_sync_login_douban">Douban にログイン</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣ログイン期限切れ、タップして再ログイン</string>
+    <string name="douban_sync_douban_login_required_banner">Douban にログインしてください。タップしてログイン</string>
+    <string name="douban_sync_trakt_login_required_banner">Trakt にログインしてください。タップしてログイン</string>
     <string name="douban_sync_complete_banner">同期完了、%1$d件追加</string>
     <string name="douban_sync_failed_banner">同期失敗、%1$d件失敗</string>
     <string name="douban_sync_cancelled_banner">同期をキャンセルしました</string>

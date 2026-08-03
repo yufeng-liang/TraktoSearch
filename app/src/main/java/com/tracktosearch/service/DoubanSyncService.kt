@@ -15,6 +15,7 @@ import android.os.IBinder
 import com.tracktosearch.MainActivity
 import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
 import com.tracktosearch.data.repository.DoubanSyncStage
@@ -166,6 +167,11 @@ class DoubanSyncService : Service() {
         }
         val contentText = when {
             progress.cookieExpired -> getString(R.string.douban_sync_cookie_expired_banner)
+            progress.isComplete && progress.stage == DoubanSyncStage.LOGIN_REQUIRED -> when (progress.loginTarget) {
+                DoubanSyncLoginTarget.DOUBAN -> getString(R.string.douban_sync_douban_login_required_banner)
+                DoubanSyncLoginTarget.TRAKT -> getString(R.string.douban_sync_trakt_login_required_banner)
+                null -> stageLabel
+            }
             progress.isComplete && progress.stage == DoubanSyncStage.COMPLETED ->
                 getString(R.string.douban_sync_result_format, progress.successCount, progress.failedCount)
             progress.isComplete && progress.stage == DoubanSyncStage.FAILED ->

@@ -263,6 +263,8 @@
     <string name="douban_sync_login_trakt">登录 Trakt</string>
     <string name="douban_sync_login_douban">登录豆瓣</string>
     <string name="douban_sync_cookie_expired_banner">豆瓣登录已过期，点此重新登录</string>
+    <string name="douban_sync_douban_login_required_banner">需要登录豆瓣，点此登录</string>
+    <string name="douban_sync_trakt_login_required_banner">需要登录 Trakt，点此登录</string>
     <string name="douban_sync_complete_banner">同步完成，新增 %1$d 条</string>
     <string name="douban_sync_failed_banner">同步失败，%1$d 条失败</string>
     <string name="douban_sync_cancelled_banner">同步已取消</string>

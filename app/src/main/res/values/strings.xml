@@ -263,6 +263,8 @@
     <string name="douban_sync_login_trakt">Login Trakt</string>
     <string name="douban_sync_login_douban">Login Douban</string>
     <string name="douban_sync_cookie_expired_banner">Douban login expired, tap to re-login</string>
+    <string name="douban_sync_douban_login_required_banner">Douban login required, tap to log in</string>
+    <string name="douban_sync_trakt_login_required_banner">Trakt login required, tap to log in</string>
     <string name="douban_sync_complete_banner">Sync complete, %1$d items added</string>
     <string name="douban_sync_failed_banner">Sync failed, %1$d items failed</string>
     <string name="douban_sync_cancelled_banner">Sync cancelled</string>
