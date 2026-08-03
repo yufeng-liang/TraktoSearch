@@ -667,7 +667,8 @@ fun SettingsScreen(
                             SettingsItemCard(
                                 icon = Icons.Rounded.Sync,
                                 title = stringResource(
-                                    if (isDoubanSyncRunning) R.string.settings_douban_resync_running
+                                    if (!doubanLoggedIn) R.string.settings_douban_sync
+                                    else if (isDoubanSyncRunning) R.string.settings_douban_resync_running
                                     else if (cooldownStatus?.neverSynced == true) R.string.settings_douban_sync
                                     else R.string.settings_douban_resync
                                 ),
@@ -1296,7 +1297,22 @@ fun SettingsScreen(
     if (showSyncProgressDialog) {
         val doubanSyncViewModel: DoubanSyncViewModel = hiltViewModel()
         DoubanSyncDialog(
-            onDismiss = { showSyncProgressDialog = false },
+            onDismiss = {
+                showSyncProgressDialog = false
+                if (!doubanSyncViewModel.doubanSyncManager.isRunning()) {
+                    doubanSyncViewModel.doubanSyncManager.resetProgress()
+                }
+            },
+            onRelogin = {
+                showSyncProgressDialog = false
+                doubanSyncViewModel.doubanSyncManager.resetProgress()
+                onNavigateToDoubanLogin()
+            },
+            onTraktLogin = {
+                showSyncProgressDialog = false
+                doubanSyncViewModel.doubanSyncManager.resetProgress()
+                onNavigateToLogin()
+            },
             viewModel = doubanSyncViewModel
         )
     }

@@ -140,7 +140,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tracktosearch.R
 import com.tracktosearch.data.repository.BatchRemovalPhase
+import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.MediaType
+import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.ui.animation.EnterMode
 import com.tracktosearch.ui.animation.cardEnter
 import com.tracktosearch.ui.component.LocalActivePosterClickSetter
@@ -945,7 +947,7 @@ fun WatchlistScreen(
     
                             // 豆瓣同步进度横幅（同步进行中或刚完成 5 秒内显示）
                             val syncProgress = uiState.doubanSyncProgress
-                            if (syncProgress != null) {
+                            if (syncProgress != null && uiState.doubanSyncBannerVisible) {
                                 // 同步进行中时图标无限旋转动画
                                 val spinTransition = rememberInfiniteTransition(label = "sync_spin")
                                 val spinRotation by spinTransition.animateFloat(
@@ -959,7 +961,20 @@ fun WatchlistScreen(
                                 NeumorphicFrostedSurface(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { showSyncDialog = true },
+                                        .clickable {
+                                            when (syncProgress.bannerClickAction()) {
+                                                DoubanSyncBannerAction.SHOW_PROGRESS,
+                                                DoubanSyncBannerAction.SHOW_RESULT -> showSyncDialog = true
+                                                DoubanSyncBannerAction.NAVIGATE_TO_DOUBAN_LOGIN -> {
+                                                    viewModel.clearDoubanSyncResult()
+                                                    onNavigateToDoubanLogin()
+                                                }
+                                                DoubanSyncBannerAction.NAVIGATE_TO_TRAKT_LOGIN -> {
+                                                    viewModel.clearDoubanSyncResult()
+                                                    onNavigateToLogin()
+                                                }
+                                            }
+                                        },
                                     isDark = isDark,
                                     shape = RoundedCornerShape(12.dp),
                                     backgroundColor = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
@@ -991,15 +1006,40 @@ fun WatchlistScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column(modifier = Modifier.weight(1f)) {
+                                            val stageLabel = stringResource(syncProgress.stage.labelRes())
+                                            val targetLabel = when (syncProgress.subStage) {
+                                                DoubanSyncSubStage.FETCHING_WISH_LIST ->
+                                                    stringResource(R.string.douban_sync_preview_status_wish)
+                                                DoubanSyncSubStage.FETCHING_COLLECT_LIST ->
+                                                    stringResource(R.string.douban_sync_preview_status_collect)
+                                                else -> null
+                                            }
                                             Text(
                                                 text = if (syncProgress.cookieExpired) {
                                                     stringResource(R.string.douban_sync_cookie_expired_banner)
+                                                } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.FAILED) {
+                                                    stringResource(R.string.douban_sync_failed_banner, syncProgress.failedCount)
+                                                } else if (syncProgress.stage == com.tracktosearch.data.repository.DoubanSyncStage.CANCELLING) {
+                                                    stringResource(R.string.douban_sync_cancelled_banner)
                                                 } else if (syncProgress.isComplete) {
                                                     stringResource(R.string.douban_sync_complete_banner, syncProgress.successCount)
+                                                } else if (syncProgress.total > 0 && targetLabel != null) {
+                                                    stringResource(
+                                                        R.string.douban_sync_notification_progress_format,
+                                                        stageLabel,
+                                                        targetLabel,
+                                                        syncProgress.current,
+                                                        syncProgress.total
+                                                    )
                                                 } else if (syncProgress.total > 0) {
-                                                    "${syncProgress.phase} (${syncProgress.current}/${syncProgress.total})"
+                                                    stringResource(
+                                                        R.string.douban_sync_progress_format,
+                                                        stageLabel,
+                                                        syncProgress.current,
+                                                        syncProgress.total
+                                                    )
                                                 } else {
-                                                    syncProgress.phase
+                                                    stageLabel
                                                 },
                                                 style = MaterialTheme.typography.labelMedium,
                                                 color = if (syncProgress.cookieExpired) MaterialTheme.colorScheme.onErrorContainer
@@ -1324,6 +1364,7 @@ fun WatchlistScreen(
                         val p = uiState.doubanSyncProgress
                         if (p == null || !p.isRunning) {
                             showSyncDialog = false
+                            viewModel.clearDoubanSyncResult()
                         }
                     },
                     onBackground = {
@@ -1332,10 +1373,12 @@ fun WatchlistScreen(
                     },
                     onRelogin = {
                         showSyncDialog = false
+                        viewModel.clearDoubanSyncResult()
                         onNavigateToDoubanLogin()
                     },
                     onTraktLogin = {
                         showSyncDialog = false
+                        viewModel.clearDoubanSyncResult()
                         onNavigateToLogin()
                     }
                 )

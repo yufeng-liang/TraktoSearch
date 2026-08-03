@@ -12,6 +12,10 @@ import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanSyncFailure
 import com.tracktosearch.data.repository.DoubanSyncManager
 import com.tracktosearch.data.repository.DoubanSyncProgress
+import com.tracktosearch.data.repository.DoubanSyncLoginTarget
+import com.tracktosearch.data.repository.DoubanSyncPreviewItem
+import com.tracktosearch.data.repository.DoubanSyncStage
+import com.tracktosearch.data.repository.DoubanSyncSubStage
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
 import io.mockk.every
@@ -85,7 +89,13 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `运行中显示转后台和取消按钮`() {
-        emit(DoubanSyncProgress(isRunning = true, current = 5, total = 100, phase = "Syncing"))
+        emit(DoubanSyncProgress(
+            isRunning = true,
+            current = 5,
+            total = 100,
+            stage = DoubanSyncStage.FETCHING_LIST,
+            subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
+        ))
         setContent()
         composeRule.onNodeWithText("Background").assertIsDisplayed().assertIsEnabled()
         composeRule.onNodeWithText("Cancel").assertIsDisplayed().assertIsEnabled()
@@ -93,7 +103,13 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `运行中点击取消调用viewModel_cancel`() {
-        emit(DoubanSyncProgress(isRunning = true, current = 5, total = 100, phase = "Syncing"))
+        emit(DoubanSyncProgress(
+            isRunning = true,
+            current = 5,
+            total = 100,
+            stage = DoubanSyncStage.FETCHING_LIST,
+            subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
+        ))
         setContent()
         composeRule.onNodeWithText("Cancel").performClick()
         verify { mockManager.cancel() }
@@ -101,7 +117,11 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `正在取消时转后台和取消按钮被禁用`() {
-        emit(DoubanSyncProgress(isRunning = true, isCancelling = true, phase = "正在取消..."))
+        emit(DoubanSyncProgress(
+            isRunning = true,
+            isCancelling = true,
+            stage = DoubanSyncStage.CANCELLING
+        ))
         setContent()
         composeRule.onNodeWithText("Background").assertIsNotEnabled()
         composeRule.onNodeWithText("Cancelling...").assertIsNotEnabled()
@@ -109,7 +129,11 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `正在取消时取消按钮文案为正在取消`() {
-        emit(DoubanSyncProgress(isRunning = true, isCancelling = true, phase = "正在取消..."))
+        emit(DoubanSyncProgress(
+            isRunning = true,
+            isCancelling = true,
+            stage = DoubanSyncStage.CANCELLING
+        ))
         setContent()
         composeRule.onNodeWithText("Cancelling...").assertIsDisplayed()
     }
@@ -118,14 +142,24 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `完成状态显示完成按钮`() {
-        emit(DoubanSyncProgress(isComplete = true, phase = "Done", successCount = 50, failedCount = 5))
+        emit(DoubanSyncProgress(
+            isComplete = true,
+            stage = DoubanSyncStage.COMPLETED,
+            successCount = 50,
+            failedCount = 5
+        ))
         setContent()
         composeRule.onNodeWithText("Sync Complete").assertIsDisplayed()
     }
 
     @Test
     fun `完成状态点击完成调用onDismiss`() {
-        emit(DoubanSyncProgress(isComplete = true, phase = "Done", successCount = 50, failedCount = 5))
+        emit(DoubanSyncProgress(
+            isComplete = true,
+            stage = DoubanSyncStage.COMPLETED,
+            successCount = 50,
+            failedCount = 5
+        ))
         var dismissed = false
         setContent(onDismiss = { dismissed = true })
         composeRule.onNodeWithText("Sync Complete").performClick()
@@ -136,14 +170,24 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `cookieExpired状态显示重新登录按钮`() {
-        emit(DoubanSyncProgress(isComplete = true, cookieExpired = true, phase = "Cookie expired"))
+        emit(DoubanSyncProgress(
+            isComplete = true,
+            stage = DoubanSyncStage.LOGIN_REQUIRED,
+            loginTarget = DoubanSyncLoginTarget.DOUBAN,
+            cookieExpired = true
+        ))
         setContent(onRelogin = {})
         composeRule.onNodeWithText("Re-login").assertIsDisplayed()
     }
 
     @Test
     fun `cookieExpired点击重新登录调用onRelogin`() {
-        emit(DoubanSyncProgress(isComplete = true, cookieExpired = true, phase = "Cookie expired"))
+        emit(DoubanSyncProgress(
+            isComplete = true,
+            stage = DoubanSyncStage.LOGIN_REQUIRED,
+            loginTarget = DoubanSyncLoginTarget.DOUBAN,
+            cookieExpired = true
+        ))
         var reloginCalled = false
         setContent(onRelogin = { reloginCalled = true })
         composeRule.onNodeWithText("Re-login").performClick()
@@ -154,7 +198,11 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `未登录Trakt状态显示登录Trakt按钮`() {
-        emit(DoubanSyncProgress(isComplete = true, phase = "未登录 Trakt,请先登录"))
+        emit(DoubanSyncProgress(
+            isComplete = true,
+            stage = DoubanSyncStage.LOGIN_REQUIRED,
+            loginTarget = DoubanSyncLoginTarget.TRAKT
+        ))
         setContent(onTraktLogin = {})
         composeRule.onNodeWithText("Login Trakt").assertIsDisplayed()
     }
@@ -163,10 +211,42 @@ class DoubanSyncDialogTest {
 
     @Test
     fun `运行中显示进度文案`() {
-        emit(DoubanSyncProgress(isRunning = true, current = 5, total = 100, phase = "Syncing"))
+        emit(DoubanSyncProgress(
+            isRunning = true,
+            current = 5,
+            total = 100,
+            stage = DoubanSyncStage.FETCHING_LIST,
+            subStage = DoubanSyncSubStage.FETCHING_WISH_LIST
+        ))
         setContent()
-        // douban_sync_progress_format = "%1$s (%2$d/%3$d)"
-        composeRule.onNodeWithText("Syncing (5/100)").assertIsDisplayed()
+        composeRule.onNodeWithText("Fetching list (5/100)").assertIsDisplayed()
+    }
+
+    @Test
+    fun `运行中显示最近抓取的豆瓣条目`() {
+        emit(
+            DoubanSyncProgress(
+                isRunning = true,
+                stage = DoubanSyncStage.FETCHING_LIST,
+                subStage = DoubanSyncSubStage.FETCHING_WISH_LIST,
+                recentItems = listOf(
+                    DoubanSyncPreviewItem(
+                        doubanId = "dune",
+                        title = "Dune",
+                        status = DoubanMarkStatus.WISH,
+                        rating = 4,
+                        markedAt = "2024-06-01"
+                    )
+                )
+            )
+        )
+        setContent()
+
+        composeRule.onNodeWithText("Recently fetched").assertIsDisplayed()
+        composeRule.onNodeWithText("Dune").assertIsDisplayed()
+        composeRule.onNodeWithText("Wish list").assertIsDisplayed()
+        composeRule.onNodeWithText("4/5").assertIsDisplayed()
+        composeRule.onNodeWithText("2024-06-01").assertIsDisplayed()
     }
 
     @Test
@@ -174,7 +254,7 @@ class DoubanSyncDialogTest {
         emit(
             DoubanSyncProgress(
                 isComplete = true,
-                phase = "Done",
+                stage = DoubanSyncStage.COMPLETED,
                 successCount = 50,
                 failedCount = 5,
                 skippedCount = 5,
@@ -199,7 +279,7 @@ class DoubanSyncDialogTest {
         emit(
             DoubanSyncProgress(
                 isComplete = true,
-                phase = "Done",
+                stage = DoubanSyncStage.COMPLETED,
                 successCount = 0, failedCount = 2,
                 skippedCount = 0, cacheHitCount = 0,
                 failedItems = items
@@ -221,7 +301,7 @@ class DoubanSyncDialogTest {
         emit(
             DoubanSyncProgress(
                 isComplete = true,
-                phase = "Done",
+                stage = DoubanSyncStage.COMPLETED,
                 successCount = 0, failedCount = 2,
                 skippedCount = 0, cacheHitCount = 0,
                 failedItems = items
@@ -241,7 +321,7 @@ class DoubanSyncDialogTest {
         emit(
             DoubanSyncProgress(
                 isComplete = true,
-                phase = "Done",
+                stage = DoubanSyncStage.COMPLETED,
                 successCount = 0, failedCount = 1,
                 skippedCount = 0, cacheHitCount = 0,
                 failedItems = items
@@ -261,7 +341,7 @@ class DoubanSyncDialogTest {
         emit(
             DoubanSyncProgress(
                 isComplete = true,
-                phase = "Done",
+                stage = DoubanSyncStage.COMPLETED,
                 successCount = 0, failedCount = 1,
                 skippedCount = 0, cacheHitCount = 0,
                 failedItems = items

@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.PowerManager
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.DoubanAuthStorage
+import com.tracktosearch.data.local.DoubanCredentials
 import com.tracktosearch.data.local.DoubanSyncMetaStorage
 import com.tracktosearch.data.local.TokenStorage
 import com.tracktosearch.data.local.db.DoubanSyncFailureDao
@@ -14,6 +15,7 @@ import com.tracktosearch.data.local.db.DoubanSyncedItemDao
 import com.tracktosearch.data.remote.douban.DelayInfo
 import com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry
 import com.tracktosearch.data.remote.douban.DoubanMarkStatus
+import com.tracktosearch.data.remote.douban.DoubanMarkItem
 import com.tracktosearch.data.remote.douban.DoubanRepository
 import com.tracktosearch.data.util.PersistentTtlCache
 import io.mockk.clearMocks
@@ -139,6 +141,52 @@ class DoubanSyncManagerLifecycleTest {
     // ============================================================
     // checkTraktAvailable 分支
     // ============================================================
+
+    @Test
+    fun 列表页回调实时发布预览条目和统一阶段() = runBlocking {
+        every { doubanAuthStorage.getCredentials() } returns DoubanCredentials("uid", "cookie")
+        val listGate = CompletableDeferred<Unit>()
+        coEvery {
+            doubanRepository.fetchMarkList(any(), any(), any(), any(), any(), any())
+        } coAnswers {
+            @Suppress("UNCHECKED_CAST")
+            val onPage = args[3] as suspend (List<DoubanMarkItem>, Int) -> Unit
+            onPage(
+                listOf(
+                    DoubanMarkItem(
+                        doubanId = "preview-1",
+                        title = "实时条目",
+                        rating = 4,
+                        comment = "短评",
+                        markedAt = "2024-06-01",
+                        doubanUrl = "https://movie.douban.com/subject/preview-1/",
+                        posterUrl = null
+                    )
+                ),
+                1
+            )
+            listGate.await()
+            true
+        }
+
+        manager.startSync()
+        waitForCondition { manager.progress.value.recentItems.isNotEmpty() }
+
+        val progress = manager.progress.value
+        assertThat(progress.stage).isEqualTo(DoubanSyncStage.FETCHING_LIST)
+        assertThat(progress.recentItems).containsExactly(
+            DoubanSyncPreviewItem(
+                doubanId = "preview-1",
+                title = "实时条目",
+                status = DoubanMarkStatus.WISH,
+                rating = 4,
+                markedAt = "2024-06-01"
+            )
+        )
+
+        listGate.complete(Unit)
+        waitForCondition { manager.progress.value.isComplete }
+    }
 
     /**
      * token 有效 → checkTraktAvailable 返回 true → 进入 runSyncLegacy

@@ -51,7 +51,10 @@ import com.tracktosearch.R
 import com.tracktosearch.data.remote.douban.DelayType
 import com.tracktosearch.data.repository.DoubanFailureExporter
 import com.tracktosearch.data.repository.DoubanSyncFailure
+import com.tracktosearch.data.repository.DoubanSyncLoginTarget
 import com.tracktosearch.data.repository.DoubanSyncManager
+import com.tracktosearch.data.repository.DoubanSyncStage
+import com.tracktosearch.data.repository.labelRes
 import com.tracktosearch.data.repository.FailureReason
 import com.tracktosearch.service.DoubanSyncService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -159,17 +162,32 @@ fun DoubanSyncDialog(
         title = { Text(stringResource(R.string.douban_sync_title)) },
         text = {
             Column {
+                val stageLabel = stringResource(p.stage.labelRes())
+                val subStageLabel = p.subStage.labelRes()?.let { stringResource(it) }
+                val etaLabel = when {
+                    p.etaSeconds < 0 -> null
+                    p.etaSeconds < 60 -> stringResource(R.string.douban_sync_eta_seconds, p.etaSeconds)
+                    p.etaSeconds < 3600 -> stringResource(
+                        R.string.douban_sync_eta_minutes,
+                        p.etaSeconds / 60
+                    )
+                    else -> stringResource(
+                        R.string.douban_sync_eta_hours,
+                        p.etaSeconds / 3600,
+                        (p.etaSeconds % 3600) / 60
+                    )
+                }
                 // 主进度:阶段 (current/total) - 完成时只显示 phase 避免出现 0/0
                 if (p.isComplete) {
-                    Text(p.phase, style = MaterialTheme.typography.bodyMedium)
+                    Text(stageLabel, style = MaterialTheme.typography.bodyMedium)
                 } else {
-                    Text(stringResource(R.string.douban_sync_progress_format, p.phase, p.current, p.total))
+                    Text(stringResource(R.string.douban_sync_progress_format, stageLabel, p.current, p.total))
                 }
                 // 子阶段(详情页 / Trakt 查询 / 批量同步 / 断点续传跳过)
-                if (p.subPhase.isNotEmpty()) {
+                if (subStageLabel != null) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        "· ${p.subPhase}",
+                        subStageLabel,
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -183,6 +201,14 @@ fun DoubanSyncDialog(
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (p.isRunning && etaLabel != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        stringResource(R.string.douban_sync_eta_format, etaLabel),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.tertiary
                     )
                 }
                 Spacer(modifier = Modifier.height(12.dp))
@@ -210,6 +236,58 @@ fun DoubanSyncDialog(
                 }
 
                 // 最近失败(同步进行中,实时滚动展示)
+                if (p.recentItems.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        stringResource(R.string.douban_sync_recent_items),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    p.recentItems.forEach { item ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            tonalElevation = 1.dp,
+                            shape = MaterialTheme.shapes.small
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                                Text(
+                                    item.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        stringResource(item.status.labelRes()),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        item.rating?.let {
+                                            stringResource(R.string.douban_sync_preview_rating_format, it)
+                                        } ?: stringResource(R.string.douban_sync_preview_no_rating),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        item.markedAt,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (p.isRunning && p.recentFailures.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -396,7 +474,9 @@ fun DoubanSyncDialog(
         confirmButton = {
             when {
                 // Trakt 未登录(DoubanSyncManager 预检设置 phase="未登录 Trakt,请先登录")
-                p.isComplete && p.phase.contains("未登录 Trakt") -> {
+                p.isComplete &&
+                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                    p.loginTarget == DoubanSyncLoginTarget.TRAKT -> {
                     Row {
                         if (onTraktLogin != null) {
                             TextButton(onClick = {
@@ -411,7 +491,10 @@ fun DoubanSyncDialog(
                 // 豆瓣未登录(DoubanSyncManager 预检设置 phase="未登录豆瓣")
                 // 与 cookieExpired 分开:cookieExpired 是登录后过期,这里是从未登录
                 // 两者都跳转豆瓣登录页,但按钮文案不同(登录 vs 重新登录)
-                p.isComplete && p.phase.contains("未登录豆瓣") && !p.cookieExpired -> {
+                p.isComplete &&
+                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                    p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
+                    !p.cookieExpired -> {
                     Row {
                         if (onRelogin != null) {
                             TextButton(onClick = {
@@ -423,7 +506,10 @@ fun DoubanSyncDialog(
                         TextButton(onClick = onDismiss) { Text(stringResource(R.string.douban_sync_complete)) }
                     }
                 }
-                p.cookieExpired -> {
+                p.isComplete &&
+                    p.stage == DoubanSyncStage.LOGIN_REQUIRED &&
+                    p.loginTarget == DoubanSyncLoginTarget.DOUBAN &&
+                    p.cookieExpired -> {
                     Row {
                         if (onRelogin != null) {
                             TextButton(onClick = {

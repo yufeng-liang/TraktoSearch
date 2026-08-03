@@ -497,6 +497,31 @@ class WatchlistViewModelTest {
     }
 
     @Test
+    fun `同步完成后横幅可隐藏但结果状态保留到用户关闭`() = runTest {
+        syncProgressFlow.value = DoubanSyncProgress(
+            isRunning = true,
+            stage = com.tracktosearch.data.repository.DoubanSyncStage.FETCHING_LIST
+        )
+        advanceUntilIdle()
+        assertThat(viewModel.uiState.value.doubanSyncBannerVisible).isTrue()
+
+        syncProgressFlow.value = DoubanSyncProgress(
+            isComplete = true,
+            stage = com.tracktosearch.data.repository.DoubanSyncStage.COMPLETED,
+            successCount = 3
+        )
+        advanceUntilIdle()
+
+        assertThat(viewModel.uiState.value.doubanSyncBannerVisible).isFalse()
+        assertThat(viewModel.uiState.value.doubanSyncProgress?.successCount).isEqualTo(3)
+        verify(exactly = 0) { doubanSyncManager.resetProgress() }
+
+        viewModel.clearDoubanSyncResult()
+        assertThat(viewModel.uiState.value.doubanSyncProgress).isNull()
+        verify { doubanSyncManager.resetProgress() }
+    }
+
+    @Test
     fun `isDoubanLoggedIn_根据登录状态返回正确值`() = runTest {
         advanceUntilIdle()
 

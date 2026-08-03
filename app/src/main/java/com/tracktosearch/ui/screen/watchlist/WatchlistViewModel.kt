@@ -116,6 +116,7 @@ data class WatchlistUiState(
     val historyShowsLoaded: Boolean = false,
     // 豆瓣同步进度（isRunning 时在 Tab 栏下方显示横幅，点击重新打开同步弹窗）
     val doubanSyncProgress: DoubanSyncProgress? = null,
+    val doubanSyncBannerVisible: Boolean = false,
     val doubanImported: Boolean = false,
     val doubanFailureCount: Int = 0,
     // 状态一致性检查进度（isRunning 时显示横幅，点击重新打开检查弹窗）
@@ -171,6 +172,7 @@ class WatchlistViewModel @Inject constructor(
     private var loadShowsJob: Job? = null
     private var loadHistoryMoviesJob: Job? = null
     private var loadHistoryShowsJob: Job? = null
+    private var doubanSyncBannerHideJob: Job? = null
     private val pendingWatchlistMutations = mutableListOf<TraktRepository.WatchlistMutation>()
 
     /** 同步完成事件（UI 监听后自动弹出 DoubanSyncDialog 显示结果） */
@@ -189,6 +191,18 @@ class WatchlistViewModel @Inject constructor(
     fun clearConsistencyCheckResult() {
         _uiState.value = _uiState.value.copy(consistencyCheckProgress = null)
         statusConsistencyChecker.resetProgress()
+    }
+
+    /** 用户关闭豆瓣同步结果后清除结果，避免下一次进入页面重复展示旧状态。 */
+    fun clearDoubanSyncResult() {
+        doubanSyncBannerHideJob?.cancel()
+        _uiState.update {
+            it.copy(
+                doubanSyncProgress = null,
+                doubanSyncBannerVisible = false
+            )
+        }
+        doubanSyncManager.resetProgress()
     }
 
     /** 是否需要首次同步引导（已登录豆瓣 + 从未同步过） */
@@ -305,24 +319,48 @@ class WatchlistViewModel @Inject constructor(
                 applyPendingWatchlistMutations()
             }
         }
-        // 监听豆瓣同步进度：isRunning 时显示横幅，完成时自动弹出结果弹窗
+        // 监听豆瓣同步进度：横幅 5 秒后隐藏，但结果保留到用户关闭对话框。
         viewModelScope.launch {
             doubanSyncManager.progress.collect { progress: DoubanSyncProgress ->
-                // 同步进行中或已完成 → 暴露给 UI 显示横幅
-                if (progress.isRunning || progress.isComplete) {
-                    _uiState.update { it.copy(doubanSyncProgress = progress) }
+                if (progress.isRunning) {
+                    doubanSyncBannerHideJob?.cancel()
+                    _uiState.update {
+                        it.copy(
+                            doubanSyncProgress = progress,
+                            doubanSyncBannerVisible = true
+                        )
+                    }
+                } else if (progress.isComplete) {
+                    doubanSyncBannerHideJob?.cancel()
+                    _uiState.update {
+                        it.copy(
+                            doubanSyncProgress = progress,
+                            doubanSyncBannerVisible = true
+                        )
+                    }
                     // 完成且有成功条目，触发静默刷新（保留已有数据避免闪烁）
-                    if (progress.isComplete && progress.successCount > 0) {
+                    if (progress.successCount > 0) {
                         refreshIfLoaded(silent = true)
                     }
-                    // 完成后：发事件让 UI 自动弹出 DoubanSyncDialog，横幅 5 秒后消失
-                    if (progress.isComplete) {
-                        refreshDoubanEmptyState()
-                        _syncCompleteEvent.emit(Unit)
+                    refreshDoubanEmptyState()
+                    _syncCompleteEvent.emit(Unit)
+                    val completedProgress = progress
+                    doubanSyncBannerHideJob = viewModelScope.launch {
                         delay(5000)
-                        _uiState.update { it.copy(doubanSyncProgress = null) }
-                        // 重置 progress 避免下次进入页面时 collector 收到旧 isComplete=true 重复弹窗
-                        doubanSyncManager.resetProgress()
+                        _uiState.update { state ->
+                            if (state.doubanSyncProgress == completedProgress) {
+                                state.copy(doubanSyncBannerVisible = false)
+                            } else {
+                                state
+                            }
+                        }
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            doubanSyncProgress = null,
+                            doubanSyncBannerVisible = false
+                        )
                     }
                 }
             }

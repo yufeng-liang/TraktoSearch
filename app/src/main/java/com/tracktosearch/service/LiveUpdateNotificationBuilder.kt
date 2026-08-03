@@ -40,18 +40,32 @@ object LiveUpdateNotificationBuilder {
         contentIntent: PendingIntent,
         cancelIntent: PendingIntent,
         cancelText: String,
+        contentText: String? = null,
+        expandedText: String? = null,
+        publicText: String? = null,
+        isTerminal: Boolean = false,
     ): Notification {
+        val resolvedContentText = contentText ?: if (total > 0) "$phase ($current/$total)" else phase
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_sync)
             .setContentTitle(title)
-            .setContentText(if (total > 0) "$phase ($current/$total)" else phase)
+            .setContentText(resolvedContentText)
             .setContentIntent(contentIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, cancelText, cancelIntent)
-            .setOngoing(true)
+            .setOngoing(!isTerminal)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+
+        if (!isTerminal) {
+            builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, cancelText, cancelIntent)
+        } else {
+            builder.setAutoCancel(true)
+        }
+        if (!expandedText.isNullOrBlank()) {
+            builder.setSubText(expandedText)
+        }
 
         if (Build.VERSION.SDK_INT >= 36) {
-            builder.setRequestPromotedOngoing(true)
+            if (!isTerminal) builder.setRequestPromotedOngoing(true)
             if (phase.isNotEmpty()) {
                 builder.setShortCriticalText(phase.take(CHIP_MAX_CHARS))
             }
@@ -59,7 +73,22 @@ object LiveUpdateNotificationBuilder {
         } else {
             if (total > 0) builder.setProgress(total, current, false)
             else builder.setProgress(0, 0, true)
+            if (!expandedText.isNullOrBlank()) {
+                builder.setStyle(NotificationCompat.BigTextStyle().bigText(expandedText))
+            }
         }
+
+        // 锁屏只显示通用状态，避免把用户的豆瓣条目标题暴露到公开通知预览。
+        builder.setPublicVersion(
+            NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_sync)
+                .setContentTitle(title)
+                .setContentText(publicText ?: title)
+                .setOngoing(!isTerminal)
+                .setOnlyAlertOnce(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
+        )
         return builder.build()
     }
 
