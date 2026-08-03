@@ -91,16 +91,41 @@ class TokenStorage @Inject constructor(
 
     suspend fun saveSessionMetadata(deviceId: String, lastOnlineAt: Long, nextCheckAt: Long) {
         val p = prefs()
-        withContext(Dispatchers.IO) {
-            p.edit()
-                .putString(KEY_DEVICE_ID, deviceId)
-                .putLong(KEY_LAST_ONLINE_AT, lastOnlineAt)
-                .putLong(KEY_NEXT_CHECK_AT, nextCheckAt)
-                .apply()
-        }
+        commit(p.edit()
+            .putString(KEY_DEVICE_ID, deviceId)
+            .putLong(KEY_LAST_ONLINE_AT, lastOnlineAt)
+            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt))
         cachedDeviceId = deviceId
         cachedLastOnlineAt = lastOnlineAt
         cachedNextCheckAt = nextCheckAt
+    }
+
+    /** 一次性持久化完整授权会话，避免令牌轮换后只写入部分状态。 */
+    suspend fun saveSession(
+        accessToken: String,
+        refreshToken: String,
+        expiresIn: Long,
+        deviceId: String,
+        lastOnlineAt: Long,
+        nextCheckAt: Long,
+    ) {
+        val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
+        val p = prefs()
+        commit(p.edit()
+            .putString(KEY_ACCESS_TOKEN, accessToken)
+            .putString(KEY_REFRESH_TOKEN, refreshToken)
+            .putLong(KEY_EXPIRES_AT, expiresAt)
+            .putString(KEY_DEVICE_ID, deviceId)
+            .putLong(KEY_LAST_ONLINE_AT, lastOnlineAt)
+            .putLong(KEY_NEXT_CHECK_AT, nextCheckAt))
+        cachedAccessToken = accessToken
+        cachedExpiresAt = expiresAt
+        cachedDeviceId = deviceId
+        cachedLastOnlineAt = lastOnlineAt
+        cachedNextCheckAt = nextCheckAt
+        cacheLoaded = true
+        _accessTokenFlow.value = accessToken
+        _isLoggedInState.value = true
     }
 
     fun getCachedDeviceId(): String? = cachedDeviceId
@@ -112,13 +137,10 @@ class TokenStorage @Inject constructor(
     suspend fun saveTokens(accessToken: String, refreshToken: String, expiresIn: Long) {
         val expiresAt = System.currentTimeMillis() / 1000 + expiresIn
         val p = prefs()
-        withContext(Dispatchers.IO) {
-            p.edit()
-                .putString(KEY_ACCESS_TOKEN, accessToken)
-                .putString(KEY_REFRESH_TOKEN, refreshToken)
-                .putLong(KEY_EXPIRES_AT, expiresAt)
-                .apply()
-        }
+        commit(p.edit()
+            .putString(KEY_ACCESS_TOKEN, accessToken)
+            .putString(KEY_REFRESH_TOKEN, refreshToken)
+            .putLong(KEY_EXPIRES_AT, expiresAt))
         cachedAccessToken = accessToken
         cachedExpiresAt = expiresAt
         cacheLoaded = true
@@ -157,16 +179,13 @@ class TokenStorage @Inject constructor(
 
     suspend fun clearTokens() {
         val p = prefs()
-        withContext(Dispatchers.IO) {
-            p.edit()
-                .remove(KEY_ACCESS_TOKEN)
-                .remove(KEY_REFRESH_TOKEN)
-                .remove(KEY_EXPIRES_AT)
-                .remove(KEY_DEVICE_ID)
-                .remove(KEY_LAST_ONLINE_AT)
-                .remove(KEY_NEXT_CHECK_AT)
-                .apply()
-        }
+        commit(p.edit()
+            .remove(KEY_ACCESS_TOKEN)
+            .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_EXPIRES_AT)
+            .remove(KEY_DEVICE_ID)
+            .remove(KEY_LAST_ONLINE_AT)
+            .remove(KEY_NEXT_CHECK_AT))
         cachedAccessToken = null
         cachedExpiresAt = 0L
         cachedDeviceId = null
@@ -175,6 +194,12 @@ class TokenStorage @Inject constructor(
         cacheLoaded = false
         _accessTokenFlow.value = null
         _isLoggedInState.value = false
+    }
+
+    private suspend fun commit(editor: SharedPreferences.Editor) {
+        check(withContext(Dispatchers.IO) { editor.commit() }) {
+            "Failed to persist auth session"
+        }
     }
 
     private companion object {

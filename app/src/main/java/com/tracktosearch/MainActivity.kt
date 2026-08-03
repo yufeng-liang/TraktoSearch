@@ -29,13 +29,10 @@ import com.tracktosearch.data.local.LanguageStorage
 import com.tracktosearch.data.local.ThemeStorage
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
-import com.tracktosearch.data.remote.douban.DoubanHotApiService
-import com.tracktosearch.data.remote.douban.dto.DoubanHotData
-import com.tracktosearch.data.remote.douban.dto.DoubanHotItem
+import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.remote.trakt.TraktAuthManager
 import com.tracktosearch.data.remote.trakt.TraktConnectionState
 import com.tracktosearch.data.session.SessionModeManager
-import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.ui.navigation.AppNavigation
 import com.tracktosearch.ui.navigation.Routes
@@ -45,9 +42,11 @@ import com.tracktosearch.ui.util.ScrollToTopProvider
 import com.tracktosearch.ui.util.showToast
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Locale
 import javax.inject.Inject
 
@@ -96,9 +95,8 @@ object DeepLinkNavigator {
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val MIN_SYSTEM_SPLASH_DURATION_MS = 1350L
-        // 系统 Splash 的最短展示时间
-        // 已登录且激活时，Splash 会等待首页预取完成
+        private const val MIN_SYSTEM_SPLASH_DURATION_MS = 720L
+        // 与系统场记板关闭动画保持一致，避免无业务原因延长 Splash。
     }
 
     @Inject
@@ -106,6 +104,9 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var traktAuthManager: TraktAuthManager
+
+    @Inject
+    lateinit var authCheckScheduler: AuthCheckScheduler
 
     @Inject
     lateinit var guestModeStorage: GuestModeStorage
@@ -121,12 +122,6 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var traktRepository: com.tracktosearch.data.repository.TraktRepository
-
-    @Inject
-    lateinit var doubanHotApi: DoubanHotApiService
-
-    @Inject
-    lateinit var sharedDoubanHotCache: PersistentTtlCache<DoubanHotData>
 
     @Inject
     lateinit var sharedTransitionStorage: com.tracktosearch.data.local.SharedTransitionStorage
@@ -189,7 +184,7 @@ class MainActivity : AppCompatActivity() {
             StartupTrace.mark("startup.enter")
             val splashStartTime = System.currentTimeMillis()
             StartupTrace.measure("auth.initialize") {
-                authManager.initialize()
+                authManager.initializeForStartup()
             }
             val authState = authManager.authState.value
             val isAuthorized = authState == AuthState.AUTHORIZED || authState == AuthState.OFFLINE
@@ -231,23 +226,9 @@ class MainActivity : AppCompatActivity() {
             }
             applyLanguage(language)
 
-            // 预加载首页所需数据
+            // 只读取首页启动所需的本地设置；影视/榜单缓存由当前页面首次使用时按需加载。
             StartupTrace.measure("local.shared_transition") {
                 sharedTransitionStorage.preloadAndGetValue()
-            }
-
-            // 已登录且激活时，在后台启动发现页新片榜和口碑榜预取；它们不阻塞 Splash 退出。
-            if (isAuthorized) {
-                this@MainActivity.lifecycleScope.launch {
-                    StartupTrace.measure("prefetch.douban_movie") {
-                        runCatching { prefetchDoubanHotCategory("douban-movie") }
-                    }
-                }
-                this@MainActivity.lifecycleScope.launch {
-                    StartupTrace.measure("prefetch.douban_weekly") {
-                        runCatching { prefetchDoubanHotCategory("douban-weekly") }
-                    }
-                }
             }
 
             if (isAuthorized) {
@@ -264,6 +245,13 @@ class MainActivity : AppCompatActivity() {
             isReady = true
             startupContentReadyForDraw = true
             StartupTrace.mark("startup.ready")
+            this@MainActivity.lifecycleScope.launch(Dispatchers.IO) {
+                if (authState == AuthState.AUTHORIZED) {
+                    authCheckScheduler.schedulePreflight(authManager.getNextCheckAt())
+                } else {
+                    authCheckScheduler.cancelPreflight()
+                }
+            }
             if (isAuthorized) {
                 this@MainActivity.lifecycleScope.launch {
                     val connected = StartupTrace.measure("trakt.profile") {
@@ -326,41 +314,6 @@ class MainActivity : AppCompatActivity() {
         StartupTrace.mark("activity.set_content.complete")
     }
 
-    /** 预热发现页新片榜/口碑榜的共享缓存，进入页面后由 DiscoverViewModel 直接复用。 */
-    private suspend fun prefetchDoubanHotCategory(categoryId: String) {
-        val cacheKey = "${categoryId}_1_10_v3"
-        sharedDoubanHotCache.awaitLoaded()
-        sharedDoubanHotCache.getOrAwait(cacheKey) {
-            val response = when (categoryId) {
-                "douban-movie" -> doubanHotApi.getChart()
-                "douban-weekly" -> doubanHotApi.getWeekly()
-                else -> error("Unsupported Douban hot category: $categoryId")
-            }
-            DoubanHotData(
-                items = response.data.map { item ->
-                    val ratingText = if (item.rating.isNotBlank() && item.rating != "暂无评分") {
-                        "【${item.rating}】"
-                    } else {
-                        ""
-                    }
-                    DoubanHotItem(
-                        id = item.id.hashCode(),
-                        title = "$ratingText${item.title}",
-                        cover = item.poster,
-                        desc = item.ratingCount,
-                        rating = item.rating,
-                        url = item.url,
-                        tmdbId = item.tmdbId,
-                        traktId = item.traktId,
-                        imdbId = item.imdbId,
-                        mediaType = item.mediaType
-                    )
-                },
-                total = response.total
-            )
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         StartupTrace.mark("activity.onResume.enter")
@@ -373,6 +326,13 @@ class MainActivity : AppCompatActivity() {
             } else if (authManager.authState.value != AuthState.UNAUTHORIZED) {
                 StartupTrace.measure("auth.resume_check") {
                     authManager.check()
+                }
+                withContext(Dispatchers.IO) {
+                    if (authManager.authState.value == AuthState.AUTHORIZED) {
+                        authCheckScheduler.schedulePreflight(authManager.getNextCheckAt())
+                    } else if (authManager.authState.value != AuthState.AUTHORIZED) {
+                        authCheckScheduler.cancelPreflight()
+                    }
                 }
             } else {
                 StartupTrace.mark("auth.resume_check.skipped", "reason=unauthorized")

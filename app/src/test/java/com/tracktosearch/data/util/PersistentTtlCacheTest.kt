@@ -99,21 +99,17 @@ class PersistentTtlCacheTest {
     }
 
     @Test
-    fun awaitLoaded_beforeLoadFromDisk_blocksUntilLoadCompletes() = runTest {
-        val cache = createCache(createDataStore(), "v4b", backgroundScope)
-        var awaitCompleted = false
-        val awaitJob = launch {
-            cache.awaitLoaded()
-            awaitCompleted = true
+    fun awaitLoaded_onFirstUse_loadsDiskEntries() = runTest {
+        val dataStore = createDataStore()
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey("v4b:k1")] = """{"name":"lazy","value":4}"""
+            prefs[longPreferencesKey("v4b:k1:exp")] = System.currentTimeMillis() + 60_000
         }
-        // 让 launched 协程启动并挂起在 awaitLoaded
-        runCurrent()
-        assertThat(awaitCompleted).isFalse()
+        val cache = createCache(dataStore, "v4b", backgroundScope)
 
-        // 调用 loadFromDisk 完成 loadedDeferred
-        cache.loadFromDisk()
-        awaitJob.join()
-        assertThat(awaitCompleted).isTrue()
+        cache.awaitLoaded()
+
+        assertThat(cache.get("k1")).isEqualTo(PersistentTestItem("lazy", 4))
     }
 
     // ==================== 5. snapshotFromDisk 返回磁盘所有未过期条目 ====================

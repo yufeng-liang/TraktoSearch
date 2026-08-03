@@ -14,11 +14,18 @@ import dagger.assisted.AssistedInject
 class AuthCheckWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val authCheckScheduler: AuthCheckScheduler
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
-        authManager.initialize()
+        val forceNetworkCheck = inputData.getBoolean(AuthCheckScheduler.FORCE_CHECK_INPUT, false)
+        authManager.initialize(forceNetworkCheck = forceNetworkCheck)
+        if (authManager.authState.value == AuthState.AUTHORIZED) {
+            authCheckScheduler.schedulePreflight(authManager.getNextCheckAt())
+        } else {
+            authCheckScheduler.cancelPreflight()
+        }
         return Result.success()
     }
 }

@@ -5,7 +5,8 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 S = 4
 W, H = 1200, 374
-TICKET_SCALE = 1.03
+TICKET_ROTATION = 0.0
+TICKET_SCALE = 1.0
 PAPER = "#F7EFE2"
 PAPER_DEEP = "#E8D3BA"
 CLAY = "#996345"
@@ -191,7 +192,7 @@ def main():
     mask_draw.rounded_rectangle((left, top, right, bottom), radius=16, fill=255)
     ticket.putalpha(ImageChops.multiply(ticket.getchannel("A"), ticket_mask))
 
-    rotated = ticket.rotate(1.4, resample=Image.Resampling.BICUBIC, center=(W / 2, H / 2))
+    rotated = ticket.rotate(TICKET_ROTATION, resample=Image.Resampling.BICUBIC, center=(W / 2, H / 2))
     scaled_width = round(W * TICKET_SCALE)
     scaled_height = round(H * TICKET_SCALE)
     scaled_ticket = rotated.resize((scaled_width, scaled_height), resample=Image.Resampling.BICUBIC)
