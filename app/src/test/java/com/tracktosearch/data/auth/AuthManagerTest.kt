@@ -3,6 +3,7 @@ package com.tracktosearch.data.auth
 import android.util.Base64
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.repository.TraktRepository
 import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -16,13 +17,19 @@ import kotlinx.serialization.json.Json
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
+import okhttp3.ResponseBody.Companion.toResponseBody
 import retrofit2.Response
+import javax.inject.Provider
 
 class AuthManagerTest {
+    private val traktRepository = mockk<TraktRepository>(relaxed = true)
+    private val traktRepositoryProvider = mockk<Provider<TraktRepository>>()
+
     @Before
     fun setUp() {
         mockkStatic(Base64::class)
         every { Base64.encodeToString(any(), any()) } returns "signature"
+        every { traktRepositoryProvider.get() } returns traktRepository
     }
 
     @After
@@ -36,7 +43,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
@@ -73,7 +80,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
 
         coEvery { storage.ensureCacheLoaded() } returns Unit
         every { storage.getCachedDeviceId() } returns "device-id"
@@ -93,7 +100,7 @@ class AuthManagerTest {
         val keyManager = mockk<DeviceKeyManager>()
         val continuityManager = mockk<DeviceContinuityManager>()
         val storage = mockk<TokenStorage>()
-        val manager = AuthManager(api, keyManager, continuityManager, storage, Json)
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
         var cachedNextCheckAt = 0L
         val futureNextCheckAt = System.currentTimeMillis() + 60_000L
 
@@ -131,5 +138,53 @@ class AuthManagerTest {
         second.await()
 
         coVerify(exactly = 1) { api.check(CheckRequest("android-id")) }
+    }
+
+    @Test
+    fun check_forbidden_clearsTraktAccountCaches() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+
+        every { continuityManager.getAndroidId() } returns "android-id"
+        coEvery { api.check(CheckRequest("android-id")) } returns
+            Response.error(403, "forbidden".toResponseBody())
+        coEvery { storage.clearTokens() } returns Unit
+
+        val result = manager.check()
+
+        assertThat(result.isFailure).isTrue()
+        assertThat(manager.authState.value).isEqualTo(AuthState.UNAUTHORIZED)
+        coVerify(exactly = 1) { traktRepository.clearTraktAccountCaches() }
+    }
+
+    @Test
+    fun refresh_replay_clearsTraktAccountCaches() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns 1_000L
+        every { storage.getCachedAccessToken() } returns "old-access"
+        coEvery { storage.isTokenValid() } returns false
+        coEvery { storage.getRefreshToken() } returns "refresh-token"
+        every { keyManager.sign(any()) } returns ByteArray(64)
+        coEvery { storage.clearTokens() } returns Unit
+        coEvery { api.challenge(ChallengeRequest("device-id")) } returns Response.success(
+            GatewayResponse("SUCCESS", "OK", data = ChallengeResponse("nonce", 2_000L))
+        )
+        coEvery { api.refresh(any()) } returns Response.error(401, "replay".toResponseBody())
+
+        manager.initialize()
+
+        assertThat(manager.authState.value).isEqualTo(AuthState.UNAUTHORIZED)
+        coVerify(exactly = 1) { traktRepository.clearTraktAccountCaches() }
     }
 }

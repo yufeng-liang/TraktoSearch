@@ -1,6 +1,7 @@
 package com.tracktosearch.data.auth
 
 import com.tracktosearch.data.local.TokenStorage
+import com.tracktosearch.data.repository.TraktRepository
 import com.tracktosearch.data.util.StartupTrace
 import com.tracktosearch.BuildConfig
 import android.os.Build
@@ -14,6 +15,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.decodeFromString
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 /**
@@ -43,7 +45,8 @@ class AuthManager @Inject constructor(
     private val deviceKeyManager: DeviceKeyManager,
     private val deviceContinuityManager: DeviceContinuityManager,
     private val tokenStorage: TokenStorage,
-    private val json: Json
+    private val json: Json,
+    private val traktRepositoryProvider: Provider<TraktRepository>
 ) {
     private val refreshCoordinator = AuthRefreshCoordinator()
     private val initializationMutex = Mutex()
@@ -125,9 +128,7 @@ class AuthManager @Inject constructor(
                 // 令牌失效，尝试刷新
                 refreshAfterCheck()
             } else if (response.code() == 403) {
-                tokenStorage.clearTokens()
-                deviceId = null
-                _authState.value = AuthState.UNAUTHORIZED
+                invalidateSession()
                 Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
             } else {
                 Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
@@ -166,9 +167,7 @@ class AuthManager @Inject constructor(
             val challengeResponse = authApiService.challenge(ChallengeRequest(currentDeviceId))
             if (!challengeResponse.isSuccessful) {
                 if (challengeResponse.code() == 401 || challengeResponse.code() == 403) {
-                    tokenStorage.clearTokens()
-                    deviceId = null
-                    _authState.value = AuthState.UNAUTHORIZED
+                    invalidateSession()
                 }
                 return Result.failure(Exception(challengeResponse.errorMessage("Challenge failed: ${challengeResponse.code()}")))
             }
@@ -196,9 +195,7 @@ class AuthManager @Inject constructor(
                 Result.success(body)
             } else if (refreshResponse.code() == 401 || refreshResponse.code() == 403) {
                 // 刷新失败，需要重新激活
-                tokenStorage.clearTokens()
-                deviceId = null
-                _authState.value = AuthState.UNAUTHORIZED
+                invalidateSession()
                 Result.failure(Exception("Refresh failed, re-authorization required"))
             } else {
                 Result.failure(Exception(refreshResponse.errorMessage("Refresh failed: ${refreshResponse.code()}")))
@@ -284,9 +281,16 @@ class AuthManager @Inject constructor(
      * 退出授权态（设备撤销后）
      */
     suspend fun deauthorize() {
-        tokenStorage.clearTokens()
+        invalidateSession()
         deviceId = null
         nextCheckAt = 0L
+    }
+
+    /** 授权会话失效时同步清理 Trakt 私有数据，避免重新激活后沿用旧账号列表。 */
+    private suspend fun invalidateSession() {
+        tokenStorage.clearTokens()
+        traktRepositoryProvider.get().clearTraktAccountCaches()
+        deviceId = null
         _authState.value = AuthState.UNAUTHORIZED
         _nickname.value = null
     }
