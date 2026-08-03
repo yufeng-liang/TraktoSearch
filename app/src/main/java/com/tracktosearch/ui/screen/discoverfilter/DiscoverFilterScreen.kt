@@ -951,12 +951,12 @@ private fun GlassFilterChip(
     modifier: Modifier = Modifier
 ) {
     val background = if (selected) {
-        MaterialTheme.colorScheme.primary
+        MaterialTheme.colorScheme.secondaryContainer
     } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
     }
     val contentColor = if (selected) {
-        MaterialTheme.colorScheme.onPrimary
+        MaterialTheme.colorScheme.onSecondaryContainer
     } else {
         MaterialTheme.colorScheme.onSurface
     }

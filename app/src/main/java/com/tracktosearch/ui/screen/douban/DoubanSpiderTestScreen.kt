@@ -708,6 +708,7 @@ fun DoubanSpiderTestScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             FilterChip(
                                 selected = uiState.markRemoveMode == "web_remove",
+                                border = if (uiState.markRemoveMode == "web_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("web_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_empty)) },
                                 modifier = Modifier.height(32.dp)
@@ -715,6 +716,7 @@ fun DoubanSpiderTestScreen(
                             Spacer(modifier = Modifier.width(6.dp))
                             FilterChip(
                                 selected = uiState.markRemoveMode == "j_remove",
+                                border = if (uiState.markRemoveMode == "j_remove") BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                                 onClick = { view.performHaptic(HapticType.CLICK); viewModel.updateMarkRemoveMode("j_remove") },
                                 label = { Text(stringResource(R.string.douban_spider_test_mark_remove_naked)) },
                                 modifier = Modifier.height(32.dp)
