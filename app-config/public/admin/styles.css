@@ -1317,7 +1317,7 @@ tbody tr:last-child td { border-bottom: none; }
 .fb-bubble.developer {
     background: var(--surface-2, #f1f2f7);
     color: var(--text-primary, #1c1c1e);
-    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
 }
 
 .fb-bubble.user {
@@ -1397,4 +1397,17 @@ tbody tr:last-child td { border-bottom: none; }
     font-weight: 600;
     font-family: 'JetBrains Mono', monospace;
     margin-right: 6px;
+}
+
+.feedback-detail-subtitle {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+.feedback-detail-subtitle::before { margin-right: 0; }
+.feedback-detail-subtitle .fb-id-badge {
+    margin-right: 0;
+    padding: 2px 8px;
+    font-size: 16px;
+    line-height: 1.2;
 }

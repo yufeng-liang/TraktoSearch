@@ -21,8 +21,8 @@ const stringSources = ['values', 'values-zh', 'values-ja', 'values-ko'].map((dir
     fs.readFileSync(path.join(root, `../app/src/main/res/${dir}/strings.xml`), 'utf8')
 );
 
-test('朋友创建不提交朋友到期时间，邀请码单独携带有效期', () => {
-    assert.match(appSource, /朋友长期有效；邀请码单独设置有效期/);
+test('用户创建不提交用户到期时间，邀请码单独携带有效期', () => {
+    assert.match(appSource, /用户长期有效；邀请码单独设置有效期/);
     assert.match(appSource, /const code = invite\.inviteCode \|\| invite\.code/);
     const createFriendModal = appSource.match(/function showCreateFriendModal\([\s\S]*?function showEditFriendModal\(/);
     assert.ok(createFriendModal, 'create friend modal should exist');
@@ -188,6 +188,24 @@ test('feedback admin APIs use the app-config Service Binding proxy', () => {
     assert.match(appSource, /fetch\(`\$\{API_BASE\}\$\{path\}`/);
 });
 
+test('反馈详情标题只展示反馈 ID 和用户，内容区隐藏类型行', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(appSource, /feedback-detail-subtitle/);
+    assert.match(appSource, /<span class="fb-id-badge"[\s\S]*?<\/span><span>· \$\{escapeHtml\(f\.friend_nickname \|\| ''\)\}<\/span>/);
+    assert.doesNotMatch(appSource, /<p class="section-subtitle feedback-detail-subtitle">[\s\S]*?typeLabels\[f\.type\]/);
+    assert.doesNotMatch(appSource, /<span style="color:var\(--text-dim\)">类型<\/span>/);
+    assert.match(stylesSource, /\.feedback-detail-subtitle \{\s*display: flex;\s*align-items: center;/);
+    assert.match(stylesSource, /\.feedback-detail-subtitle \.fb-id-badge \{[\s\S]*?font-size: 16px;/);
+});
+
+test('反馈详情可以返回列表，开发者气泡尖角位于左下角', () => {
+    const stylesSource = fs.readFileSync(path.join(root, 'public/admin/styles.css'), 'utf8');
+    assert.match(appSource, /document\.getElementById\('fb-back'\)\.addEventListener\('click', \(\) => navigate\('feedback'\)\)/);
+    assert.doesNotMatch(appSource, /document\.getElementById\('fb-back'\)[\s\S]*?location\.hash = '#\/feedback'/);
+    assert.match(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-bottom-left-radius: 4px;/);
+    assert.doesNotMatch(stylesSource, /\.fb-bubble\.developer \{[\s\S]*?border-top-left-radius: 4px;/);
+});
+
 test('navigation renders once through hashchange for a changed route', () => {
     const navigateBlock = appSource.match(/function navigate\([\s\S]*?\r?\n}\r?\n/);
     assert.ok(navigateBlock, 'navigate function should exist');
@@ -210,6 +228,15 @@ test('friend list delegates search and pagination to the server', () => {
     assert.match(appSource, /friendsPage\.total/);
     assert.match(workerSource, /LIMIT \? OFFSET \?/);
     assert.match(workerSource, /nickname LIKE|LOWER\(f\.nickname\)/);
+});
+
+test('后台统一使用用户文案，用户列表用设备数量展示上限', () => {
+    assert.doesNotMatch(htmlSource, /朋友/);
+    assert.doesNotMatch(appSource, /朋友/);
+    assert.match(appSource, /<th>设备<\/th><th>有效期至<\/th>/);
+    assert.doesNotMatch(appSource, /<th>上限<\/th>/);
+    assert.match(appSource, /<td>\$\{f\.devices\}\/\$\{f\.maxDevices\}<\/td>/);
+    assert.doesNotMatch(appSource, /\n\s*<td>\$\{f\.maxDevices\}<\/td>/);
 });
 
 test('admin status and reduced motion states are accessible', () => {
@@ -271,7 +298,7 @@ test('toolbar controls expose accessible names and expanded state', () => {
 
 test('disabled friends can be re-enabled without restoring revoked devices', () => {
     assert.match(appSource, /API\.enableFriend\(friendId\)/);
-    assert.match(appSource, /重新启用朋友/);
+    assert.match(appSource, /重新启用用户/);
     assert.match(appSource, /不会恢复已撤销设备和会话/);
     assert.match(appSource, /FRIEND_ENABLE/);
     assert.match(workerSource, /export async function enableFriend/);

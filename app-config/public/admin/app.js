@@ -584,7 +584,7 @@ function legacyErrorMessage(error) {
 function errorMessage(error) {
     const codeMessages = {
         MIGRATION_DEVICE_NOT_FOUND: '迁移邀请码需要已有绑定设备，请改选激活',
-        MIGRATION_DEVICE_MISMATCH: '该设备不属于此朋友，无法迁移',
+        MIGRATION_DEVICE_MISMATCH: '该设备不属于此用户，无法迁移',
         DEVICE_ALREADY_BOUND: '此设备已绑定，请改用激活邀请码或先撤销原绑定',
         MAX_DEVICES_BELOW_ACTIVE: '设备上限不能低于当前活跃设备数',
         REQUEST_TIMEOUT: '请求超时，请检查网络后重试',
@@ -636,7 +636,7 @@ function eventLabel(type) {
     const map = {
         REINSTALL_RECOVER: '卸载重装恢复',
         ACTIVATE: '激活', MIGRATE: '迁移', REFRESH: '刷新令牌', REFRESH_REPLAY: '重放检测',
-        DEVICE_REVOKE: '撤销设备', DEVICE_DELETE: '删除设备记录', FRIEND_DISABLE: '禁用朋友', FRIEND_CREATE: '创建朋友', FRIEND_UPDATE: '更新朋友',
+        DEVICE_REVOKE: '撤销设备', DEVICE_DELETE: '删除设备记录', FRIEND_DISABLE: '禁用用户', FRIEND_CREATE: '创建用户', FRIEND_UPDATE: '更新用户',
         INVITE_CREATE: '生成邀请码', INVITE_REVOKE: '撤销邀请码',
     };
     return escapeHtml(map[type] || type);
@@ -649,15 +649,15 @@ function auditDetail(log) {
         'invite_kind:ACTIVATION': '邀请码类型：激活',
         'invite_kind:MIGRATION': '邀请码类型：迁移',
         invite_revoked: '邀请码已撤销',
-        friend_created: '朋友已创建',
-        friend_disabled: '朋友已禁用',
+        friend_created: '用户已创建',
+        friend_disabled: '用户已禁用',
         device_revoked: '设备已撤销',
         device_deleted: '设备记录已软删除',
         'refresh:rotated': '刷新成功，旧刷新令牌已轮换',
         'refresh:invalid_signature': '客户端签名校验失败',
         'refresh:invalid_challenge': '刷新挑战已过期或与设备不匹配',
-        'refresh:device_or_friend_revoked': '设备或朋友已撤销',
-        'refresh:friend_expired': '朋友有效期已到，设备授权已失效',
+        'refresh:device_or_friend_revoked': '设备或用户已撤销',
+        'refresh:friend_expired': '用户有效期已到，设备授权已失效',
         'refresh:expired': '刷新令牌已过期',
         'refresh:token_not_found': '刷新令牌不存在或已失效',
         'refresh:replay_revoked_all': '检测到令牌重放，已撤销该设备全部刷新会话',
@@ -966,7 +966,7 @@ function renderDashboard(container, renderToken) {
         if (statsResult.status === 'fulfilled') {
             const s = statsResult.value;
             stats.innerHTML = `
-                <div class="stat-card"><div class="stat-label">活跃朋友</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
+                <div class="stat-card"><div class="stat-label">活跃用户</div><div class="stat-value stat-accent">${s.totalFriends}</div><div class="stat-hint">当前可用</div></div>
                 <div class="stat-card"><div class="stat-label">活跃设备</div><div class="stat-value stat-success">${s.activeDevices}</div><div class="stat-hint">在线设备</div></div>
                 <div class="stat-card"><div class="stat-label">24h 失败</div><div class="stat-value ${s.recentFailures > 0 ? 'stat-danger' : ''}">${s.recentFailures}</div><div class="stat-hint">需关注</div></div>
                 <div class="stat-card"><div class="stat-label">管理服务</div><div class="stat-value" style="font-size:20px">${s.gatewayHealth === 'ok' ? '🟢 正常' : '🔴 异常'}</div><div class="stat-hint">D1 与统计查询</div></div>
@@ -1002,7 +1002,7 @@ function dashboardFailuresCard(failures) {
     return `<div class="card">
         <div class="card-header"><span class="card-title">最近授权失败</span><button type="button" class="btn btn-ghost btn-sm js-view-all-failures">查看全部</button></div>
         ${failures.length === 0 ? '<div class="empty-state"><div class="empty-title">无失败记录</div><div class="empty-desc">系统运行正常</div></div>' :
-        `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${failures.map(l => `<tr><td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatTime(l.createdAt)}</td><td>${eventLabel(l.eventType)}</td><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td><td style="color:var(--danger)">${escapeHtml(l.errorCode || '—')}</td></tr>`).join('')}</tbody></table></div>`}
+        `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>用户</th><th>错误</th></tr></thead><tbody>${failures.map(l => `<tr><td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatTime(l.createdAt)}</td><td>${eventLabel(l.eventType)}</td><td style="font-family:var(--font-mono);font-size:12px">${escapeHtml(l.friendId)}</td><td style="color:var(--danger)">${escapeHtml(l.errorCode || '—')}</td></tr>`).join('')}</tbody></table></div>`}
     </div>`;
 }
 
@@ -1031,13 +1031,13 @@ function showAllFailuresModal() {
                 <tr>
                     <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${formatTime(log.createdAt)}</td>
                     <td>${eventLabel(log.eventType)}</td>
-                    <td>${entityCell(log.friendName, log.friendId, '未知朋友')}</td>
+                    <td>${entityCell(log.friendName, log.friendId, '未知用户')}</td>
                     <td style="color:var(--danger);font-size:12px">${escapeHtml(log.errorCode || '—')}</td>
                 </tr>
             `).join('');
         const end = Math.min(page.offset + page.logs.length, page.total);
         body.innerHTML = `
-            <div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>朋友</th><th>错误</th></tr></thead><tbody>${rows}</tbody></table></div>
+            <div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>用户</th><th>错误</th></tr></thead><tbody>${rows}</tbody></table></div>
             <div class="invite-pagination failure-modal-pagination"><span>共 ${page.total} 条，${page.total ? `第 ${page.offset + 1} - ${end} 条` : '暂无记录'}</span><div><button type="button" class="btn btn-ghost btn-sm failure-prev" ${page.offset === 0 ? 'disabled' : ''}>上一页</button><button type="button" class="btn btn-ghost btn-sm failure-next" ${page.hasMore ? '' : 'disabled'}>下一页</button></div></div>
         `;
         body.querySelector('.failure-prev')?.addEventListener('click', () => loadPage(Math.max(0, page.offset - limit)));
@@ -1069,22 +1069,22 @@ function dashboardErrorCard(title, error, container, renderToken) {
 // ===== Friends list =====
 function renderFriends(container, renderToken) {
     const header = document.createElement('div');
-    header.innerHTML = `<h1 class="section-title">朋友</h1><p class="section-subtitle">管理朋友白名单和设备</p>`;
+    header.innerHTML = `<h1 class="section-title">用户</h1><p class="section-subtitle">管理用户白名单和设备</p>`;
     container.appendChild(header);
 
     const toolbar = document.createElement('div');
     toolbar.className = 'toolbar';
     toolbar.innerHTML = `
-        <div class="toolbar-search"><input type="search" class="form-input" id="searchInput" aria-label="搜索朋友" autocomplete="off" placeholder="搜索昵称或备注..."></div>
+        <div class="toolbar-search"><input type="search" class="form-input" id="searchInput" aria-label="搜索用户" autocomplete="off" placeholder="搜索昵称或备注..."></div>
         <div class="toolbar-filters">
-            <select class="form-select" id="statusFilter" aria-label="朋友状态筛选" style="width:auto">
+            <select class="form-select" id="statusFilter" aria-label="用户状态筛选" style="width:auto">
                 <option value="">全部状态</option>
                 <option value="ACTIVE">活跃</option>
                 <option value="DISABLED">已禁用</option>
             </select>
             <button class="btn btn-primary" id="createFriendBtn">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                创建朋友
+                创建用户
             </button>
         </div>
     `;
@@ -1092,7 +1092,7 @@ function renderFriends(container, renderToken) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>上限</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="8"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>昵称</th><th>状态</th><th>设备</th><th>有效期至</th><th>最近活动</th><th>操作</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination friends-pagination"></div>`;
     container.appendChild(tableWrap);
     const friendHeaderRow = tableWrap.querySelector('thead tr');
     friendHeaderRow?.children[0]?.insertAdjacentHTML('afterend', '<th>邮箱</th>');
@@ -1117,7 +1117,7 @@ function renderFriends(container, renderToken) {
             const friends = friendsPage.friends;
 
             if (friends.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friendsPage.total === 0 && !query && !filter ? '还没有朋友' : '没有匹配结果'}</div><div class="empty-desc">${friendsPage.total === 0 && !query && !filter ? '点击右上角按钮创建第一个朋友' : '尝试调整搜索或筛选条件'}</div>${friendsPage.total === 0 && !query && !filter ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建朋友</button>' : ''}</div></td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">${friendsPage.total === 0 && !query && !filter ? '还没有用户' : '没有匹配结果'}</div><div class="empty-desc">${friendsPage.total === 0 && !query && !filter ? '点击右上角按钮创建第一个用户' : '尝试调整搜索或筛选条件'}</div>${friendsPage.total === 0 && !query && !filter ? '<button class="btn btn-primary js-create-friend" style="margin-top:8px">+ 创建用户</button>' : ''}</div></td></tr>`;
                 tbody.querySelector('.js-create-friend')?.addEventListener('click', showCreateFriendModal);
             } else {
                 tbody.innerHTML = friends.map(f => `
@@ -1125,7 +1125,6 @@ function renderFriends(container, renderToken) {
                         <td><div style="font-weight:600">${escapeHtml(f.nickname)}</div>${f.note ? `<div style="font-size:12px;color:var(--text-dim)">${escapeHtml(f.note)}</div>` : ''}</td>
                         <td>${statusBadge(f.status)}</td>
                         <td>${f.devices}/${f.maxDevices}</td>
-                        <td>${f.maxDevices}</td>
                         <td style="color:var(--text-dim);font-family:var(--font-mono);font-size:12px">${formatDate(f.expiresAt)}</td>
                         <td style="color:var(--text-dim);font-size:12px">${formatTime(f.lastSeen)}</td>
                         <td><button class="btn btn-ghost btn-sm js-friend-detail" data-id="${escapeHtml(f.id)}">详情</button></td>
@@ -1146,7 +1145,7 @@ function renderFriends(container, renderToken) {
         }).catch(err => {
             if (renderToken !== state.renderToken || !container.isConnected) return;
             if (sequence !== loadSequence) return;
-            tbody.innerHTML = `<tr><td colspan="8"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendsRetry">重试</button></div></td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7"><div class="error-banner"><span class="error-text">加载失败：${escapeHtml(errorMessage(err))}</span><button class="btn btn-sm btn-ghost" id="friendsRetry">重试</button></div></td></tr>`;
             tbody.querySelector('#friendsRetry')?.addEventListener('click', loadAndRender);
         });
     }
@@ -1161,7 +1160,7 @@ function renderFriendDetail(container, renderToken) {
     const id = state.params.id;
     const title = document.createElement('div');
     title.className = 'detail-heading';
-    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">朋友详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用朋友</button></div>`;
+    title.innerHTML = `<div class="detail-heading-copy"><h1 class="section-title">用户详情</h1><p class="section-subtitle" id="detailSubtitle">加载中...</p></div><div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="editBtn" hidden><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>编辑信息</button><button class="btn btn-danger btn-sm detail-disable-btn" id="disableBtn" hidden>禁用用户</button></div>`;
     container.appendChild(title);
 
     const content = document.createElement('div');
@@ -1178,7 +1177,7 @@ function renderFriendDetail(container, renderToken) {
         disableButton.hidden = false;
         disableButton.disabled = false;
         disableButton.className = `btn btn-sm detail-disable-btn ${f.status === 'DISABLED' ? 'btn-primary' : 'btn-danger'}`;
-        disableButton.textContent = f.status === 'DISABLED' ? '重新启用朋友' : '禁用朋友';
+        disableButton.textContent = f.status === 'DISABLED' ? '重新启用用户' : '禁用用户';
         content.innerHTML = `
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">基本信息</span><span>${statusBadge(f.status)}</span></div>
@@ -1433,10 +1432,10 @@ function renderAudit(container, renderToken) {
             <option value="REFRESH">刷新令牌</option>
             <option value="REFRESH_REPLAY">重放检测</option>
             <option value="DEVICE_REVOKE">撤销设备</option>
-            <option value="FRIEND_DISABLE">禁用朋友</option>
-            <option value="FRIEND_ENABLE">启用朋友</option>
-            <option value="FRIEND_CREATE">创建朋友</option>
-            <option value="FRIEND_UPDATE">更新朋友</option>
+            <option value="FRIEND_DISABLE">禁用用户</option>
+            <option value="FRIEND_ENABLE">启用用户</option>
+            <option value="FRIEND_CREATE">创建用户</option>
+            <option value="FRIEND_UPDATE">更新用户</option>
             <option value="INVITE_CREATE">生成邀请码</option>
             <option value="INVITE_REVOKE">撤销邀请码</option>
         </select>
@@ -1461,7 +1460,7 @@ function renderAudit(container, renderToken) {
 
     const tableWrap = document.createElement('div');
     tableWrap.className = 'table-wrap';
-    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>详情</th><th>朋友</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination audit-pagination"></div>`;
+    tableWrap.innerHTML = `<div class="table-scroll"><table><thead><tr><th>时间</th><th>事件</th><th>详情</th><th>用户</th><th>设备</th><th>结果</th><th>错误码</th></tr></thead><tbody><tr><td colspan="7"><div class="loading-skeleton" style="height:200px;margin:16px"></div></td></tr></tbody></table></div><div class="invite-pagination audit-pagination"></div>`;
     container.appendChild(tableWrap);
 
     const eventFilter = toolbar.querySelector('#eventFilter');
@@ -1492,7 +1491,7 @@ function renderAudit(container, renderToken) {
                         <td style="font-family:var(--font-mono);font-size:12px;color:var(--text-dim)">${new Date(l.createdAt).toLocaleString('zh-CN')}</td>
                         <td>${eventLabel(l.eventType)}</td>
                         <td>${escapeHtml(auditDetail(l))}</td>
-                        <td>${entityCell(l.friendName, l.friendId, '未知朋友')}</td>
+                        <td>${entityCell(l.friendName, l.friendId, '未知用户')}</td>
                         <td>${entityCell(l.deviceName, l.deviceId, '未知设备')}</td>
                         <td>${statusBadge(l.result)}</td>
                         <td style="color:var(--danger);font-size:12px">${escapeHtml(l.errorCode || '—')}</td>
@@ -1526,7 +1525,7 @@ function showCreateFriendModal() {
         <div class="form-group"><label class="form-label" for="create-friend-nickname">昵称 *</label><input class="form-input" id="create-friend-nickname" name="nickname" maxlength="32" autocomplete="nickname" placeholder="例如：小明"></div>
         <div class="form-group"><label class="form-label" for="create-friend-note">备注</label><input class="form-input" id="create-friend-note" name="note" maxlength="64" autocomplete="off" placeholder="可选，如：大学同学"></div>
         <div class="form-group"><label class="form-label" for="create-friend-max-devices">设备上限</label><input class="form-input" id="create-friend-max-devices" name="maxDevices" type="number" min="1" max="10" value="2" autocomplete="off"></div>
-        <p class="form-hint">朋友长期有效；邀请码单独设置有效期。</p>
+        <p class="form-hint">用户长期有效；邀请码单独设置有效期。</p>
     `;
 
     const createEmailGroup = document.createElement('div');
@@ -1541,7 +1540,7 @@ function showCreateFriendModal() {
     bindSubmitButton(form, submitBtn);
 
     modal.open({
-        title: '创建朋友',
+        title: '创建用户',
         body: form,
         footer: [
             Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
@@ -1588,7 +1587,7 @@ function showCreateFriendModal() {
         try {
             const friend = await API.createFriend(data);
             modal.close();
-            showToast(`已创建朋友 "${friend.nickname}"`);
+            showToast(`已创建用户 "${friend.nickname}"`);
             navigate('friend-detail', { id: friend.id });
         } catch (err) {
             submitBtn.disabled = false;
@@ -1630,7 +1629,7 @@ function showEditFriendModal(friend) {
     bindSubmitButton(form, submitBtn);
 
     modal.open({
-        title: `编辑朋友 · ${friend.nickname}`,
+        title: `编辑用户 · ${friend.nickname}`,
         body: form,
         footer: [
             Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
@@ -1687,7 +1686,7 @@ function showEditFriendModal(friend) {
         try {
             await API.updateFriend(friend.id, { nickname, email: email || null, note, maxDevices, expiresAt });
             modal.close();
-            showToast(`朋友「${nickname}」已更新`);
+            showToast(`用户「${nickname}」已更新`);
             navigate('friend-detail', { id: friend.id });
         } catch (err) {
             submitBtn.disabled = false;
@@ -1702,7 +1701,7 @@ function showCreateInviteModal(friendId, friendName, activeDeviceCount = 0) {
     form.innerHTML = `
         <div class="form-group"><label class="form-label" for="invite-kind">邀请类型</label>
             <select class="form-select" id="invite-kind" name="kind">
-                <option value="ACTIVATION">激活（新朋友）</option>
+                <option value="ACTIVATION">激活（新用户）</option>
                 <option value="MIGRATION">迁移（现有设备）</option>
             </select>
         </div>
@@ -1798,7 +1797,7 @@ async function copyText(text) {
 function showInviteCodeResult(code, expiresAt) {
     const body = document.createElement('div');
     body.innerHTML = `
-        <div class="invite-warning">⚠️ 此邀请码只显示一次，关闭此窗口后无法再次查看。请立即复制并发送给朋友。</div>
+        <div class="invite-warning">⚠️ 此邀请码只显示一次，关闭此窗口后无法再次查看。请立即复制并发送给用户。</div>
         <div class="invite-code-box"><div class="invite-code" id="inviteCodeDisplay">${escapeHtml(code)}</div></div>
         <p style="font-size:12px;color:var(--text-dim);text-align:center">有效期至 ${formatDate(expiresAt)}</p>
     `;
@@ -1909,8 +1908,8 @@ function showDeleteDeviceModal(deviceId, deviceName) {
 function showDisableFriendModal(friendId, friendName, deviceCount) {
     const body = document.createElement('div');
     body.innerHTML = `
-        <div class="confirm-danger-text">确定要禁用朋友 <strong>${escapeHtml(friendName)}</strong> 吗？</div>
-        <div class="confirm-danger-impact">⚠️ 禁用后该朋友下全部 ${Number(deviceCount) || 0} 台设备和会话立即失效。需要手动启用才能恢复。</div>
+        <div class="confirm-danger-text">确定要禁用用户 <strong>${escapeHtml(friendName)}</strong> 吗？</div>
+        <div class="confirm-danger-impact">⚠️ 禁用后该用户下全部 ${Number(deviceCount) || 0} 台设备和会话立即失效。需要手动启用才能恢复。</div>
     `;
 
     const confirmBtn = document.createElement('button');
@@ -1918,7 +1917,7 @@ function showDisableFriendModal(friendId, friendName, deviceCount) {
     confirmBtn.textContent = '确认禁用';
 
     modal.open({
-        title: '禁用朋友',
+        title: '禁用用户',
         body: body,
         footer: [
             Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
@@ -1933,7 +1932,7 @@ function showDisableFriendModal(friendId, friendName, deviceCount) {
         try {
             await API.disableFriend(friendId);
             modal.close();
-            showToast('朋友已禁用');
+            showToast('用户已禁用');
             navigate('friend-detail', { id: state.params.id });
         } catch (err) {
             confirmBtn.disabled = false;
@@ -1946,8 +1945,8 @@ function showDisableFriendModal(friendId, friendName, deviceCount) {
 function showEnableFriendModal(friendId, friendName) {
     const body = document.createElement('div');
     body.innerHTML = `
-        <div class="confirm-danger-text">确定要重新启用朋友 <strong>${escapeHtml(friendName)}</strong> 吗？</div>
-        <div class="confirm-danger-impact">启用只恢复朋友状态，不会恢复已撤销设备和会话。需要重新生成邀请码并重新绑定设备。</div>
+        <div class="confirm-danger-text">确定要重新启用用户 <strong>${escapeHtml(friendName)}</strong> 吗？</div>
+        <div class="confirm-danger-impact">启用只恢复用户状态，不会恢复已撤销设备和会话。需要重新生成邀请码并重新绑定设备。</div>
     `;
 
     const confirmBtn = document.createElement('button');
@@ -1955,7 +1954,7 @@ function showEnableFriendModal(friendId, friendName) {
     confirmBtn.textContent = '确认启用';
 
     modal.open({
-        title: '重新启用朋友',
+        title: '重新启用用户',
         body,
         footer: [
             Object.assign(document.createElement('button'), { className: 'btn btn-ghost', textContent: '取消', type: 'button' }),
@@ -1970,7 +1969,7 @@ function showEnableFriendModal(friendId, friendName) {
         try {
             await API.enableFriend(friendId);
             modal.close();
-            showToast('朋友已重新启用');
+            showToast('用户已重新启用');
             navigate('friend-detail', { id: state.params.id });
         } catch (err) {
             confirmBtn.disabled = false;
@@ -2007,7 +2006,7 @@ function renderFeedback(container, renderToken) {
                 <option value="REPLIED">已回复</option>
                 <option value="CLOSED">已关闭</option>
             </select>
-            <input type="text" class="form-input" id="fb-nickname" placeholder="朋友名搜索" style="width:160px">
+            <input type="text" class="form-input" id="fb-nickname" placeholder="用户名搜索" style="width:160px">
             <button class="btn btn-primary btn-sm" id="fb-search">搜索</button>
         </div>
     `;
@@ -2067,7 +2066,7 @@ function renderFeedback(container, renderToken) {
                 }).join('');
                 tableWrap.innerHTML = `
                     <div class="table-scroll"><table>
-                        <thead><tr><th>ID</th><th>类型</th><th>朋友</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
+                        <thead><tr><th>ID</th><th>类型</th><th>用户</th><th>内容</th><th>截图</th><th>状态</th><th>时间</th></tr></thead>
                         <tbody>${rows}</tbody>
                     </table></div>
                 `;
@@ -2103,7 +2102,6 @@ function showFeedbackDetail(id, container, renderToken) {
         if (renderToken !== state.renderToken || !container.isConnected) return;
         const f = data.feedback || {};
         const replies = data.replies || [];
-        const typeLabels = { FEATURE: '功能建议', BUG: 'Bug 报告', UX: '体验问题', OTHER: '其他' };
         const typeColors = { FEATURE: '#34d399', BUG: '#fb7185', UX: '#fbbf24', OTHER: '#9ca3af' };
         const statusLabels = { PENDING: '待处理', REPLIED: '已回复', CLOSED: '已关闭' };
         const statusColors = { PENDING: '#fb923c', REPLIED: '#10b981', CLOSED: '#9ca3af' };
@@ -2143,15 +2141,14 @@ function showFeedbackDetail(id, container, renderToken) {
 
         container.innerHTML = `
             <div class="detail-heading">
-                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span> ${escapeHtml(typeLabels[f.type] || f.type || '')} · ${escapeHtml(f.friend_nickname || '')}</p></div>
+                <div class="detail-heading-copy"><h1 class="section-title">反馈详情</h1><p class="section-subtitle feedback-detail-subtitle"><span class="fb-id-badge" style="background:${typeColor}33;color:${typeColor}">${displayId}</span><span>· ${escapeHtml(f.friend_nickname || '')}</span></p></div>
                 <div class="detail-heading-actions"><button class="btn btn-ghost btn-sm" id="fb-back">返回列表</button></div>
             </div>
             <div class="detail-grid">
                 <div class="card detail-card">
                     <div class="card-header"><span class="card-title">反馈内容</span><span style="color:${statusColors[f.status] || '#9ca3af'};font-weight:500">${statusLabels[f.status] || f.status || ''}</span></div>
                     <div style="display:grid;gap:10px;font-size:13px;margin-bottom:16px">
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">朋友</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
-                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">类型</span><span>${escapeHtml(typeLabels[f.type] || f.type || '—')}</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">用户</span><span>${escapeHtml(f.friend_nickname || '—')}</span></div>
                         <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">时间</span><span>${formatTime(f.created_at)}</span></div>
                         ${f.trakt_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Trakt</span><span>${escapeHtml(f.trakt_username)}</span></div>` : ''}
                         ${f.douban_username ? `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">豆瓣</span><span>${escapeHtml(f.douban_username)}</span></div>` : ''}
@@ -2189,7 +2186,7 @@ function showFeedbackDetail(id, container, renderToken) {
                 </div>
             </div>
         `;
-        document.getElementById('fb-back').addEventListener('click', () => { location.hash = '#/feedback'; });
+        document.getElementById('fb-back').addEventListener('click', () => navigate('feedback'));
 
         // 截图上传逻辑
         const pendingScreenshots = [];
