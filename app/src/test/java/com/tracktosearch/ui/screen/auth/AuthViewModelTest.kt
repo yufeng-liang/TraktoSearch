@@ -2,6 +2,7 @@ package com.tracktosearch.ui.screen.auth
 
 import com.google.common.truth.Truth.assertThat
 import com.tracktosearch.test.MainDispatcherRule
+import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import io.mockk.coEvery
@@ -12,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import org.junit.Before
 import org.junit.Test
 import org.junit.Rule
 
@@ -21,12 +23,19 @@ class AuthViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val authManager = mockk<AuthManager>()
+    private val authCheckScheduler = mockk<AuthCheckScheduler>(relaxed = true)
+
+    @Before
+    fun setUp() {
+        every { authManager.recoveryFailure } returns MutableStateFlow(null)
+        every { authManager.getNextCheckAt() } returns 0L
+    }
 
     @Test
     fun `authorized gateway state starts as activated`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.AUTHORIZED)
 
-        val viewModel = AuthViewModel(authManager)
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         assertThat(viewModel.uiState.value.activated).isTrue()
     }
@@ -34,7 +43,7 @@ class AuthViewModelTest {
     @Test
     fun `updating invite code clears previous error`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
-        val viewModel = AuthViewModel(authManager)
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode("")
         viewModel.activate()
@@ -47,7 +56,7 @@ class AuthViewModelTest {
     fun `successful activation unlocks the login page`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
         coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.success(mockk())
-        val viewModel = AuthViewModel(authManager)
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode(" TS-1234567890 ")
         viewModel.activate()
@@ -62,7 +71,7 @@ class AuthViewModelTest {
     fun `activated state ignores repeated activation`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
         coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.success(mockk())
-        val viewModel = AuthViewModel(authManager)
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode("TS-1234567890")
         viewModel.activate()
@@ -78,7 +87,7 @@ class AuthViewModelTest {
     fun `failed activation keeps login page locked`() = runTest {
         every { authManager.authState } returns MutableStateFlow(AuthState.UNAUTHORIZED)
         coEvery { authManager.activate(any(), any(), any(), any()) } returns Result.failure(Exception("INVALID_INVITE"))
-        val viewModel = AuthViewModel(authManager)
+        val viewModel = AuthViewModel(authManager, authCheckScheduler)
 
         viewModel.updateInviteCode("TS-1234567890")
         viewModel.activate()

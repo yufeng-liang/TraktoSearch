@@ -10,26 +10,15 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
-import coil.request.ImageRequest
-import com.tracktosearch.di.DoubanIdMapping
 import com.tracktosearch.di.NetworkModule
 import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.notification.NotificationScheduler
-import com.tracktosearch.data.remote.config.RemoteConfigManager
-import com.tracktosearch.data.remote.douban.dto.DoubanHotData
-import com.tracktosearch.data.repository.FeedbackRepository
-import com.tracktosearch.data.repository.TmdbRepository
-import com.tracktosearch.data.repository.TraktRepository
-import com.tracktosearch.data.util.PersistentTtlCache
 import com.tracktosearch.data.util.StartupTrace
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import javax.inject.Inject
@@ -41,15 +30,7 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
     @Inject lateinit var baseOkHttpClient: OkHttpClient
     @Inject lateinit var notificationScheduler: NotificationScheduler
     @Inject lateinit var authCheckScheduler: AuthCheckScheduler
-    @Inject lateinit var tmdbRepository: TmdbRepository
-    @Inject lateinit var traktRepository: TraktRepository
-    @Inject lateinit var doubanHotCache: PersistentTtlCache<DoubanHotData>
-    @Inject lateinit var doubanDetailCache: PersistentTtlCache<com.tracktosearch.data.remote.douban.DoubanDetailCacheEntry>
-    @Inject @DoubanIdMapping lateinit var doubanIdMappingCache: PersistentTtlCache<String>
-    @Inject lateinit var remoteConfigManager: RemoteConfigManager
-    @Inject lateinit var posterColorCache: com.tracktosearch.data.util.PosterColorCache
     @Inject lateinit var crashLogUploader: com.tracktosearch.data.util.CrashLogUploader
-    @Inject lateinit var feedbackRepository: FeedbackRepository
 
     // CrashLogUploader 已改为 Hilt 单例：走网关 /api/crash-logs 代理，客户端不持有上报密钥。
 
@@ -81,39 +62,8 @@ class TraktSearchApp : Application(), ImageLoaderFactory, Configuration.Provider
             // 后续启用时恢复下一行调用。
             // remoteConfigManager.initialize()
             StartupTrace.mark("application.remote_config.disabled")
-            // 后台加载持久化缓存（海报路径、演职员头像、ID 映射、6h 榜单数据等），不阻塞 UI
-            // 四组缓存并行加载：Tmdb 详情/列表 + Trakt ID 映射/趋势 + 豆瓣热榜 + 豆瓣详情页缓存
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                StartupTrace.measure("application.cache_warmup") {
-                    coroutineScope {
-                        val jobs = buildList {
-                            tmdbRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
-                            traktRepository.persistentCaches.forEach { cache -> add(async { cache.loadFromDisk() }) }
-                            add(async { doubanHotCache.loadFromDisk() })
-                            add(async { doubanDetailCache.loadFromDisk() })
-                            add(async { doubanIdMappingCache.loadFromDisk() })
-                            add(async { feedbackRepository.loadCacheFromDisk() })
-                        }
-                        jobs.awaitAll()
-                    }
-                    posterColorCache.warmUp()
-                }
-            }
-            // 独立协程预热开屏图标到 Coil 内存缓存：按显示尺寸(211dp)降采样解码，
-            // 使 splash 的 AsyncImage 命中缓存秒显，避免异步加载时序冲突导致图标不显示
-            CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-                runCatching {
-                    val density = resources.displayMetrics.density
-                    val sizePx = (211 * density).toInt()
-                    coil.Coil.imageLoader(this@TraktSearchApp).execute(
-                        ImageRequest.Builder(this@TraktSearchApp)
-                            .data(R.drawable.ic_search_cloud)
-                            .size(sizePx)
-                            .crossfade(false)
-                            .build()
-                    )
-                }
-            }
+            // 持久化缓存按当前页面首次使用时加载；不在 Application 阶段全量读盘或预热。
+            StartupTrace.mark("application.cache_warmup.deferred", "reason=load_on_page")
         }
     }
 

@@ -95,6 +95,45 @@ class AuthManagerTest {
     }
 
     @Test
+    fun initializeForStartup_timeoutKeepsSessionInOfflineGrace() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val now = System.currentTimeMillis() / 1000
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns now
+        coEvery { storage.isTokenValid() } returns true
+        every { continuityManager.getAndroidId() } returns "android-id"
+        coEvery { api.check(CheckRequest("android-id")) } coAnswers {
+            delay(1_000)
+            Response.success(
+                GatewayResponse(
+                    "SUCCESS",
+                    "OK",
+                    data = CheckResponse(
+                        authorized = true,
+                        friendId = "friend-id",
+                        deviceId = "device-id",
+                        nickname = "friend",
+                        deviceStatus = "ACTIVE",
+                        nextCheckAt = now + 86_400,
+                        configVersion = 1,
+                    ),
+                ),
+            )
+        }
+
+        manager.initializeForStartup(timeoutMillis = 100)
+
+        assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
+    }
+
+    @Test
     fun concurrentInitialize_checksOnlyAfterTheFirstInitializationUpdatesSession() = runTest {
         val api = mockk<AuthApiService>()
         val keyManager = mockk<DeviceKeyManager>()

@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tracktosearch.BuildConfig
+import com.tracktosearch.data.auth.AuthCheckScheduler
 import com.tracktosearch.data.auth.AuthManager
 import com.tracktosearch.data.auth.AuthState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -24,7 +26,8 @@ data class AuthUiState(
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
-    private val authManager: AuthManager
+    private val authManager: AuthManager,
+    private val authCheckScheduler: AuthCheckScheduler
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(
         AuthUiState(activated = authManager.authState.value.isActivated())
@@ -63,6 +66,10 @@ class AuthViewModel @Inject constructor(
                 packageName = BuildConfig.APPLICATION_ID
             )
             _uiState.value = if (result.isSuccess) {
+                val nextCheckAt = authManager.getNextCheckAt()
+                viewModelScope.launch(Dispatchers.IO) {
+                    runCatching { authCheckScheduler.schedulePreflight(nextCheckAt) }
+                }
                 _uiState.value.copy(
                     isLoading = false,
                     activated = true,

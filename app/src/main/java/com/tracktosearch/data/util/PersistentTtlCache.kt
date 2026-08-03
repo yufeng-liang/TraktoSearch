@@ -71,41 +71,45 @@ class PersistentTtlCache<T>(
 
     /**
      * 从磁盘加载所有条目到内存缓存。
-     * 应在 Application 启动时调用（后台线程，不阻塞 UI）。
+     * 首次使用时由 awaitLoaded() 触发，也允许调用方显式提前加载。
+     * 读盘始终在 IO 线程执行，且同一缓存只加载一次。
      */
-    suspend fun loadFromDisk() = withContext(Dispatchers.IO) {
+    suspend fun loadFromDisk() {
         loadMutex.withLock {
+            if (loadedDeferred.isCompleted) return@withLock
             val loadId = beginDiskLoad()
-            try {
-                val prefs = dataStore.data.first()
-                val now = System.currentTimeMillis()
-                prefs.asMap().forEach { (key, value) ->
-                    val keyStr = key.name
-                    if (!keyStr.startsWith("$keyPrefix:")) return@forEach
-                    // 跳过 expireAt 元数据 key（格式: {prefix}:{cacheKey}:exp）
-                    if (keyStr.endsWith(":exp")) return@forEach
-                    val cacheKey = keyStr.removePrefix("$keyPrefix:")
-                    val jsonStr = value as? String ?: return@forEach
-                    try {
-                        val item = json.decodeFromString(serializer, jsonStr)
-                        // 读取持久化的 expireAt，恢复原始过期时间（避免重启后 TTL 被重置导致缓存永不过期）
-                        val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
-                        if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) {
-                            // 已过期，跳过（不加载到内存）
-                            return@forEach
+            withContext(Dispatchers.IO) {
+                try {
+                    val prefs = dataStore.data.first()
+                    val now = System.currentTimeMillis()
+                    prefs.asMap().forEach { (key, value) ->
+                        val keyStr = key.name
+                        if (!keyStr.startsWith("$keyPrefix:")) return@forEach
+                        // 跳过 expireAt 元数据 key（格式: {prefix}:{cacheKey}:exp）
+                        if (keyStr.endsWith(":exp")) return@forEach
+                        val cacheKey = keyStr.removePrefix("$keyPrefix:")
+                        val jsonStr = value as? String ?: return@forEach
+                        try {
+                            val item = json.decodeFromString(serializer, jsonStr)
+                            // 读取持久化的 expireAt，恢复原始过期时间（避免重启后 TTL 被重置导致缓存永不过期）
+                            val expireAt = prefs[longPreferencesKey("$keyStr:exp")]
+                            if (expireAt != null && expireAt != Long.MAX_VALUE && now > expireAt) {
+                                // 已过期，跳过（不加载到内存）
+                                return@forEach
+                            }
+                            putDiskValueIfCurrent(loadId, cacheKey, item, expireAt)
+                        } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                            // 反序列化失败（数据格式变更），跳过该条目
+                            Log.w("PersistentTtlCache", "loadFromDisk decode failed for key=$keyStr: ${e.message}")
                         }
-                        putDiskValueIfCurrent(loadId, cacheKey, item, expireAt)
-                    } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                        // 反序列化失败（数据格式变更），跳过该条目
-                        Log.w("PersistentTtlCache", "loadFromDisk decode failed for key=$keyStr: ${e.message}")
                     }
+                } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                    // 磁盘读取失败不阻塞应用启动
+                    Log.w("PersistentTtlCache", "loadFromDisk failed for prefix=$keyPrefix: ${e.message}")
+                } finally {
+                    finishDiskLoad(loadId)
+                    loadedDeferred.complete(Unit)
                 }
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                // 磁盘读取失败不阻塞应用启动
-                Log.w("PersistentTtlCache", "loadFromDisk failed for prefix=$keyPrefix: ${e.message}")
-            } finally {
-                finishDiskLoad(loadId)
-                loadedDeferred.complete(Unit)
             }
         }
     }
@@ -114,7 +118,11 @@ class PersistentTtlCache<T>(
      * 等待磁盘加载完成。缓存未命中时调用，确保先尝试从磁盘加载的数据中查找，
      * 再决定是否走网络。已加载完成时立即返回。
      */
-    suspend fun awaitLoaded() = loadedDeferred.await()
+    suspend fun awaitLoaded() {
+        // Application 不再全量预热缓存；页面首次真正访问缓存时才加载对应前缀。
+        loadFromDisk()
+        loadedDeferred.await()
+    }
 
     override fun put(key: String, value: T) {
         withGenerationLock {

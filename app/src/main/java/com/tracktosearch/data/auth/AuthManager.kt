@@ -9,8 +9,10 @@ import android.util.Base64
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.decodeFromString
@@ -48,6 +50,10 @@ class AuthManager @Inject constructor(
     private val json: Json,
     private val traktRepositoryProvider: Provider<TraktRepository>
 ) {
+    companion object {
+        const val STARTUP_AUTH_TIMEOUT_MS = 5_000L
+    }
+
     private val refreshCoordinator = AuthRefreshCoordinator()
     private val initializationMutex = Mutex()
 
@@ -133,6 +139,8 @@ class AuthManager @Inject constructor(
             } else {
                 Result.failure(Exception(response.errorMessage("Check failed: ${response.code()}")))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             // 网络异常 → 进入离线宽限
             handleOffline()
@@ -200,6 +208,8 @@ class AuthManager @Inject constructor(
             } else {
                 Result.failure(Exception(refreshResponse.errorMessage("Refresh failed: ${refreshResponse.code()}")))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             handleOffline()
         }
@@ -237,11 +247,25 @@ class AuthManager @Inject constructor(
     }
 
     /** 启动时恢复本地会话并按需向网关校验。 */
-    suspend fun initialize() {
-        initializationMutex.withLock { initializeLocked() }
+    suspend fun initialize(forceNetworkCheck: Boolean = false) {
+        initializationMutex.withLock { initializeLocked(forceNetworkCheck) }
     }
 
-    private suspend fun initializeLocked() {
+    /**
+     * 启动授权校验的硬上限，避免网关连接异常时系统 Splash 无限等待。
+     * 超时仍沿用已有离线宽限判定，不会把已激活用户直接送回登录页。
+     */
+    suspend fun initializeForStartup(timeoutMillis: Long = STARTUP_AUTH_TIMEOUT_MS) {
+        val completed = withTimeoutOrNull(timeoutMillis) {
+            initialize()
+        } != null
+        if (!completed) {
+            StartupTrace.mark("auth.initialize.timeout", "timeoutMs=$timeoutMillis")
+            handleOffline<Unit>()
+        }
+    }
+
+    private suspend fun initializeLocked(forceNetworkCheck: Boolean) {
         tokenStorage.ensureCacheLoaded()
         deviceId = tokenStorage.getCachedDeviceId()
         nextCheckAt = tokenStorage.getCachedNextCheckAt()
@@ -266,14 +290,15 @@ class AuthManager @Inject constructor(
             if (_authState.value == AuthState.UNAUTHORIZED) {
                 recoverSilently()
             }
-            return
+            if (_authState.value != AuthState.AUTHORIZED || !forceNetworkCheck) return
         }
         // 每日网关校验尚未到期时，沿用本地授权状态，避免冷启动被网络请求阻塞。
-        if (nextCheckAt > System.currentTimeMillis() / 1000) {
+        if (!forceNetworkCheck && nextCheckAt > System.currentTimeMillis() / 1000) {
             _authState.value = AuthState.AUTHORIZED
             StartupTrace.mark("auth.initialize.cached_authorization", "nextCheckAt=$nextCheckAt")
             return
         }
+        _authState.value = AuthState.AUTHORIZED
         check()
     }
 
@@ -337,6 +362,8 @@ class AuthManager @Inject constructor(
             tokenStorage.saveSessionMetadata(body.deviceId, lastOnlineAt, nextCheckAt)
             _authState.value = AuthState.AUTHORIZED
             Result.success(body)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             _recoveryFailure.value = e.message ?: "RECOVERY_FAILED"
             Result.failure(e)
