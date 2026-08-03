@@ -289,6 +289,8 @@ fun DiscoverScreen(
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
                         )
                     }
+                    val doubanMovieCategory = uiState.doubanHotCategories
+                        .firstOrNull { it.id == "douban-movie" }
                     // 栏目 id -> Hero 卡片定义（标题/渐变/点击/数据），仅包含需要展示为 Hero 的栏目
                     val heroCategoryDefs = mapOf<String, HeroCategory>(
                         "tmdb-popular" to HeroCategory(
@@ -315,12 +317,11 @@ fun DiscoverScreen(
                         "douban-movie" to HeroCategory(
                             id = "douban-movie",
                             title = stringResource(R.string.discover_douban_new_movies),
-                            count = uiState.doubanHotCategories.sumOf { it.items.size },
+                            count = doubanMovieCategory?.let { category ->
+                                category.total.takeIf { it > 0 } ?: category.items.size
+                            } ?: 0,
                             gradient = doubanGradient,
-                            onClick = {
-                                val firstCategory = uiState.doubanHotCategories.firstOrNull()
-                                showDoubanAllDialog = firstCategory?.id ?: "douban-movie"
-                            }
+                            onClick = { showDoubanAllDialog = "douban-movie" }
                         ),
                         "trakt-lists" to HeroCategory(
                             id = "trakt-lists",
