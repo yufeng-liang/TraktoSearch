@@ -12,6 +12,7 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import org.junit.After
@@ -54,8 +55,7 @@ class AuthManagerTest {
         coEvery { storage.getRefreshToken() } returns "refresh-token"
         every { continuityManager.getAndroidId() } returns "android-id"
         every { keyManager.sign(any()) } returns ByteArray(64)
-        coEvery { storage.saveTokens(any(), any(), any()) } returns Unit
-        coEvery { storage.saveSessionMetadata(any(), any(), any()) } returns Unit
+        coEvery { storage.saveSession(any(), any(), any(), any(), any(), any()) } returns Unit
         coEvery { api.challenge(ChallengeRequest("device-id")) } returns Response.success(
             GatewayResponse("SUCCESS", "OK", data = ChallengeResponse("nonce", 2_000L))
         )
@@ -131,6 +131,61 @@ class AuthManagerTest {
         manager.initializeForStartup(timeoutMillis = 100)
 
         assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
+    }
+
+    @Test
+    fun initializeForStartup_timeoutDoesNotCancelInFlightRefresh() = runTest {
+        val api = mockk<AuthApiService>()
+        val keyManager = mockk<DeviceKeyManager>()
+        val continuityManager = mockk<DeviceContinuityManager>()
+        val storage = mockk<TokenStorage>()
+        val manager = AuthManager(api, keyManager, continuityManager, storage, Json, traktRepositoryProvider)
+        val refreshStarted = CompletableDeferred<Unit>()
+        val releaseRefresh = CompletableDeferred<Unit>()
+
+        coEvery { storage.ensureCacheLoaded() } returns Unit
+        every { storage.getCachedDeviceId() } returns "device-id"
+        every { storage.getCachedNextCheckAt() } returns 0L
+        every { storage.getCachedLastOnlineAt() } returns System.currentTimeMillis() / 1000
+        every { storage.getCachedAccessToken() } returns "old-access"
+        coEvery { storage.isTokenValid() } returns false
+        coEvery { storage.getRefreshToken() } returns "refresh-token"
+        every { continuityManager.getAndroidId() } returns "android-id"
+        every { keyManager.sign(any()) } returns ByteArray(64)
+        coEvery { storage.saveSession(any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { api.challenge(ChallengeRequest("device-id")) } returns Response.success(
+            GatewayResponse("SUCCESS", "OK", data = ChallengeResponse("nonce", 2_000L))
+        )
+        coEvery { api.refresh(any()) } coAnswers {
+            refreshStarted.complete(Unit)
+            releaseRefresh.await()
+            Response.success(
+                GatewayResponse(
+                    "SUCCESS",
+                    "OK",
+                    data = RefreshResponse("new-access", "new-refresh", 2_000L, 3_000L)
+                )
+            )
+        }
+
+        val startup = async { manager.initializeForStartup(timeoutMillis = 100) }
+        refreshStarted.await()
+        startup.await()
+
+        assertThat(manager.authState.value).isEqualTo(AuthState.OFFLINE)
+        releaseRefresh.complete(Unit)
+
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default.limitedParallelism(1)) {
+            kotlinx.coroutines.withTimeout(2_000) {
+                while (manager.authState.value != AuthState.AUTHORIZED) {
+                    delay(10)
+                }
+            }
+        }
+
+        coVerify(exactly = 1) {
+            storage.saveSession("new-access", "new-refresh", any(), "device-id", any(), any())
+        }
     }
 
     @Test

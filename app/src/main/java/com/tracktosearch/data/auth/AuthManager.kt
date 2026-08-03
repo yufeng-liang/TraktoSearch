@@ -10,6 +10,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -56,6 +61,9 @@ class AuthManager @Inject constructor(
 
     private val refreshCoordinator = AuthRefreshCoordinator()
     private val initializationMutex = Mutex()
+    private val startupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val startupJobMutex = Mutex()
+    private var startupInitializationJob: Job? = null
 
     private val _authState = MutableStateFlow(AuthState.UNAUTHORIZED)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -99,12 +107,18 @@ class AuthManager @Inject constructor(
             val response = authApiService.activate(request)
             if (response.isSuccessful) {
                 val body = response.body()?.data ?: return Result.failure(Exception(response.errorMessage("Empty response")))
-                // 保存令牌
-                tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+                val now = System.currentTimeMillis() / 1000
+                tokenStorage.saveSession(
+                    accessToken = body.accessToken,
+                    refreshToken = body.refreshToken,
+                    expiresIn = body.accessExpiresAt - now,
+                    deviceId = body.deviceId,
+                    lastOnlineAt = now,
+                    nextCheckAt = body.nextCheckAt,
+                )
                 deviceId = body.deviceId
                 nextCheckAt = body.nextCheckAt
-                lastOnlineAt = System.currentTimeMillis() / 1000
-                tokenStorage.saveSessionMetadata(deviceId!!, lastOnlineAt, nextCheckAt)
+                lastOnlineAt = now
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
             } else {
@@ -158,15 +172,18 @@ class AuthManager @Inject constructor(
      * 处理因旧 access token 失败的刷新请求。
      * 如果其他并发请求已经完成刷新，直接复用缓存中的新 token。
      */
-    suspend fun refreshIfNeeded(failedAccessToken: String): Boolean =
+    suspend fun refreshIfNeeded(
+        failedAccessToken: String,
+        allowSilentRecovery: Boolean = true,
+    ): Boolean =
         refreshCoordinator.refreshIfNeeded(
             failedAccessToken = failedAccessToken,
             currentAccessToken = tokenStorage::getCachedAccessToken
         ) {
-            refreshLocked().isSuccess
+            refreshLocked(allowSilentRecovery).isSuccess
         }
 
-    private suspend fun refreshLocked(): Result<RefreshResponse> {
+    private suspend fun refreshLocked(allowSilentRecovery: Boolean = true): Result<RefreshResponse> {
         return try {
             val currentDeviceId = deviceId ?: return Result.failure(Exception("No device ID"))
             val refreshToken = tokenStorage.getRefreshToken() ?: return Result.failure(Exception("No refresh token"))
@@ -196,15 +213,26 @@ class AuthManager @Inject constructor(
             )
             if (refreshResponse.isSuccessful) {
                 val body = refreshResponse.body()?.data ?: return Result.failure(Exception(refreshResponse.errorMessage("Empty response")))
-                tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
-                lastOnlineAt = System.currentTimeMillis() / 1000
-                tokenStorage.saveSessionMetadata(currentDeviceId, lastOnlineAt, nextCheckAt)
+                val now = System.currentTimeMillis() / 1000
+                tokenStorage.saveSession(
+                    accessToken = body.accessToken,
+                    refreshToken = body.refreshToken,
+                    expiresIn = body.accessExpiresAt - now,
+                    deviceId = currentDeviceId,
+                    lastOnlineAt = now,
+                    nextCheckAt = nextCheckAt,
+                )
+                lastOnlineAt = now
                 _authState.value = AuthState.AUTHORIZED
                 Result.success(body)
             } else if (refreshResponse.code() == 401 || refreshResponse.code() == 403) {
-                // 刷新失败，需要重新激活
+                // 服务端已撤销当前刷新会话时，release 先尝试用设备连续性自动恢复。
                 invalidateSession()
-                Result.failure(Exception("Refresh failed, re-authorization required"))
+                if (allowSilentRecovery) {
+                    recoverAfterRefreshFailure()
+                } else {
+                    Result.failure(Exception("Refresh failed, re-authorization required"))
+                }
             } else {
                 Result.failure(Exception(refreshResponse.errorMessage("Refresh failed: ${refreshResponse.code()}")))
             }
@@ -256,20 +284,41 @@ class AuthManager @Inject constructor(
      * 超时仍沿用已有离线宽限判定，不会把已激活用户直接送回登录页。
      */
     suspend fun initializeForStartup(timeoutMillis: Long = STARTUP_AUTH_TIMEOUT_MS) {
-        val completed = withTimeoutOrNull(timeoutMillis) {
-            initialize()
-        } != null
+        val deadlineNanos = System.nanoTime() + timeoutMillis.coerceAtLeast(0L) * 1_000_000L
+        val cacheLoaded = withTimeoutOrNull(timeoutMillis) {
+            loadCachedSession()
+            true
+        } == true
+        if (!cacheLoaded) {
+            StartupTrace.mark("auth.initialize.timeout", "timeoutMs=$timeoutMillis;phase=cache")
+            handleOffline<Unit>()
+            return
+        }
+        val initializationJob = startupJobMutex.withLock {
+            startupInitializationJob?.takeIf { it.isActive }
+                ?: startupScope.launch { initialize() }.also { startupInitializationJob = it }
+        }
+        val remainingMillis = ((deadlineNanos - System.nanoTime()) / 1_000_000L).coerceAtLeast(0L)
+        val completed = withTimeoutOrNull(remainingMillis) {
+            initializationJob.join()
+            true
+        } == true
         if (!completed) {
             StartupTrace.mark("auth.initialize.timeout", "timeoutMs=$timeoutMillis")
+            // 不取消后台刷新：服务端可能已经完成一次性 refresh token 轮换。
             handleOffline<Unit>()
         }
     }
 
-    private suspend fun initializeLocked(forceNetworkCheck: Boolean) {
+    private suspend fun loadCachedSession() {
         tokenStorage.ensureCacheLoaded()
         deviceId = tokenStorage.getCachedDeviceId()
         nextCheckAt = tokenStorage.getCachedNextCheckAt()
         lastOnlineAt = tokenStorage.getCachedLastOnlineAt()
+    }
+
+    private suspend fun initializeLocked(forceNetworkCheck: Boolean) {
+        loadCachedSession()
         if (!tokenStorage.isTokenValid()) {
             // access token 仅有 15 分钟寿命；只要 refresh session 仍在，就先轮换令牌。
             // 不能因为短期 access token 过期就丢弃已激活的设备会话，否则应用重启会错误回到邀请码页。
@@ -282,7 +331,7 @@ class AuthManager @Inject constructor(
                     failedAccessToken = failedAccessToken,
                     currentAccessToken = tokenStorage::getCachedAccessToken
                 ) {
-                    refreshLocked().isSuccess
+                    refreshLocked(allowSilentRecovery = false).isSuccess
                 }
             } else {
                 _authState.value = AuthState.UNAUTHORIZED
@@ -355,11 +404,18 @@ class AuthManager @Inject constructor(
             }
             val body = response.body()?.data
                 ?: return recoveryFailure("Recovery response is empty")
-            tokenStorage.saveTokens(body.accessToken, body.refreshToken, body.accessExpiresAt - System.currentTimeMillis() / 1000)
+            val now = System.currentTimeMillis() / 1000
+            tokenStorage.saveSession(
+                accessToken = body.accessToken,
+                refreshToken = body.refreshToken,
+                expiresIn = body.accessExpiresAt - now,
+                deviceId = body.deviceId,
+                lastOnlineAt = now,
+                nextCheckAt = body.nextCheckAt,
+            )
             deviceId = body.deviceId
             nextCheckAt = body.nextCheckAt
-            lastOnlineAt = System.currentTimeMillis() / 1000
-            tokenStorage.saveSessionMetadata(body.deviceId, lastOnlineAt, nextCheckAt)
+            lastOnlineAt = now
             _authState.value = AuthState.AUTHORIZED
             Result.success(body)
         } catch (e: CancellationException) {
@@ -373,6 +429,22 @@ class AuthManager @Inject constructor(
     private fun recoveryFailure(message: String): Result<ActivateResponse> {
         _recoveryFailure.value = message
         return Result.failure(Exception(message))
+    }
+
+    private suspend fun recoverAfterRefreshFailure(): Result<RefreshResponse> {
+        val recovery = recoverSilently()
+        val body = recovery.getOrNull()
+            ?: return Result.failure(
+                recovery.exceptionOrNull() ?: Exception("Refresh failed, re-authorization required")
+            )
+        return Result.success(
+            RefreshResponse(
+                accessToken = body.accessToken,
+                refreshToken = body.refreshToken,
+                accessExpiresAt = body.accessExpiresAt,
+                refreshExpiresAt = body.refreshExpiresAt,
+            )
+        )
     }
 
     // === Getters ===
