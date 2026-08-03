@@ -233,13 +233,13 @@ fun DiscoverScreen(
             ) {
                 // 顶部 Hero 分类快捷入口：由栏目设置（显示/隐藏 + 排序）驱动
                 item(key = "discover_hero_categories") {
-                    // 缓存主题对应的渐变，保留栏目色相并压低高亮端，确保白字清晰
+                    // 缓存按主题生成的 5 个渐变 Brush，避免每次重组创建新实例
                     val popularGradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFFC74624), Color(0xFFB8781F))
+                                listOf(Color(0xFFE05A2D), Color(0xFFD89C2C))
                             } else {
-                                listOf(Color(0xFFE85D2A), Color(0xFFD99A2B))
+                                listOf(Color(0xFFF06A2F), Color(0xFFE6AA35))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
@@ -248,9 +248,9 @@ fun DiscoverScreen(
                     val upcomingGradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFFA54F78), Color(0xFF7B55B4))
+                                listOf(Color(0xFFC26391), Color(0xFF9968CC))
                             } else {
-                                listOf(Color(0xFFB85C86), Color(0xFF8B5CC7))
+                                listOf(Color(0xFFCB6C98), Color(0xFF9C6BD1))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
@@ -259,9 +259,9 @@ fun DiscoverScreen(
                     val recommendGradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFF3E6FC7), Color(0xFF27869F))
+                                listOf(Color(0xFF5587E0), Color(0xFF36A9C4))
                             } else {
-                                listOf(Color(0xFF4A78D1), Color(0xFF2E9BB3))
+                                listOf(Color(0xFF5C89E0), Color(0xFF36AFC7))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
@@ -270,9 +270,9 @@ fun DiscoverScreen(
                     val doubanGradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFF2D9662), Color(0xFF2F879E))
+                                listOf(Color(0xFF43B77A), Color(0xFF3CABBE))
                             } else {
-                                listOf(Color(0xFF35A86F), Color(0xFF3B9AB5))
+                                listOf(Color(0xFF42B87C), Color(0xFF43A9C2))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
@@ -281,9 +281,9 @@ fun DiscoverScreen(
                     val listsGradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFFBD4F6D), Color(0xFF9B5A50))
+                                listOf(Color(0xFFD86182), Color(0xFFB96D62))
                             } else {
-                                listOf(Color(0xFFD95F7D), Color(0xFFB96F62))
+                                listOf(Color(0xFFE56B89), Color(0xFFC67A6B))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)
@@ -723,13 +723,13 @@ fun DiscoverScreen(
                         Modifier.fillMaxWidth()
                     }
                     val shape = RoundedCornerShape(20.dp)
-                    // 中等明度的玫瑰紫渐变，避免白色文字落在近白高亮上
+                    // 浅玫瑰紫渐变（与「去豆瓣登录」卡片样式统一，仅渐变配色不同）
                     val gradient = remember(isDark) {
                         Brush.linearGradient(
                             colors = if (isDark) {
-                                listOf(Color(0xFF83489A), Color(0xFFB04E69))
+                                listOf(Color(0xFFA85BC2), Color(0xFFD45F7B))
                             } else {
-                                listOf(Color(0xFF9B56B0), Color(0xFFD25D76))
+                                listOf(Color(0xFFAD65BF), Color(0xFFE26C87))
                             },
                             start = Offset(0f, Float.POSITIVE_INFINITY),
                             end = Offset(Float.POSITIVE_INFINITY, 0f)

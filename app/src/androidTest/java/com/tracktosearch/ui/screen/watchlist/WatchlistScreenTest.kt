@@ -418,7 +418,7 @@ class WatchlistScreenTest {
      * needFirstSyncGuide 默认 false,避免弹出首次同步引导弹窗。
      */
     @Test
-    fun tmdbUnavailable_doesNotRenderPosterErrorBanner() {
+    fun tmdbUnavailable_rendersPosterErrorOnCard() {
         composeRule.setContent {
             WatchlistScreen(
                 onMovieClick = { _, _, _, _, _, _, _ -> },
@@ -445,10 +445,9 @@ class WatchlistScreenTest {
         }
         composeRule.waitForIdle()
 
-        assertThat(
-            composeRule.onAllNodesWithText(context.getString(R.string.watchlist_poster_error))
-                .fetchSemanticsNodes()
-        ).isEmpty()
+        composeRule
+            .onNodeWithText(context.getString(R.string.watchlist_poster_error))
+            .assertIsDisplayed()
     }
 
     private fun createMockWatchlistViewModel(

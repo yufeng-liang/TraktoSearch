@@ -9,6 +9,8 @@ import io.mockk.coVerify
 import io.mockk.spyk
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -262,6 +264,23 @@ class CommentTranslatorTest {
         assertThat(result.comment).isEqualTo("通用翻译")
         assertThat(getTranslationCache().get(24)).isEqualTo("通用翻译")
         coVerify(exactly = 1) { translator["translateWithBaidu"](any<String>(), any<String>()) }
+    }
+
+    @Test
+    fun translateSingleComment_网关标准化响应_显示译文() = runBlocking {
+        Locale.setDefault(Locale.CHINESE)
+        val api = io.mockk.mockk<TranslateApiService>()
+        coEvery { api.translateAi(any()) } returns ResponseBody.create(
+            "application/json".toMediaType(),
+            """{"translation":"标准化译文"}"""
+        )
+        val realTranslator = CommentTranslator(api)
+
+        val result = realTranslator.translateSingleComment(
+            TraktComment(id = 26, comment = "english text")
+        )
+
+        assertThat(result.comment).isEqualTo("标准化译文")
     }
 
     @Test

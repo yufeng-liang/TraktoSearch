@@ -255,16 +255,6 @@ fun WatchlistScreen(
     var showFirstSyncGuide by remember { mutableStateOf(false) }
     // 模式选择弹窗（引导弹窗确认后弹出）
     var showSyncModePicker by remember { mutableStateOf(false) }
-    val posterErrorMessage = context.getString(R.string.watchlist_poster_error)
-    // 当前可见 tab 的 TMDB 不可用状态（实时计算，避免多 tab 加载互相覆盖）
-    val tmdbUnavailable = uiState.isTmdbUnavailable(selectedMode, selectedTab)
-    LaunchedEffect(tmdbUnavailable) {
-        // 仅在当前 tab 出现 TMDB 数据缺失时提示一次 Toast。
-        if (tmdbUnavailable) {
-            Toast.makeText(context, posterErrorMessage, Toast.LENGTH_LONG).show()
-        }
-    }
-
     // 监听首次同步引导状态
     LaunchedEffect(Unit) {
         viewModel.needFirstSyncGuide.collect { need ->
@@ -1491,6 +1481,24 @@ private fun WatchlistPosterCard(
                 onLongClick = if (isMultiSelectMode) null else onLongClick,
                 posterModifier = posterModifier
             )
+            // TMDB 补充数据失败时，在对应海报卡片内提示，避免页面级 Toast 与具体条目脱节
+            if (item.tmdbId > 0 && item.posterUrl == null) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.62f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.watchlist_poster_error),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+            }
             // 想看/已看角标（海报左上角，沿用 MovieCard 样式）
             if (isWatched || isInWatchlist) {
                 Row(

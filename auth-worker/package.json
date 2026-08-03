@@ -4,6 +4,7 @@
     "private": true,
     "scripts": {
         "typecheck": "tsc -p tsconfig.json",
+        "test": "node --experimental-strip-types --test test/translate.test.ts",
         "dev": "wrangler dev",
         "deploy": "wrangler deploy",
         "migration:local": "wrangler d1 execute auth-db --local --file",
@@ -12,6 +13,6 @@
     "devDependencies": {
         "@cloudflare/workers-types": "^5.20260724.1",
         "typescript": "^5.3.0",
-        "wrangler": "^4.114.0"
+        "wrangler": "^4.118.0"
     }
 }
