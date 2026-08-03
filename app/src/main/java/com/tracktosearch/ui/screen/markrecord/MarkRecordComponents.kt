@@ -98,8 +98,8 @@ fun MarkRecordItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(backgroundBrush)
             .then(if (isRemoved) Modifier.alpha(0.55f) else Modifier)
+            .background(backgroundBrush)
             .clickable(onClick = onClick)
             .padding(horizontal = 6.dp, vertical = 6.dp)
     ) {
