@@ -32,7 +32,7 @@ class UpdateRepository @Inject constructor(
         private const val GITHUB_OWNER = "yufeng-liang"
         private const val GITHUB_REPO = "TrackToSearch"
         private const val GITEE_OWNER = "yufeng-liang"
-        private const val GITEE_REPO = "TrackToSearch"
+        private const val GITEE_REPO = "TrackToSearch-release"
         // 公开仓库，专门存放 release APK
         private const val RELEASE_REPO_OWNER = "yufeng-liang"
         private const val RELEASE_REPO = "TrackToSearch-release"

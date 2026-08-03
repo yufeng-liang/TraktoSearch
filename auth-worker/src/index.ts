@@ -37,6 +37,7 @@ import { handleGithubProxy } from './proxy/github';
 import { handleTranslateProxy } from './proxy/translate';
 import { handleCrashLogProxy } from './proxy/crash-logs';
 import { handleConfigProxy } from './proxy/config';
+import { handlePublicUpdateReleaseProxy, isPublicUpdateReleasePath } from './proxy/update';
 import { handleInviteRequest, handleInviteResend, handleInviteVerification } from './invitations';
 
 export interface Env {
@@ -218,6 +219,11 @@ async function handleAuthApi(
         if (isTraktPublicPath(traktPath)) {
             return handleTraktPublicProxy(request, env, path);
         }
+    }
+
+    // 更新检查和更新日志只读取固定的公开 release 仓库，不应依赖用户 JWT。
+    if (isPublicUpdateReleasePath(path) && request.method === 'GET') {
+        return handlePublicUpdateReleaseProxy(request, env, path);
     }
 
     // 需要 JWT 的端点
